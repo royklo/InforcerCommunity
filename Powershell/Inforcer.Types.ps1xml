@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Types>
+  <Type>
+    <Name>Inforcer.Baseline</Name>
+    <Members>
+      <ScriptProperty>
+        <Name>MemberCount</Name>
+        <GetScriptBlock>if ($this.members) { $this.members.Count } else { 0 }</GetScriptBlock>
+      </ScriptProperty>
+    </Members>
+  </Type>
+</Types>

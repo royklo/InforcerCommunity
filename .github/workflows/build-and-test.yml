@@ -1,0 +1,26 @@
+# Build and test Inforcer module
+# Runs script module consistency tests (Pester) when present
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-script-module:
+    name: Pester (script module)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester
+        run: |
+          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+        shell: pwsh
+
+      - name: Run Consistency.Tests.ps1
+        run: |
+          Invoke-Pester ./Tests/Consistency.Tests.ps1 -PassThru -Output Detailed
+        shell: pwsh

@@ -1,6 +1,6 @@
 # Trigger publish pipeline in the automation repo
-# DISABLED: Uncomment when ready — every push to main would trigger publish to PS Gallery.
-# Runs when a PR merges to main; sends repository_dispatch to the automation repo.
+# DISABLED: Rename to trigger-publish.yml and uncomment below to enable.
+# Then every push to main would trigger publish to PS Gallery.
 # Requires secret AUTOMATION_TRIGGER_TOKEN (PAT with repo scope on the automation repo).
 # name: Trigger Publish
 

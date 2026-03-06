@@ -1,8 +1,8 @@
 # Inforcer PowerShell Module
 
-[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/Inforcer)](https://www.powershellgallery.com/packages/Inforcer)
-[![CI](https://github.com/royklo/Inforcer-Powershell-Module/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/royklo/Inforcer-Powershell-Module/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[PowerShell Gallery](https://www.powershellgallery.com/packages/Inforcer)
+[CI](https://github.com/royklo/Inforcer-Powershell-Module/actions)
+[License: MIT](LICENSE)
 
 PowerShell module for the **Inforcer API**. Connect, query tenants, baselines, policies, alignment scores, and audit events with consistent parameters and output.
 
@@ -10,8 +10,8 @@ PowerShell module for the **Inforcer API**. Connect, query tenants, baselines, p
 
 This module was **created by Roy Klooster** for the community. It is **not owned or officially maintained by Inforcer**; it is a community project built by a community member to make it easier to work with the Inforcer API from PowerShell.
 
-- **Repository:** https://github.com/royklo/Inforcer-Powershell-Module
-- **PowerShell Gallery:** https://www.powershellgallery.com/packages/Inforcer
+- **Repository:** [https://github.com/royklo/Inforcer-Powershell-Module](https://github.com/royklo/Inforcer-Powershell-Module)
+- **PowerShell Gallery:** [https://www.powershellgallery.com/packages/Inforcer](https://www.powershellgallery.com/packages/Inforcer)
 
 ## Repository structure
 
@@ -115,4 +115,3 @@ Found a bug or have a feature idea? Please open an issue:
 
 ---
 
-**Publishing:** The module is published to PowerShell Gallery by the [Powershell-Module-Automation](https://github.com/royklo/Powershell-Module-Automation) repository. When a PR merges to `main`, the `trigger-publish.yml` workflow sends a `repository_dispatch` event to the automation repo, which runs the full pipeline (validate, test, version check, changelog, publish, post-publish verification, GitHub release). No publishing secrets are stored in this repository.

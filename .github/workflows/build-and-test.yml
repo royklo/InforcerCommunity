@@ -1,5 +1,5 @@
 # Build and test Inforcer module
-# Runs script module consistency tests (Pester) when present
+# Runs Pester consistency tests and PSScriptAnalyzer on push/PR to main
 name: Build and Test
 
 on:
@@ -16,11 +16,31 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Pester
-        run: |
-          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+        run: Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
         shell: pwsh
 
       - name: Run Consistency.Tests.ps1
         run: |
-          Invoke-Pester ./Tests/Consistency.Tests.ps1 -PassThru -Output Detailed
+          $result = Invoke-Pester ./Tests/Consistency.Tests.ps1 -PassThru -Output Detailed
+          if ($result.FailedCount -gt 0) { exit 1 }
+        shell: pwsh
+
+  static-analysis:
+    name: PSScriptAnalyzer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        run: Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+        shell: pwsh
+
+      - name: Run PSScriptAnalyzer
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path ./module -Recurse -Severity Error
+          if ($results) {
+              $results | Format-Table -AutoSize
+              throw "PSScriptAnalyzer found $($results.Count) error(s)."
+          }
+          Write-Host 'PSScriptAnalyzer: no errors found.'
         shell: pwsh

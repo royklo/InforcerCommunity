@@ -13,6 +13,10 @@ function Invoke-InforcerApiRequest {
         Optional JSON body for POST/PUT.
     .PARAMETER OutputType
         PowerShellObject (return PSObjects) or JsonObject (return JSON string). Default: PowerShellObject.
+    .PARAMETER PreserveStructure
+        When set, skips the automatic array-unwrapping step. The .data wrapper is still
+        unwrapped, but inner structure (e.g. items + continuationToken) is preserved.
+        Use this when the caller needs pagination metadata alongside the results.
     #>
     [CmdletBinding()]
     param(
@@ -28,7 +32,10 @@ function Invoke-InforcerApiRequest {
 
         [Parameter(Mandatory = $false)]
         [ValidateSet('PowerShellObject', 'JsonObject')]
-        [string]$OutputType = 'PowerShellObject'
+        [string]$OutputType = 'PowerShellObject',
+
+        [Parameter(Mandatory = $false)]
+        [switch]$PreserveStructure
     )
 
     if (-not (Test-InforcerSession)) {
@@ -133,6 +140,10 @@ function Invoke-InforcerApiRequest {
     if ($OutputType -eq 'JsonObject') {
         $json = $data | ConvertTo-Json -Depth 100
         return $json
+    }
+
+    if ($PreserveStructure) {
+        return $data
     }
 
     # If data is a single object with one array property (e.g. value, items, policies), unwrap to that array

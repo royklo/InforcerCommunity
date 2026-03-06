@@ -5,7 +5,7 @@ This is the script implementation of the Inforcer PowerShell module. It provides
 ## Module structure
 
 ```
-Powershell/
+module/
 ├── Inforcer.psd1           # Module manifest
 ├── Inforcer.psm1           # Root script (dot-sources Public + Private)
 ├── Inforcer.Format.ps1xml  # Default table/list formats
@@ -34,13 +34,13 @@ Powershell/
 
 ## Loading the script module
 
-From the repository root (or from the folder containing `Powershell`):
+From the repository root (or from the folder containing `module`):
 
 ```powershell
-Import-Module ./Powershell -Force
+Import-Module ./module -Force
 ```
 
-Or from the `Powershell` folder:
+Or from the `module` folder:
 
 ```powershell
 Import-Module . -Force

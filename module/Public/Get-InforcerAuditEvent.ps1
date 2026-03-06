@@ -147,43 +147,32 @@ foreach ($batch in $typeBatches) {
         $body = $bodyObj | ConvertTo-Json -Depth 100 -Compress
 
         Write-Verbose 'Searching audit events...'
-        $response = Invoke-InforcerApiRequest -Endpoint '/beta/auditEvents/search' -Method POST -Body $body -OutputType PowerShellObject
+        $response = Invoke-InforcerApiRequest -Endpoint '/beta/auditEvents/search' -Method POST -Body $body -OutputType PowerShellObject -PreserveStructure
         if ($null -eq $response) { break }
 
+        # After -PreserveStructure, .data is already unwrapped but inner structure (items + continuationToken) is intact
         $root = $response
-        if ($response -is [PSObject]) {
-            $dataProp = $response.PSObject.Properties['data']
-            if (-not $dataProp) { $dataProp = $response.PSObject.Properties['Data'] }
-            if ($dataProp -and $dataProp.Value -is [PSObject]) {
-                $root = $dataProp.Value
-            }
+        $items = $null
+        foreach ($propName in 'items', 'Items') {
+            $prop = $root.PSObject.Properties[$propName]
+            if ($prop -and $null -ne $prop.Value) { $items = $prop.Value; break }
         }
 
-        $itemsProp = $root.PSObject.Properties['items']
-        if (-not $itemsProp) { $itemsProp = $root.PSObject.Properties['Items'] }
-        if ($itemsProp -and $null -ne $itemsProp.Value) {
-            $items = $itemsProp.Value
-            if ($items -is [array]) {
-                foreach ($item in $items) {
-                    if ($item -is [PSObject]) {
-                        Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent | Out-Null
-                        [void]$allItems.Add($item)
-                        if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
-                    }
-                }
-            } elseif ($items -is [System.Collections.IEnumerable] -and $items -isnot [string]) {
-                foreach ($item in $items) {
-                    if ($item -is [PSObject]) {
-                        Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent | Out-Null
-                        [void]$allItems.Add($item)
-                        if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
-                    }
+        if ($items) {
+            foreach ($item in @($items)) {
+                if ($item -is [PSObject]) {
+                    Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent | Out-Null
+                    [void]$allItems.Add($item)
+                    if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
                 }
             }
         }
 
-        $continuationToken = $root.PSObject.Properties['continuationToken'].Value
-        if (-not $continuationToken) { $continuationToken = $root.PSObject.Properties['ContinuationToken'].Value }
+        $continuationToken = $null
+        foreach ($tokenProp in 'continuationToken', 'ContinuationToken') {
+            $tp = $root.PSObject.Properties[$tokenProp]
+            if ($tp -and $tp.Value) { $continuationToken = $tp.Value; break }
+        }
         if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
     } while ($continuationToken)
 }

@@ -1,22 +1,22 @@
-# Inforcer PowerShell Module
+# InforcerCommunity PowerShell Module
 
-[PowerShell Gallery](https://www.powershellgallery.com/packages/Inforcer)
-[CI](https://github.com/royklo/Inforcer-Powershell-Module/actions)
+[PowerShell Gallery](https://www.powershellgallery.com/packages/InforcerCommunity)
+[CI](https://github.com/royklo/InforcerCommunity/actions)
 [License: MIT](LICENSE)
 
-PowerShell module for the **Inforcer API**. Connect, query tenants, baselines, policies, alignment scores, and audit events with consistent parameters and output.
+Community PowerShell module for the **Inforcer API**. Connect, query tenants, baselines, policies, alignment scores, and audit events with consistent parameters and output.
 
 ## About
 
 This module was **created by Roy Klooster** for the community. It is **not owned or officially maintained by Inforcer**; it is a community project built by a community member to make it easier to work with the Inforcer API from PowerShell.
 
-- **Repository:** [https://github.com/royklo/Inforcer-Powershell-Module](https://github.com/royklo/Inforcer-Powershell-Module)
-- **PowerShell Gallery:** [https://www.powershellgallery.com/packages/Inforcer](https://www.powershellgallery.com/packages/Inforcer)
+- **Repository:** [https://github.com/royklo/InforcerCommunity](https://github.com/royklo/InforcerCommunity)
+- **PowerShell Gallery:** [https://www.powershellgallery.com/packages/InforcerCommunity](https://www.powershellgallery.com/packages/InforcerCommunity)
 
 ## Repository structure
 
 ```
-Inforcer-Powershell-Module/
+InforcerCommunity/
 ├── README.md                 # This file
 ├── LICENSE                   # MIT (community project disclaimer)
 ├── CONTRIBUTING.md           # How to contribute, fork & PR
@@ -29,10 +29,10 @@ Inforcer-Powershell-Module/
 │   └── CMDLET-REFERENCE.md   # Parameters and example output
 ├── CHANGELOG.md              # Release history
 ├── module/                 # Script module (see module/README.md)
-│   ├── Inforcer.psd1
-│   ├── Inforcer.psm1
-│   ├── Inforcer.Format.ps1xml
-│   ├── Inforcer.Types.ps1xml
+│   ├── InforcerCommunity.psd1
+│   ├── InforcerCommunity.psm1
+│   ├── InforcerCommunity.Format.ps1xml
+│   ├── InforcerCommunity.Types.ps1xml
 │   ├── README.md
 │   ├── Public/               # Exported cmdlets
 │   └── Private/              # Helpers (API, session, aliases, etc.)
@@ -50,16 +50,18 @@ Inforcer-Powershell-Module/
 ### From PowerShell Gallery (recommended)
 
 ```powershell
-Install-Module -Name Inforcer -Scope CurrentUser
+Install-Module -Name InforcerCommunity -Scope CurrentUser
 ```
 
 ### From source (GitHub)
 
 ```powershell
-git clone https://github.com/royklo/Inforcer-Powershell-Module.git
-cd Inforcer-Powershell-Module
-Import-Module ./module -Force
+git clone https://github.com/royklo/InforcerCommunity.git
+cd InforcerCommunity
+Import-Module ./module/InforcerCommunity.psd1 -Force
 ```
+
+Always run `Import-Module` from the **repository root** and use `./module/InforcerCommunity.psd1`. If you see an error about `Inforcer.Format.ps1xml` or a path containing `Inforcer-Powershell-Module`, you are loading the manifest from the wrong directory or an old copy of the repo; switch to the InforcerCommunity repo root and use the path above.
 
 ## Quick start
 
@@ -108,8 +110,8 @@ We welcome contributions: fork the repo, make your changes, and open a pull requ
 
 Found a bug or have a feature idea? Please open an issue:
 
-- [Bug report](https://github.com/royklo/Inforcer-Powershell-Module/issues/new?template=bug_report.md)
-- [Feature request](https://github.com/royklo/Inforcer-Powershell-Module/issues/new?template=feature_request.md)
+- [Bug report](https://github.com/royklo/InforcerCommunity/issues/new?template=bug_report.md)
+- [Feature request](https://github.com/royklo/InforcerCommunity/issues/new?template=feature_request.md)
 
 ## License
 

@@ -1,21 +1,21 @@
 # Test-AllCmdlets.ps1
-# Loads the Inforcer module and runs each exported cmdlet with safe parameters to verify they execute
+# Loads the InforcerCommunity module and runs each exported cmdlet with safe parameters to verify they execute
 # without crashing. Run without an active connection; most Get-* cmdlets will produce an error (expected).
 # Usage: from repo root: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Test-AllCmdlets.ps1
 
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $PSCommandPath
 $repoRoot = Split-Path -Parent $scriptDir
-$modulePath = Join-Path $repoRoot 'module' 'Inforcer.psd1'
+$modulePath = Join-Path $repoRoot 'module' 'InforcerCommunity.psd1'
 
 if (-not (Test-Path -LiteralPath $modulePath)) {
     Write-Error "Module not found: $modulePath"
     exit 1
 }
 
-Remove-Module -Name 'Inforcer' -ErrorAction SilentlyContinue
+Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
 Import-Module $modulePath -Force
-$exported = (Get-Module -Name 'Inforcer').ExportedCommands.Keys
+$exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
 
 $failed = 0
 foreach ($name in $exported) {

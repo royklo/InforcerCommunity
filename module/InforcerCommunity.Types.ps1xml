@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Types>
   <Type>
-    <Name>Inforcer.Baseline</Name>
+    <Name>InforcerCommunity.Baseline</Name>
     <Members>
       <ScriptProperty>
         <Name>MemberCount</Name>

@@ -2,9 +2,9 @@
 <Configuration>
   <ViewDefinitions>
     <View>
-      <Name>Inforcer.Baseline.Default</Name>
+      <Name>InforcerCommunity.Baseline.Default</Name>
       <ViewSelectedBy>
-        <TypeName>Inforcer.Baseline</TypeName>
+        <TypeName>InforcerCommunity.Baseline</TypeName>
       </ViewSelectedBy>
       <TableControl>
         <TableHeaders>

@@ -1,17 +1,17 @@
-# Inforcer PowerShell Script Module
+# InforcerCommunity PowerShell Script Module
 
-This is the script implementation of the Inforcer PowerShell module. It provides cmdlets to connect to the Inforcer API and query tenants, baselines, policies, alignment scores, and audit events.
+This is the script implementation of the InforcerCommunity module (community project for the Inforcer API). It provides cmdlets to connect to the Inforcer API and query tenants, baselines, policies, alignment scores, and audit events.
 
 ## Module structure
 
 ```
 module/
-├── Inforcer.psd1           # Module manifest
-├── Inforcer.psm1           # Root script (dot-sources Public + Private)
-├── Inforcer.Format.ps1xml  # Default table/list formats
-├── Inforcer.Types.ps1xml   # Type definitions
-├── README.md               # This file
-├── Public/                 # Exported cmdlets
+├── InforcerCommunity.psd1           # Module manifest
+├── InforcerCommunity.psm1           # Root script (dot-sources Public + Private)
+├── InforcerCommunity.Format.ps1xml  # Default table/list formats
+├── InforcerCommunity.Types.ps1xml   # Type definitions
+├── README.md                        # This file
+├── Public/                          # Exported cmdlets
 │   ├── Connect-Inforcer.ps1
 │   ├── Disconnect-Inforcer.ps1
 │   ├── Test-InforcerConnection.ps1
@@ -20,7 +20,7 @@ module/
 │   ├── Get-InforcerTenantPolicies.ps1
 │   ├── Get-InforcerAlignmentScore.ps1
 │   └── Get-InforcerAuditEvent.ps1
-└── Private/                # Helpers (not exported)
+└── Private/                         # Helpers (not exported)
     ├── Invoke-InforcerApiRequest.ps1
     ├── Test-InforcerSession.ps1
     ├── Get-InforcerBaseUrl.ps1
@@ -34,16 +34,18 @@ module/
 
 ## Loading the script module
 
-From the repository root (or from the folder containing `module`):
+Run from the repository root so the path resolves to this repo's module folder.
+
+From the repository root:
 
 ```powershell
-Import-Module ./module -Force
+Import-Module ./module/InforcerCommunity.psd1 -Force
 ```
 
 Or from the `module` folder:
 
 ```powershell
-Import-Module . -Force
+Import-Module ./InforcerCommunity.psd1 -Force
 ```
 
 ## Quick start

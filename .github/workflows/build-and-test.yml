@@ -1,4 +1,4 @@
-# Build and test Inforcer module
+# Build and test InforcerCommunity module
 # Runs Pester consistency tests and PSScriptAnalyzer on push/PR to main
 name: Build and Test
 

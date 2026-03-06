@@ -1,6 +1,7 @@
-# # Trigger publish pipeline in the automation repo
-# # Runs when a PR merges to main; sends repository_dispatch to the automation repo.
-# # Requires secret AUTOMATION_TRIGGER_TOKEN (PAT with repo scope on the automation repo).
+# Trigger publish pipeline in the automation repo
+# DISABLED: Uncomment when ready — every push to main would trigger publish to PS Gallery.
+# Runs when a PR merges to main; sends repository_dispatch to the automation repo.
+# Requires secret AUTOMATION_TRIGGER_TOKEN (PAT with repo scope on the automation repo).
 # name: Trigger Publish
 
 # on:

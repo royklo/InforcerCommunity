@@ -1,25 +1,6 @@
 <#
 .SYNOPSIS
-    Retrieves policies for a tenant from the Inforcer API.
-.DESCRIPTION
-    Gets all policies for the specified tenant. TenantId can be Client Tenant ID or GUID.
-    Output is normalized to use PolicyName (from displayName or name) so properties are consistent across all rows.
-.PARAMETER Format
-    Raw (default).
-.PARAMETER TenantId
-    Tenant to get policies for (required). Integer or GUID.
-.PARAMETER OutputType
-    PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
-.EXAMPLE
-    Get-InforcerTenantPolicies -TenantId 482
-.EXAMPLE
-    Get-InforcerTenantPolicies -TenantId "bb3b1f9d-d866-4b5a-abad-69d6a26bc446" -OutputType JsonObject
-.NOTES
-    Always use the PolicyName property for the policy display name; it is populated from displayName or name for consistency.
-.OUTPUTS
-    PSObject or String
-.LINK
-    Connect-Inforcer
+    (Internal) Enriches a policy object with normalized properties and aliases.
 #>
 function EnrichPolicyObject {
     param([PSObject]$pso)
@@ -52,6 +33,29 @@ function EnrichPolicyObject {
     Add-InforcerPropertyAliases -InputObject $pso -ObjectType Policy | Out-Null
 }
 
+<#
+.SYNOPSIS
+    Retrieves policies for a tenant from the Inforcer API.
+.DESCRIPTION
+    Gets all policies for the specified tenant. TenantId can be Client Tenant ID or GUID.
+    Output is normalized to use PolicyName (from displayName or name) so properties are consistent across all rows.
+.PARAMETER Format
+    Raw (default).
+.PARAMETER TenantId
+    Tenant to get policies for (required). Integer or GUID.
+.PARAMETER OutputType
+    PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
+.EXAMPLE
+    Get-InforcerTenantPolicies -TenantId 482
+.EXAMPLE
+    Get-InforcerTenantPolicies -TenantId "bb3b1f9d-d866-4b5a-abad-69d6a26bc446" -OutputType JsonObject
+.NOTES
+    Always use the PolicyName property for the policy display name; it is populated from displayName or name for consistency.
+.OUTPUTS
+    PSObject or String
+.LINK
+    Connect-Inforcer
+#>
 function Get-InforcerTenantPolicies {
 [CmdletBinding()]
 [OutputType([PSObject], [string])]

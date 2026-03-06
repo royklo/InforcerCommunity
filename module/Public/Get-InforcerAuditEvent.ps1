@@ -5,7 +5,7 @@
     POST /beta/auditEvents/search. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
     When -EventType is not specified, uses all event types from the API (or fallback authentication, failedAuthentication).
 .PARAMETER EventType
-    Event types to include. Omit for all types (tab-complete after Connect-Inforcer).
+    Event types to include. Omit for all types (tab-complete with supported event types).
 .PARAMETER DateFrom
     Start of date/time range (inclusive). Omit with DateTo = 10 years ago to now; if only DateTo set = 30 days before DateTo.
 .PARAMETER DateTo
@@ -32,6 +32,7 @@
 .LINK
     Connect-Inforcer
 #>
+
 function Get-InforcerAuditEvent {
 [CmdletBinding()]
 [OutputType([PSObject], [string])]
@@ -44,21 +45,28 @@ param(
             $prefix = ($prefix -split ',' | ForEach-Object { $_.Trim() })[-1]
         }
         $prefix = $prefix.Trim()
-        # Path-like or empty: show all types so engine does not fall back to path completion
+        # Inline list so completer never depends on script scope (avoids path completion fallback)
+        $types = @(
+            'authentication', 'failedAuthentication', 'supportAccessInvoke', 'userGroupCreate', 'userGroupUpdate',
+            'userGroupDelete', 'userGroupMembershipModified', 'clientStatusChanged', 'clientCreated', 'salesAdminUpdated',
+            'clientAdminUpdated', 'sharedBaselinesManaged', 'alertRuleCreate', 'alertRuleUpdate', 'alertRuleDelete',
+            'apiKeyCreate', 'apiKeyDelete', 'apiKeyUsage', 'tenantUserCreate', 'tenantUserUpdate', 'tenantUserResetMfa',
+            'tenantUserResetPassword', 'tenantUserRevokedSessions', 'tenantUserGroupMembershipModified', 'tenantUserOffboardingQueued',
+            'tenantUserLicensesModified', 'tenantOnboard', 'tenantRefresh', 'tenantDelete', 'userCreate', 'userDelete',
+            'userResetPassword', 'userResetMfa', 'userToggleEnable', 'userAutoProvision', 'userToggleSso',
+            'tenantGroupCreate', 'tenantGroupUpdate', 'tenantGroupMembershipsModified', 'tenantGroupsDeployment',
+            'policiesDeployment', 'policiesRestore', 'policiesRename', 'policiesDelete', 'tenantAssessmentRun',
+            'tenantAssessmentSuccess', 'tenantAssessmentFailure', 'copilotAssessmentRun', 'copilotAssessmentSuccess', 'copilotAssessmentFailure',
+            'tenantLicenseUpdate', 'clientLicenseUpdate'
+        )
         $filterByPrefix = $prefix -and $prefix -notmatch '^[./\\]'
-        $types = @()
-        try {
-            $types = @(Get-InforcerAuditEventType -ErrorAction SilentlyContinue)
-        } catch { }
         if ($filterByPrefix) {
             $filtered = @($types | Where-Object { $_ -like "$prefix*" })
-            # Only return full list when current word is an exact match (so Tab cycles); partial match like "failedauth" stays filtered
             $exactMatch = $filtered | Where-Object { $_ -ceq $prefix }
             if ($exactMatch.Count -ne 1) {
                 $types = $filtered
             }
         }
-        # Return CompletionResult so engine uses parameter completion, not path completion
         foreach ($t in $types) {
             [Management.Automation.CompletionResult]::new($t, $t, [Management.Automation.CompletionResultType]::ParameterValue, $t)
         }

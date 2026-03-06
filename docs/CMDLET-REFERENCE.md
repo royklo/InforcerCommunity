@@ -25,7 +25,7 @@ Connect-Inforcer -ApiKey "your-api-key" -Region uk
 ```
 Status      : Connected
 Region      : uk
-BaseUrl     : https://REDACTED/api
+BaseUrl     : https://api-uk.inforcer.com/api
 ConnectedAt : 05-Mar-2025 14:30:00
 ```
 
@@ -239,7 +239,7 @@ Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
-| **EventType** | String[] | No | Event types to include. Tab completion after Connect. Omit for all types. |
+| **EventType** | String[] | No | Event types to include. Tab completion with supported event types. Omit for all types. |
 | **DateFrom** | DateTime | No | Start of date/time range (inclusive). |
 | **DateTo** | DateTime | No | End of date/time range (inclusive). |
 | **PageSize** | Int | No | Page size per API request. Default: 100. |

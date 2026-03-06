@@ -159,6 +159,11 @@ if ($null -ne $TenantId) {
         $idProp = $_.PSObject.Properties['clientTenantId']
         $idProp -and [int]$idProp.Value -eq $clientTenantId
     })
+    # If no tenant with this ID exists in the system, return nothing.
+    if ($tenants.Count -eq 0) {
+        Write-Verbose "No tenant found with ID $clientTenantId. Returning no results."
+        return
+    }
 }
 
 if (-not [string]::IsNullOrWhiteSpace($Tag)) {
@@ -180,6 +185,32 @@ if (-not [string]::IsNullOrWhiteSpace($Tag)) {
 
 Write-Verbose "Building alignment table from alignment scores ($($allAlignmentData.Count) source(s))..."
 
+# Helper: add to $targetIds any tenant that is aligned to a baseline owned by an ID in $baselineOwnerIds
+function Add-ChildTenantIdsFromAlignments {
+    param([System.Collections.Hashtable]$targetIds, [array]$allTenants, [array]$baselineOwnerIds)
+    foreach ($t in $allTenants) {
+        if (-not ($t -is [PSObject])) { continue }
+        $sumProp = $t.PSObject.Properties['alignmentSummaries']
+        if (-not $sumProp -or $null -eq $sumProp.Value) { continue }
+        $sums = $sumProp.Value
+        if ($sums -isnot [object[]]) { $sums = @($sums) }
+        foreach ($s in $sums) {
+            if (-not ($s -is [PSObject])) { continue }
+            $abtProp = $s.PSObject.Properties['alignedBaselineTenantId']
+            if ($abtProp -and $null -ne $abtProp.Value) {
+                $abt = 0
+                if ([int]::TryParse($abtProp.Value.ToString(), [ref]$abt) -and ($baselineOwnerIds -contains $abt)) {
+                    $childId = 0
+                    $childProp = $t.PSObject.Properties['clientTenantId']
+                    if ($childProp -and [int]::TryParse($childProp.Value.ToString(), [ref]$childId)) {
+                        $targetIds[$childId] = $true
+                    }
+                }
+            }
+        }
+    }
+}
+
 # Only filter by tenant when user explicitly passed -TenantId or -Tag; otherwise show all alignment rows
 $tenantIds = @{}
 if ($null -ne $TenantId -or -not [string]::IsNullOrWhiteSpace($Tag)) {
@@ -191,30 +222,9 @@ if ($null -ne $TenantId -or -not [string]::IsNullOrWhiteSpace($Tag)) {
         }
     }
     # If the requested tenant is a baseline owner, also include tenants aligned TO it
-    # (their alignmentSummaries reference it as alignedBaselineTenantId)
     if ($null -ne $TenantId -and $tenantIds.Count -gt 0) {
         $baselineOwnerIds = @($tenantIds.Keys)
-        foreach ($t in $allTenants) {
-            if (-not ($t -is [PSObject])) { continue }
-            $sumProp = $t.PSObject.Properties['alignmentSummaries']
-            if (-not $sumProp -or $null -eq $sumProp.Value) { continue }
-            $sums = $sumProp.Value
-            if ($sums -isnot [object[]]) { $sums = @($sums) }
-            foreach ($s in $sums) {
-                if (-not ($s -is [PSObject])) { continue }
-                $abtProp = $s.PSObject.Properties['alignedBaselineTenantId']
-                if ($abtProp -and $null -ne $abtProp.Value) {
-                    $abt = 0
-                    if ([int]::TryParse($abtProp.Value.ToString(), [ref]$abt) -and $baselineOwnerIds -contains $abt) {
-                        $childId = 0
-                        $childProp = $t.PSObject.Properties['clientTenantId']
-                        if ($childProp -and [int]::TryParse($childProp.Value.ToString(), [ref]$childId)) {
-                            $tenantIds[$childId] = $true
-                        }
-                    }
-                }
-            }
-        }
+        Add-ChildTenantIdsFromAlignments -targetIds $tenantIds -allTenants $allTenants -baselineOwnerIds $baselineOwnerIds
     }
 }
 
@@ -225,6 +235,7 @@ if ($flatFormat) {
     foreach ($item in $allAlignmentData) {
         if (-not ($item -is [PSObject])) { continue }
         $tidProp = $item.PSObject.Properties['tenantId']
+        if (-not $tidProp) { $tidProp = $item.PSObject.Properties['clientTenantId'] }
         $targetTenantClientTenantId = 0
         if ($tidProp -and $null -ne $tidProp.Value) {
             if (-not [int]::TryParse($tidProp.Value.ToString(), [ref]$targetTenantClientTenantId)) { continue }
@@ -256,68 +267,68 @@ if ($flatFormat) {
         [void]$alignmentTable.Add($row)
     }
 } else {
-foreach ($tenant in $allAlignmentData) {
-    if (-not ($tenant -is [PSObject])) { continue }
-    $cidProp = $tenant.PSObject.Properties['clientTenantId']
-    $targetTenantClientTenantId = 0
-    if ($null -ne $cidProp -and $null -ne $cidProp.Value) {
-        if (-not [int]::TryParse($cidProp.Value.ToString(), [ref]$targetTenantClientTenantId)) { continue }
+    foreach ($tenant in $allAlignmentData) {
+        if (-not ($tenant -is [PSObject])) { continue }
+        $cidProp = $tenant.PSObject.Properties['clientTenantId']
+        $targetTenantClientTenantId = 0
+        if ($null -ne $cidProp -and $null -ne $cidProp.Value) {
+            if (-not [int]::TryParse($cidProp.Value.ToString(), [ref]$targetTenantClientTenantId)) { continue }
+        }
+        if ($tenantIds.Count -gt 0 -and -not $tenantIds.ContainsKey($targetTenantClientTenantId)) { continue }
+
+        $summariesProp = $tenant.PSObject.Properties['alignmentSummaries']
+        if (-not $summariesProp -or $null -eq $summariesProp.Value) { continue }
+        $summaries = ConvertTo-InforcerArray $summariesProp.Value
+        if ($summaries.Count -eq 0) { continue }
+
+        $targetTenantFriendlyName = $tenant.PSObject.Properties['tenantFriendlyName'].Value -as [string]
+        if (-not $targetTenantFriendlyName) { $targetTenantFriendlyName = '' }
+        $targetTenantMsTenantId = $tenant.PSObject.Properties['msTenantId'].Value -as [string]
+
+        foreach ($alignment in $summaries) {
+            if (-not ($alignment -is [PSObject])) { continue }
+
+            $baselineOwnerTenantId = 0
+            $aidProp = $alignment.PSObject.Properties['alignedBaselineTenantId']
+            if ($null -ne $aidProp -and $null -ne $aidProp.Value) {
+                $tmp = 0
+                if ([int]::TryParse($aidProp.Value.ToString(), [ref]$tmp)) { $baselineOwnerTenantId = $tmp }
+            }
+
+            $baselineOwnerFriendlyName = "Unknown (ID: $baselineOwnerTenantId)"
+            $baselineOwnerMsTenantId = $null
+            if ($tenantLookup.ContainsKey($baselineOwnerTenantId)) {
+                $ownerTenant = $tenantLookup[$baselineOwnerTenantId]
+                $fn = $ownerTenant.PSObject.Properties['tenantFriendlyName'].Value
+                $baselineOwnerFriendlyName = if ($fn) { $fn.ToString() } else { "Unknown (ID: $baselineOwnerTenantId)" }
+                $baselineOwnerMsTenantId = $ownerTenant.PSObject.Properties['msTenantId'].Value -as [string]
+            }
+
+            $scoreProp = $alignment.PSObject.Properties['alignmentScore']
+            $alignmentScoreFormatted = FormatAlignmentScore $(if ($scoreProp -and $null -ne $scoreProp.Value) { $scoreProp.Value } else { $null })
+
+            $row = [PSCustomObject]@{
+                BaselineName                    = $alignment.PSObject.Properties['alignedBaselineName'].Value
+                BaselineId                      = $alignment.PSObject.Properties['alignedBaselineId'].Value
+                AlignmentScore                   = $alignmentScoreFormatted
+                AlignedThreshold                 = $alignment.PSObject.Properties['alignedThreshold'].Value
+                SemiAlignedThreshold             = $alignment.PSObject.Properties['semiAlignedThreshold'].Value
+                LastAlignmentDateTime            = $alignment.PSObject.Properties['lastAlignmentDateTime'].Value
+                LastComparisonDateTime           = $alignment.PSObject.Properties['lastComparisonDateTime'].Value
+                BaselineOwnerTenantFriendlyName  = $baselineOwnerFriendlyName
+                BaselineOwnerTenantMsTenantId    = $baselineOwnerMsTenantId
+                BaselineOwnerTenantId            = $baselineOwnerTenantId
+                TargetTenantFriendlyName         = $targetTenantFriendlyName
+                TargetTenantMsTenantId            = $targetTenantMsTenantId
+                TargetTenantClientTenantId       = $targetTenantClientTenantId
+                AlignedBaselineId                = $alignment.PSObject.Properties['alignedBaselineId'].Value
+            }
+            $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantFriendlyName', 'TargetTenantFriendlyName'))
+            $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantMsTenantId', 'TargetTenantMsTenantId'))
+            $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantClientTenantId', 'TargetTenantClientTenantId'))
+            [void]$alignmentTable.Add($row)
+        }
     }
-    if ($tenantIds.Count -gt 0 -and -not $tenantIds.ContainsKey($targetTenantClientTenantId)) { continue }
-
-    $summariesProp = $tenant.PSObject.Properties['alignmentSummaries']
-    if (-not $summariesProp -or $null -eq $summariesProp.Value) { continue }
-    $summaries = ConvertTo-InforcerArray $summariesProp.Value
-    if ($summaries.Count -eq 0) { continue }
-
-    $targetTenantFriendlyName = $tenant.PSObject.Properties['tenantFriendlyName'].Value -as [string]
-    if (-not $targetTenantFriendlyName) { $targetTenantFriendlyName = '' }
-    $targetTenantMsTenantId = $tenant.PSObject.Properties['msTenantId'].Value -as [string]
-
-    foreach ($alignment in $summaries) {
-        if (-not ($alignment -is [PSObject])) { continue }
-
-        $baselineOwnerTenantId = 0
-        $aidProp = $alignment.PSObject.Properties['alignedBaselineTenantId']
-        if ($null -ne $aidProp -and $null -ne $aidProp.Value) {
-            $tmp = 0
-            if ([int]::TryParse($aidProp.Value.ToString(), [ref]$tmp)) { $baselineOwnerTenantId = $tmp }
-        }
-
-        $baselineOwnerFriendlyName = "Unknown (ID: $baselineOwnerTenantId)"
-        $baselineOwnerMsTenantId = $null
-        if ($tenantLookup.ContainsKey($baselineOwnerTenantId)) {
-            $ownerTenant = $tenantLookup[$baselineOwnerTenantId]
-            $fn = $ownerTenant.PSObject.Properties['tenantFriendlyName'].Value
-            $baselineOwnerFriendlyName = if ($fn) { $fn.ToString() } else { "Unknown (ID: $baselineOwnerTenantId)" }
-            $baselineOwnerMsTenantId = $ownerTenant.PSObject.Properties['msTenantId'].Value -as [string]
-        }
-
-        $scoreProp = $alignment.PSObject.Properties['alignmentScore']
-        $alignmentScoreFormatted = FormatAlignmentScore $(if ($scoreProp -and $null -ne $scoreProp.Value) { $scoreProp.Value } else { $null })
-
-        $row = [PSCustomObject]@{
-            BaselineName                    = $alignment.PSObject.Properties['alignedBaselineName'].Value
-            BaselineId                      = $alignment.PSObject.Properties['alignedBaselineId'].Value
-            AlignmentScore                   = $alignmentScoreFormatted
-            AlignedThreshold                 = $alignment.PSObject.Properties['alignedThreshold'].Value
-            SemiAlignedThreshold             = $alignment.PSObject.Properties['semiAlignedThreshold'].Value
-            LastAlignmentDateTime            = $alignment.PSObject.Properties['lastAlignmentDateTime'].Value
-            LastComparisonDateTime           = $alignment.PSObject.Properties['lastComparisonDateTime'].Value
-            BaselineOwnerTenantFriendlyName  = $baselineOwnerFriendlyName
-            BaselineOwnerTenantMsTenantId    = $baselineOwnerMsTenantId
-            BaselineOwnerTenantId            = $baselineOwnerTenantId
-            TargetTenantFriendlyName         = $targetTenantFriendlyName
-            TargetTenantMsTenantId            = $targetTenantMsTenantId
-            TargetTenantClientTenantId       = $targetTenantClientTenantId
-            AlignedBaselineId                = $alignment.PSObject.Properties['alignedBaselineId'].Value
-        }
-        $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantFriendlyName', 'TargetTenantFriendlyName'))
-        $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantMsTenantId', 'TargetTenantMsTenantId'))
-        $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantClientTenantId', 'TargetTenantClientTenantId'))
-        [void]$alignmentTable.Add($row)
-    }
-}
 }
 
 Write-Verbose "Generated alignment table with $($alignmentTable.Count) row(s)."

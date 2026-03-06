@@ -80,7 +80,8 @@ function Invoke-InforcerApiRequest {
     }
 
     try {
-        $response = Invoke-RestMethod @params
+        $webResponse = Invoke-WebRequest @params
+        $responseBody = $webResponse.Content
     } catch [System.Net.WebException] {
         $statusCode = [int]$_.Exception.Response.StatusCode
         $reader = $null
@@ -103,35 +104,48 @@ function Invoke-InforcerApiRequest {
         return
     }
 
-    $rawResponse = $response
-    if ($response -is [string]) {
-        try {
-            $rawResponse = $response | ConvertFrom-Json
-        } catch {
-            Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $($response.Substring(0, [Math]::Min(200, $response.Length)))..." `
-                -ErrorId 'NonJsonResponse' `
-                -Category InvalidData
-            return
-        }
+    if ([string]::IsNullOrWhiteSpace($responseBody)) {
+        Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData
+        return
+    }
+
+    try {
+        $rawResponse = $responseBody | ConvertFrom-Json
+    } catch {
+        Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $($responseBody.Substring(0, [Math]::Min(200, $responseBody.Length)))..." `
+            -ErrorId 'NonJsonResponse' `
+            -Category InvalidData
+        return
     }
 
     if ($null -eq $rawResponse) {
-        Write-Error -Message 'API returned an empty or invalid response.' -ErrorId 'EmptyResponse' -Category InvalidData
+        Write-Error -Message 'API returned an invalid response.' -ErrorId 'EmptyResponse' -Category InvalidData
+        return
+    }
+
+    # API error payload (success: false) — single, clean message; no stack or raw JSON
+    $successValue = $rawResponse.PSObject.Properties['success'].Value
+    if ($null -ne $rawResponse.PSObject.Properties['success'] -and $successValue -eq $false) {
+        $apiMessage = ($rawResponse.PSObject.Properties['message'].Value -as [string])
+        if ([string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage = 'Request failed.' }
+        $apiMessage = $apiMessage.Trim()
+        $errorCode = ($rawResponse.PSObject.Properties['errorCode'].Value -as [string])
+        if ([string]::IsNullOrWhiteSpace($errorCode)) { $errorCode = '' }
+
+        $friendlyMessage = switch -Regex ($errorCode) {
+            '^forbidden$'       { "You don't have permission to access this tenant or resource." }
+            'notfound|not_found' { "Tenant or resource not found." }
+            default             { $apiMessage }
+        }
+        if ($rawResponse.errors -is [array] -and $rawResponse.errors.Count -gt 0) {
+            $extra = ($rawResponse.errors | ForEach-Object { $_.ToString() }) -join '; '
+            if (-not [string]::IsNullOrWhiteSpace($extra)) { $friendlyMessage += " $extra" }
+        }
+        Write-Error -Message $friendlyMessage -ErrorId 'ApiError' -Category InvalidOperation
         return
     }
 
     $data = $rawResponse
-    if ($rawResponse.PSObject.Properties['success']) {
-        if (-not $rawResponse.success) {
-            $msg = if ($rawResponse.message) { $rawResponse.message } else { 'API request failed' }
-            if ($rawResponse.errors -is [array] -and $rawResponse.errors.Count -gt 0) {
-                $msg += ' - ' + ($rawResponse.errors -join ', ')
-            }
-            Write-Error -Message $msg -ErrorId 'ApiError' -Category InvalidOperation
-            return
-        }
-    }
-    # Unwrap response.data when present (API often returns { "data": [...] } with or without "success")
     $dataProp = $rawResponse.PSObject.Properties['data']
     if ($dataProp -and $null -ne $dataProp.Value) {
         $data = $dataProp.Value

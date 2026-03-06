@@ -76,6 +76,9 @@ Get-InforcerAlignmentScore
 # Get policies for a tenant
 Get-InforcerTenantPolicies -TenantId 482
 
+# Show policy changes (PolicyDiffFormatted on each tenant when available)
+Get-InforcerTenant | Select-Object ClientTenantId, TenantFriendlyName, PolicyDiffFormatted
+
 # Disconnect when done
 Disconnect-Inforcer
 ```
@@ -92,8 +95,7 @@ Disconnect-Inforcer
 | **Get-InforcerBaseline**       | Retrieves baseline groups and members.                      |
 | **Get-InforcerTenantPolicies** | Retrieves policies for a specified tenant.                  |
 | **Get-InforcerAlignmentScore** | Retrieves alignment scores (table or raw format).           |
-| **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range).    |
-| **Get-InforcerAuditEventType** | Returns event type names (used for tab completion).         |
+| **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 
 
 For full parameter details and example output, see **[Cmdlet Reference](docs/CMDLET-REFERENCE.md)**.

@@ -1,6 +1,6 @@
 @{
     RootModule        = 'Inforcer.psm1'
-    ModuleVersion     = '0.0.1'
+    ModuleVersion     = '0.0.2'
     GUID              = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
     Author            = 'Roy Klooster'
     CompanyName       = 'Community'

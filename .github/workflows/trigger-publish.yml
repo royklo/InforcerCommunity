@@ -1,21 +1,21 @@
-# Trigger publish pipeline in the automation repo
-# Runs when a PR merges to main; sends repository_dispatch to the automation repo.
-# Requires secret AUTOMATION_TRIGGER_TOKEN (PAT with repo scope on the automation repo).
-name: Trigger Publish
+# # Trigger publish pipeline in the automation repo
+# # Runs when a PR merges to main; sends repository_dispatch to the automation repo.
+# # Requires secret AUTOMATION_TRIGGER_TOKEN (PAT with repo scope on the automation repo).
+# name: Trigger Publish
 
-on:
-  push:
-    branches: [ main, master ]
+# on:
+#   push:
+#     branches: [ main, master ]
 
-jobs:
-  trigger:
-    name: Notify automation repo
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send repository_dispatch
-        run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.AUTOMATION_TRIGGER_TOKEN }}" \
-            https://api.github.com/repos/${{ vars.AUTOMATION_REPO || 'royklo/Powershell-Module-Automation' }}/dispatches \
-            -d '{"event_type":"publish_module","client_payload":{"repository":"${{ github.repository }}","ref":"${{ github.ref }}"}}'
+# jobs:
+#   trigger:
+#     name: Notify automation repo
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Send repository_dispatch
+#         run: |
+#           curl -X POST \
+#             -H "Accept: application/vnd.github+json" \
+#             -H "Authorization: Bearer ${{ secrets.AUTOMATION_TRIGGER_TOKEN }}" \
+#             https://api.github.com/repos/${{ vars.AUTOMATION_REPO || 'royklo/Powershell-Module-Automation' }}/dispatches \
+#             -d '{"event_type":"publish_module","client_payload":{"repository":"${{ github.repository }}","ref":"${{ github.ref }}"}}'

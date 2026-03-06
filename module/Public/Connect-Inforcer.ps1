@@ -11,16 +11,16 @@
 .PARAMETER Region
     Region for production API. Valid: uk, eu, us, anz. Default: uk. Ignored when -BaseUrl is set.
 .PARAMETER BaseUrl
-    Optional custom base URL. When set, -Region is ignored. Use a UAT URL (e.g. containing uat or inforcerdev) to connect to UAT; output shows Environment = UAT only when connected to UAT or DEV.
+    Optional custom base URL. When set, -Region is ignored.
 .EXAMPLE
     Connect-Inforcer -ApiKey "your-api-key" -Region uk
 .EXAMPLE
     $key = Read-Host -AsSecureString -Prompt "API Key"; Connect-Inforcer -ApiKey $key -Region uk
 .EXAMPLE
-    Connect-Inforcer -ApiKey $key -BaseUrl "https://api-uk.uat.inforcerdev.net/api"
-    Connects to UAT; output includes Environment = UAT. Production connections do not show Environment.
+    Connect-Inforcer -ApiKey $key -BaseUrl "https://api.example.com/api"
+    Connects using a custom base URL (use your actual API base URL in place of the example).
 .OUTPUTS
-    PSObject with Status, Region, BaseUrl, ConnectedAt; Environment is included only when connected to UAT or DEV.
+    PSObject with Status, Region, BaseUrl, ConnectedAt.
 .LINK
     Disconnect-Inforcer
 .LINK
@@ -88,7 +88,7 @@ try {
     if ($_.Exception.Response) { $statusCode = [int]$_.Exception.Response.StatusCode }
     $msg = $_.Exception.Message
     if ($statusCode -eq 401) {
-        $msg = 'Connection failed: the API key is invalid for this endpoint. Use a key that matches the environment (e.g. UAT key with UAT URL, production key with production URL).'
+        $msg = 'Connection failed: the API key is invalid for this endpoint.'
     } else {
         $msg = "Connection validation failed (HTTP $statusCode): $msg"
     }
@@ -99,11 +99,6 @@ try {
     return
 }
 
-# Derive environment from BaseUrl for display (UAT/DEV vs Production)
-$environment = $null
-if ($baseUrlValue -match 'uat|inforcerdev') { $environment = 'UAT' }
-elseif ($baseUrlValue -match '\bdev\b|\.dev\.') { $environment = 'DEV' }
-
 $script:InforcerSession = @{
     ApiKey      = $secureApiKey
     BaseUrl     = $baseUrlValue
@@ -111,16 +106,13 @@ $script:InforcerSession = @{
     ConnectedAt = Get-Date
 }
 
-Write-Verbose "Successfully connected to Inforcer API at $baseUrlValue $(if ($environment) { "($environment)" } else { '(Production)' })"
+Write-Verbose "Successfully connected to Inforcer API at $baseUrlValue"
 
 $out = [PSCustomObject]@{
     Status      = 'Connected'
     Region      = $Region
     BaseUrl     = $baseUrlValue
     ConnectedAt = $script:InforcerSession.ConnectedAt
-}
-if ($environment) {
-    $out.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('Environment', $environment))
 }
 $out
 }

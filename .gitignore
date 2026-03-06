@@ -34,3 +34,6 @@ packages/
 # Pester
 PesterResult*.xml
 TestResults/
+
+# Cursor
+.cursor/

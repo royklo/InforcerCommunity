@@ -1,7 +1,7 @@
-# Internal: returns audit event type names from the API. Used for Get-InforcerAuditEvent -EventType tab completion and for resolving "all types" when -EventType is omitted.
-# Exported only so the argument completer (running in user scope) can call it; not advertised as a primary cmdlet.
-# Uses global cache so tab completion (which may run in a different scope) always sees it.
-# Default list matches API /beta/auditEvents/eventTypes so autotab works before first API call.
+# Internal: returns audit event type names from the API.
+# Used by Get-InforcerAuditEvent when -EventType is omitted (resolve "all types").
+# Tab completion for -EventType uses the static list in Get-InforcerAuditEvent.ps1 so it always works.
+# Uses global cache for API response so "all types" resolution is consistent.
 
 if (-not $global:InforcerCachedEventTypes) {
     $global:InforcerCachedEventTypes = @(

@@ -115,7 +115,7 @@ Found a bug or have a feature idea? Please open an issue:
 
 ## License
 
-[MIT](LICENSE) — (c) Roy Klooster. Community project, not affiliated with Inforcer.
+[MIT](LICENSE) — This module was created by Roy Klooster for the community. It is not owned or officially maintained by Inforcer; it is a community project built by a community member to make it easier to work with the Inforcer API from PowerShell.
 
 ---
 

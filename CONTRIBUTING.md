@@ -5,7 +5,7 @@ Thank you for your interest in contributing. This project is maintained by the c
 ## How to contribute (fork and pull request)
 
 1. **Fork the repository**  
-   Click **Fork** on [the GitHub repo](<!-- REPLACE: GITHUB_URL -->).
+   Click **Fork** on [the GitHub repo](https://github.com/royklo/Inforcer-Powershell-Module).
 
 2. **Clone your fork**
    ```powershell
@@ -19,7 +19,7 @@ Thank you for your interest in contributing. This project is maintained by the c
    # or: git checkout -b fix/bug-description
    ```
 
-4. **Make your changes** in `Powershell/` (see [Development setup](#development-setup) and [Code style](#code-style)).
+4. **Make your changes** in `module/` (see [Development setup](#development-setup) and [Code style](#code-style)).
 
 5. **Run tests** (see [Testing](#testing)).
 
@@ -31,14 +31,14 @@ Thank you for your interest in contributing. This project is maintained by the c
    ```
 
 7. **Open a pull request**  
-   Go to the [original repository](<!-- REPLACE: GITHUB_URL -->) and open a **New pull request** from your branch. Fill in the PR template (summary of changes, related issue if any, checklist).
+   Go to the [original repository](https://github.com/royklo/Inforcer-Powershell-Module) and open a **New pull request** from your branch. Fill in the PR template (summary of changes, related issue if any, checklist).
 
 ## Development setup
 
 - **PowerShell 7.0+** is required.
-- No build step: the module is a script module. After editing files under `Powershell/`, re-import:
+- No build step: the module is a script module. After editing files under `module/`, re-import:
   ```powershell
-  Import-Module ./Powershell -Force
+  Import-Module ./module -Force
   ```
 - Optional: run the full cmdlet verification script from repo root:
   ```powershell
@@ -51,16 +51,16 @@ The module follows a **consistency contract** so all cmdlets behave predictably:
 
 - **Parameter order:** Format → TenantId → Tag (if any) → OutputType for Get-* cmdlets that return API data.
 - **-Format and -OutputType:** Present where applicable; do not remove them.
-- **Property names:** Use the standard PascalCase aliases (Tenant, Baseline, Policy, AlignmentScore, AuditEvent) implemented in `Powershell/Private/Add-InforcerPropertyAliases.ps1`.
+- **Property names:** Use the standard PascalCase aliases (Tenant, Baseline, Policy, AlignmentScore, AuditEvent) implemented in `module/Private/Add-InforcerPropertyAliases.ps1`.
 - **JSON depth:** Always 100 for `-OutputType JsonObject`.
 
-The full contract and checklist are in `.cursor/agents/inforcer-unified-guardian.md` and summarized in `.cursor/skills/inforcer-unified-guardian/SKILL.md`. When you fix a bug or change behavior, update **FINDINGS.md** with what was done and how to test.
+When you fix a bug or change behavior, describe what was done and how to test in your pull request.
 
 ## How to raise a bug
 
 Use the **Bug report** issue template so we get the information we need:
 
-1. Go to [New issue](<!-- REPLACE: GITHUB_URL -->/issues/new).
+1. Go to [New issue](https://github.com/royklo/Inforcer-Powershell-Module/issues/new).
 2. Choose **Bug report**.
 3. Fill in:
    - **Description** — What went wrong?
@@ -74,7 +74,7 @@ Use the **Bug report** issue template so we get the information we need:
 
 Use the **Feature request** template:
 
-1. Go to [New issue](<!-- REPLACE: GITHUB_URL -->/issues/new).
+1. Go to [New issue](https://github.com/royklo/Inforcer-Powershell-Module/issues/new).
 2. Choose **Feature request**.
 3. Describe the feature, the use case, and your proposed solution.
 
@@ -83,7 +83,7 @@ Use the **Feature request** template:
 From the repository root:
 
 ```powershell
-Invoke-Pester ./Powershell/Tests/Consistency.Tests.ps1
+Invoke-Pester ./Tests/Consistency.Tests.ps1
 ```
 
 This checks that exported functions and key parameters match the consistency contract. Optionally run `scripts/Test-AllCmdlets.ps1` to verify all cmdlets load and respond correctly when not connected.
@@ -93,16 +93,15 @@ This checks that exported functions and key parameters match the consistency con
 - **CI must pass** (the GitHub Action runs the consistency tests).
 - **Tests pass locally** — run the Pester tests before pushing.
 - **Comment-based help** — Keep `.SYNOPSIS`, `.DESCRIPTION`, parameters, and examples complete for any cmdlet you change.
-- **Consistency contract** — Follow parameter order and property names; reference the guardian docs if you change parameters or output shape.
-- **FINDINGS.md** — If your change fixes a bug or adds a finding, add or update the row with "What was done" and "How to test".
+- **Consistency contract** — Follow parameter order and property names described in [Code style and consistency](#code-style-and-consistency).
+- Describe in your PR what was done and how to test if you fixed a bug or changed behavior.
 
 Avoid breaking changes to Public cmdlets or output properties without prior discussion in an issue.
 
 ## Adding a new cmdlet
 
-1. Update the consistency contract in `.cursor/agents/inforcer-unified-guardian.md` (cmdlet list, parameters, and property names if you introduce a new object type).
-2. Implement in `Powershell/Public/` and add the function name to `FunctionsToExport` in `Powershell/Inforcer.psd1`.
-3. Update `docs/CMDLET-REFERENCE.md` with synopsis, parameters, examples, and example output.
-4. Run the consistency checklist and tests; update `Powershell/Tests/Consistency.Tests.ps1` if the expected cmdlet/parameter list changes.
+1. Implement in `module/Public/` following the consistency rules above, and add the function name to `FunctionsToExport` in `module/Inforcer.psd1`.
+2. Update `docs/CMDLET-REFERENCE.md` with synopsis, parameters, examples, and example output.
+3. Run the consistency tests; update `Tests/Consistency.Tests.ps1` if the expected cmdlet or parameter list changes.
 
 Thank you for contributing.

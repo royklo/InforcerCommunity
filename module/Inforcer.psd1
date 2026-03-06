@@ -7,7 +7,7 @@
     Copyright         = '(c) Roy Klooster. Community project, not affiliated with Inforcer.'
     Description       = 'Community PowerShell module for the Inforcer API. Created by Roy Klooster.'
     PowerShellVersion = '7.0'
-    ScriptsToProcess  = @('Scripts/Register-InforcerAuditEventCompleters.ps1')
+    ScriptsToProcess  = @()
     TypesToProcess    = @('Inforcer.Types.ps1xml')
     FormatsToProcess  = @('Inforcer.Format.ps1xml')
     FunctionsToExport = @(
@@ -26,7 +26,7 @@
     AliasesToExport   = @()
     PrivateData       = @{
         PSData = @{
-            ProjectUri = '<!-- REPLACE: GITHUB_URL -->'
+            ProjectUri = 'https://github.com/royklo/Inforcer-Powershell-Module'
         }
     }
 }

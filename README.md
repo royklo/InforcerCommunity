@@ -1,8 +1,8 @@
 # Inforcer PowerShell Module
 
-[PowerShell Gallery](!-- REPLACE: PSGALLERY_URL --)
-[![CI]([https://github.com/](https://github.com/)[/](https://github.com/)/actions/workflows/build-and-test.yml/badge.svg)](/actions)
-[License: MIT](LICENSE)
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/Inforcer)](https://www.powershellgallery.com/packages/Inforcer)
+[![CI](https://github.com/royklo/Inforcer-Powershell-Module/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/royklo/Inforcer-Powershell-Module/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 PowerShell module for the **Inforcer API**. Connect, query tenants, baselines, policies, alignment scores, and audit events with consistent parameters and output.
 
@@ -10,8 +10,8 @@ PowerShell module for the **Inforcer API**. Connect, query tenants, baselines, p
 
 This module was **created by Roy Klooster** for the community. It is **not owned or officially maintained by Inforcer**; it is a community project built by a community member to make it easier to work with the Inforcer API from PowerShell.
 
-- **Repository:** 
-- **PowerShell Gallery:** 
+- **Repository:** https://github.com/royklo/Inforcer-Powershell-Module
+- **PowerShell Gallery:** https://www.powershellgallery.com/packages/Inforcer
 
 ## Repository structure
 
@@ -24,10 +24,11 @@ Inforcer-Powershell-Module/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/       # Bug report, feature request
 │   ├── PULL_REQUEST_TEMPLATE.md
-│   └── workflows/            # build-and-test.yml, publish-to-gallery.yml
+│   └── workflows/            # build-and-test.yml, trigger-publish.yml
 ├── docs/
 │   └── CMDLET-REFERENCE.md   # Parameters and example output
-├── Powershell/               # Script module (see Powershell/README.md)
+├── CHANGELOG.md              # Release history
+├── module/                 # Script module (see module/README.md)
 │   ├── Inforcer.psd1
 │   ├── Inforcer.psm1
 │   ├── Inforcer.Format.ps1xml
@@ -55,9 +56,9 @@ Install-Module -Name Inforcer -Scope CurrentUser
 ### From source (GitHub)
 
 ```powershell
-git clone <!-- REPLACE: GITHUB_URL -->.git
+git clone https://github.com/royklo/Inforcer-Powershell-Module.git
 cd Inforcer-Powershell-Module
-Import-Module ./Powershell -Force
+Import-Module ./module -Force
 ```
 
 ## Quick start
@@ -105,8 +106,8 @@ We welcome contributions: fork the repo, make your changes, and open a pull requ
 
 Found a bug or have a feature idea? Please open an issue:
 
-- [Bug report](/issues/new?template=bug_report.md)
-- [Feature request](/issues/new?template=feature_request.md)
+- [Bug report](https://github.com/royklo/Inforcer-Powershell-Module/issues/new?template=bug_report.md)
+- [Feature request](https://github.com/royklo/Inforcer-Powershell-Module/issues/new?template=feature_request.md)
 
 ## License
 
@@ -114,6 +115,4 @@ Found a bug or have a feature idea? Please open an issue:
 
 ---
 
-**Where to paste your links:** In this file, replace `<!-- REPLACE: GITHUB_URL -->` with your full GitHub repo URL (e.g. `https://github.com/yourusername/Inforcer-Powershell-Module`) and `<!-- REPLACE: PSGALLERY_URL -->` with the PowerShell Gallery package URL (e.g. `https://www.powershellgallery.com/packages/Inforcer`). For the CI badge to work, also replace `<!-- REPLACE: GITHUB_ORG_OR_USER -->` and `<!-- REPLACE: GITHUB_REPO -->` in the badge URL with your GitHub username/org and repo name.
-
-**PowerShell Gallery auto-publish:** The workflow `.github/workflows/publish-to-gallery.yml` publishes the module when you push to `main`. Store your PowerShell Gallery API key in GitHub: **Settings → Secrets and variables → Actions → New repository secret**, name `PS_GALLERY_API_KEY`. Bump `ModuleVersion` in `Powershell/Inforcer.psd1` before merging to `main` so each publish has a new version.
+**Publishing:** The module is published to PowerShell Gallery by the [Powershell-Module-Automation](https://github.com/royklo/Powershell-Module-Automation) repository. When a PR merges to `main`, the `trigger-publish.yml` workflow sends a `repository_dispatch` event to the automation repo, which runs the full pipeline (validate, test, version check, changelog, publish, post-publish verification, GitHub release). No publishing secrets are stored in this repository.

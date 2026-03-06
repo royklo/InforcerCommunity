@@ -27,6 +27,8 @@
     Get-InforcerTenant
 #>
 function Connect-Inforcer {
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '',
+    Justification = 'Intentional convenience: users may pass a plain-text API key which is converted to SecureString for storage.')]
 [CmdletBinding(SupportsShouldProcess = $true)]
 [OutputType([PSObject])]
 param(

@@ -1,6 +1,16 @@
 MIT License
 
-Copyright (c) Inforcer
+This project is a community PowerShell module created by Roy Klooster. It is not
+affiliated with, endorsed by, or connected to Inforcer (the organization or product).
+It is offered purely as an extra tool for the community. You use it at your own
+risk; the author is not responsible for any mistakes you make, for how you use
+the software, or for any damage or loss resulting from its use.
+
+The project is community-driven: contributions are welcome via pull requests and
+are merged after review and validation. There is no formal "organization" behind
+it—just maintainers and contributors working together.
+
+Copyright (c) Roy Klooster
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

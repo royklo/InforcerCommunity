@@ -1,0 +1,36 @@
+# Environment and secrets
+.env
+.env.local
+*.env
+
+# Build outputs
+**/bin/
+**/obj/
+
+# IDE and editors
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PowerShell
+*.pdb
+*.nupkg
+packages/
+
+# Logs and temp
+*.log
+*.tmp
+*.temp
+*.swp
+*~
+
+# Pester
+PesterResult*.xml
+TestResults/

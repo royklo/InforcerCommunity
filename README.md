@@ -24,7 +24,7 @@ Inforcer-Powershell-Module/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/       # Bug report, feature request
 │   ├── PULL_REQUEST_TEMPLATE.md
-│   └── workflows/            # build-and-test.yml, trigger-publish.yml
+│   └── workflows/            # build-and-test.yml; trigger-publish.yml.disabled (disabled)
 ├── docs/
 │   └── CMDLET-REFERENCE.md   # Parameters and example output
 ├── CHANGELOG.md              # Release history

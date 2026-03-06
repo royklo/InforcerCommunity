@@ -8,7 +8,7 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 
 ### Added
 
-- Initial release of the Inforcer PowerShell module.
+- Initial release of the InforcerCommunity PowerShell module.
 - Cmdlets: Connect-Inforcer, Disconnect-Inforcer, Test-InforcerConnection, Get-InforcerTenant, Get-InforcerBaseline, Get-InforcerTenantPolicies, Get-InforcerAlignmentScore, Get-InforcerAuditEvent.
 - Tab completion for audit event types.
 - Region support (uk, eu, us, anz) and custom BaseUrl.

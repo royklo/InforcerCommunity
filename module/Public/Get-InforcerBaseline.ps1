@@ -87,12 +87,12 @@ if ($result -is [array]) {
     foreach ($item in $result) {
         if ($item -is [PSObject]) {
             Add-InforcerPropertyAliases -InputObject $item -ObjectType Baseline
-            $item.PSObject.TypeNames.Insert(0, 'Inforcer.Baseline')
+            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Baseline')
         }
     }
 } elseif ($result -is [PSObject]) {
     Add-InforcerPropertyAliases -InputObject $result -ObjectType Baseline
-    $result.PSObject.TypeNames.Insert(0, 'Inforcer.Baseline')
+    $result.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Baseline')
 }
 
 if ($filterPredicate) {

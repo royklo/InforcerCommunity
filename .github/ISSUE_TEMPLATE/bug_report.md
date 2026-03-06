@@ -28,7 +28,7 @@ What actually happened (error message, wrong output, or no output).
 
 - **PowerShell version:** (e.g. output of `$PSVersionTable.PSVersion`)
 - **OS:** (e.g. Windows 11, macOS 14, Ubuntu 22.04)
-- **Module version:** (e.g. output of `Get-Module Inforcer | Select-Object Version`)
+- **Module version:** (e.g. output of `Get-Module InforcerCommunity | Select-Object Version`)
 
 ## Additional context
 

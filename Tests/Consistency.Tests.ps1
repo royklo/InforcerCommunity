@@ -3,19 +3,33 @@
 # Run from repo root: Invoke-Pester ./Tests/Consistency.Tests.ps1
 
 $ErrorActionPreference = 'Stop'
-$here = Split-Path -Parent $PSCommandPath
-$repoRoot = Join-Path $here '..'
-$moduleRoot = Join-Path $repoRoot 'module'
+
+# Resolve path to InforcerCommunity.psd1. Defined in global scope so Pester BeforeAll blocks can call it.
+function global:Get-InforcerCommunityManifestPath {
+    if ($script:manifestPathCache -and (Test-Path -LiteralPath $script:manifestPathCache)) { return $script:manifestPathCache }
+    $here = $PSScriptRoot
+    if (-not $here -and $PSCommandPath) { $here = Split-Path -Parent $PSCommandPath }
+    if ($here) {
+        $tryPath = Join-Path (Join-Path (Join-Path $here '..') 'module') 'InforcerCommunity.psd1'
+        if (Test-Path -LiteralPath $tryPath) { $script:manifestPathCache = $tryPath; return $tryPath }
+    }
+    $root = Get-Location
+    $tryPath = Join-Path (Join-Path $root 'module') 'InforcerCommunity.psd1'
+    if (-not (Test-Path -LiteralPath $tryPath)) {
+        throw "Module manifest not found. Run from repo root. Tried: $tryPath"
+    }
+    $script:manifestPathCache = $tryPath
+    $tryPath
+}
 
 # Expected cmdlets and key parameters (from consistency contract) - defined inside Describe for scope
 Describe 'Consistency contract' {
 
     BeforeAll {
-        Remove-Module -Name 'Inforcer' -ErrorAction SilentlyContinue
-        $modRoot = if ($moduleRoot) { $moduleRoot } else { Join-Path (Get-Location) 'module' }
-        $manifestPath = (Resolve-Path (Join-Path $modRoot 'Inforcer.psd1')).Path
-        Import-Module $manifestPath -Force
-        $script:exported = (Get-Module -Name 'Inforcer').ExportedCommands.Keys
+        Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
+        $path = Get-InforcerCommunityManifestPath
+        Import-Module $path -Force
+        $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
         $script:expectedCount = 8
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
@@ -76,10 +90,8 @@ Describe 'No-silent-failure contract' {
     # Runs without a connection so we can test in CI without API keys.
 
     BeforeAll {
-        Remove-Module -Name 'Inforcer' -ErrorAction SilentlyContinue
-        $modRoot = if ($moduleRoot) { $moduleRoot } else { Join-Path (Get-Location) 'module' }
-        $manifestPath = (Resolve-Path (Join-Path $modRoot 'Inforcer.psd1')).Path
-        Import-Module $manifestPath -Force
+        Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
+        Import-Module (Get-InforcerCommunityManifestPath) -Force
     }
 
     It 'Disconnect-Inforcer produces output when not connected' {
@@ -130,10 +142,8 @@ Describe 'Parameter binding and behavior' {
     # Validates: parameters work, and cmdlet returns output or error as expected (no silence).
 
     BeforeAll {
-        Remove-Module -Name 'Inforcer' -ErrorAction SilentlyContinue
-        $modRoot = if ($moduleRoot) { $moduleRoot } else { Join-Path (Get-Location) 'module' }
-        $manifestPath = (Resolve-Path (Join-Path $modRoot 'Inforcer.psd1')).Path
-        Import-Module $manifestPath -Force
+        Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
+        Import-Module (Get-InforcerCommunityManifestPath) -Force
     }
 
     It 'Connect-Inforcer accepts ApiKey and Region and produces output or error' {

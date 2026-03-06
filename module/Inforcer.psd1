@@ -4,7 +4,6 @@
     GUID              = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
     Author            = 'Roy Klooster'
     CompanyName       = 'Community'
-    Copyright         = '(c) Roy Klooster. Community project, not affiliated with Inforcer.'
     Description       = 'Community PowerShell module for the Inforcer API. Created by Roy Klooster.'
     PowerShellVersion = '7.0'
     ScriptsToProcess  = @()

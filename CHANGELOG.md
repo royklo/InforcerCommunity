@@ -8,13 +8,9 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 
 ### Features
 
-- PowerShell Gallery–ready metadata and dry-run script for publish validation.
+- PowerShell Gallery–ready metadata.
 - README Quick start: example for showing policy changes per tenant.
 
-### Bug Fixes
-
-- Consistency tests: fixed module load path when run via Pester.
-- Get-InforcerTenant: `-TenantId` now returns only the matching tenant.
 
 ### Documentation
 

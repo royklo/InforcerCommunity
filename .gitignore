@@ -46,3 +46,7 @@ TestResults/
 
 # Skills
 /SKILLS.md
+
+# ignore test files
+/*.html
+/**/*.html

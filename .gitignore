@@ -37,3 +37,12 @@ TestResults/
 
 # Cursor
 .cursor/
+
+# Github
+/.github/copilot-instructions.md
+
+# Agents
+/AGENTS.md
+
+# Skills
+/SKILLS.md

@@ -26,7 +26,8 @@ InforcerCommunity/
 │   ├── PULL_REQUEST_TEMPLATE.md
 │   └── workflows/            # build-and-test.yml
 ├── docs/
-│   └── CMDLET-REFERENCE.md   # Parameters and example output
+│   ├── CMDLET-REFERENCE.md   # Parameters and example output
+│   └── API-REFERENCE.md      # API schemas and response structures
 ├── CHANGELOG.md              # Release history
 ├── module/                 # Script module (see module/README.md)
 │   ├── InforcerCommunity.psd1
@@ -100,7 +101,7 @@ Disconnect-Inforcer
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 
 
-For full parameter details and example output, see **[Cmdlet Reference](docs/CMDLET-REFERENCE.md)**.
+For full parameter details and example output, see **[Cmdlet Reference](docs/CMDLET-REFERENCE.md)**. For detailed API schemas and response structures, see **[API Reference](docs/API-REFERENCE.md)**.
 
 ## Contributing
 

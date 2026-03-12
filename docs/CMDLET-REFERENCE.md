@@ -2,6 +2,8 @@
 
 This document describes each cmdlet with parameters, usage examples, and **example output**.
 
+> **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
+
 ---
 
 ## Connect-Inforcer
@@ -88,6 +90,8 @@ When not connected, an error is written (e.g. "Not connected. To connect, run: C
 
 Retrieves tenant information. Optionally filter by `-TenantId` (Client Tenant ID or Microsoft Tenant ID GUID). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
 
+**Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `tags`, `alignmentSummaries`, `licenses`
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
@@ -133,6 +137,8 @@ Same shape as one of the objects above (one tenant).
 
 Retrieves baseline groups and their members. Optionally filter by `-TenantId` (owner or member).
 
+**Output schema**: [BaselineGroup](./API-REFERENCE.md#baselinegroup) — includes `members`, `items`, alignment thresholds
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
@@ -163,6 +169,8 @@ SemiAlignedThreshold      : 60
 ## Get-InforcerTenantPolicies
 
 Retrieves policies for a specified tenant. TenantId can be Client Tenant ID (integer) or Microsoft Tenant ID (GUID).
+
+**Output schema**: [Policy](./API-REFERENCE.md#policy) — includes `product`, `platform`, `policyData`, `tags`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -203,6 +211,8 @@ Platform   : Exchange
 
 Retrieves alignment scores. **Format Table** (default): one row per alignment with columns below. **Format Raw**: raw API response. Optional `-TenantId` and `-Tag` filter the table.
 
+**Output schema**: [AlignmentScore](./API-REFERENCE.md#alignmentscore) — includes `score`, `baselineGroupId`, `lastComparisonDateTime`
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Table` (default) or `Raw`. |
@@ -236,6 +246,8 @@ A JSON string (array of objects) with properties such as `tenantId`, `tenantFrie
 ## Get-InforcerAuditEvent
 
 Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-DateFrom`, `-DateTo`, `-PageSize`, and `-MaxResults`.
+
+**Output schema**: [AuditEvent](./API-REFERENCE.md#auditevent) — includes `eventType`, `timestamp`, flattened metadata fields
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -287,6 +299,7 @@ Timestamp       : 2025-03-05T14:20:00Z
 
 ## See also
 
-- **README.md** — Installation and quick start.
-- **CONTRIBUTING.md** — How to contribute and report bugs.
+- **[API-REFERENCE.md](./API-REFERENCE.md)** — Detailed API schemas and response structures.
+- **[README.md](../README.md)** — Installation and quick start.
+- **[CONTRIBUTING.md](../CONTRIBUTING.md)** — How to contribute and report bugs.
 - **Get-Help \<CmdletName\> -Full** — Full comment-based help in the module.

@@ -97,7 +97,8 @@ function Invoke-InforcerApiRequest {
             if ($json.message) { $detail = $json.message }
             elseif ($json.error) { $detail = $json.error }
         } catch { }
-        $detail = $detail -replace [regex]::Escape($apiKey), '[REDACTED]'
+        $apiKeyPattern = [regex]::new([regex]::Escape($apiKey), 'Compiled')
+        $detail = $apiKeyPattern.Replace($detail, '[REDACTED]')
         Write-Error -Message "Inforcer API request failed (HTTP $statusCode): $detail" `
             -ErrorId 'ApiRequestFailed' `
             -Category ConnectionError
@@ -168,9 +169,5 @@ function Invoke-InforcerApiRequest {
         }
     }
 
-    if ($data -is [array]) {
-        $data | ForEach-Object { $_ }
-    } else {
-        $data
-    }
+    $data
 }

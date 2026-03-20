@@ -17,7 +17,7 @@ function Add-InforcerPropertyAliases {
         [object]$InputObject,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AuditEvent')]
+        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent')]
         [string]$ObjectType
     )
 
@@ -51,39 +51,40 @@ function Add-InforcerPropertyAliases {
                 $licensesProp = $obj.PSObject.Properties['licenses']
                 if ($licensesProp -and $null -ne $licensesProp.Value) {
                     $arr = @($licensesProp.Value)
-                    $parts = @()
+                    $parts = [System.Collections.Generic.List[string]]::new($arr.Count)
                     foreach ($x in $arr) {
                         if ($null -eq $x) { continue }
+                        $val = $null
                         if ($x -is [PSObject] -and $x.PSObject.Properties['sku']) {
-                            $parts += $x.PSObject.Properties['sku'].Value -as [string]
+                            $val = $x.PSObject.Properties['sku'].Value -as [string]
                         } elseif ($x -is [PSObject] -and $x.PSObject.Properties['name']) {
-                            $parts += $x.PSObject.Properties['name'].Value -as [string]
+                            $val = $x.PSObject.Properties['name'].Value -as [string]
                         } else {
-                            $parts += $x.ToString().Trim()
+                            $val = $x.ToString().Trim()
                         }
+                        if (-not [string]::IsNullOrWhiteSpace($val)) { [void]$parts.Add($val) }
                     }
-                    $licensesStr = ($parts | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ', '
-                    if ($obj.PSObject.Properties['licenses']) { $obj.PSObject.Properties.Remove('licenses') }
-                    $obj.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('licenses', $licensesStr))
+                    $licensesStr = $parts -join ', '
+                    $licensesProp.Value = $licensesStr
                 }
                 # PolicyDiff formatted from recentChanges when available (structured: Changed / Added / Removed)
                 $recentProp = $obj.PSObject.Properties['recentChanges']
                 if ($recentProp -and $null -ne $recentProp.Value -and -not $obj.PSObject.Properties['PolicyDiffFormatted']) {
                     $rc = $recentProp.Value
-                    $lines = @()
+                    $lines = [System.Collections.Generic.List[string]]::new()
                     if ($rc -is [PSObject]) {
                         foreach ($sectionName in @('changedPolicies','addedPolicies','removedPolicies','changed','added','removed')) {
                             $sectionProp = $rc.PSObject.Properties[$sectionName]
                             if (-not $sectionProp -or $null -eq $sectionProp.Value) { continue }
                             $label = switch -Regex ($sectionName) { 'changed' { 'Changed Policies' } 'added' { 'Added Policies' } 'removed' { 'Removed Policies' } default { $sectionName } }
-                            $lines += $label + ':'
+                            [void]$lines.Add($label + ':')
                             $items = $sectionProp.Value
                             if ($items -is [object[]]) {
                                 foreach ($i in $items) {
                                     $s = if ($i -is [PSObject]) { $i.ToString() } else { $i -as [string] }
-                                    if ($s) { $lines += "  - $s" }
+                                    if ($s) { [void]$lines.Add("  - $s") }
                                 }
-                            } elseif ($items -is [string]) { $lines += "  - $items" }
+                            } elseif ($items -is [string]) { [void]$lines.Add("  - $items") }
                         }
                     }
                     if ($lines.Count -gt 0) {
@@ -134,13 +135,16 @@ function Add-InforcerPropertyAliases {
                     $idVal = $obj.PSObject.Properties['id'].Value
                     $policyNameVal = "Policy $(if ($null -ne $idVal) { $idVal } else { 'Unknown' })"
                 }
-                if ($obj.PSObject.Properties['PolicyName']) { $obj.PSObject.Properties.Remove('PolicyName') }
-                $obj.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('PolicyName', $policyNameVal))
-                if ($obj.PSObject.Properties['FriendlyName']) { $obj.PSObject.Properties.Remove('FriendlyName') }
-                $obj.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('FriendlyName', 'PolicyName'))
+                $pnProp = $obj.PSObject.Properties['PolicyName']
+                if ($pnProp) { $pnProp.Value = $policyNameVal }
+                else { $obj.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('PolicyName', $policyNameVal)) }
                 # Hide redundant name, displayName, friendlyName so only PolicyName is shown
                 foreach ($hide in @('name', 'displayName', 'friendlyName')) {
                     if ($obj.PSObject.Properties[$hide]) { $obj.PSObject.Properties.Remove($hide) }
+                }
+                # Add FriendlyName alias AFTER removing originals (PSObject.Properties is case-insensitive)
+                if (-not $obj.PSObject.Properties['FriendlyName']) {
+                    $obj.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('FriendlyName', 'PolicyName'))
                 }
             }
             'AlignmentScore' {
@@ -150,6 +154,51 @@ function Add-InforcerPropertyAliases {
                 AddAliasIfExists $obj 'BaselineGroupId' 'baselineGroupId'
                 AddAliasIfExists $obj 'BaselineGroupName' 'baselineGroupName'
                 AddAliasIfExists $obj 'LastComparisonDateTime' 'lastComparisonDateTime'
+            }
+            'AlignmentDetail' {
+                # Top-level alignment properties
+                AddAliasIfExists $obj 'AlignmentScore' 'alignmentScore'
+                AddAliasIfExists $obj 'BaselineTenantId' 'baselineTenantId'
+                AddAliasIfExists $obj 'SubjectTenantId' 'subjectTenantId'
+                AddAliasIfExists $obj 'SubjectDataTimestamp' 'subjectDataTimestamp'
+                AddAliasIfExists $obj 'BaselineDataTimestamp' 'baselineDataTimestamp'
+                AddAliasIfExists $obj 'CompletedAt' 'completedAt'
+                # Metrics
+                $metricsProp = $obj.PSObject.Properties['metrics']
+                if ($metricsProp -and $null -ne $metricsProp.Value -and $metricsProp.Value -is [PSObject]) {
+                    $m = $metricsProp.Value
+                    AddAliasIfExists $m 'TotalPolicies' 'totalPolicies'
+                    AddAliasIfExists $m 'MatchedPolicies' 'matchedPolicies'
+                    AddAliasIfExists $m 'MatchedWithAcceptedDeviations' 'matchedWithAcceptedDeviations'
+                    AddAliasIfExists $m 'DeviatedPolicies' 'deviatedPolicies'
+                    AddAliasIfExists $m 'RecommendedPoliciesFromBaseline' 'recommendedPoliciesFromBaseline'
+                    AddAliasIfExists $m 'CustomerOnlyPolicies' 'customerOnlyPolicies'
+                }
+                # Per-policy aliases (matchedPolicies and deviatedUnaccepted arrays)
+                $alignPropCached = $obj.PSObject.Properties['alignment']
+                if ($alignPropCached -and $null -ne $alignPropCached.Value) {
+                    $alignVal = $alignPropCached.Value
+                }
+                foreach ($arrayName in @('matchedPolicies', 'matchedWithAcceptedDeviations', 'deviatedUnaccepted', 'missingFromSubjectUnaccepted', 'additionalInSubjectUnaccepted')) {
+                    if ($null -eq $alignVal) { continue }
+                    $policyArrayProp = $alignVal.PSObject.Properties[$arrayName]
+                    if (-not $policyArrayProp -or $null -eq $policyArrayProp.Value) { continue }
+                    foreach ($policy in @($policyArrayProp.Value)) {
+                        if (-not ($policy -is [PSObject])) { continue }
+                        AddAliasIfExists $policy 'PolicyName' 'policyName'
+                        AddAliasIfExists $policy 'Product' 'product'
+                        AddAliasIfExists $policy 'PrimaryGroup' 'primaryGroup'
+                        AddAliasIfExists $policy 'SecondaryGroup' 'secondaryGroup'
+                        AddAliasIfExists $policy 'Platform' 'platform'
+                        AddAliasIfExists $policy 'PolicyTypeId' 'policyTypeId'
+                        AddAliasIfExists $policy 'InforcerPolicyTypeName' 'inforcerPolicyTypeName'
+                        AddAliasIfExists $policy 'PolicyCategoryId' 'policyCategoryId'
+                        AddAliasIfExists $policy 'IsDeviation' 'isDeviation'
+                        AddAliasIfExists $policy 'IsMissingFromSubject' 'isMissingFromSubject'
+                        AddAliasIfExists $policy 'IsAdditionalInSubject' 'isAdditionalInSubject'
+                        AddAliasIfExists $policy 'ReadOnly' 'readOnly'
+                    }
+                }
             }
             'AuditEvent' {
                 AddAliasIfExists $obj 'CorrelationId' 'correlationId'
@@ -167,9 +216,9 @@ function Add-InforcerPropertyAliases {
                     $metaProps = $meta.PSObject.Properties
                     # Only IPv4 and IPv6 (skip generic clientIp to avoid duplicating when same as clientIpv4)
                     foreach ($pn in @('clientIpv4','clientIpv6')) {
+                        $noteName = $pn.Substring(0,1).ToUpper() + $pn.Substring(1)
                         $p = $metaProps[$pn]
-                        if ($null -eq $p) { $p = $metaProps[$pn -replace '^c', 'C'] }
-                        $noteName = $pn -replace '^c', 'C'
+                        if ($null -eq $p) { $p = $metaProps[$noteName] }
                         if (-not $obj.PSObject.Properties[$noteName]) {
                             $val = if ($p -and $null -ne $p.Value) { $p.Value } else { '' }
                             $obj.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new($noteName, $val))

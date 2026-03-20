@@ -52,5 +52,39 @@
         </TableRowEntries>
       </TableControl>
     </View>
+    <View>
+      <Name>InforcerCommunity.AlignmentDetailPolicy.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.AlignmentDetailPolicy</TypeName>
+      </ViewSelectedBy>
+      <GroupBy>
+        <PropertyName>TenantName</PropertyName>
+      </GroupBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><PropertyName>TenantName</PropertyName></ListItem>
+              <ListItem><PropertyName>TenantId</PropertyName></ListItem>
+              <ListItem><PropertyName>AlignmentScore</PropertyName></ListItem>
+              <ListItem><PropertyName>TotalPolicies</PropertyName></ListItem>
+              <ListItem><PropertyName>Aligned</PropertyName></ListItem>
+              <ListItem><PropertyName>AcceptedDeviation</PropertyName></ListItem>
+              <ListItem><PropertyName>UnacceptedDeviation</PropertyName></ListItem>
+              <ListItem><PropertyName>RecommendedFromBaseline</PropertyName></ListItem>
+              <ListItem><PropertyName>ExistingCustomerPolicies</PropertyName></ListItem>
+              <ListItem><PropertyName>CompletedAt</PropertyName></ListItem>
+              <ListItem><PropertyName>PolicyName</PropertyName></ListItem>
+              <ListItem><PropertyName>AlignmentStatus</PropertyName></ListItem>
+              <ListItem><PropertyName>Product</PropertyName></ListItem>
+              <ListItem><PropertyName>PrimaryGroup</PropertyName></ListItem>
+              <ListItem><PropertyName>SecondaryGroup</PropertyName></ListItem>
+              <ListItem><PropertyName>InforcerPolicyTypeName</PropertyName></ListItem>
+              <ListItem><PropertyName>Tags</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
   </ViewDefinitions>
 </Configuration>

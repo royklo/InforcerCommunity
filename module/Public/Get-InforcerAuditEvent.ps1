@@ -30,6 +30,8 @@
 .OUTPUTS
     PSObject or String (JSON array when -OutputType JsonObject)
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcerauditevent
+.LINK
     Connect-Inforcer
 #>
 
@@ -133,10 +135,10 @@ $dateToStr = $dateToVal.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 $allItems = [System.Collections.ArrayList]::new()
 $hasLimit = $MaxResults -gt 0
 $batchSize = 10
-$typeBatches = @()
+$typeBatches = [System.Collections.Generic.List[object]]::new()
 for ($i = 0; $i -lt $eventTypes.Count; $i += $batchSize) {
     $end = [Math]::Min($i + $batchSize, $eventTypes.Count)
-    $typeBatches += ,@($eventTypes[$i..($end - 1)])
+    [void]$typeBatches.Add(@($eventTypes[$i..($end - 1)]))
 }
 
 foreach ($batch in $typeBatches) {
@@ -169,7 +171,7 @@ foreach ($batch in $typeBatches) {
         if ($items) {
             foreach ($item in @($items)) {
                 if ($item -is [PSObject]) {
-                    Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent | Out-Null
+                    $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent
                     [void]$allItems.Add($item)
                     if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
                 }
@@ -189,6 +191,6 @@ if ($OutputType -eq 'JsonObject') {
     $json = $allItems | ConvertTo-Json -Depth 100
     return $json
 } else {
-    $allItems | ForEach-Object { $_ }
+    $allItems
 }
 }

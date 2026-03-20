@@ -42,7 +42,7 @@ foreach ($name in $exported) {
             'Get-InforcerTenantPolicies' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }
-            'Get-InforcerAlignmentScore' {
+            'Get-InforcerAlignmentDetails' {
                 $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
             }
             'Get-InforcerAuditEvent' {

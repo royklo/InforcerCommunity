@@ -27,7 +27,8 @@ function Resolve-InforcerTenantId {
     process {
         $tenantIdString = $TenantId.ToString().Trim()
 
-        if ($tenantIdString -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+        $guidResult = [guid]::Empty
+        if ([guid]::TryParse($tenantIdString, [ref]$guidResult)) {
             Write-Verbose "Microsoft Tenant ID (GUID) detected: $tenantIdString. Looking up client tenant ID..."
             $tenantsToUse = $TenantData
             if ($null -eq $tenantsToUse -or $tenantsToUse.Count -eq 0) {
@@ -48,8 +49,9 @@ function Resolve-InforcerTenantId {
             throw [System.InvalidOperationException]::new("No tenant found with Microsoft Tenant ID: $tenantIdString")
         }
 
-        if ($tenantIdString -match '^\d+$') {
-            $resolved = [int]$tenantIdString
+        $parsedInt = 0
+        if ([int]::TryParse($tenantIdString, [ref]$parsedInt)) {
+            $resolved = $parsedInt
             Write-Verbose "Client Tenant ID detected: $resolved"
             return $resolved
         }

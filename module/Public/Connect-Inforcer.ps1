@@ -22,6 +22,8 @@
 .OUTPUTS
     PSObject with Status, Region, BaseUrl, ConnectedAt.
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#connect-inforcer
+.LINK
     Disconnect-Inforcer
 .LINK
     Get-InforcerTenant

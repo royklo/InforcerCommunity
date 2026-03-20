@@ -35,6 +35,9 @@ packages/
 PesterResult*.xml
 TestResults/
 
+# Claude
+.claude/
+
 # Cursor
 .cursor/
 

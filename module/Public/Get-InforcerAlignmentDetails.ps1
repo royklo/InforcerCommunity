@@ -1,32 +1,47 @@
 <#
 .SYNOPSIS
-    Retrieves alignment scores from the Inforcer API (table or raw).
+    Retrieves alignment scores or alignment details from the Inforcer API.
 .DESCRIPTION
-    Format Table: flattened table with one row per alignment. Format Raw: raw API response.
-    Optional -TenantId and -Tag (Table only) filters.
+    Without -BaselineId: retrieves alignment score summaries (table or raw).
+    With -BaselineId: retrieves detailed alignment data including metrics,
+    per-policy matches, deviations, diffs, variables, and tags.
+    When -TenantId is also specified, queries a single tenant.
+    When only -BaselineId is specified, queries all member tenants of that baseline.
+    -BaselineId accepts a GUID or a friendly baseline name (resolved via the baselines API).
 .PARAMETER Format
     Table (default) or Raw.
 .PARAMETER TenantId
-    Optional. Filter to this tenant.
+    Optional. Filter to this tenant. When used with -BaselineId, queries only this tenant.
+.PARAMETER BaselineId
+    Optional. Baseline GUID or friendly name. When provided, retrieves detailed alignment
+    data. Without -TenantId, loops through all member tenants of the baseline.
 .PARAMETER Tag
-    Optional. When Format is Table, filter to tenants with tag containing this value (case-insensitive).
+    Optional. When Format is Table (without -BaselineId), filter to tenants with tag containing this value (case-insensitive).
 .PARAMETER OutputType
-    Used when Format is Raw. PowerShellObject (default) or JsonObject. JSON uses Depth 100.
+    PowerShellObject (default) or JsonObject. JSON uses Depth 100.
 .EXAMPLE
-    Get-InforcerAlignmentScore
+    Get-InforcerAlignmentDetails
 .EXAMPLE
-    Get-InforcerAlignmentScore -Format Raw -OutputType JsonObject
+    Get-InforcerAlignmentDetails -Format Raw -OutputType JsonObject
 .EXAMPLE
-    Get-InforcerAlignmentScore -TenantId 482 -Tag Production
+    Get-InforcerAlignmentDetails -TenantId 482 -Tag Production
 .EXAMPLE
-    Get-InforcerAlignmentScore -Format Table
-    Table includes LastComparisonDateTime and uses fresh data from /beta/alignmentScores.
+    Get-InforcerAlignmentDetails -TenantId 139 -BaselineId "Provision M365"
+    Retrieves detailed alignment data using the baseline friendly name.
+.EXAMPLE
+    Get-InforcerAlignmentDetails -TenantId 139 -BaselineId "91e0b0f7-69f1-453f-8d73-5a6f726b5b21" -Format Raw
+    Retrieves raw alignment detail response by baseline GUID.
+.EXAMPLE
+    Get-InforcerAlignmentDetails -BaselineId "Inforcer Blueprint Baseline - Tier 2 - Enhanced"
+    Retrieves alignment details for all member tenants of the baseline.
 .OUTPUTS
     PSObject or String
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforceralignmentdetails
+.LINK
     Connect-Inforcer
 #>
-function Get-InforcerAlignmentScore {
+function Get-InforcerAlignmentDetails {
 [CmdletBinding()]
 [OutputType([PSObject], [string])]
 param(
@@ -38,6 +53,9 @@ param(
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
+    [string]$BaselineId,
+
+    [Parameter(Mandatory = $false)]
     [string]$Tag,
 
     [Parameter(Mandatory = $false)]
@@ -47,6 +65,182 @@ param(
 
 if (-not (Test-InforcerSession)) {
     Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' -ErrorId 'NotConnected' -Category ConnectionError
+    return
+}
+
+# --- Alignment Details mode: -BaselineId provided ---
+if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
+
+    # Resolve baseline (fetch baselines once — reused for member lookup when no TenantId)
+    $allBaselines = $null
+    try {
+        $guidTest = [guid]::Empty
+        if (-not [guid]::TryParse($BaselineId.Trim(), [ref]$guidTest)) {
+            # Name lookup — fetch baselines so we can reuse them for members
+            $allBaselines = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+            $baselineGuid = Resolve-InforcerBaselineId -BaselineId $BaselineId -BaselineData $allBaselines
+        } else {
+            $baselineGuid = $BaselineId.Trim()
+        }
+    } catch {
+        Write-Error -Message $_.Exception.Message -ErrorId 'InvalidBaselineId' -Category InvalidArgument
+        return
+    }
+
+    # Build list of tenants to query
+    $tenantsToQuery = [System.Collections.Generic.List[object]]::new()
+
+    if ($null -ne $TenantId) {
+        # Single tenant mode
+        try {
+            $clientTenantId = Resolve-InforcerTenantId -TenantId $TenantId
+        } catch {
+            Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
+            return
+        }
+        [void]$tenantsToQuery.Add(@{ Id = $clientTenantId; Name = "Tenant $clientTenantId" })
+    } else {
+        # All members mode — find baseline members
+        if ($null -eq $allBaselines) {
+            $allBaselines = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+        }
+        $baselineObj = $null
+        foreach ($bl in $allBaselines) {
+            if (-not ($bl -is [PSObject])) { continue }
+            $idProp = $bl.PSObject.Properties['id']
+            if ($idProp -and $null -ne $idProp.Value -and $idProp.Value.ToString() -eq $baselineGuid) {
+                $baselineObj = $bl
+                break
+            }
+        }
+        if ($null -eq $baselineObj) {
+            Write-Error -Message "Baseline not found: $baselineGuid" -ErrorId 'BaselineNotFound' -Category ObjectNotFound
+            return
+        }
+        $membersProp = $baselineObj.PSObject.Properties['members']
+        if (-not $membersProp -or $null -eq $membersProp.Value -or @($membersProp.Value).Count -eq 0) {
+            Write-Warning 'No member tenants found for this baseline.'
+            return
+        }
+        foreach ($member in @($membersProp.Value)) {
+            if (-not ($member -is [PSObject])) { continue }
+            $mIdProp = $member.PSObject.Properties['clientTenantId']
+            if (-not $mIdProp -or $null -eq $mIdProp.Value) { continue }
+            $mId = [int]$mIdProp.Value
+            $mNameProp = $member.PSObject.Properties['tenantFriendlyName']
+            $mName = if ($mNameProp -and $null -ne $mNameProp.Value) { $mNameProp.Value.ToString() } else { "Tenant $mId" }
+            [void]$tenantsToQuery.Add(@{ Id = $mId; Name = $mName })
+        }
+        if ($tenantsToQuery.Count -eq 0) {
+            Write-Warning 'No member tenants found for this baseline.'
+            return
+        }
+        Write-Verbose "Found $($tenantsToQuery.Count) member tenant(s) for baseline."
+    }
+
+    # Status map for policy arrays
+    $arrayStatusMap = @{
+        'matchedPolicies'                = 'Aligned'
+        'matchedWithAcceptedDeviations'  = 'Accepted Deviation'
+        'deviatedUnaccepted'             = 'Unaccepted Deviation'
+        'missingFromSubjectUnaccepted'   = 'Recommended From Baseline'
+        'additionalInSubjectUnaccepted'  = 'Existing Customer Policy'
+    }
+
+    # Query each tenant
+    foreach ($tenantEntry in $tenantsToQuery) {
+        $tId = $tenantEntry.Id
+        $tName = $tenantEntry.Name
+
+        Write-Verbose "Retrieving alignment details for tenant $tId ($tName), baseline $baselineGuid..."
+        $detailEndpoint = "/beta/tenants/$tId/alignmentDetails?customBaselineId=$baselineGuid"
+        $response = Invoke-InforcerApiRequest -Endpoint $detailEndpoint -Method GET -OutputType $OutputType
+        if ($null -eq $response) { continue }
+
+        if ($OutputType -eq 'JsonObject') {
+            $response
+            continue
+        }
+
+        if ($Format -eq 'Raw') {
+            if ($response -is [PSObject]) {
+                $null = Add-InforcerPropertyAliases -InputObject $response -ObjectType AlignmentDetail
+            }
+            $response
+            continue
+        }
+
+        # Format Table: flatten into metrics summary + per-policy rows
+        $alignment = $null
+        $metrics = $null
+        $completedAt = $null
+
+        if ($response -is [PSObject]) {
+            $alignmentProp = $response.PSObject.Properties['alignment']
+            if ($alignmentProp -and $null -ne $alignmentProp.Value) { $alignment = $alignmentProp.Value }
+            $metricsProp = $response.PSObject.Properties['metrics']
+            if ($metricsProp -and $null -ne $metricsProp.Value) { $metrics = $metricsProp.Value }
+            $completedAtProp = $response.PSObject.Properties['completedAt']
+            if ($completedAtProp -and $null -ne $completedAtProp.Value) { $completedAt = $completedAtProp.Value }
+        }
+
+        if ($null -eq $alignment) {
+            Write-Warning "No alignment data returned for tenant $tName ($tId)."
+            continue
+        }
+
+        $alignmentScoreVal = $alignment.PSObject.Properties['alignmentScore'].Value
+        $alignmentScoreFormatted = if ($null -ne $alignmentScoreVal) {
+            [Math]::Round([double]$alignmentScoreVal, 2)
+        } else { $null }
+        $totalPolicies            = if ($metrics) { $metrics.PSObject.Properties['totalPolicies'].Value } else { $null }
+        $alignedCount             = if ($metrics) { $metrics.PSObject.Properties['matchedPolicies'].Value } else { $null }
+        $acceptedDeviationCount   = if ($metrics) { $metrics.PSObject.Properties['matchedWithAcceptedDeviations'].Value } else { $null }
+        $unacceptedDeviationCount = if ($metrics) { $metrics.PSObject.Properties['deviatedPolicies'].Value } else { $null }
+        $recommendedCount         = if ($metrics) { $metrics.PSObject.Properties['recommendedPoliciesFromBaseline'].Value } else { $null }
+        $existingCustomerCount    = if ($metrics) { $metrics.PSObject.Properties['customerOnlyPolicies'].Value } else { $null }
+
+        # Collect policy rows
+        foreach ($arrayName in $arrayStatusMap.Keys) {
+            $policyArrayProp = $alignment.PSObject.Properties[$arrayName]
+            if (-not $policyArrayProp -or $null -eq $policyArrayProp.Value) { continue }
+            $status = $arrayStatusMap[$arrayName]
+            foreach ($policy in @($policyArrayProp.Value)) {
+                if (-not ($policy -is [PSObject])) { continue }
+                $tagNames = [System.Collections.Generic.List[string]]::new()
+                $policyTagsProp = $policy.PSObject.Properties['policyTags']
+                if ($policyTagsProp -and $null -ne $policyTagsProp.Value) {
+                    foreach ($t in @($policyTagsProp.Value)) {
+                        if ($t -is [PSObject] -and $t.PSObject.Properties['name']) {
+                            [void]$tagNames.Add($t.PSObject.Properties['name'].Value)
+                        }
+                    }
+                }
+
+                $row = [PSCustomObject]@{
+                    TenantName             = $tName
+                    TenantId               = $tId
+                    AlignmentScore         = $alignmentScoreFormatted
+                    TotalPolicies          = $totalPolicies
+                    Aligned                = $alignedCount
+                    AcceptedDeviation      = $acceptedDeviationCount
+                    UnacceptedDeviation    = $unacceptedDeviationCount
+                    RecommendedFromBaseline = $recommendedCount
+                    ExistingCustomerPolicies = $existingCustomerCount
+                    CompletedAt            = $completedAt
+                    PolicyName             = $policy.PSObject.Properties['policyName'].Value
+                    AlignmentStatus        = $status
+                    Product                = $policy.PSObject.Properties['product'].Value
+                    PrimaryGroup           = $policy.PSObject.Properties['primaryGroup'].Value
+                    SecondaryGroup         = $policy.PSObject.Properties['secondaryGroup'].Value
+                    InforcerPolicyTypeName = $policy.PSObject.Properties['inforcerPolicyTypeName'].Value
+                    Tags                   = ($tagNames -join ', ')
+                }
+                $row.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AlignmentDetailPolicy')
+                $row
+            }
+        }
+    }
     return
 }
 
@@ -94,9 +288,9 @@ if ($Format -eq 'Raw') {
         } else {
             $filtered = Filter-InforcerResponse -InputObject $response -FilterScript $predicate -OutputType PowerShellObject
             foreach ($item in (ConvertTo-InforcerArray $filtered)) {
-                if ($item -is [PSObject]) { Add-InforcerPropertyAliases -InputObject $item -ObjectType AlignmentScore | Out-Null }
+                if ($item -is [PSObject]) { $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AlignmentScore }
             }
-            if ($filtered -is [array]) { $filtered | ForEach-Object { $_ } } else { $filtered }
+            $filtered
         }
         return
     }
@@ -105,9 +299,9 @@ if ($Format -eq 'Raw') {
         return $response
     }
     foreach ($item in (ConvertTo-InforcerArray $response)) {
-        if ($item -is [PSObject]) { Add-InforcerPropertyAliases -InputObject $item -ObjectType AlignmentScore | Out-Null }
+        if ($item -is [PSObject]) { $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AlignmentScore }
     }
-    if ($response -is [array]) { $response | ForEach-Object { $_ } } else { $response }
+    $response
     return
 }
 
@@ -134,7 +328,7 @@ if ($needTenants) {
     $allTenants = ConvertTo-InforcerArray $tenantResponse
     foreach ($t in $allTenants) {
         if ($t -is [PSObject]) {
-            Add-InforcerPropertyAliases -InputObject $t -ObjectType Tenant | Out-Null
+            $null = Add-InforcerPropertyAliases -InputObject $t -ObjectType Tenant
             $idProp = $t.PSObject.Properties['clientTenantId']
             if ($null -ne $idProp -and $null -ne $idProp.Value) {
                 $id = [int]$idProp.Value
@@ -168,16 +362,17 @@ if ($null -ne $TenantId) {
 
 if (-not [string]::IsNullOrWhiteSpace($Tag)) {
     Write-Verbose "Filtering to tenants with tag containing: $Tag"
+    $tagPattern = "*$Tag*"
     $tenants = @($tenants | Where-Object {
         $tagsProp = $_.PSObject.Properties['tags']
         if (-not $tagsProp -or $null -eq $tagsProp.Value) { return $false }
         $val = $tagsProp.Value
         if ($val -is [object[]]) {
             foreach ($x in $val) {
-                if ($x -and $x.ToString().IndexOf($Tag, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+                if ($x -and $x.ToString() -like $tagPattern) { return $true }
             }
         } else {
-            if ($val.ToString().IndexOf($Tag, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+            if ($val.ToString() -like $tagPattern) { return $true }
         }
         $false
     })
@@ -337,5 +532,5 @@ if ($OutputType -eq 'JsonObject') {
     Write-Output $json
     return
 }
-$alignmentTable | ForEach-Object { $_ }
+$alignmentTable
 }

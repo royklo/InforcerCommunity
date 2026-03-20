@@ -21,6 +21,8 @@
 .OUTPUTS
     PSObject or String (when -OutputType JsonObject)
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcertenant
+.LINK
     Connect-Inforcer
 #>
 function Get-InforcerTenant {
@@ -50,9 +52,11 @@ process {
     $singleTenantId = $null
     if ($null -ne $TenantId) {
         $tenantIdStr = $TenantId.ToString().Trim()
-        if ($tenantIdStr -match '^\d+$') {
-            $singleTenantId = [int]$tenantIdStr
-        } elseif ($tenantIdStr -match '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') {
+        $parsedInt = 0
+        $parsedGuid = [guid]::Empty
+        if ([int]::TryParse($tenantIdStr, [ref]$parsedInt)) {
+            $singleTenantId = $parsedInt
+        } elseif ([guid]::TryParse($tenantIdStr, [ref]$parsedGuid)) {
             try {
                 $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId
             } catch {
@@ -92,22 +96,24 @@ process {
     # Force to array (API can return single object or array)
     $all = @($response)
     foreach ($item in $all) {
-        if ($item -is [PSObject]) { Add-InforcerPropertyAliases -InputObject $item -ObjectType Tenant | Out-Null }
+        if ($item -is [PSObject]) { $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType Tenant }
     }
-    # Dedupe by ClientTenantId
+    # Dedupe by ClientTenantId (aliases already applied above)
     $seen = @{}
-    $result = $all | Where-Object {
-        $id = $_.ClientTenantId; if ($null -eq $id) { $id = $_.clientTenantId }
-        if ($null -eq $id) { return $true }
-        $id = [int]$id
-        if ($seen[$id]) { return $false }
-        $seen[$id] = $true
-        $true
+    $result = foreach ($item in $all) {
+        $id = $item.ClientTenantId
+        if ($null -eq $id) { $id = $item.clientTenantId }
+        if ($null -eq $id) { $item; continue }
+        $idInt = [int]$id
+        if ($seen.ContainsKey($idInt)) { continue }
+        $seen[$idInt] = $true
+        $item
     }
     # Filter to one tenant when -TenantId passed
     if ($null -ne $singleTenantId) {
-        $result = $result | Where-Object {
-            $id = $_.ClientTenantId; if ($null -eq $id) { $id = $_.clientTenantId }
+        $result = @($result) | Where-Object {
+            $id = $_.ClientTenantId
+            if ($null -eq $id) { $id = $_.clientTenantId }
             $null -ne $id -and [int]$id -eq $singleTenantId
         }
         if (-not $result) {
@@ -115,6 +121,6 @@ process {
             return
         }
     }
-    $result | ForEach-Object { $_ }
+    $result
 }
 }

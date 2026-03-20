@@ -19,6 +19,8 @@
 .OUTPUTS
     PSObject or String
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcerbaseline
+.LINK
     Connect-Inforcer
 #>
 function Get-InforcerBaseline {
@@ -99,9 +101,5 @@ if ($filterPredicate) {
     $result = Filter-InforcerResponse -InputObject $result -FilterScript $filterPredicate -OutputType PowerShellObject
 }
 
-if ($result -is [array]) {
-    $result | ForEach-Object { $_ }
-} else {
-    $result
-}
+$result
 }

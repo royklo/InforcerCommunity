@@ -74,7 +74,7 @@ Connect-Inforcer -ApiKey "your-api-key" -Region uk
 Get-InforcerTenant
 
 # Get alignment score table
-Get-InforcerAlignmentScore
+Get-InforcerAlignmentDetails
 
 # Get policies for a tenant
 Get-InforcerTenantPolicies -TenantId 482
@@ -97,7 +97,7 @@ Disconnect-Inforcer
 | **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId). |
 | **Get-InforcerBaseline**       | Retrieves baseline groups and members.                      |
 | **Get-InforcerTenantPolicies** | Retrieves policies for a specified tenant.                  |
-| **Get-InforcerAlignmentScore** | Retrieves alignment scores (table or raw format).           |
+| **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 
 

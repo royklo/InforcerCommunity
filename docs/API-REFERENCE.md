@@ -63,7 +63,7 @@ Retrieves baseline groups and their members.
 
 Retrieves alignment scores for tenants.
 
-**Cmdlet**: `Get-InforcerAlignmentScore`
+**Cmdlet**: `Get-InforcerAlignmentDetails`
 
 **Response**: Array of [AlignmentScore](#alignmentscore)
 

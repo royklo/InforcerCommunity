@@ -34,7 +34,7 @@ Describe 'Consistency contract' {
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
-            'Get-InforcerAlignmentScore', 'Get-InforcerAuditEvent'
+            'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent'
         )
         $script:expectedParameters = @{
             'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl')
@@ -43,7 +43,7 @@ Describe 'Consistency contract' {
             'Get-InforcerTenant'            = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerBaseline'          = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerTenantPolicies'    = @('Format', 'TenantId', 'OutputType')
-            'Get-InforcerAlignmentScore'    = @('Format', 'TenantId', 'Tag', 'OutputType')
+            'Get-InforcerAlignmentDetails'    = @('Format', 'TenantId', 'BaselineId', 'Tag', 'OutputType')
             'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'PageSize', 'MaxResults', 'Format', 'OutputType')
         }
     }
@@ -68,7 +68,7 @@ Describe 'Consistency contract' {
     }
 
     It 'Get-* cmdlets that return API data have -Format and -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentScore', 'Get-InforcerAuditEvent')
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'Format'
@@ -81,6 +81,33 @@ Describe 'Consistency contract' {
             $help = Get-Help -Name $name -ErrorAction Stop
             $help.Synopsis | Should -Not -BeNullOrEmpty -Because "cmdlet $name must have .SYNOPSIS"
             $help.Examples | Should -Not -BeNullOrEmpty -Because "cmdlet $name must have at least one .EXAMPLE"
+        }
+    }
+
+    It 'Every exported cmdlet has complete Get-Help: Description, Parameters documented, and Online URI' {
+        foreach ($name in $script:expectedNames) {
+            $help = Get-Help -Name $name -Full -ErrorAction Stop
+
+            # Description
+            $desc = $help.Description
+            ($null -ne $desc -and @($desc).Count -gt 0) | Should -BeTrue -Because "cmdlet $name must have .DESCRIPTION"
+
+            # Every declared parameter (excluding common params) should be documented
+            $cmd = Get-Command -Name $name -ErrorAction Stop
+            $commonParams = @('Verbose','Debug','ErrorAction','WarningAction','InformationAction','ErrorVariable','WarningVariable','InformationVariable','OutVariable','OutBuffer','PipelineVariable','ProgressAction','WhatIf','Confirm')
+            $declaredParams = @($cmd.Parameters.Keys | Where-Object { $_ -notin $commonParams })
+            $documentedParams = @()
+            if ($help.parameters -and $help.parameters.parameter) {
+                $documentedParams = @($help.parameters.parameter | ForEach-Object { $_.Name })
+            }
+            foreach ($p in $declaredParams) {
+                $documentedParams | Should -Contain $p -Because "cmdlet $name parameter '$p' must be documented in help"
+            }
+
+            # Online help URI (first URI in .LINK)
+            $uris = @($help.relatedLinks.navigationLink | Where-Object { $_.uri } | ForEach-Object { $_.uri })
+            $uris.Count | Should -BeGreaterThan 0 -Because "cmdlet $name must have a .LINK URI for Get-Help -Online"
+            $uris[0] | Should -Match '^https://' -Because "cmdlet $name online help URI must be an HTTPS URL"
         }
     }
 }
@@ -123,9 +150,9 @@ Describe 'No-silent-failure contract' {
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 
-    It 'Get-InforcerAlignmentScore produces an error when not connected' {
+    It 'Get-InforcerAlignmentDetails produces an error when not connected' {
         $err = $null
-        Get-InforcerAlignmentScore -ErrorVariable err -ErrorAction SilentlyContinue
+        Get-InforcerAlignmentDetails -ErrorVariable err -ErrorAction SilentlyContinue
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 
@@ -195,13 +222,13 @@ Describe 'Parameter binding and behavior' {
         }
     }
 
-    It 'Get-InforcerAlignmentScore with -Format -TenantId -Tag -OutputType binds and produces output or error' {
+    It 'Get-InforcerAlignmentDetails with -Format -TenantId -Tag -OutputType binds and produces output or error' {
         $out = @(); $err = @()
-        $out = Get-InforcerAlignmentScore -Format Table -TenantId 1 -Tag 'Production' -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+        $out = Get-InforcerAlignmentDetails -Format Table -TenantId 1 -Tag 'Production' -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
         $err = @($err)
         $hasOutput = $null -ne $out
         $hasError = $err.Count -gt 0
-        ($hasOutput -or $hasError) | Should -BeTrue -Because 'Get-InforcerAlignmentScore must not silently do nothing'
+        ($hasOutput -or $hasError) | Should -BeTrue -Because 'Get-InforcerAlignmentDetails must not silently do nothing'
         if ($hasError -and $err[0].ToString() -match 'Cannot bind|Parameter.*not found|Unknown parameter') {
             Set-ItResult -Inconclusive -Because 'Parameter binding failed'
         }
@@ -227,11 +254,316 @@ Describe 'Parameter binding and behavior' {
         ($hasString -or $hasError) | Should -BeTrue -Because 'JsonObject path must return string or error'
     }
 
-    It 'Get-InforcerAlignmentScore -OutputType JsonObject returns string or error' {
-        $out = Get-InforcerAlignmentScore -OutputType JsonObject -ErrorVariable err -ErrorAction SilentlyContinue
+    It 'Get-InforcerAlignmentDetails -OutputType JsonObject returns string or error' {
+        $out = Get-InforcerAlignmentDetails -OutputType JsonObject -ErrorVariable err -ErrorAction SilentlyContinue
         $err = @($err)
         $hasString = $null -ne $out -and $out -is [string]
         $hasError = $err.Count -gt 0
         ($hasString -or $hasError) | Should -BeTrue -Because 'JsonObject path must return string or error'
+    }
+
+    It 'Get-InforcerAlignmentDetails -BaselineId without -TenantId attempts baseline member lookup' {
+        $err = $null
+        Get-InforcerAlignmentDetails -BaselineId 'test-guid' -ErrorVariable err -ErrorAction SilentlyContinue
+        # Without a session, this produces a connection error (not a parameter validation error)
+        $err = @($err)
+        $err.Count | Should -BeGreaterThan 0 -Because 'no session should produce connection error'
+    }
+
+    It 'Get-InforcerTenant -TenantId with invalid format produces an error' {
+        $err = $null
+        Get-InforcerTenant -TenantId 'not-valid-id' -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'invalid TenantId format should error'
+    }
+
+    It 'Connect-Inforcer with empty string ApiKey produces an error' {
+        $err = $null
+        try { Connect-Inforcer -ApiKey '' -Region uk -ErrorVariable err -ErrorAction SilentlyContinue } catch { $err = @($_) }
+        $err | Should -Not -BeNullOrEmpty -Because 'empty ApiKey must not connect'
+    }
+}
+
+Describe 'Private helpers (via module scope)' {
+
+    BeforeAll {
+        Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
+        Import-Module (Get-InforcerCommunityManifestPath) -Force
+    }
+
+    Context 'Test-InforcerSession' {
+        It 'Returns false when no session exists' {
+            & (Get-Module InforcerCommunity) {
+                $script:InforcerSession = $null
+                Test-InforcerSession | Should -BeFalse
+            }
+        }
+
+        It 'Returns true with valid session' {
+            & (Get-Module InforcerCommunity) {
+                $secKey = ConvertTo-SecureString 'test-key' -AsPlainText -Force
+                $script:InforcerSession = @{ ApiKey = $secKey; BaseUrl = 'https://api.test.com' }
+                Test-InforcerSession | Should -BeTrue
+            }
+        }
+
+        It 'Returns false with empty SecureString (length 0)' {
+            & (Get-Module InforcerCommunity) {
+                $emptyKey = [System.Security.SecureString]::new()
+                $script:InforcerSession = @{ ApiKey = $emptyKey; BaseUrl = 'https://api.test.com' }
+                Test-InforcerSession | Should -BeFalse
+            }
+        }
+
+        It 'Returns false with empty BaseUrl' {
+            & (Get-Module InforcerCommunity) {
+                $secKey = ConvertTo-SecureString 'test-key' -AsPlainText -Force
+                $script:InforcerSession = @{ ApiKey = $secKey; BaseUrl = '' }
+                Test-InforcerSession | Should -BeFalse
+            }
+        }
+
+        It 'Returns false with null ApiKey' {
+            & (Get-Module InforcerCommunity) {
+                $script:InforcerSession = @{ ApiKey = $null; BaseUrl = 'https://api.test.com' }
+                Test-InforcerSession | Should -BeFalse
+            }
+        }
+    }
+
+    Context 'Resolve-InforcerTenantId' {
+        It 'Resolves numeric integer to Int32' {
+            & (Get-Module InforcerCommunity) {
+                $result = Resolve-InforcerTenantId -TenantId 482
+                $result | Should -Be 482
+                $result | Should -BeOfType [int]
+            }
+        }
+
+        It 'Resolves numeric string to Int32' {
+            & (Get-Module InforcerCommunity) {
+                $result = Resolve-InforcerTenantId -TenantId '123'
+                $result | Should -Be 123
+                $result | Should -BeOfType [int]
+            }
+        }
+
+        It 'Throws on invalid TenantId format' {
+            & (Get-Module InforcerCommunity) {
+                { Resolve-InforcerTenantId -TenantId 'not-valid' } | Should -Throw '*Invalid TenantId format*'
+            }
+        }
+    }
+
+    Context 'Resolve-InforcerBaselineId' {
+        It 'Passes through a valid GUID' {
+            & (Get-Module InforcerCommunity) {
+                $guid = '91e0b0f7-69f1-453f-8d73-5a6f726b5b21'
+                $result = Resolve-InforcerBaselineId -BaselineId $guid
+                $result | Should -Be $guid
+            }
+        }
+
+        It 'Resolves name with exact case match' {
+            & (Get-Module InforcerCommunity) {
+                $baselines = @(
+                    [PSCustomObject]@{ id = 'aaa'; name = 'Provision M365' }
+                    [PSCustomObject]@{ id = 'bbb'; name = 'Security Baseline' }
+                )
+                $result = Resolve-InforcerBaselineId -BaselineId 'Provision M365' -BaselineData $baselines
+                $result | Should -Be 'aaa'
+            }
+        }
+
+        It 'Resolves name with case-insensitive fallback' {
+            & (Get-Module InforcerCommunity) {
+                $baselines = @([PSCustomObject]@{ id = 'ccc'; name = 'Security Baseline' })
+                $result = Resolve-InforcerBaselineId -BaselineId 'security baseline' -BaselineData $baselines
+                $result | Should -Be 'ccc'
+            }
+        }
+
+        It 'Prefers exact case match over case-insensitive' {
+            & (Get-Module InforcerCommunity) {
+                $baselines = @(
+                    [PSCustomObject]@{ id = '111'; name = 'test' }
+                    [PSCustomObject]@{ id = '222'; name = 'Test' }
+                )
+                $result = Resolve-InforcerBaselineId -BaselineId 'Test' -BaselineData $baselines
+                $result | Should -Be '222'
+            }
+        }
+
+        It 'Throws when baseline name not found' {
+            & (Get-Module InforcerCommunity) {
+                $baselines = @([PSCustomObject]@{ id = 'aaa'; name = 'Existing' })
+                { Resolve-InforcerBaselineId -BaselineId 'NonExistent' -BaselineData $baselines } | Should -Throw '*No baseline found*'
+            }
+        }
+    }
+
+    Context 'Add-InforcerPropertyAliases' {
+        It 'Tenant: adds PascalCase aliases and converts licenses to string' {
+            & (Get-Module InforcerCommunity) {
+                $tenant = [PSCustomObject]@{
+                    clientTenantId = 482
+                    tenantFriendlyName = 'Contoso'
+                    licenses = @([PSCustomObject]@{ sku = 'PREMIUM' }, [PSCustomObject]@{ sku = 'EMS' })
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $tenant -ObjectType Tenant
+                $tenant.ClientTenantId | Should -Be 482
+                $tenant.TenantFriendlyName | Should -Be 'Contoso'
+                $tenant.licenses | Should -BeOfType [string]
+                $tenant.licenses | Should -Be 'PREMIUM, EMS'
+            }
+        }
+
+        It 'Tenant: builds PolicyDiffFormatted from recentChanges' {
+            & (Get-Module InforcerCommunity) {
+                $tenant = [PSCustomObject]@{
+                    clientTenantId = 1
+                    recentChanges = [PSCustomObject]@{
+                        changedPolicies = @('Policy A')
+                        addedPolicies = @('Policy B')
+                    }
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $tenant -ObjectType Tenant
+                $tenant.PSObject.Properties['PolicyDiffFormatted'] | Should -Not -BeNullOrEmpty
+                $tenant.PolicyDiffFormatted | Should -Match 'Changed Policies'
+                $tenant.PolicyDiffFormatted | Should -Match 'Policy A'
+            }
+        }
+
+        It 'Policy: sets PolicyName from displayName and creates FriendlyName alias' {
+            & (Get-Module InforcerCommunity) {
+                $policy = [PSCustomObject]@{ id = 'p1'; displayName = 'CA Block Legacy'; friendlyName = 'Block Legacy' }
+                $null = Add-InforcerPropertyAliases -InputObject $policy -ObjectType Policy
+                $policy.PolicyName | Should -Be 'CA Block Legacy'
+                $policy.FriendlyName | Should -Be 'CA Block Legacy'
+                $policy.PSObject.Properties['displayName'] | Should -BeNullOrEmpty
+                $policy.PSObject.Properties['FriendlyName'].MemberType | Should -Be 'AliasProperty'
+            }
+        }
+
+        It 'Policy: falls back to name when displayName is missing' {
+            & (Get-Module InforcerCommunity) {
+                $policy = [PSCustomObject]@{ id = 'p2'; name = 'Fallback Name' }
+                $null = Add-InforcerPropertyAliases -InputObject $policy -ObjectType Policy
+                $policy.PolicyName | Should -Be 'Fallback Name'
+            }
+        }
+
+        It 'Policy: falls back to "Policy {id}" when all names missing' {
+            & (Get-Module InforcerCommunity) {
+                $policy = [PSCustomObject]@{ id = 'p3' }
+                $null = Add-InforcerPropertyAliases -InputObject $policy -ObjectType Policy
+                $policy.PolicyName | Should -Be 'Policy p3'
+            }
+        }
+
+        It 'AlignmentScore: adds PascalCase aliases' {
+            & (Get-Module InforcerCommunity) {
+                $score = [PSCustomObject]@{ tenantId = 1; score = 95; baselineGroupName = 'BL1'; lastComparisonDateTime = '2026-01-01' }
+                $null = Add-InforcerPropertyAliases -InputObject $score -ObjectType AlignmentScore
+                $score.TenantId | Should -Be 1
+                $score.Score | Should -Be 95
+                $score.BaselineGroupName | Should -Be 'BL1'
+                $score.LastComparisonDateTime | Should -Be '2026-01-01'
+            }
+        }
+
+        It 'AuditEvent: flattens metadata and removes metadata property' {
+            & (Get-Module InforcerCommunity) {
+                $auditEvt = [PSCustomObject]@{
+                    correlationId = 'c1'; eventType = 'authentication'
+                    metadata = [PSCustomObject]@{
+                        clientIpv4 = '10.0.0.1'; clientIpv6 = '::1'
+                        nameLookup = [PSCustomObject]@{ username = 'john@test.com'; displayName = 'John' }
+                    }
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $auditEvt -ObjectType AuditEvent
+                $auditEvt.ClientIpv4 | Should -Be '10.0.0.1'
+                $auditEvt.ClientIpv6 | Should -Be '::1'
+                $auditEvt.UserName | Should -Be 'john@test.com'
+                $auditEvt.UserDisplayName | Should -Be 'John'
+                $auditEvt.PSObject.Properties['metadata'] | Should -BeNullOrEmpty
+            }
+        }
+
+        It 'AlignmentDetail: adds aliases to metrics and per-policy arrays' {
+            & (Get-Module InforcerCommunity) {
+                $detail = [PSCustomObject]@{
+                    alignmentScore = 92.5; completedAt = '2026-01-01'
+                    metrics = [PSCustomObject]@{ totalPolicies = 50; matchedPolicies = 45 }
+                    alignment = [PSCustomObject]@{
+                        matchedPolicies = @([PSCustomObject]@{ policyName = 'P1'; product = 'Intune' })
+                    }
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $detail -ObjectType AlignmentDetail
+                $detail.AlignmentScore | Should -Be 92.5
+                $detail.CompletedAt | Should -Be '2026-01-01'
+                $detail.metrics.TotalPolicies | Should -Be 50
+                $detail.alignment.matchedPolicies[0].PolicyName | Should -Be 'P1'
+            }
+        }
+    }
+
+    Context 'Filter-InforcerResponse' {
+        It 'Filters PSObject array correctly' {
+            & (Get-Module InforcerCommunity) {
+                $items = @([PSCustomObject]@{ id = 1; name = 'A' }, [PSCustomObject]@{ id = 2; name = 'B' })
+                $result = Filter-InforcerResponse -InputObject $items -FilterScript { param($p) $p.name -eq 'A' } -OutputType PowerShellObject
+                @($result).Count | Should -Be 1
+                $result[0].id | Should -Be 1
+            }
+        }
+
+        It 'Filters JSON string correctly' {
+            & (Get-Module InforcerCommunity) {
+                $json = '[{"id":1,"name":"A"},{"id":2,"name":"B"}]'
+                $result = Filter-InforcerResponse -InputObject $json -FilterScript { param($p) $p.name -eq 'B' } -OutputType JsonObject
+                $parsed = $result | ConvertFrom-Json
+                $parsed.id | Should -Be 2
+            }
+        }
+
+        It 'Returns null JSON when no matches on JSON input' {
+            & (Get-Module InforcerCommunity) {
+                $json = '[{"id":1}]'
+                $result = Filter-InforcerResponse -InputObject $json -FilterScript { $false } -OutputType JsonObject
+                $result | Should -Be 'null'
+            }
+        }
+
+        It 'Returns empty JSON for whitespace input' {
+            & (Get-Module InforcerCommunity) {
+                $result = Filter-InforcerResponse -InputObject '  ' -FilterScript { $true } -OutputType JsonObject
+                $result | Should -Be '[]'
+            }
+        }
+    }
+
+    Context 'ConvertTo-InforcerArray' {
+        It 'Wraps single object in array' {
+            & (Get-Module InforcerCommunity) {
+                $obj = [PSCustomObject]@{ id = 1 }
+                $result = ConvertTo-InforcerArray $obj
+                @($result).Count | Should -Be 1
+            }
+        }
+
+        It 'Returns array as-is' {
+            & (Get-Module InforcerCommunity) {
+                $arr = @([PSCustomObject]@{ id = 1 }, [PSCustomObject]@{ id = 2 })
+                $result = ConvertTo-InforcerArray $arr
+                @($result).Count | Should -Be 2
+            }
+        }
+
+        It 'Returns empty array for null' {
+            & (Get-Module InforcerCommunity) {
+                $result = ConvertTo-InforcerArray $null
+                @($result).Count | Should -Be 0
+            }
+        }
     }
 }

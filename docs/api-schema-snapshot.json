@@ -1,0 +1,220 @@
+{
+  "generatedAt": "2026-03-26T21:54:24Z",
+  "generatedFrom": "https://api-uk.inforcer.com/api",
+  "endpoints": {
+    "GET /beta/tenants": {
+      "properties": {
+        "clientTenantId": "integer",
+        "tenantFriendlyName": "string",
+        "tenantDnsName": "string",
+        "msTenantId": "string",
+        "secureScore": "number",
+        "isBaseline": "boolean",
+        "lastBackupTimestamp": "datetime",
+        "recentChanges": "integer",
+        "policyDiff": "string",
+        "tags": "array",
+        "alignmentSummaries": {
+          "_type": "array",
+          "_itemProperties": {
+            "alignedBaselineTenantId": "integer",
+            "alignedBaselineId": "string",
+            "alignedBaselineName": "string",
+            "alignmentScore": "integer",
+            "alignedThreshold": "integer",
+            "semiAlignedThreshold": "integer",
+            "lastAlignmentDateTime": "datetime"
+          }
+        },
+        "licenses": {
+          "_type": "array",
+          "_itemProperties": {
+            "sku": "string"
+          }
+        }
+      }
+    },
+    "GET /beta/baselines": {
+      "properties": {
+        "id": "string",
+        "name": "string",
+        "baselineClientTenantId": "integer",
+        "baselineTenantFriendlyName": "string",
+        "baselineTenantDnsName": "string",
+        "baselineMsTenantId": "string",
+        "alignedThreshold": "integer",
+        "semiAlignedThreshold": "integer",
+        "members": {
+          "_type": "array",
+          "_itemProperties": {
+            "clientTenantId": "integer",
+            "tenantFriendlyName": "string",
+            "tenantDnsName": "string",
+            "msTenantId": "string"
+          }
+        },
+        "mode": "string",
+        "autoAddNewPolicies": "boolean",
+        "isComplete": "boolean",
+        "isShared": "boolean",
+        "items": {
+          "_type": "array",
+          "_itemProperties": {
+            "policySnapshotId": "null",
+            "childCustomBaselineId": "null",
+            "policyCategoryProduct": "string",
+            "policyCategoryPrimaryGroup": "string",
+            "policyCategorySecondaryGroup": "string",
+            "alignAssignments": "boolean"
+          }
+        }
+      }
+    },
+    "GET /beta/alignmentScores": {
+      "properties": {
+        "tenantId": "integer",
+        "tenantFriendlyName": "string",
+        "score": "integer",
+        "baselineGroupId": "string",
+        "baselineGroupName": "string",
+        "lastComparisonDateTime": "datetime"
+      }
+    },
+    "GET /beta/tenants/{tenantId}/policies": {
+      "properties": {
+        "id": "string",
+        "policyTypeId": "integer",
+        "name": "null",
+        "displayName": "string",
+        "friendlyName": "string",
+        "description": "null",
+        "readOnly": "boolean",
+        "product": "string",
+        "primaryGroup": "string",
+        "secondaryGroup": "string",
+        "platform": "null",
+        "policyCategoryId": "integer",
+        "tags": "array",
+        "policyData": "object"
+      }
+    },
+    "GET /beta/tenants/{tenantId}/alignmentDetails": {
+      "properties": {
+        "metrics": {
+          "_type": "object",
+          "_properties": {
+            "totalPolicies": "integer",
+            "matchedPolicies": "integer",
+            "matchedWithAcceptedDeviations": "integer",
+            "deviatedPolicies": "integer",
+            "recommendedPoliciesFromBaseline": "integer",
+            "customerOnlyPolicies": "integer"
+          }
+        },
+        "completedAt": "datetime",
+        "alignment": {
+          "_type": "object",
+          "_properties": {
+            "baselineTenantId": "integer",
+            "subjectTenantId": "integer",
+            "subjectDataTimestamp": "datetime",
+            "baselineDataTimestamp": "datetime",
+            "alignmentScore": "number",
+            "deviatedUnaccepted": "array",
+            "matchedPolicies": {
+              "_type": "array",
+              "_itemProperties": {
+                "baselinePolicySnapshotId": "string",
+                "baselinePolicySnapshotVersionId": "string",
+                "matchingSubjectPolicies": {
+                  "_type": "array",
+                  "_itemProperties": {
+                    "subjectPolicySnapshotId": "string",
+                    "subjectPolicySnapshotVersionId": "string",
+                    "subjectPolicyGuid": "null",
+                    "policyDataDiff": "array",
+                    "policyAssignmentsDiff": "array",
+                    "policyTags": "array",
+                    "acceptedDeviations": "array"
+                  }
+                },
+                "isDeviation": "boolean",
+                "isMissingFromSubject": "boolean",
+                "isAdditionalInSubject": "boolean",
+                "matchingVariables": {
+                  "_type": "array",
+                  "_itemProperties": {
+                    "variableId": "string",
+                    "variableName": "string",
+                    "baselineValue": "string",
+                    "subjectValue": "string",
+                    "description": "string",
+                    "propertyPath": "string",
+                    "isHidden": "boolean",
+                    "isBaselineOnly": "boolean"
+                  }
+                },
+                "similarPolicies": "array",
+                "acceptedDeviations": "array",
+                "policyGuid": "null",
+                "policyName": "string",
+                "policySnapshotId": "null",
+                "policySnapshotVersionId": "null",
+                "policyTypeId": "integer",
+                "inforcerPolicyTypeName": "string",
+                "policyCategoryId": "integer",
+                "product": "string",
+                "primaryGroup": "string",
+                "secondaryGroup": "string",
+                "platform": "null",
+                "description": "null",
+                "isPolicyDeleteDisabled": "boolean",
+                "isPolicyDeployable": "boolean",
+                "policyTags": "array",
+                "readOnly": "boolean",
+                "fullAccessLicenseRequirements": "array"
+              }
+            },
+            "matchedWithAcceptedDeviations": "array",
+            "additionalInSubjectUnaccepted": "array",
+            "missingFromSubjectUnaccepted": "array"
+          }
+        }
+      }
+    },
+    "GET /beta/auditEvents/eventTypes": {
+      "properties": {
+        "name": "string"
+      }
+    },
+    "POST /beta/auditEvents/search": {
+      "properties": {
+        "id": "string",
+        "correlationId": "string",
+        "clientId": "integer",
+        "relType": "string",
+        "relId": "string",
+        "eventType": "string",
+        "message": "string",
+        "code": "string",
+        "user": "string",
+        "timestamp": "datetime",
+        "metadata": {
+          "_type": "object",
+          "_properties": {
+            "clientIp": "string",
+            "clientIpv4": "string",
+            "clientIpv6": "null",
+            "nameLookup": {
+              "_type": "object",
+              "_properties": {
+                "user:username:763": "string",
+                "user:displayName:763": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -4,6 +4,12 @@
 .DESCRIPTION
     POST /beta/auditEvents/search. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
     When -EventType is not specified, uses all event types from the API (or fallback authentication, failedAuthentication).
+    Use -Id to retrieve a specific event by its event ID. Use -CorrelationId to retrieve all events
+    sharing a correlation ID. Both perform a broad search and filter client-side.
+.PARAMETER Id
+    Retrieve a specific audit event by its event ID (GUID). Searches all event types and filters client-side.
+.PARAMETER CorrelationId
+    Retrieve all audit events sharing this correlation ID. Searches all event types and filters client-side.
 .PARAMETER EventType
     Event types to include. Omit for all types (tab-complete with supported event types).
 .PARAMETER DateFrom
@@ -20,6 +26,12 @@
     PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 .EXAMPLE
     Get-InforcerAuditEvent
+.EXAMPLE
+    Get-InforcerAuditEvent -Id "2070eb50-5ac2-4b9b-a157-0003dd3982fe"
+    Retrieves a single audit event by its ID.
+.EXAMPLE
+    Get-InforcerAuditEvent -CorrelationId "e7ec6f01-a24b-4012-bab7-e8f0e53e2dab"
+    Retrieves all audit events sharing a correlation ID.
 .EXAMPLE
     Get-InforcerAuditEvent -DateFrom (Get-Date).AddDays(-7) -DateTo (Get-Date)
 .EXAMPLE
@@ -40,6 +52,12 @@ function Get-InforcerAuditEvent {
 [OutputType([PSObject], [string])]
 param(
     [Parameter(Mandatory = $false)]
+    [string]$Id,
+
+    [Parameter(Mandatory = $false)]
+    [string]$CorrelationId,
+
+    [Parameter(Mandatory = $false)]
     [ArgumentCompleter({
         param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
         $prefix = if ($wordToComplete) { $wordToComplete } else { '' }
@@ -49,17 +67,27 @@ param(
         $prefix = $prefix.Trim()
         # Inline list so completer never depends on script scope (avoids path completion fallback)
         $types = @(
-            'authentication', 'failedAuthentication', 'supportAccessInvoke', 'userGroupCreate', 'userGroupUpdate',
-            'userGroupDelete', 'userGroupMembershipModified', 'clientStatusChanged', 'clientCreated', 'salesAdminUpdated',
-            'clientAdminUpdated', 'sharedBaselinesManaged', 'alertRuleCreate', 'alertRuleUpdate', 'alertRuleDelete',
-            'apiKeyCreate', 'apiKeyDelete', 'apiKeyUsage', 'tenantUserCreate', 'tenantUserUpdate', 'tenantUserResetMfa',
-            'tenantUserResetPassword', 'tenantUserRevokedSessions', 'tenantUserGroupMembershipModified', 'tenantUserOffboardingQueued',
-            'tenantUserLicensesModified', 'tenantOnboard', 'tenantRefresh', 'tenantDelete', 'userCreate', 'userDelete',
-            'userResetPassword', 'userResetMfa', 'userToggleEnable', 'userAutoProvision', 'userToggleSso',
-            'tenantGroupCreate', 'tenantGroupUpdate', 'tenantGroupMembershipsModified', 'tenantGroupsDeployment',
-            'policiesDeployment', 'policiesRestore', 'policiesRename', 'policiesDelete', 'tenantAssessmentRun',
-            'tenantAssessmentSuccess', 'tenantAssessmentFailure', 'copilotAssessmentRun', 'copilotAssessmentSuccess', 'copilotAssessmentFailure',
-            'tenantLicenseUpdate', 'clientLicenseUpdate'
+            'alertRuleCreate', 'alertRuleDelete', 'alertRuleUpdate',
+            'apiKeyCreate', 'apiKeyDelete', 'apiKeyUsage',
+            'authentication',
+            'clientAdminUpdated', 'clientCreated', 'clientLicenseUpdate', 'clientStatusChanged',
+            'copilotAssessmentFailure', 'copilotAssessmentRun', 'copilotAssessmentSuccess',
+            'failedAuthentication',
+            'policiesDelete', 'policiesDeployment', 'policiesRename', 'policiesRestore',
+            'reportQueued',
+            'salesAdminUpdated',
+            'scheduleCreate', 'scheduleDelete', 'scheduleUpdate',
+            'sharedBaselinesManaged',
+            'supportAccessInvoke',
+            'tenantAssessmentFailure', 'tenantAssessmentRun', 'tenantAssessmentSuccess',
+            'tenantDelete', 'tenantGroupCreate', 'tenantGroupMembershipsModified', 'tenantGroupUpdate', 'tenantGroupsDeployment',
+            'tenantLicenseUpdate', 'tenantOnboard', 'tenantRefresh',
+            'tenantUserCreate', 'tenantUserGroupMembershipModified', 'tenantUserLicensesModified',
+            'tenantUserOffboardingQueued', 'tenantUserResetMfa', 'tenantUserResetPassword',
+            'tenantUserRevokedSessions', 'tenantUserUpdate',
+            'userAutoProvision', 'userCreate', 'userDelete',
+            'userGroupCreate', 'userGroupDelete', 'userGroupMembershipModified', 'userGroupUpdate',
+            'userResetMfa', 'userResetPassword', 'userToggleEnable', 'userToggleSso'
         )
         $filterByPrefix = $prefix -and $prefix -notmatch '^[./\\]'
         if ($filterByPrefix) {
@@ -106,7 +134,7 @@ $eventTypes = @()
 if ($null -eq $EventType -or $EventType.Count -eq 0) {
     Write-Verbose 'Fetching all audit event types from API...'
     try {
-        $eventTypes = @(Get-InforcerAuditEventType -ErrorAction SilentlyContinue)
+        $eventTypes = @(Get-InforcerSupportedEventType -ErrorAction SilentlyContinue)
     } catch {
         $eventTypes = @()
     }
@@ -172,6 +200,7 @@ foreach ($batch in $typeBatches) {
             foreach ($item in @($items)) {
                 if ($item -is [PSObject]) {
                     $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent
+                    $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AuditEvent')
                     [void]$allItems.Add($item)
                     if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
                 }
@@ -185,6 +214,30 @@ foreach ($batch in $typeBatches) {
         }
         if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
     } while ($continuationToken)
+}
+
+# Filter by -Id or -CorrelationId when specified
+if (-not [string]::IsNullOrWhiteSpace($Id)) {
+    $idTrimmed = $Id.Trim()
+    $allItems = [System.Collections.ArrayList]@($allItems | Where-Object {
+        $idProp = $_.PSObject.Properties['id']
+        $idProp -and $idProp.Value -and $idProp.Value.ToString() -eq $idTrimmed
+    })
+    if ($allItems.Count -eq 0) {
+        Write-Warning "No audit event found with ID '$idTrimmed'."
+        return
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($CorrelationId)) {
+    $corrTrimmed = $CorrelationId.Trim()
+    $allItems = [System.Collections.ArrayList]@($allItems | Where-Object {
+        $corrProp = $_.PSObject.Properties['correlationId']
+        $corrProp -and $corrProp.Value -and $corrProp.Value.ToString() -eq $corrTrimmed
+    })
+    if ($allItems.Count -eq 0) {
+        Write-Warning "No audit events found with CorrelationId '$corrTrimmed'."
+        return
+    }
 }
 
 if ($OutputType -eq 'JsonObject') {

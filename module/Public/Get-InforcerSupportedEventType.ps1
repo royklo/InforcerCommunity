@@ -5,21 +5,51 @@
 
 if (-not $global:InforcerCachedEventTypes) {
     $global:InforcerCachedEventTypes = @(
-        'authentication', 'failedAuthentication', 'supportAccessInvoke', 'userGroupCreate', 'userGroupUpdate',
-        'userGroupDelete', 'userGroupMembershipModified', 'clientStatusChanged', 'clientCreated', 'salesAdminUpdated',
-        'clientAdminUpdated', 'sharedBaselinesManaged', 'alertRuleCreate', 'alertRuleUpdate', 'alertRuleDelete',
-        'apiKeyCreate', 'apiKeyDelete', 'apiKeyUsage', 'tenantUserCreate', 'tenantUserUpdate', 'tenantUserResetMfa',
-        'tenantUserResetPassword', 'tenantUserRevokedSessions', 'tenantUserGroupMembershipModified', 'tenantUserOffboardingQueued',
-        'tenantUserLicensesModified', 'tenantOnboard', 'tenantRefresh', 'tenantDelete', 'userCreate', 'userDelete',
-        'userResetPassword', 'userResetMfa', 'userToggleEnable', 'userAutoProvision', 'userToggleSso',
-        'tenantGroupCreate', 'tenantGroupUpdate', 'tenantGroupMembershipsModified', 'tenantGroupsDeployment',
-        'policiesDeployment', 'policiesRestore', 'policiesRename', 'policiesDelete', 'tenantAssessmentRun',
-        'tenantAssessmentSuccess', 'tenantAssessmentFailure', 'copilotAssessmentRun', 'copilotAssessmentSuccess', 'copilotAssessmentFailure',
-        'tenantLicenseUpdate', 'clientLicenseUpdate'
+        'alertRuleCreate', 'alertRuleDelete', 'alertRuleUpdate',
+        'apiKeyCreate', 'apiKeyDelete', 'apiKeyUsage',
+        'authentication',
+        'clientAdminUpdated', 'clientCreated', 'clientLicenseUpdate', 'clientStatusChanged',
+        'copilotAssessmentFailure', 'copilotAssessmentRun', 'copilotAssessmentSuccess',
+        'failedAuthentication',
+        'policiesDelete', 'policiesDeployment', 'policiesRename', 'policiesRestore',
+        'reportQueued',
+        'salesAdminUpdated',
+        'scheduleCreate', 'scheduleDelete', 'scheduleUpdate',
+        'sharedBaselinesManaged',
+        'supportAccessInvoke',
+        'tenantAssessmentFailure', 'tenantAssessmentRun', 'tenantAssessmentSuccess',
+        'tenantDelete', 'tenantGroupCreate', 'tenantGroupMembershipsModified', 'tenantGroupUpdate', 'tenantGroupsDeployment',
+        'tenantLicenseUpdate', 'tenantOnboard', 'tenantRefresh',
+        'tenantUserCreate', 'tenantUserGroupMembershipModified', 'tenantUserLicensesModified',
+        'tenantUserOffboardingQueued', 'tenantUserResetMfa', 'tenantUserResetPassword',
+        'tenantUserRevokedSessions', 'tenantUserUpdate',
+        'userAutoProvision', 'userCreate', 'userDelete',
+        'userGroupCreate', 'userGroupDelete', 'userGroupMembershipModified', 'userGroupUpdate',
+        'userResetMfa', 'userResetPassword', 'userToggleEnable', 'userToggleSso'
     )
 }
 
-function Get-InforcerAuditEventType {
+function Get-InforcerSupportedEventType {
+    <#
+    .SYNOPSIS
+    Returns a list of available audit event types from the Inforcer API.
+
+    .DESCRIPTION
+    Retrieves the valid event type names that can be used with Get-InforcerAuditEvent.
+    This function is primarily used for tab completion of the -EventType parameter in Get-InforcerAuditEvent.
+    Requires an active Inforcer session (use Connect-Inforcer to establish one).
+
+    .OUTPUTS
+    System.String
+    Returns a list of audit event type names as strings.
+
+    .EXAMPLE
+    Get-InforcerSupportedEventType
+    Returns all available audit event type names for use with Get-InforcerAuditEvent.
+
+    .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/Get-InforcerSupportedEventType.md
+    #>
     [CmdletBinding()]
     [OutputType([string])]
     param()

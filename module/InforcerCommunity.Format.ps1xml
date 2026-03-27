@@ -1,57 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Configuration>
   <ViewDefinitions>
+
+    <!-- TENANT -->
+    <View>
+      <Name>InforcerCommunity.Tenant.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.Tenant</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>ClientTenantId</Label><PropertyName>ClientTenantId</PropertyName></ListItem>
+              <ListItem><Label>MsTenantId</Label><PropertyName>MsTenantId</PropertyName></ListItem>
+              <ListItem><Label>TenantFriendlyName</Label><PropertyName>TenantFriendlyName</PropertyName></ListItem>
+              <ListItem><Label>TenantDnsName</Label><PropertyName>TenantDnsName</PropertyName></ListItem>
+              <ListItem><Label>licenses</Label><PropertyName>licenses</PropertyName></ListItem>
+              <ListItem><Label>SecureScore</Label><PropertyName>SecureScore</PropertyName></ListItem>
+              <ListItem><Label>IsBaseline</Label><PropertyName>IsBaseline</PropertyName></ListItem>
+              <ListItem><Label>LastBackupTimestamp</Label><PropertyName>LastBackupTimestamp</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- BASELINE -->
     <View>
       <Name>InforcerCommunity.Baseline.Default</Name>
       <ViewSelectedBy>
         <TypeName>InforcerCommunity.Baseline</TypeName>
       </ViewSelectedBy>
-      <TableControl>
-        <TableHeaders>
-          <TableColumnHeader>
-            <Label>BaselineId</Label>
-            <Width>38</Width>
-          </TableColumnHeader>
-          <TableColumnHeader>
-            <Label>Name</Label>
-            <Width>50</Width>
-          </TableColumnHeader>
-          <TableColumnHeader>
-            <Label>OwnerTenantId</Label>
-            <Width>14</Width>
-          </TableColumnHeader>
-          <TableColumnHeader>
-            <Label>OwnerName</Label>
-            <Width>24</Width>
-          </TableColumnHeader>
-          <TableColumnHeader>
-            <Label>Members</Label>
-            <Width>7</Width>
-          </TableColumnHeader>
-        </TableHeaders>
-        <TableRowEntries>
-          <TableRowEntry>
-            <TableColumnItems>
-              <TableColumnItem>
-                <PropertyName>BaselineId</PropertyName>
-              </TableColumnItem>
-              <TableColumnItem>
-                <PropertyName>BaselineName</PropertyName>
-              </TableColumnItem>
-              <TableColumnItem>
-                <PropertyName>BaselineClientTenantId</PropertyName>
-              </TableColumnItem>
-              <TableColumnItem>
-                <PropertyName>BaselineTenantFriendlyName</PropertyName>
-              </TableColumnItem>
-              <TableColumnItem>
-                <ScriptBlock>if ($_.members) { $_.members.Count } else { 0 }</ScriptBlock>
-              </TableColumnItem>
-            </TableColumnItems>
-          </TableRowEntry>
-        </TableRowEntries>
-      </TableControl>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>BaselineName</Label><PropertyName>BaselineName</PropertyName></ListItem>
+              <ListItem><Label>BaselineId</Label><PropertyName>BaselineId</PropertyName></ListItem>
+              <ListItem><Label>Owner</Label><PropertyName>BaselineTenantFriendlyName</PropertyName></ListItem>
+              <ListItem><Label>OwnerTenantId</Label><PropertyName>BaselineClientTenantId</PropertyName></ListItem>
+              <ListItem><Label>Members</Label><ScriptBlock>if ($_.members -and $_.members.Count -gt 0) { ($_.members | ForEach-Object { "$($_.TenantFriendlyName) ($($_.ClientTenantId))" }) -join ', ' } else { '(none)' }</ScriptBlock></ListItem>
+              <ListItem><Label>AlignedThreshold</Label><PropertyName>AlignedThreshold</PropertyName></ListItem>
+              <ListItem><Label>SemiAlignedThreshold</Label><PropertyName>SemiAlignedThreshold</PropertyName></ListItem>
+              <ListItem><Label>Mode</Label><ScriptBlock>$_.mode</ScriptBlock></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
     </View>
+
+    <!-- POLICY -->
+    <View>
+      <Name>InforcerCommunity.Policy.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.Policy</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>PolicyName</Label><PropertyName>PolicyName</PropertyName></ListItem>
+              <ListItem><Label>Product</Label><PropertyName>Product</PropertyName></ListItem>
+              <ListItem><Label>PrimaryGroup</Label><PropertyName>PrimaryGroup</PropertyName></ListItem>
+              <ListItem><Label>SecondaryGroup</Label><PropertyName>SecondaryGroup</PropertyName></ListItem>
+              <ListItem><Label>Platform</Label><PropertyName>Platform</PropertyName></ListItem>
+              <ListItem><Label>ReadOnly</Label><PropertyName>ReadOnly</PropertyName></ListItem>
+              <ListItem><Label>Tags</Label><ScriptBlock>$_.Tags</ScriptBlock></ListItem>
+              <ListItem><Label>PolicyData</Label><ScriptBlock>if ($_.policyData) { $_.policyData | ConvertTo-Json -Depth 3 -Compress } else { '' }</ScriptBlock></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- ALIGNMENT SCORE (Table format of Get-InforcerAlignmentDetails) -->
+    <View>
+      <Name>InforcerCommunity.AlignmentScore.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.AlignmentScore</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>Tenant</Label><PropertyName>TargetTenantFriendlyName</PropertyName></ListItem>
+              <ListItem><Label>TenantId</Label><PropertyName>TargetTenantClientTenantId</PropertyName></ListItem>
+              <ListItem><Label>AlignmentScore</Label><PropertyName>AlignmentScore</PropertyName></ListItem>
+              <ListItem><Label>BaselineName</Label><PropertyName>BaselineName</PropertyName></ListItem>
+              <ListItem><Label>LastComparisonDateTime</Label><PropertyName>LastComparisonDateTime</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- ALIGNMENT DETAIL POLICY (per-policy rows with -BaselineId) -->
     <View>
       <Name>InforcerCommunity.AlignmentDetailPolicy.Default</Name>
       <ViewSelectedBy>
@@ -64,16 +108,6 @@
         <ListEntries>
           <ListEntry>
             <ListItems>
-              <ListItem><PropertyName>TenantName</PropertyName></ListItem>
-              <ListItem><PropertyName>TenantId</PropertyName></ListItem>
-              <ListItem><PropertyName>AlignmentScore</PropertyName></ListItem>
-              <ListItem><PropertyName>TotalPolicies</PropertyName></ListItem>
-              <ListItem><PropertyName>Aligned</PropertyName></ListItem>
-              <ListItem><PropertyName>AcceptedDeviation</PropertyName></ListItem>
-              <ListItem><PropertyName>UnacceptedDeviation</PropertyName></ListItem>
-              <ListItem><PropertyName>RecommendedFromBaseline</PropertyName></ListItem>
-              <ListItem><PropertyName>ExistingCustomerPolicies</PropertyName></ListItem>
-              <ListItem><PropertyName>CompletedAt</PropertyName></ListItem>
               <ListItem><PropertyName>PolicyName</PropertyName></ListItem>
               <ListItem><PropertyName>AlignmentStatus</PropertyName></ListItem>
               <ListItem><PropertyName>Product</PropertyName></ListItem>
@@ -86,5 +120,31 @@
         </ListEntries>
       </ListControl>
     </View>
+
+    <!-- AUDIT EVENT -->
+    <View>
+      <Name>InforcerCommunity.AuditEvent.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.AuditEvent</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>Id</Label><ScriptBlock>$_.id</ScriptBlock></ListItem>
+              <ListItem><Label>EventType</Label><PropertyName>EventType</PropertyName></ListItem>
+              <ListItem><Label>Code</Label><PropertyName>Code</PropertyName></ListItem>
+              <ListItem><Label>User</Label><PropertyName>User</PropertyName></ListItem>
+              <ListItem><Label>Timestamp</Label><PropertyName>Timestamp</PropertyName></ListItem>
+              <ListItem><Label>Message</Label><PropertyName>Message</PropertyName></ListItem>
+              <ListItem><Label>ClientIpv4</Label><PropertyName>ClientIpv4</PropertyName></ListItem>
+              <ListItem><Label>UserName</Label><PropertyName>UserName</PropertyName></ListItem>
+              <ListItem><Label>UserDisplayName</Label><PropertyName>UserDisplayName</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

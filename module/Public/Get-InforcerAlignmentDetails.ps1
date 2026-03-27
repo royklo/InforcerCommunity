@@ -91,14 +91,26 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
     $tenantsToQuery = [System.Collections.Generic.List[object]]::new()
 
     if ($null -ne $TenantId) {
-        # Single tenant mode
+        # Single tenant mode — resolve ID and friendly name
         try {
             $clientTenantId = Resolve-InforcerTenantId -TenantId $TenantId
         } catch {
             Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
             return
         }
-        [void]$tenantsToQuery.Add(@{ Id = $clientTenantId; Name = "Tenant $clientTenantId" })
+        $tenantFriendlyName = "Tenant $clientTenantId"
+        $tenantsForName = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject)
+        foreach ($t in $tenantsForName) {
+            if ($t -is [PSObject]) {
+                $cidProp = $t.PSObject.Properties['clientTenantId']
+                if ($cidProp -and [int]$cidProp.Value -eq $clientTenantId) {
+                    $fnProp = $t.PSObject.Properties['tenantFriendlyName']
+                    if ($fnProp -and $fnProp.Value) { $tenantFriendlyName = $fnProp.Value.ToString() }
+                    break
+                }
+            }
+        }
+        [void]$tenantsToQuery.Add(@{ Id = $clientTenantId; Name = $tenantFriendlyName })
     } else {
         # All members mode — find baseline members
         if ($null -eq $allBaselines) {
@@ -122,6 +134,7 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
             Write-Warning 'No member tenants found for this baseline.'
             return
         }
+        # Pick first member only — baseline policies are the same regardless of member
         foreach ($member in @($membersProp.Value)) {
             if (-not ($member -is [PSObject])) { continue }
             $mIdProp = $member.PSObject.Properties['clientTenantId']
@@ -130,12 +143,13 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
             $mNameProp = $member.PSObject.Properties['tenantFriendlyName']
             $mName = if ($mNameProp -and $null -ne $mNameProp.Value) { $mNameProp.Value.ToString() } else { "Tenant $mId" }
             [void]$tenantsToQuery.Add(@{ Id = $mId; Name = $mName })
+            break
         }
         if ($tenantsToQuery.Count -eq 0) {
             Write-Warning 'No member tenants found for this baseline.'
             return
         }
-        Write-Verbose "Found $($tenantsToQuery.Count) member tenant(s) for baseline."
+        Write-Verbose "Using member tenant $($tenantsToQuery[0].Name) ($($tenantsToQuery[0].Id)) to retrieve baseline policies."
     }
 
     # Status map for policy arrays
@@ -154,8 +168,16 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
 
         Write-Verbose "Retrieving alignment details for tenant $tId ($tName), baseline $baselineGuid..."
         $detailEndpoint = "/beta/tenants/$tId/alignmentDetails?customBaselineId=$baselineGuid"
-        $response = Invoke-InforcerApiRequest -Endpoint $detailEndpoint -Method GET -OutputType $OutputType
-        if ($null -eq $response) { continue }
+        $response = Invoke-InforcerApiRequest -Endpoint $detailEndpoint -Method GET -OutputType $OutputType -ErrorAction SilentlyContinue -ErrorVariable apiErr
+        if ($null -eq $response) {
+            $errMsg = if ($apiErr -and $apiErr.Count -gt 0) { $apiErr[0].Exception.Message } else { $null }
+            if ($errMsg -match 'permission|forbidden|access') {
+                Write-Warning "No access to alignment details for tenant '$tName' ($tId). You may not have permission to view this baseline's data."
+            } else {
+                Write-Warning "No alignment data returned for tenant '$tName' ($tId)."
+            }
+            continue
+        }
 
         if ($OutputType -eq 'JsonObject') {
             $response
@@ -200,7 +222,14 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
         $recommendedCount         = if ($metrics) { $metrics.PSObject.Properties['recommendedPoliciesFromBaseline'].Value } else { $null }
         $existingCustomerCount    = if ($metrics) { $metrics.PSObject.Properties['customerOnlyPolicies'].Value } else { $null }
 
-        # Collect policy rows
+        # Display metrics summary via host (not pipeline) so it doesn't break | Format-Table
+        Write-Host ""
+        Write-Host "  Tenant: $tName ($tId)" -ForegroundColor Cyan
+        Write-Host "  Alignment Score: $alignmentScoreFormatted | Total: $totalPolicies | Aligned: $alignedCount | Accepted Deviation: $acceptedDeviationCount | Unaccepted Deviation: $unacceptedDeviationCount | Recommended: $recommendedCount | Customer Only: $existingCustomerCount"
+        Write-Host "  Completed: $completedAt"
+        Write-Host ""
+
+        # Per-policy rows
         foreach ($arrayName in $arrayStatusMap.Keys) {
             $policyArrayProp = $alignment.PSObject.Properties[$arrayName]
             if (-not $policyArrayProp -or $null -eq $policyArrayProp.Value) { continue }
@@ -218,16 +247,6 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
                 }
 
                 $row = [PSCustomObject]@{
-                    TenantName             = $tName
-                    TenantId               = $tId
-                    AlignmentScore         = $alignmentScoreFormatted
-                    TotalPolicies          = $totalPolicies
-                    Aligned                = $alignedCount
-                    AcceptedDeviation      = $acceptedDeviationCount
-                    UnacceptedDeviation    = $unacceptedDeviationCount
-                    RecommendedFromBaseline = $recommendedCount
-                    ExistingCustomerPolicies = $existingCustomerCount
-                    CompletedAt            = $completedAt
                     PolicyName             = $policy.PSObject.Properties['policyName'].Value
                     AlignmentStatus        = $status
                     Product                = $policy.PSObject.Properties['product'].Value
@@ -288,7 +307,10 @@ if ($Format -eq 'Raw') {
         } else {
             $filtered = Filter-InforcerResponse -InputObject $response -FilterScript $predicate -OutputType PowerShellObject
             foreach ($item in (ConvertTo-InforcerArray $filtered)) {
-                if ($item -is [PSObject]) { $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AlignmentScore }
+                if ($item -is [PSObject]) {
+                    $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AlignmentScore
+                    $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AlignmentScoreRaw')
+                }
             }
             $filtered
         }
@@ -299,7 +321,10 @@ if ($Format -eq 'Raw') {
         return $response
     }
     foreach ($item in (ConvertTo-InforcerArray $response)) {
-        if ($item -is [PSObject]) { $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AlignmentScore }
+        if ($item -is [PSObject]) {
+            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AlignmentScore
+            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AlignmentScoreRaw')
+        }
     }
     $response
     return
@@ -441,24 +466,14 @@ if ($flatFormat) {
         $alignmentScoreFormatted = FormatAlignmentScore $scoreVal
 
         $row = [PSCustomObject]@{
-            BaselineName                    = $item.PSObject.Properties['baselineGroupName'].Value
-            BaselineId                      = $item.PSObject.Properties['baselineGroupId'].Value
-            AlignmentScore                   = $alignmentScoreFormatted
-            AlignedThreshold                 = $null
-            SemiAlignedThreshold             = $null
-            LastAlignmentDateTime            = $null
-            LastComparisonDateTime           = $item.PSObject.Properties['lastComparisonDateTime'].Value
-            BaselineOwnerTenantFriendlyName  = $null
-            BaselineOwnerTenantMsTenantId    = $null
-            BaselineOwnerTenantId            = $null
-            TargetTenantFriendlyName         = ($item.PSObject.Properties['tenantFriendlyName'].Value -as [string])
-            TargetTenantMsTenantId           = $null
-            TargetTenantClientTenantId       = $targetTenantClientTenantId
-            AlignedBaselineId                = $item.PSObject.Properties['baselineGroupId'].Value
+            TargetTenantFriendlyName    = ($item.PSObject.Properties['tenantFriendlyName'].Value -as [string])
+            TargetTenantClientTenantId  = $targetTenantClientTenantId
+            AlignmentScore              = $alignmentScoreFormatted
+            BaselineName                = $item.PSObject.Properties['baselineGroupName'].Value
+            BaselineId                  = $item.PSObject.Properties['baselineGroupId'].Value
+            LastComparisonDateTime      = $item.PSObject.Properties['lastComparisonDateTime'].Value
         }
-        $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantFriendlyName', 'TargetTenantFriendlyName'))
-        $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantMsTenantId', 'TargetTenantMsTenantId'))
-        $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantClientTenantId', 'TargetTenantClientTenantId'))
+        $row.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AlignmentScore')
         [void]$alignmentTable.Add($row)
     }
 } else {
@@ -478,49 +493,24 @@ if ($flatFormat) {
 
         $targetTenantFriendlyName = $tenant.PSObject.Properties['tenantFriendlyName'].Value -as [string]
         if (-not $targetTenantFriendlyName) { $targetTenantFriendlyName = '' }
-        $targetTenantMsTenantId = $tenant.PSObject.Properties['msTenantId'].Value -as [string]
 
         foreach ($alignment in $summaries) {
             if (-not ($alignment -is [PSObject])) { continue }
-
-            $baselineOwnerTenantId = 0
-            $aidProp = $alignment.PSObject.Properties['alignedBaselineTenantId']
-            if ($null -ne $aidProp -and $null -ne $aidProp.Value) {
-                $tmp = 0
-                if ([int]::TryParse($aidProp.Value.ToString(), [ref]$tmp)) { $baselineOwnerTenantId = $tmp }
-            }
-
-            $baselineOwnerFriendlyName = "Unknown (ID: $baselineOwnerTenantId)"
-            $baselineOwnerMsTenantId = $null
-            if ($tenantLookup.ContainsKey($baselineOwnerTenantId)) {
-                $ownerTenant = $tenantLookup[$baselineOwnerTenantId]
-                $fn = $ownerTenant.PSObject.Properties['tenantFriendlyName'].Value
-                $baselineOwnerFriendlyName = if ($fn) { $fn.ToString() } else { "Unknown (ID: $baselineOwnerTenantId)" }
-                $baselineOwnerMsTenantId = $ownerTenant.PSObject.Properties['msTenantId'].Value -as [string]
-            }
 
             $scoreProp = $alignment.PSObject.Properties['alignmentScore']
             $alignmentScoreFormatted = FormatAlignmentScore $(if ($scoreProp -and $null -ne $scoreProp.Value) { $scoreProp.Value } else { $null })
 
             $row = [PSCustomObject]@{
-                BaselineName                    = $alignment.PSObject.Properties['alignedBaselineName'].Value
-                BaselineId                      = $alignment.PSObject.Properties['alignedBaselineId'].Value
-                AlignmentScore                   = $alignmentScoreFormatted
-                AlignedThreshold                 = $alignment.PSObject.Properties['alignedThreshold'].Value
-                SemiAlignedThreshold             = $alignment.PSObject.Properties['semiAlignedThreshold'].Value
-                LastAlignmentDateTime            = $alignment.PSObject.Properties['lastAlignmentDateTime'].Value
-                LastComparisonDateTime           = $alignment.PSObject.Properties['lastComparisonDateTime'].Value
-                BaselineOwnerTenantFriendlyName  = $baselineOwnerFriendlyName
-                BaselineOwnerTenantMsTenantId    = $baselineOwnerMsTenantId
-                BaselineOwnerTenantId            = $baselineOwnerTenantId
-                TargetTenantFriendlyName         = $targetTenantFriendlyName
-                TargetTenantMsTenantId            = $targetTenantMsTenantId
-                TargetTenantClientTenantId       = $targetTenantClientTenantId
-                AlignedBaselineId                = $alignment.PSObject.Properties['alignedBaselineId'].Value
+                TargetTenantFriendlyName    = $targetTenantFriendlyName
+                TargetTenantClientTenantId  = $targetTenantClientTenantId
+                AlignmentScore              = $alignmentScoreFormatted
+                BaselineName                = $alignment.PSObject.Properties['alignedBaselineName'].Value
+                BaselineId                  = $alignment.PSObject.Properties['alignedBaselineId'].Value
+                LastComparisonDateTime      = $alignment.PSObject.Properties['lastComparisonDateTime'].Value
+                AlignedThreshold            = $alignment.PSObject.Properties['alignedThreshold'].Value
+                SemiAlignedThreshold        = $alignment.PSObject.Properties['semiAlignedThreshold'].Value
             }
-            $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantFriendlyName', 'TargetTenantFriendlyName'))
-            $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantMsTenantId', 'TargetTenantMsTenantId'))
-            $row.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('TenantClientTenantId', 'TargetTenantClientTenantId'))
+            $row.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AlignmentScore')
             [void]$alignmentTable.Add($row)
         }
     }

@@ -30,11 +30,11 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 8
+        $script:expectedCount = 9
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
-            'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent'
+            'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType'
         )
         $script:expectedParameters = @{
             'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl')
@@ -45,6 +45,7 @@ Describe 'Consistency contract' {
             'Get-InforcerTenantPolicies'    = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerAlignmentDetails'    = @('Format', 'TenantId', 'BaselineId', 'Tag', 'OutputType')
             'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'PageSize', 'MaxResults', 'Format', 'OutputType')
+            'Get-InforcerSupportedEventType'    = @()
         }
     }
 
@@ -417,22 +418,6 @@ Describe 'Private helpers (via module scope)' {
             }
         }
 
-        It 'Tenant: builds PolicyDiffFormatted from recentChanges' {
-            & (Get-Module InforcerCommunity) {
-                $tenant = [PSCustomObject]@{
-                    clientTenantId = 1
-                    recentChanges = [PSCustomObject]@{
-                        changedPolicies = @('Policy A')
-                        addedPolicies = @('Policy B')
-                    }
-                }
-                $null = Add-InforcerPropertyAliases -InputObject $tenant -ObjectType Tenant
-                $tenant.PSObject.Properties['PolicyDiffFormatted'] | Should -Not -BeNullOrEmpty
-                $tenant.PolicyDiffFormatted | Should -Match 'Changed Policies'
-                $tenant.PolicyDiffFormatted | Should -Match 'Policy A'
-            }
-        }
-
         It 'Policy: sets PolicyName from displayName and creates FriendlyName alias' {
             & (Get-Module InforcerCommunity) {
                 $policy = [PSCustomObject]@{ id = 'p1'; displayName = 'CA Block Legacy'; friendlyName = 'Block Legacy' }
@@ -471,13 +456,13 @@ Describe 'Private helpers (via module scope)' {
             }
         }
 
-        It 'AuditEvent: flattens metadata and removes metadata property' {
+        It 'AuditEvent: flattens metadata fields and preserves metadata property' {
             & (Get-Module InforcerCommunity) {
                 $auditEvt = [PSCustomObject]@{
                     correlationId = 'c1'; eventType = 'authentication'
                     metadata = [PSCustomObject]@{
                         clientIpv4 = '10.0.0.1'; clientIpv6 = '::1'
-                        nameLookup = [PSCustomObject]@{ username = 'john@test.com'; displayName = 'John' }
+                        nameLookup = [PSCustomObject]@{ 'user:username:1' = 'john@test.com'; 'user:displayName:1' = 'John' }
                     }
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $auditEvt -ObjectType AuditEvent
@@ -485,7 +470,7 @@ Describe 'Private helpers (via module scope)' {
                 $auditEvt.ClientIpv6 | Should -Be '::1'
                 $auditEvt.UserName | Should -Be 'john@test.com'
                 $auditEvt.UserDisplayName | Should -Be 'John'
-                $auditEvt.PSObject.Properties['metadata'] | Should -BeNullOrEmpty
+                $auditEvt.PSObject.Properties['metadata'] | Should -Not -BeNullOrEmpty
             }
         }
 

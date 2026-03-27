@@ -35,6 +35,7 @@ function EnrichPolicyObject {
         else { $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('Tags', '')) }
     }
     $null = Add-InforcerPropertyAliases -InputObject $pso -ObjectType Policy
+    $pso.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Policy')
 }
 
 <#

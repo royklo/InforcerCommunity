@@ -19,7 +19,8 @@ module/
 │   ├── Get-InforcerBaseline.ps1
 │   ├── Get-InforcerTenantPolicies.ps1
 │   ├── Get-InforcerAlignmentDetails.ps1
-│   └── Get-InforcerAuditEvent.ps1
+│   ├── Get-InforcerAuditEvent.ps1
+│   └── Get-InforcerSupportedEventType.ps1
 └── Private/                         # Helpers (not exported)
     ├── Invoke-InforcerApiRequest.ps1
     ├── Test-InforcerSession.ps1
@@ -28,8 +29,7 @@ module/
     ├── Add-InforcerPropertyAliases.ps1
     ├── Filter-InforcerResponse.ps1
     ├── ConvertFrom-InforcerSecureString.ps1
-    ├── ConvertTo-InforcerArray.ps1
-    └── Get-InforcerAuditEventType.ps1
+    └── ConvertTo-InforcerArray.ps1
 ```
 
 ## Loading the script module

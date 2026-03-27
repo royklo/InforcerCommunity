@@ -82,26 +82,47 @@ function Invoke-InforcerApiRequest {
     try {
         $webResponse = Invoke-WebRequest @params
         $responseBody = $webResponse.Content
-    } catch [System.Net.WebException] {
-        $statusCode = [int]$_.Exception.Response.StatusCode
-        $reader = $null
-        try {
-            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-            $responseBody = $reader.ReadToEnd()
-        } finally {
-            if ($reader) { $reader.Dispose() }
+    } catch {
+        # PowerShell 7: HttpResponseException; PowerShell 5.1: WebException
+        $responseBody = $null
+        if ($_.Exception -is [System.Net.WebException] -and $_.Exception.Response) {
+            $reader = $null
+            try {
+                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                $responseBody = $reader.ReadToEnd()
+            } finally {
+                if ($reader) { $reader.Dispose() }
+            }
+        } elseif ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+            # PowerShell 7+ stores the response body in ErrorDetails.Message
+            $responseBody = $_.ErrorDetails.Message
         }
-        $detail = $responseBody
+        $detail = if ($responseBody) { $responseBody } else { $_.Exception.Message }
         try {
             $json = $responseBody | ConvertFrom-Json -ErrorAction SilentlyContinue
-            if ($json.message) { $detail = $json.message }
-            elseif ($json.error) { $detail = $json.error }
+            if ($json) {
+                $statusCode = ($json.PSObject.Properties['statusCode'].Value -as [int])
+                $errorCode = ($json.PSObject.Properties['errorCode'].Value -as [string])
+                $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
+                $detail = switch ($true) {
+                    ($statusCode -eq 429 -or ($apiMessage -and $apiMessage -match 'quota|rate.?limit|throttl')) {
+                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
+                    }
+                    ($errorCode -match '^forbidden$') {
+                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { "You don't have permission to access this tenant or resource." }
+                    }
+                    ($errorCode -match 'notfound|not_found') {
+                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { 'Tenant or resource not found.' }
+                    }
+                    default {
+                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } elseif ($json.error) { $json.error } else { $responseBody }
+                    }
+                }
+            }
         } catch { }
         $apiKeyPattern = [regex]::new([regex]::Escape($apiKey), 'Compiled')
         $detail = $apiKeyPattern.Replace($detail, '[REDACTED]')
-        Write-Error -Message "Inforcer API request failed (HTTP $statusCode): $detail" `
-            -ErrorId 'ApiRequestFailed' `
-            -Category ConnectionError
+        Write-Error -Message $detail -ErrorId 'ApiRequestFailed' -Category ConnectionError
         return
     }
 

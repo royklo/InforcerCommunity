@@ -5,7 +5,7 @@
     Lists tenants. Optionally filter by -TenantId (Client Tenant ID or Microsoft Tenant ID GUID).
     Output includes PascalCase aliases (e.g. ClientTenantId, TenantFriendlyName). When the API
     returns licenses as an array, it is converted to a comma-separated string in the licenses property.
-    PolicyDiff and PolicyDiffFormatted (from recentChanges) show policy change information when available.
+    PolicyDiff shows policy change information when available.
 .PARAMETER Format
     Output format. Raw = raw API response (default).
 .PARAMETER TenantId
@@ -96,7 +96,10 @@ process {
     # Force to array (API can return single object or array)
     $all = @($response)
     foreach ($item in $all) {
-        if ($item -is [PSObject]) { $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType Tenant }
+        if ($item -is [PSObject]) {
+            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType Tenant
+            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Tenant')
+        }
     }
     # Dedupe by ClientTenantId (aliases already applied above)
     $seen = @{}

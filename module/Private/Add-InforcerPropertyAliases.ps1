@@ -67,30 +67,6 @@ function Add-InforcerPropertyAliases {
                     $licensesStr = $parts -join ', '
                     $licensesProp.Value = $licensesStr
                 }
-                # PolicyDiff formatted from recentChanges when available (structured: Changed / Added / Removed)
-                $recentProp = $obj.PSObject.Properties['recentChanges']
-                if ($recentProp -and $null -ne $recentProp.Value -and -not $obj.PSObject.Properties['PolicyDiffFormatted']) {
-                    $rc = $recentProp.Value
-                    $lines = [System.Collections.Generic.List[string]]::new()
-                    if ($rc -is [PSObject]) {
-                        foreach ($sectionName in @('changedPolicies','addedPolicies','removedPolicies','changed','added','removed')) {
-                            $sectionProp = $rc.PSObject.Properties[$sectionName]
-                            if (-not $sectionProp -or $null -eq $sectionProp.Value) { continue }
-                            $label = switch -Regex ($sectionName) { 'changed' { 'Changed Policies' } 'added' { 'Added Policies' } 'removed' { 'Removed Policies' } default { $sectionName } }
-                            [void]$lines.Add($label + ':')
-                            $items = $sectionProp.Value
-                            if ($items -is [object[]]) {
-                                foreach ($i in $items) {
-                                    $s = if ($i -is [PSObject]) { $i.ToString() } else { $i -as [string] }
-                                    if ($s) { [void]$lines.Add("  - $s") }
-                                }
-                            } elseif ($items -is [string]) { [void]$lines.Add("  - $items") }
-                        }
-                    }
-                    if ($lines.Count -gt 0) {
-                        $obj.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('PolicyDiffFormatted', ($lines -join "`n")))
-                    }
-                }
             }
             'Baseline' {
                 AddAliasIfExists $obj 'BaselineClientTenantId' 'baselineClientTenantId'
@@ -231,8 +207,10 @@ function Add-InforcerPropertyAliases {
                         if ($nameLookup -is [PSObject]) {
                             foreach ($kp in $nameLookup.PSObject.Properties) {
                                 $k = $kp.Name; $v = $kp.Value
-                                if ($k -match 'username') { $username = $v }
-                                if ($k -match 'displayName') { $displayName = $v }
+                                # Only match user: prefixed keys (e.g. "user:username:763", "user:displayName:763")
+                                # Skip non-user keys like "alertRuleConfig:displayName:..."
+                                if ($k -like 'user:username:*') { $username = $v }
+                                if ($k -like 'user:displayName:*') { $displayName = $v }
                             }
                         }
                         if ($username -and -not $obj.PSObject.Properties['UserName']) {
@@ -243,10 +221,9 @@ function Add-InforcerPropertyAliases {
                         }
                     }
                 }
-                # Remove metadata property so output only shows flattened top-level fields
-                if ($obj.PSObject.Properties['metadata']) {
-                    $obj.PSObject.Properties.Remove('metadata')
-                }
+                # Keep metadata on the object — Format.ps1xml controls default view.
+                # Metadata contains event-type-specific data (e.g. alertRuleCreate has createAlertRuleConfigCommand)
+                # accessible via $event.metadata or Select-Object *.
             }
         }
 

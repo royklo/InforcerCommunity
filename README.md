@@ -79,8 +79,8 @@ Get-InforcerAlignmentDetails
 # Get policies for a tenant
 Get-InforcerTenantPolicies -TenantId 482
 
-# Show policy changes (PolicyDiffFormatted on each tenant when available)
-Get-InforcerTenant | Select-Object ClientTenantId, TenantFriendlyName, PolicyDiffFormatted
+# Show policy changes (PolicyDiff on each tenant when available)
+Get-InforcerTenant | Select-Object ClientTenantId, TenantFriendlyName, PolicyDiff
 
 # Disconnect when done
 Disconnect-Inforcer

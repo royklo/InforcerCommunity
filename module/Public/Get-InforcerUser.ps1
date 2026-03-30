@@ -89,10 +89,16 @@ function Get-InforcerUser {
         if ($PSCmdlet.ParameterSetName -eq 'ById') {
             # --- ById: single user detail ---
             $endpoint = "/beta/tenants/$resolvedTenantId/users/$UserId"
-            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject
+            $err = $null
+            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
 
             if ($null -eq $response) {
-                Write-Error -Message "User '$UserId' not found in tenant '$resolvedTenantId'." -ErrorId 'UserNotFound' -Category ObjectNotFound
+                # Only emit UserNotFound if API returned 404; otherwise the API helper already wrote the real error
+                if ($err -and $err[0].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
+                    Write-Error -Message "User '$UserId' not found in tenant '$resolvedTenantId'." -ErrorId 'UserNotFound' -Category ObjectNotFound
+                } elseif (-not $err) {
+                    Write-Error -Message "User '$UserId' not found in tenant '$resolvedTenantId'." -ErrorId 'UserNotFound' -Category ObjectNotFound
+                }
                 return
             }
 

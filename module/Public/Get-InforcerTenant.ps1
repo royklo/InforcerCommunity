@@ -61,35 +61,25 @@ process {
         }
     }
 
-    # Use pre-fetched data or convert for JsonObject output
     if ($OutputType -eq 'JsonObject') {
-        $response = $tenantData | ConvertTo-Json -Depth 100
-    } else {
-        $response = $tenantData
-    }
-
-    if ($OutputType -eq 'JsonObject') {
+        # Filter PSObjects first, then convert to JSON once — avoids unnecessary serialize/deserialize round-trip
+        $jsonData = $tenantData
         if ($null -ne $singleTenantId) {
-            $obj = $response | ConvertFrom-Json
-            $arr = if ($obj -is [array]) { @($obj) } else { @($obj) }
-            $filtered = @($arr | Where-Object {
+            $jsonData = @($tenantData | Where-Object {
                 $id = $_.clientTenantId
                 if ($null -eq $id) { $id = $_.ClientTenantId }
-                $id -ne $null -and [int]$id -eq $singleTenantId
+                $null -ne $id -and [int]$id -eq $singleTenantId
             })
-            if ($filtered.Count -eq 0) {
+            if ($jsonData.Count -eq 0) {
                 Write-Error -Message "Tenant or resource not found." -ErrorId 'TenantNotFound' -Category ObjectNotFound
                 return
             }
-            ($filtered | ConvertTo-Json -Depth 100)
-        } else {
-            $response
         }
-        return
+        return ($jsonData | ConvertTo-Json -Depth 100)
     }
 
     # Force to array (API can return single object or array)
-    $all = @($response)
+    $all = @($tenantData)
     foreach ($item in $all) {
         if ($item -is [PSObject]) { Add-InforcerPropertyAliases -InputObject $item -ObjectType Tenant | Out-Null }
     }

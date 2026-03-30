@@ -123,7 +123,8 @@ function Invoke-InforcerApiRequest {
 
         $detail = $detail -replace [regex]::Escape($apiKey), '[REDACTED]'
         $msg = if ($statusCode -gt 0) { "Inforcer API request failed (HTTP $statusCode): $detail" } else { "Inforcer API request failed: $detail" }
-        Write-Error -Message $msg -ErrorId 'ApiRequestFailed' -Category ConnectionError
+        $errorId = if ($statusCode -gt 0) { "ApiRequestFailed_$statusCode" } else { 'ApiRequestFailed' }
+        Write-Error -Message $msg -ErrorId $errorId -Category ConnectionError
         return
     }
 

@@ -71,7 +71,8 @@ param(
     [ValidateSet('Raw')]
     [string]$Format = 'Raw',
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+    [Alias('ClientTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]

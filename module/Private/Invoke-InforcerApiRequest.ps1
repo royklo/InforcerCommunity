@@ -15,8 +15,12 @@ function Invoke-InforcerApiRequest {
         PowerShellObject (return PSObjects) or JsonObject (return JSON string). Default: PowerShellObject.
     .PARAMETER PreserveStructure
         When set, skips the automatic array-unwrapping step. The .data wrapper is still
-        unwrapped, but inner structure (e.g. items + continuationToken) is preserved.
-        Use this when the caller needs pagination metadata alongside the results.
+        unwrapped, but inner structure (e.g. items + continuationToken inside .data) is preserved.
+        Use this when the caller needs pagination metadata that lives inside the .data object.
+    .PARAMETER PreserveFullResponse
+        When set, returns the full parsed API response without any unwrapping. Neither
+        .data nor arrays are unwrapped. Use this when pagination metadata (e.g. continuationToken)
+        lives at the response root level alongside .data, not inside it.
     #>
     [CmdletBinding()]
     param(
@@ -35,7 +39,10 @@ function Invoke-InforcerApiRequest {
         [string]$OutputType = 'PowerShellObject',
 
         [Parameter(Mandatory = $false)]
-        [switch]$PreserveStructure
+        [switch]$PreserveStructure,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$PreserveFullResponse
     )
 
     if (-not (Test-InforcerSession)) {
@@ -73,75 +80,83 @@ function Invoke-InforcerApiRequest {
         Uri             = $uri
         Method          = $Method
         Headers         = $headers
-        UseBasicParsing = $true
     }
     if (-not [string]::IsNullOrWhiteSpace($Body)) {
         $params['Body'] = $Body
     }
 
     try {
-        $webResponse = Invoke-WebRequest @params
-        $responseBody = $webResponse.Content
+        $rawResponse = Invoke-RestMethod @params
     } catch {
-        # PowerShell 7: HttpResponseException; PowerShell 5.1: WebException
-        $responseBody = $null
-        if ($_.Exception -is [System.Net.WebException] -and $_.Exception.Response) {
+        $statusCode = 0
+        $detail = $_.Exception.Message
+
+        if ($_.Exception.Response) {
+            $statusCode = [int]$_.Exception.Response.StatusCode
+        }
+
+        # PS7: ErrorDetails.Message contains the response body
+        if ($_.ErrorDetails.Message) {
+            $detail = $_.ErrorDetails.Message
+            try {
+                $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
+                if ($json) {
+                    $errorCode = ($json.PSObject.Properties['errorCode'].Value -as [string])
+                    $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
+                    $detail = switch ($true) {
+                        ($statusCode -eq 429 -or ($apiMessage -and $apiMessage -match 'quota|rate.?limit|throttl')) {
+                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
+                        }
+                        ($errorCode -match '^forbidden$') {
+                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { "You don't have permission to access this tenant or resource." }
+                        }
+                        ($errorCode -match 'notfound|not_found') {
+                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { 'Tenant or resource not found.' }
+                        }
+                        default {
+                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } elseif ($json.error) { $json.error } else { $detail }
+                        }
+                    }
+                }
+            } catch { }
+        }
+        # PS5.1 fallback: read from response stream
+        elseif ($_.Exception.Response) {
             $reader = $null
             try {
                 $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
                 $responseBody = $reader.ReadToEnd()
+                $detail = $responseBody
+                try {
+                    $json = $responseBody | ConvertFrom-Json -ErrorAction SilentlyContinue
+                    if ($json.message) { $detail = $json.message }
+                    elseif ($json.error) { $detail = $json.error }
+                } catch { }
             } finally {
                 if ($reader) { $reader.Dispose() }
             }
-        } elseif ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            # PowerShell 7+ stores the response body in ErrorDetails.Message
-            $responseBody = $_.ErrorDetails.Message
         }
-        $detail = if ($responseBody) { $responseBody } else { $_.Exception.Message }
-        try {
-            $json = $responseBody | ConvertFrom-Json -ErrorAction SilentlyContinue
-            if ($json) {
-                $statusCode = ($json.PSObject.Properties['statusCode'].Value -as [int])
-                $errorCode = ($json.PSObject.Properties['errorCode'].Value -as [string])
-                $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
-                $detail = switch ($true) {
-                    ($statusCode -eq 429 -or ($apiMessage -and $apiMessage -match 'quota|rate.?limit|throttl')) {
-                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
-                    }
-                    ($errorCode -match '^forbidden$') {
-                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { "You don't have permission to access this tenant or resource." }
-                    }
-                    ($errorCode -match 'notfound|not_found') {
-                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { 'Tenant or resource not found.' }
-                    }
-                    default {
-                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } elseif ($json.error) { $json.error } else { $responseBody }
-                    }
-                }
-            }
-        } catch { }
+
         $apiKeyPattern = [regex]::new([regex]::Escape($apiKey), 'Compiled')
         $detail = $apiKeyPattern.Replace($detail, '[REDACTED]')
-        Write-Error -Message $detail -ErrorId 'ApiRequestFailed' -Category ConnectionError
-        return
-    }
-
-    if ([string]::IsNullOrWhiteSpace($responseBody)) {
-        Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData
-        return
-    }
-
-    try {
-        $rawResponse = $responseBody | ConvertFrom-Json
-    } catch {
-        Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $($responseBody.Substring(0, [Math]::Min(200, $responseBody.Length)))..." `
-            -ErrorId 'NonJsonResponse' `
-            -Category InvalidData
+        $msg = if ($statusCode -gt 0) { "Inforcer API request failed (HTTP $statusCode): $detail" } else { "Inforcer API request failed: $detail" }
+        $errorId = if ($statusCode -gt 0) { "ApiRequestFailed_$statusCode" } else { 'ApiRequestFailed' }
+        Write-Error -Message $msg -ErrorId $errorId -Category ConnectionError
         return
     }
 
     if ($null -eq $rawResponse) {
-        Write-Error -Message 'API returned an invalid response.' -ErrorId 'EmptyResponse' -Category InvalidData
+        Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData
+        return
+    }
+
+    # Invoke-RestMethod auto-parses JSON to PSObject. If the response is a string or other
+    # non-object type, the endpoint likely returned non-JSON (e.g. HTML from a misconfigured BaseUrl).
+    if ($rawResponse -is [string] -or ($rawResponse -isnot [PSObject] -and $rawResponse -isnot [array])) {
+        $preview = $rawResponse.ToString()
+        if ($preview.Length -gt 200) { $preview = $preview.Substring(0, 200) + '...' }
+        Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $preview" `
+            -ErrorId 'NonJsonResponse' -Category InvalidData
         return
     }
 
@@ -165,6 +180,10 @@ function Invoke-InforcerApiRequest {
         }
         Write-Error -Message $friendlyMessage -ErrorId 'ApiError' -Category InvalidOperation
         return
+    }
+
+    if ($PreserveFullResponse) {
+        return $rawResponse
     }
 
     $data = $rawResponse

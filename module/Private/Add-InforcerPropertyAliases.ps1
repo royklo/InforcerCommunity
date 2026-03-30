@@ -17,7 +17,7 @@ function Add-InforcerPropertyAliases {
         [object]$InputObject,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent')]
+        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User')]
         [string]$ObjectType
     )
 
@@ -224,6 +224,85 @@ function Add-InforcerPropertyAliases {
                 # Keep metadata on the object — Format.ps1xml controls default view.
                 # Metadata contains event-type-specific data (e.g. alertRuleCreate has createAlertRuleConfigCommand)
                 # accessible via $event.metadata or Select-Object *.
+            }
+            'UserSummary' {
+                AddAliasIfExists $obj 'Id' 'id'
+                AddAliasIfExists $obj 'DisplayName' 'displayName'
+                AddAliasIfExists $obj 'UserPrincipalName' 'userPrincipalName'
+                AddAliasIfExists $obj 'UserType' 'userType'
+                AddAliasIfExists $obj 'JobTitle' 'jobTitle'
+                AddAliasIfExists $obj 'Department' 'department'
+                AddAliasIfExists $obj 'Groups' 'groups'
+                AddAliasIfExists $obj 'Roles' 'roles'
+                AddAliasIfExists $obj 'AssignedLicenses' 'assignedLicenses'
+                AddAliasIfExists $obj 'IsGlobalAdmin' 'isGlobalAdmin'
+                AddAliasIfExists $obj 'IsAccountEnabled' 'isAccountEnabled'
+                AddAliasIfExists $obj 'IsMfaRegistered' 'isMfaRegistered'
+                AddAliasIfExists $obj 'IsMfaCapable' 'isMfaCapable'
+            }
+            'User' {
+                # Shared with UserSummary
+                AddAliasIfExists $obj 'Id' 'id'
+                AddAliasIfExists $obj 'DisplayName' 'displayName'
+                AddAliasIfExists $obj 'UserPrincipalName' 'userPrincipalName'
+                AddAliasIfExists $obj 'UserType' 'userType'
+                AddAliasIfExists $obj 'JobTitle' 'jobTitle'
+                AddAliasIfExists $obj 'Department' 'department'
+                AddAliasIfExists $obj 'AssignedLicenses' 'assignedLicenses'
+                AddAliasIfExists $obj 'IsGlobalAdmin' 'isGlobalAdmin'
+                AddAliasIfExists $obj 'IsMfaRegistered' 'isMfaRegistered'
+                AddAliasIfExists $obj 'IsMfaCapable' 'isMfaCapable'
+
+                # Detail-only properties
+                AddAliasIfExists $obj 'GivenName' 'givenName'
+                AddAliasIfExists $obj 'Surname' 'surname'
+                AddAliasIfExists $obj 'Mail' 'mail'
+                AddAliasIfExists $obj 'MobilePhone' 'mobilePhone'
+                AddAliasIfExists $obj 'BusinessPhones' 'businessPhones'
+                AddAliasIfExists $obj 'OfficeLocation' 'officeLocation'
+                AddAliasIfExists $obj 'StreetAddress' 'streetAddress'
+                AddAliasIfExists $obj 'City' 'city'
+                AddAliasIfExists $obj 'State' 'state'
+                AddAliasIfExists $obj 'PostalCode' 'postalCode'
+                AddAliasIfExists $obj 'Country' 'country'
+                AddAliasIfExists $obj 'PreferredLanguage' 'preferredLanguage'
+                AddAliasIfExists $obj 'AccountEnabled' 'accountEnabled'
+                AddAliasIfExists $obj 'UsageLocation' 'usageLocation'
+                AddAliasIfExists $obj 'CreatedDateTime' 'createdDateTime'
+                AddAliasIfExists $obj 'LastPasswordChangeDateTime' 'lastPasswordChangeDateTime'
+                AddAliasIfExists $obj 'LastSignInDateTime' 'lastSignInDateTime'
+                AddAliasIfExists $obj 'CompanyName' 'companyName'
+                AddAliasIfExists $obj 'EmployeeId' 'employeeId'
+                AddAliasIfExists $obj 'EmployeeType' 'employeeType'
+                AddAliasIfExists $obj 'EmployeeHireDate' 'employeeHireDate'
+                AddAliasIfExists $obj 'MailNickname' 'mailNickname'
+                AddAliasIfExists $obj 'PreferredDataLocation' 'preferredDataLocation'
+                AddAliasIfExists $obj 'OnPremisesSyncEnabled' 'onPremisesSyncEnabled'
+                AddAliasIfExists $obj 'OtherMails' 'otherMails'
+                AddAliasIfExists $obj 'ProxyAddresses' 'proxyAddresses'
+                AddAliasIfExists $obj 'CreationType' 'creationType'
+                AddAliasIfExists $obj 'PasswordPolicies' 'passwordPolicies'
+                AddAliasIfExists $obj 'SignInSessionsValidFromDateTime' 'signInSessionsValidFromDateTime'
+                AddAliasIfExists $obj 'ImAddresses' 'imAddresses'
+                AddAliasIfExists $obj 'LegalAgeGroupClassification' 'legalAgeGroupClassification'
+                AddAliasIfExists $obj 'OnPremisesLastSyncDateTime' 'onPremisesLastSyncDateTime'
+                AddAliasIfExists $obj 'OnPremisesDistinguishedName' 'onPremisesDistinguishedName'
+                AddAliasIfExists $obj 'OnPremisesDomainName' 'onPremisesDomainName'
+                AddAliasIfExists $obj 'OnPremisesImmutableId' 'onPremisesImmutableId'
+                AddAliasIfExists $obj 'OnPremisesSecurityIdentifier' 'onPremisesSecurityIdentifier'
+                AddAliasIfExists $obj 'OnPremisesSamAccountName' 'onPremisesSamAccountName'
+                AddAliasIfExists $obj 'OnPremisesUserPrincipalName' 'onPremisesUserPrincipalName'
+                AddAliasIfExists $obj 'Manager' 'manager'
+                AddAliasIfExists $obj 'Groups' 'groups'
+                AddAliasIfExists $obj 'Devices' 'devices'
+                AddAliasIfExists $obj 'Roles' 'roles'
+                AddAliasIfExists $obj 'AppRoleAssignments' 'appRoleAssignments'
+                AddAliasIfExists $obj 'IsCloudOnly' 'isCloudOnly'
+                AddAliasIfExists $obj 'IsHybrid' 'isHybrid'
+                AddAliasIfExists $obj 'IsAllDevicesCompliant' 'isAllDevicesCompliant'
+                AddAliasIfExists $obj 'RiskState' 'riskState'
+                AddAliasIfExists $obj 'RiskDetail' 'riskDetail'
+                AddAliasIfExists $obj 'RiskLevel' 'riskLevel'
             }
         }
 

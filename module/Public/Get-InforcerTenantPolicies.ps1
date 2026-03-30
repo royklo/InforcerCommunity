@@ -42,12 +42,12 @@ function EnrichPolicyObject {
 .SYNOPSIS
     Retrieves policies for a tenant from the Inforcer API.
 .DESCRIPTION
-    Gets all policies for the specified tenant. TenantId can be Client Tenant ID or GUID.
+    Gets all policies for the specified tenant. TenantId accepts a numeric ID, GUID, or tenant name.
     Output is normalized to use PolicyName (from displayName or name) so properties are consistent across all rows.
 .PARAMETER Format
     Raw (default).
 .PARAMETER TenantId
-    Tenant to get policies for (required). Integer or GUID.
+    Tenant to get policies for (required). Numeric ID, GUID, or tenant name.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 .EXAMPLE

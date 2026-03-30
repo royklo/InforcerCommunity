@@ -88,14 +88,14 @@ When not connected, an error is written (e.g. "Not connected. To connect, run: C
 
 ## Get-InforcerTenant
 
-Retrieves tenant information. Optionally filter by `-TenantId` (Client Tenant ID or Microsoft Tenant ID GUID). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
+Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
 
 **Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `tags`, `alignmentSummaries`, `licenses`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
-| **TenantId** | Object | No | Filter to this tenant (integer or GUID). |
+| **TenantId** | Object | No | Filter to this tenant (numeric ID, GUID, or tenant name). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -168,14 +168,14 @@ SemiAlignedThreshold      : 60
 
 ## Get-InforcerTenantPolicies
 
-Retrieves policies for a specified tenant. TenantId can be Client Tenant ID (integer) or Microsoft Tenant ID (GUID).
+Retrieves policies for a specified tenant. TenantId accepts a numeric ID, Microsoft Tenant ID (GUID), or tenant name.
 
 **Output schema**: [Policy](./API-REFERENCE.md#policy) — includes `product`, `platform`, `policyData`, `tags`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
-| **TenantId** | Object | Yes | Tenant to get policies for (integer or GUID). |
+| **TenantId** | Object | Yes | Tenant to get policies for (numeric ID, GUID, or tenant name). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Example
@@ -306,7 +306,7 @@ Retrieves users from an Inforcer tenant. Without `-UserId`, returns a paginated 
 | Parameter | Type | Mandatory | ParameterSet | Description |
 |-----------|------|-----------|--------------|-------------|
 | **Format** | String | No | Both | `Raw` (default). |
-| **TenantId** | Object | Yes | Both | Client Tenant ID (integer) or Microsoft Tenant ID (GUID). Supports pipeline input. |
+| **TenantId** | Object | Yes | Both | Numeric ID, Microsoft Tenant ID (GUID), or tenant name. Supports pipeline input. |
 | **Search** | String | No | List | Server-side search filter for the user list. |
 | **MaxResults** | Int | No | List | Max users to return. 0 = no limit. Default: 0. |
 | **UserId** | String | Yes | ById | The user ID (GUID) to retrieve full details for. |

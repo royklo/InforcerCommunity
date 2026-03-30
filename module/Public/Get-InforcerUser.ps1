@@ -12,7 +12,7 @@ function Get-InforcerUser {
         Output format. Currently only 'Raw' is supported.
 
     .PARAMETER TenantId
-        The Inforcer tenant ID. Accepts numeric ID or GUID. Supports pipeline input.
+        The Inforcer tenant ID. Accepts numeric ID, GUID, or tenant name. Supports pipeline input.
 
     .PARAMETER Search
         Server-side search filter for the user list. Only available in the List parameter set.

@@ -47,19 +47,26 @@ process {
 
     Write-Verbose 'Retrieving tenant information...'
 
+    # Fetch tenant list once — reuse for both name/GUID resolution and output
+    $tenantData = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject)
+    if ($null -eq $tenantData -or $tenantData.Count -eq 0) { return }
+
     $singleTenantId = $null
     if ($null -ne $TenantId) {
         try {
-            $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId
+            $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId -TenantData $tenantData
         } catch {
             Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
             return
         }
     }
 
-    # Always use list endpoint then filter by TenantId when specified (single-tenant GET can return full list)
-    $response = Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType $OutputType
-    if ($null -eq $response) { return }
+    # Use pre-fetched data or convert for JsonObject output
+    if ($OutputType -eq 'JsonObject') {
+        $response = $tenantData | ConvertTo-Json -Depth 100
+    } else {
+        $response = $tenantData
+    }
 
     if ($OutputType -eq 'JsonObject') {
         if ($null -ne $singleTenantId) {

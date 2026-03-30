@@ -15,8 +15,12 @@ function Invoke-InforcerApiRequest {
         PowerShellObject (return PSObjects) or JsonObject (return JSON string). Default: PowerShellObject.
     .PARAMETER PreserveStructure
         When set, skips the automatic array-unwrapping step. The .data wrapper is still
-        unwrapped, but inner structure (e.g. items + continuationToken) is preserved.
-        Use this when the caller needs pagination metadata alongside the results.
+        unwrapped, but inner structure (e.g. items + continuationToken inside .data) is preserved.
+        Use this when the caller needs pagination metadata that lives inside the .data object.
+    .PARAMETER PreserveFullResponse
+        When set, returns the full parsed API response without any unwrapping. Neither
+        .data nor arrays are unwrapped. Use this when pagination metadata (e.g. continuationToken)
+        lives at the response root level alongside .data, not inside it.
     #>
     [CmdletBinding()]
     param(
@@ -125,6 +129,16 @@ function Invoke-InforcerApiRequest {
 
     if ($null -eq $rawResponse) {
         Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData
+        return
+    }
+
+    # Invoke-RestMethod auto-parses JSON to PSObject. If the response is a string or other
+    # non-object type, the endpoint likely returned non-JSON (e.g. HTML from a misconfigured BaseUrl).
+    if ($rawResponse -is [string] -or ($rawResponse -isnot [PSObject] -and $rawResponse -isnot [array])) {
+        $preview = $rawResponse.ToString()
+        if ($preview.Length -gt 200) { $preview = $preview.Substring(0, 200) + '...' }
+        Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $preview" `
+            -ErrorId 'NonJsonResponse' -Category InvalidData
         return
     }
 

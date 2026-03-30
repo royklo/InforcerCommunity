@@ -53,8 +53,9 @@ function Get-InforcerUser {
         [ValidateSet('Raw')]
         [string]$Format = 'Raw',
 
-        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName, ParameterSetName = 'List')]
-        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName, ParameterSetName = 'ById')]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'List')]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'ById')]
+        [Alias('ClientTenantId')]
         [object]$TenantId,
 
         [Parameter(ParameterSetName = 'List')]
@@ -74,7 +75,7 @@ function Get-InforcerUser {
 
     process {
         if (-not (Test-InforcerSession)) {
-            Write-Error "Not connected to Inforcer. Use Connect-Inforcer first."
+            Write-Error -Message "Not connected to Inforcer. Use Connect-Inforcer first." -ErrorId 'NotConnected' -Category ConnectionError
             return
         }
 
@@ -91,7 +92,7 @@ function Get-InforcerUser {
             $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject
 
             if ($null -eq $response) {
-                Write-Error "User '$UserId' not found in tenant '$resolvedTenantId'."
+                Write-Error -Message "User '$UserId' not found in tenant '$resolvedTenantId'." -ErrorId 'UserNotFound' -Category ObjectNotFound
                 return
             }
 
@@ -105,9 +106,10 @@ function Get-InforcerUser {
         }
 
         # --- List: paginated user list ---
-        $allItems = [System.Collections.ArrayList]::new()
+        $jsonBuffer = if ($OutputType -eq 'JsonObject') { [System.Collections.ArrayList]::new() } else { $null }
         $continuationToken = $null
         $pageCount = 0
+        $itemCount = 0
 
         do {
             $pageCount++
@@ -138,21 +140,27 @@ function Get-InforcerUser {
                 Write-Verbose "Page $pageCount returned $($itemArray.Count) items."
                 foreach ($item in $itemArray) {
                     if ($null -eq $item) { continue }
-                    if ($MaxResults -gt 0 -and $allItems.Count -ge $MaxResults) {
+                    if ($MaxResults -gt 0 -and $itemCount -ge $MaxResults) {
                         $continuationToken = $null
                         break
                     }
-                    $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType UserSummary
-                    $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.UserSummary')
-                    [void]$allItems.Add($item)
+                    $itemCount++
+
+                    if ($OutputType -eq 'JsonObject') {
+                        # Buffer raw items without aliases for clean JSON
+                        [void]$jsonBuffer.Add($item)
+                    } else {
+                        # Stream to pipeline immediately
+                        $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType UserSummary
+                        $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.UserSummary')
+                        $item
+                    }
                 }
             }
         } while ($continuationToken)
 
         if ($OutputType -eq 'JsonObject') {
-            return $allItems | ConvertTo-Json -Depth 100
+            return $jsonBuffer | ConvertTo-Json -Depth 100
         }
-
-        $allItems | ForEach-Object { $_ }
     }
 }

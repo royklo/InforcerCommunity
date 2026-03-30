@@ -49,18 +49,10 @@ process {
 
     $singleTenantId = $null
     if ($null -ne $TenantId) {
-        $tenantIdStr = $TenantId.ToString().Trim()
-        if ($tenantIdStr -match '^\d+$') {
-            $singleTenantId = [int]$tenantIdStr
-        } elseif ($tenantIdStr -match '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') {
-            try {
-                $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId
-            } catch {
-                Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
-                return
-            }
-        } else {
-            Write-Error -Message 'Invalid TenantId format. Use numeric Client Tenant ID or GUID.' -ErrorId 'InvalidTenantId' -Category InvalidArgument
+        try {
+            $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId
+        } catch {
+            Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
             return
         }
     }

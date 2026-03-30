@@ -2,14 +2,14 @@
 .SYNOPSIS
     Retrieves tenant information from the Inforcer API.
 .DESCRIPTION
-    Lists tenants. Optionally filter by -TenantId (Client Tenant ID or Microsoft Tenant ID GUID).
+    Lists tenants. Optionally filter by -TenantId (numeric ID, Microsoft Tenant ID GUID, or tenant name).
     Output includes PascalCase aliases (e.g. ClientTenantId, TenantFriendlyName). When the API
     returns licenses as an array, it is converted to a comma-separated string in the licenses property.
     PolicyDiff and PolicyDiffFormatted (from recentChanges) show policy change information when available.
 .PARAMETER Format
     Output format. Raw = raw API response (default).
 .PARAMETER TenantId
-    Optional. Filter to this tenant (integer or GUID).
+    Optional. Filter to this tenant (numeric ID, GUID, or tenant name).
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 .EXAMPLE

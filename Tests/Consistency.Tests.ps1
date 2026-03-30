@@ -384,9 +384,9 @@ Describe 'Private helpers (via module scope)' {
             }
         }
 
-        It 'Throws on invalid TenantId format' {
+        It 'Throws when tenant name not found' {
             & (Get-Module InforcerCommunity) {
-                { Resolve-InforcerTenantId -TenantId 'not-valid' } | Should -Throw '*No tenant found*'
+                { Resolve-InforcerTenantId -TenantId 'not-valid' -ErrorAction SilentlyContinue } | Should -Throw '*No tenant found*'
             }
         }
     }

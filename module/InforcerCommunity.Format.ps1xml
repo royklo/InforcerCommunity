@@ -78,16 +78,16 @@
                 <PropertyName>Department</PropertyName>
               </ListItem>
               <ListItem>
-                <Label>IsAccountEnabled</Label>
-                <PropertyName>IsAccountEnabled</PropertyName>
+                <Label>AssignedLicenses</Label>
+                <PropertyName>AssignedLicenses</PropertyName>
               </ListItem>
               <ListItem>
                 <Label>IsGlobalAdmin</Label>
                 <PropertyName>IsGlobalAdmin</PropertyName>
               </ListItem>
               <ListItem>
-                <Label>IsMfaRegistered</Label>
-                <PropertyName>IsMfaRegistered</PropertyName>
+                <Label>IsMfaCapable</Label>
+                <PropertyName>IsMfaCapable</PropertyName>
               </ListItem>
             </ListItems>
           </ListEntry>

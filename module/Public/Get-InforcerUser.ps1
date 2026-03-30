@@ -115,15 +115,17 @@ function Get-InforcerUser {
             if ($continuationToken) { $queryParams += "continuationToken=$([System.Uri]::EscapeDataString($continuationToken))" }
             if ($queryParams.Count -gt 0) { $endpoint += '?' + ($queryParams -join '&') }
 
-            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure
+            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveFullResponse
 
             if ($null -eq $response) { break }
 
-            $items = if ($null -ne $response.data) { $response.data } elseif ($null -ne $response.Data) { $response.Data } else { $null }
-            $continuationToken = if ($null -ne $response.continuationToken) { $response.continuationToken } elseif ($null -ne $response.ContinuationToken) { $response.ContinuationToken } else { $null }
+            # continuationToken is at the response root level (sibling of .data), not inside .data
+            $items = if ($null -ne $response.PSObject.Properties['data']) { $response.data } else { $null }
+            $continuationToken = if ($null -ne $response.PSObject.Properties['continuationToken']) { $response.continuationToken } else { $null }
 
             if ($null -ne $items) {
                 foreach ($item in @($items)) {
+                    if ($null -eq $item) { continue }
                     if ($MaxResults -gt 0 -and $allItems.Count -ge $MaxResults) {
                         $continuationToken = $null
                         break

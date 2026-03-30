@@ -35,7 +35,10 @@ function Invoke-InforcerApiRequest {
         [string]$OutputType = 'PowerShellObject',
 
         [Parameter(Mandatory = $false)]
-        [switch]$PreserveStructure
+        [switch]$PreserveStructure,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$PreserveFullResponse
     )
 
     if (-not (Test-InforcerSession)) {
@@ -143,6 +146,10 @@ function Invoke-InforcerApiRequest {
         }
         Write-Error -Message $friendlyMessage -ErrorId 'ApiError' -Category InvalidOperation
         return
+    }
+
+    if ($PreserveFullResponse) {
+        return $rawResponse
     }
 
     $data = $rawResponse

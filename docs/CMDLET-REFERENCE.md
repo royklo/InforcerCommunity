@@ -160,12 +160,17 @@ Get-InforcerBaseline -TenantId 482
 ### Example output
 
 ```
-BaselineId                             Name                                               OwnerTenantId OwnerName                Members Aligned SemiAlgn
-----------                             ----                                               ------------- ---------                ------- ------- --------
-bg-001                                 Production baseline                                103           Contoso Ltd              2       80      60
+BaselineName         : Production baseline
+BaselineId           : bg-001
+Owner                : Contoso Ltd
+OwnerTenantId        : 103
+Members              : Fabrikam (142), Tailspin (201)
+AlignedThreshold     : 80
+SemiAlignedThreshold : 60
+Mode                 : Standard
 ```
 
-Use `| Select-Object *` to see all properties including `mode`, `autoAddNewPolicies`, `isComplete`, `isShared`, and `items`.
+Use `| Select-Object *` to see all properties including `autoAddNewPolicies`, `isComplete`, `isShared`, and `items`.
 
 ---
 
@@ -214,15 +219,15 @@ The default view shows 7 key properties. Use `| Select-Object *` to see all prop
 
 ## Get-InforcerAlignmentDetails
 
-Retrieves alignment scores or detailed alignment data. **Format Table** (default): one row per alignment with columns below. **Format Raw**: raw API response. Optional `-TenantId` and `-Tag` filter the table. When both `-TenantId` and `-BaselineId` are provided, retrieves detailed per-policy alignment data from the alignmentDetails endpoint.
+Retrieves alignment scores or detailed alignment data. **Format Table** (default): one row per alignment with columns below. **Format Raw**: raw API response. Optional `-TenantId` and `-Tag` filter the table. With `-BaselineId`, retrieves detailed per-policy alignment data. When `-BaselineId` is used without `-TenantId`, the first member tenant is queried (baseline policies are identical across all members).
 
 **Output schema**: [AlignmentScore](./API-REFERENCE.md#alignmentscore) — includes `score`, `baselineGroupId`, `lastComparisonDateTime`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Table` (default) or `Raw`. |
-| **TenantId** | Object | No | Filter to this tenant. Required when using `-BaselineId`. |
-| **BaselineId** | String | No | Baseline GUID or friendly name. When provided with `-TenantId`, retrieves detailed alignment data. |
+| **TenantId** | Object | No | Filter to this tenant (numeric ID, GUID, or tenant name). When used with `-BaselineId`, queries that specific tenant. |
+| **BaselineId** | String | No | Baseline GUID or friendly name. When used alone (without `-TenantId`), queries the first member tenant (baseline policies are identical across members). |
 | **Tag** | String | No | When Format is Table (without `-BaselineId`), filter to tenants with tag containing this value (case-insensitive). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
@@ -232,6 +237,7 @@ Retrieves alignment scores or detailed alignment data. **Format Table** (default
 Get-InforcerAlignmentDetails
 Get-InforcerAlignmentDetails -Format Raw -OutputType JsonObject
 Get-InforcerAlignmentDetails -TenantId 482 -Tag Production
+Get-InforcerAlignmentDetails -BaselineId "Provision M365"
 Get-InforcerAlignmentDetails -TenantId 139 -BaselineId "Provision M365"
 Get-InforcerAlignmentDetails -TenantId 139 -BaselineId "91e0b0f7-69f1-453f-8d73-5a6f726b5b21" -Format Raw
 ```

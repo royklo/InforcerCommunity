@@ -201,9 +201,6 @@
       <ViewSelectedBy>
         <TypeName>InforcerCommunity.AlignmentDetailPolicy</TypeName>
       </ViewSelectedBy>
-      <GroupBy>
-        <PropertyName>TenantName</PropertyName>
-      </GroupBy>
       <ListControl>
         <ListEntries>
           <ListEntry>

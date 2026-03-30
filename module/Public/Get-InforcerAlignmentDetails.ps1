@@ -6,7 +6,7 @@
     With -BaselineId: retrieves detailed alignment data including metrics,
     per-policy matches, deviations, diffs, variables, and tags.
     When -TenantId is also specified, queries a single tenant.
-    When only -BaselineId is specified, queries all member tenants of that baseline.
+    When only -BaselineId is specified, queries the first member tenant (baseline policies are identical across members).
     -BaselineId accepts a GUID or a friendly baseline name (resolved via the baselines API).
 .PARAMETER Format
     Table (default) or Raw.
@@ -388,17 +388,16 @@ if ($null -ne $TenantId) {
 
 if (-not [string]::IsNullOrWhiteSpace($Tag)) {
     Write-Verbose "Filtering to tenants with tag containing: $Tag"
-    $tagPattern = "*$Tag*"
     $tenants = @($tenants | Where-Object {
         $tagsProp = $_.PSObject.Properties['tags']
         if (-not $tagsProp -or $null -eq $tagsProp.Value) { return $false }
         $val = $tagsProp.Value
         if ($val -is [object[]]) {
             foreach ($x in $val) {
-                if ($x -and $x.ToString() -like $tagPattern) { return $true }
+                if ($x -and $x.ToString().IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
             }
         } else {
-            if ($val.ToString() -like $tagPattern) { return $true }
+            if ($val.ToString().IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
         }
         $false
     })

@@ -28,8 +28,9 @@ function Resolve-InforcerTenantId {
         $tenantIdString = $TenantId.ToString().Trim()
 
         # Numeric Client Tenant ID — return directly
-        if ($tenantIdString -match '^\d+$') {
-            $resolved = [int]$tenantIdString
+        $parsedInt = 0
+        if ([int]::TryParse($tenantIdString, [ref]$parsedInt)) {
+            $resolved = $parsedInt
             Write-Verbose "Client Tenant ID detected: $resolved"
             return $resolved
         }
@@ -42,7 +43,8 @@ function Resolve-InforcerTenantId {
         $tenants = if ($tenantsToUse -is [array]) { $tenantsToUse } else { @($tenantsToUse) }
 
         # GUID — match on msTenantId
-        if ($tenantIdString -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+        $guidResult = [guid]::Empty
+        if ([guid]::TryParse($tenantIdString, [ref]$guidResult)) {
             Write-Verbose "Microsoft Tenant ID (GUID) detected: $tenantIdString. Looking up client tenant ID..."
             foreach ($t in $tenants) {
                 $msId = $t.PSObject.Properties['msTenantId'].Value

@@ -8,29 +8,34 @@ function EnrichPolicyObject {
     $tagsProp = $pso.PSObject.Properties['tags']
     if ($null -ne $tagsProp -and $null -ne $tagsProp.Value) {
         $arr = $tagsProp.Value
-        $names = @()
+        $names = [System.Collections.Generic.List[string]]::new()
         if ($arr -is [object[]]) {
             foreach ($t in $arr) {
                 if ($t -is [PSObject] -and $t.PSObject.Properties['name']) {
-                    $names += $t.name
+                    [void]$names.Add($t.name)
                 } else {
-                    $names += $t.ToString()
+                    [void]$names.Add($t.ToString())
                 }
             }
         }
         $tagsString = $names -join ', '
-        $pso.PSObject.Properties.Remove('tags')
-        $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('tags', $tagsString))
-        if ($pso.PSObject.Properties['Tags']) { $pso.PSObject.Properties.Remove('Tags') }
-        $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('Tags', $tagsString))
-        $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TagsArray', $tagsProp.Value))
+        $tagsProp.Value = $tagsString
+        $tagsPropUpper = $pso.PSObject.Properties['Tags']
+        if ($tagsPropUpper) { $tagsPropUpper.Value = $tagsString }
+        else { $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('Tags', $tagsString)) }
+        if (-not $pso.PSObject.Properties['TagsArray']) {
+            $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TagsArray', $arr))
+        }
     } else {
-        if ($pso.PSObject.Properties['tags']) { $pso.PSObject.Properties.Remove('tags') }
-        $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('tags', ''))
-        if ($pso.PSObject.Properties['Tags']) { $pso.PSObject.Properties.Remove('Tags') }
-        $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('Tags', ''))
+        $existingTags = $pso.PSObject.Properties['tags']
+        if ($existingTags) { $existingTags.Value = '' }
+        else { $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('tags', '')) }
+        $existingTagsUpper = $pso.PSObject.Properties['Tags']
+        if ($existingTagsUpper) { $existingTagsUpper.Value = '' }
+        else { $pso.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('Tags', '')) }
     }
-    Add-InforcerPropertyAliases -InputObject $pso -ObjectType Policy | Out-Null
+    $null = Add-InforcerPropertyAliases -InputObject $pso -ObjectType Policy
+    $pso.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Policy')
 }
 
 <#
@@ -54,6 +59,8 @@ function EnrichPolicyObject {
 .OUTPUTS
     PSObject or String
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcertenantpolicies
+.LINK
     Connect-Inforcer
 #>
 function Get-InforcerTenantPolicies {
@@ -64,7 +71,8 @@ param(
     [ValidateSet('Raw')]
     [string]$Format = 'Raw',
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+    [Alias('ClientTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -103,9 +111,5 @@ if ($result -is [array]) {
     EnrichPolicyObject $result
 }
 
-if ($result -is [array]) {
-    $result | ForEach-Object { $_ }
-} else {
-    $result
-}
+$result
 }

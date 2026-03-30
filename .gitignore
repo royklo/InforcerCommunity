@@ -50,3 +50,6 @@ TestResults/
 # ignore test files
 /*.html
 /**/*.html
+
+# Superpowers specs
+docs/superpowers/

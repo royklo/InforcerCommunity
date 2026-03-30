@@ -76,53 +76,55 @@ function Invoke-InforcerApiRequest {
         Uri             = $uri
         Method          = $Method
         Headers         = $headers
-        UseBasicParsing = $true
     }
     if (-not [string]::IsNullOrWhiteSpace($Body)) {
         $params['Body'] = $Body
     }
 
     try {
-        $webResponse = Invoke-WebRequest @params
-        $responseBody = $webResponse.Content
-    } catch [System.Net.WebException] {
-        $statusCode = [int]$_.Exception.Response.StatusCode
-        $reader = $null
-        try {
-            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-            $responseBody = $reader.ReadToEnd()
-        } finally {
-            if ($reader) { $reader.Dispose() }
-        }
-        $detail = $responseBody
-        try {
-            $json = $responseBody | ConvertFrom-Json -ErrorAction SilentlyContinue
-            if ($json.message) { $detail = $json.message }
-            elseif ($json.error) { $detail = $json.error }
-        } catch { }
-        $detail = $detail -replace [regex]::Escape($apiKey), '[REDACTED]'
-        Write-Error -Message "Inforcer API request failed (HTTP $statusCode): $detail" `
-            -ErrorId 'ApiRequestFailed' `
-            -Category ConnectionError
-        return
-    }
-
-    if ([string]::IsNullOrWhiteSpace($responseBody)) {
-        Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData
-        return
-    }
-
-    try {
-        $rawResponse = $responseBody | ConvertFrom-Json
+        $rawResponse = Invoke-RestMethod @params
     } catch {
-        Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $($responseBody.Substring(0, [Math]::Min(200, $responseBody.Length)))..." `
-            -ErrorId 'NonJsonResponse' `
-            -Category InvalidData
+        $statusCode = 0
+        $detail = $_.Exception.Message
+
+        if ($_.Exception.Response) {
+            $statusCode = [int]$_.Exception.Response.StatusCode
+        }
+
+        # PS7: ErrorDetails.Message contains the response body
+        if ($_.ErrorDetails.Message) {
+            $detail = $_.ErrorDetails.Message
+            try {
+                $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
+                if ($json.message) { $detail = $json.message }
+                elseif ($json.error) { $detail = $json.error }
+            } catch { }
+        }
+        # PS5.1 fallback: read from response stream
+        elseif ($_.Exception.Response) {
+            $reader = $null
+            try {
+                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                $responseBody = $reader.ReadToEnd()
+                $detail = $responseBody
+                try {
+                    $json = $responseBody | ConvertFrom-Json -ErrorAction SilentlyContinue
+                    if ($json.message) { $detail = $json.message }
+                    elseif ($json.error) { $detail = $json.error }
+                } catch { }
+            } finally {
+                if ($reader) { $reader.Dispose() }
+            }
+        }
+
+        $detail = $detail -replace [regex]::Escape($apiKey), '[REDACTED]'
+        $msg = if ($statusCode -gt 0) { "Inforcer API request failed (HTTP $statusCode): $detail" } else { "Inforcer API request failed: $detail" }
+        Write-Error -Message $msg -ErrorId 'ApiRequestFailed' -Category ConnectionError
         return
     }
 
     if ($null -eq $rawResponse) {
-        Write-Error -Message 'API returned an invalid response.' -ErrorId 'EmptyResponse' -Category InvalidData
+        Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData
         return
     }
 

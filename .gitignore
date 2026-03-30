@@ -50,3 +50,10 @@ TestResults/
 # ignore test files
 /*.html
 /**/*.html
+
+# Claude
+.claude
+Claude.md
+
+# Superpowers specs
+docs/superpowers/

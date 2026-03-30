@@ -88,14 +88,14 @@ When not connected, an error is written (e.g. "Not connected. To connect, run: C
 
 ## Get-InforcerTenant
 
-Retrieves tenant information. Optionally filter by `-TenantId` (Client Tenant ID or Microsoft Tenant ID GUID). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
+Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
 
 **Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `tags`, `alignmentSummaries`, `licenses`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
-| **TenantId** | Object | No | Filter to this tenant (integer or GUID). |
+| **TenantId** | Object | No | Filter to this tenant (numeric ID, GUID, or tenant name). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -168,14 +168,14 @@ SemiAlignedThreshold      : 60
 
 ## Get-InforcerTenantPolicies
 
-Retrieves policies for a specified tenant. TenantId can be Client Tenant ID (integer) or Microsoft Tenant ID (GUID).
+Retrieves policies for a specified tenant. TenantId accepts a numeric ID, Microsoft Tenant ID (GUID), or tenant name.
 
 **Output schema**: [Policy](./API-REFERENCE.md#policy) — includes `product`, `platform`, `policyData`, `tags`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
-| **TenantId** | Object | Yes | Tenant to get policies for (integer or GUID). |
+| **TenantId** | Object | Yes | Tenant to get policies for (numeric ID, GUID, or tenant name). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Example
@@ -293,6 +293,61 @@ Message         : Invalid credentials
 Code            : 401
 User            : unknown
 Timestamp       : 2025-03-05T14:20:00Z
+```
+
+---
+
+## Get-InforcerUser
+
+Retrieves users from an Inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information.
+
+**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail)
+
+| Parameter | Type | Mandatory | ParameterSet | Description |
+|-----------|------|-----------|--------------|-------------|
+| **Format** | String | No | Both | `Raw` (default). |
+| **TenantId** | Object | Yes | Both | Numeric ID, Microsoft Tenant ID (GUID), or tenant name. Supports pipeline input. |
+| **Search** | String | No | List | Server-side search filter for the user list. |
+| **MaxResults** | Int | No | List | Max users to return. 0 = no limit. Default: 0. |
+| **UserId** | String | Yes | ById | The user ID (GUID) to retrieve full details for. |
+| **OutputType** | String | No | Both | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
+
+### Examples
+
+```powershell
+Get-InforcerUser -TenantId 139
+Get-InforcerUser -TenantId 139 -Search "Adele"
+Get-InforcerUser -TenantId 139 -MaxResults 50
+Get-InforcerUser -TenantId 139 -UserId "8e61ce11-a45b-42a6-8ca4-1d881781566d"
+Get-InforcerTenant -TenantId 139 | Get-InforcerUser
+Get-InforcerUser -TenantId 139 -OutputType JsonObject
+```
+
+### Example output — List (UserSummary)
+
+```
+DisplayName      : Adele Vance
+UserPrincipalName : AdeleV@contoso.OnMicrosoft.com
+UserType         : Member
+Department       : Retail
+AssignedLicenses : {@{sku=SPB; name=Microsoft 365 Business Premium; ...}}
+IsGlobalAdmin    : False
+IsMfaCapable     : False
+```
+
+### Example output — Detail (User)
+
+```
+DisplayName      : Adele Vance
+UserPrincipalName : AdeleV@contoso.OnMicrosoft.com
+UserType         : Member
+Department       : Retail
+Mail             : AdeleV@contoso.OnMicrosoft.com
+AccountEnabled   : True
+IsGlobalAdmin    : False
+IsCloudOnly      : True
+IsMfaRegistered  : False
+RiskLevel        :
 ```
 
 ---

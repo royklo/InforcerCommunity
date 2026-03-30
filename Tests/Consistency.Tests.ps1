@@ -30,11 +30,11 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 8
+        $script:expectedCount = 9
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
-            'Get-InforcerAlignmentScore', 'Get-InforcerAuditEvent'
+            'Get-InforcerAlignmentScore', 'Get-InforcerAuditEvent', 'Get-InforcerUser'
         )
         $script:expectedParameters = @{
             'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl')
@@ -45,6 +45,7 @@ Describe 'Consistency contract' {
             'Get-InforcerTenantPolicies'    = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerAlignmentScore'    = @('Format', 'TenantId', 'Tag', 'OutputType')
             'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'PageSize', 'MaxResults', 'Format', 'OutputType')
+            'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'OutputType')
         }
     }
 
@@ -68,7 +69,7 @@ Describe 'Consistency contract' {
     }
 
     It 'Get-* cmdlets that return API data have -Format and -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentScore', 'Get-InforcerAuditEvent')
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentScore', 'Get-InforcerAuditEvent', 'Get-InforcerUser')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'Format'
@@ -132,6 +133,12 @@ Describe 'No-silent-failure contract' {
     It 'Get-InforcerAuditEvent produces an error when not connected' {
         $err = $null
         Get-InforcerAuditEvent -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Get-InforcerUser produces an error when not connected' {
+        $err = $null
+        Get-InforcerUser -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 }
@@ -233,5 +240,33 @@ Describe 'Parameter binding and behavior' {
         $hasString = $null -ne $out -and $out -is [string]
         $hasError = $err.Count -gt 0
         ($hasString -or $hasError) | Should -BeTrue -Because 'JsonObject path must return string or error'
+    }
+
+    It 'Get-InforcerUser (List) binds all key parameters without errors' {
+        $err = $null
+        $null = Get-InforcerUser -Format Raw -TenantId 1 -Search 'test' -MaxResults 10 -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | ForEach-Object {
+            $_.Exception.Message | Should -Not -BeLike '*parameter*'
+            $_.Exception.Message | Should -Not -BeLike '*cannot bind*'
+        }
+    }
+
+    It 'Get-InforcerUser (ById) binds all key parameters without errors' {
+        $err = $null
+        $null = Get-InforcerUser -Format Raw -TenantId 1 -UserId '00000000-0000-0000-0000-000000000000' -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | ForEach-Object {
+            $_.Exception.Message | Should -Not -BeLike '*parameter*'
+            $_.Exception.Message | Should -Not -BeLike '*cannot bind*'
+        }
+    }
+
+    It 'Get-InforcerUser -OutputType JsonObject returns string or error' {
+        $err = $null
+        $result = Get-InforcerUser -TenantId 1 -OutputType JsonObject -ErrorVariable err -ErrorAction SilentlyContinue
+        if ($result) {
+            $result | Should -BeOfType [string]
+        } else {
+            $err | Should -Not -BeNullOrEmpty
+        }
     }
 }

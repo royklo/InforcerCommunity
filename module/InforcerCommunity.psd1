@@ -1,6 +1,6 @@
 @{
     RootModule        = 'InforcerCommunity.psm1'
-    ModuleVersion     = '0.0.3'
+    ModuleVersion     = '0.1.0'
     GUID              = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
     Author            = 'Roy Klooster'
     Description       = 'Community PowerShell module for the Inforcer API. Created by Roy Klooster. Not owned or officially maintained by Inforcer.'
@@ -17,6 +17,7 @@
         'Get-InforcerTenantPolicies'
         'Get-InforcerAlignmentScore'
         'Get-InforcerAuditEvent'
+        'Get-InforcerUser'
     )
     CmdletsToExport   = @()
     VariablesToExport  = @()

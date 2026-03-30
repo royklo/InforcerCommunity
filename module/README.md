@@ -19,7 +19,8 @@ module/
 │   ├── Get-InforcerBaseline.ps1
 │   ├── Get-InforcerTenantPolicies.ps1
 │   ├── Get-InforcerAlignmentScore.ps1
-│   └── Get-InforcerAuditEvent.ps1
+│   ├── Get-InforcerAuditEvent.ps1
+│   └── Get-InforcerUser.ps1
 └── Private/                         # Helpers (not exported)
     ├── Invoke-InforcerApiRequest.ps1
     ├── Test-InforcerSession.ps1

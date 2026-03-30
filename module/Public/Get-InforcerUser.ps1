@@ -107,24 +107,36 @@ function Get-InforcerUser {
         # --- List: paginated user list ---
         $allItems = [System.Collections.ArrayList]::new()
         $continuationToken = $null
+        $pageCount = 0
 
         do {
+            $pageCount++
             $endpoint = "/beta/tenants/$resolvedTenantId/users"
             $queryParams = @()
             if ($Search) { $queryParams += "search=$([System.Uri]::EscapeDataString($Search))" }
             if ($continuationToken) { $queryParams += "continuationToken=$([System.Uri]::EscapeDataString($continuationToken))" }
             if ($queryParams.Count -gt 0) { $endpoint += '?' + ($queryParams -join '&') }
 
+            Write-Verbose "Fetching page $pageCount..."
             $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveFullResponse
 
             if ($null -eq $response) { break }
 
             # continuationToken is at the response root level (sibling of .data), not inside .data
             $items = if ($null -ne $response.PSObject.Properties['data']) { $response.data } else { $null }
-            $continuationToken = if ($null -ne $response.PSObject.Properties['continuationToken']) { $response.continuationToken } else { $null }
+            $newToken = if ($null -ne $response.PSObject.Properties['continuationToken']) { $response.continuationToken } else { $null }
+
+            # Guard against infinite loop: if API returns the same token, stop
+            if ($newToken -and $newToken -eq $continuationToken) {
+                Write-Verbose "API returned duplicate continuationToken. Stopping pagination."
+                break
+            }
+            $continuationToken = $newToken
 
             if ($null -ne $items) {
-                foreach ($item in @($items)) {
+                $itemArray = @($items)
+                Write-Verbose "Page $pageCount returned $($itemArray.Count) items."
+                foreach ($item in $itemArray) {
                     if ($null -eq $item) { continue }
                     if ($MaxResults -gt 0 -and $allItems.Count -ge $MaxResults) {
                         $continuationToken = $null

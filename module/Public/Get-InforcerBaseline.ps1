@@ -19,6 +19,8 @@
 .OUTPUTS
     PSObject or String
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcerbaseline
+.LINK
     Connect-Inforcer
 #>
 function Get-InforcerBaseline {
@@ -29,7 +31,8 @@ param(
     [ValidateSet('Raw')]
     [string]$Format = 'Raw',
 
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
+    [Alias('ClientTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -86,12 +89,12 @@ $result = $response
 if ($result -is [array]) {
     foreach ($item in $result) {
         if ($item -is [PSObject]) {
-            Add-InforcerPropertyAliases -InputObject $item -ObjectType Baseline
+            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType Baseline
             $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Baseline')
         }
     }
 } elseif ($result -is [PSObject]) {
-    Add-InforcerPropertyAliases -InputObject $result -ObjectType Baseline
+    $null = Add-InforcerPropertyAliases -InputObject $result -ObjectType Baseline
     $result.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Baseline')
 }
 
@@ -99,9 +102,5 @@ if ($filterPredicate) {
     $result = Filter-InforcerResponse -InputObject $result -FilterScript $filterPredicate -OutputType PowerShellObject
 }
 
-if ($result -is [array]) {
-    $result | ForEach-Object { $_ }
-} else {
-    $result
-}
+$result
 }

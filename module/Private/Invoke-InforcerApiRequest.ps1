@@ -100,8 +100,24 @@ function Invoke-InforcerApiRequest {
             $detail = $_.ErrorDetails.Message
             try {
                 $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
-                if ($json.message) { $detail = $json.message }
-                elseif ($json.error) { $detail = $json.error }
+                if ($json) {
+                    $errorCode = ($json.PSObject.Properties['errorCode'].Value -as [string])
+                    $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
+                    $detail = switch ($true) {
+                        ($statusCode -eq 429 -or ($apiMessage -and $apiMessage -match 'quota|rate.?limit|throttl')) {
+                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
+                        }
+                        ($errorCode -match '^forbidden$') {
+                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { "You don't have permission to access this tenant or resource." }
+                        }
+                        ($errorCode -match 'notfound|not_found') {
+                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { 'Tenant or resource not found.' }
+                        }
+                        default {
+                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } elseif ($json.error) { $json.error } else { $detail }
+                        }
+                    }
+                }
             } catch { }
         }
         # PS5.1 fallback: read from response stream
@@ -121,7 +137,8 @@ function Invoke-InforcerApiRequest {
             }
         }
 
-        $detail = $detail -replace [regex]::Escape($apiKey), '[REDACTED]'
+        $apiKeyPattern = [regex]::new([regex]::Escape($apiKey), 'Compiled')
+        $detail = $apiKeyPattern.Replace($detail, '[REDACTED]')
         $msg = if ($statusCode -gt 0) { "Inforcer API request failed (HTTP $statusCode): $detail" } else { "Inforcer API request failed: $detail" }
         $errorId = if ($statusCode -gt 0) { "ApiRequestFailed_$statusCode" } else { 'ApiRequestFailed' }
         Write-Error -Message $msg -ErrorId $errorId -Category ConnectionError
@@ -192,9 +209,5 @@ function Invoke-InforcerApiRequest {
         }
     }
 
-    if ($data -is [array]) {
-        $data | ForEach-Object { $_ }
-    } else {
-        $data
-    }
+    $data
 }

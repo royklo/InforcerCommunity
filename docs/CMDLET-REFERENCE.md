@@ -4,6 +4,8 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
+> **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
+
 ---
 
 ## Connect-Inforcer
@@ -90,7 +92,7 @@ When not connected, an error is written (e.g. "Not connected. To connect, run: C
 
 Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
 
-**Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `tags`, `alignmentSummaries`, `licenses`
+**Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -109,23 +111,26 @@ Get-InforcerTenant -OutputType JsonObject
 ### Example output — list of tenants
 
 ```
-ClientTenantId     : 103
-MsTenantId         : a1b2c3d4-e5f6-7890-abcd-ef1111111111
-TenantFriendlyName : Contoso Ltd
-TenantDnsName      : contoso.onmicrosoft.com
-licenses           : PREMIUM, INTUNE
-SecureScore        : 85
-IsBaseline         : True
-LastBackupTimestamp: 2025-03-01T10:00:00Z
+ClientTenantId      : 103
+MsTenantId          : a1b2c3d4-e5f6-7890-abcd-ef1111111111
+TenantFriendlyName  : Contoso Ltd
+TenantDnsName       : contoso.onmicrosoft.com
+licenses            : PREMIUM, INTUNE
+SecureScore         : 85
+IsBaseline          : True
+LastBackupTimestamp : 2025-03-01T10:00:00Z
 
-ClientTenantId     : 482
-MsTenantId         : b2c3d4e5-f6a7-8901-bcde-f22222222222
-TenantFriendlyName : Fabrikam Inc
-TenantDnsName      : fabrikam.onmicrosoft.com
-licenses           : PREMIUM
-SecureScore        : 72
-IsBaseline         : False
+ClientTenantId      : 482
+MsTenantId          : b2c3d4e5-f6a7-8901-bcde-f22222222222
+TenantFriendlyName  : Fabrikam Inc
+TenantDnsName       : fabrikam.onmicrosoft.com
+licenses            : PREMIUM
+SecureScore         : 72
+IsBaseline          : False
+LastBackupTimestamp : 2025-03-01T09:00:00Z
 ```
+
+The default view shows 8 key properties. Use `| Select-Object *` to see all properties including `alignmentSummaries`, `policyDiff`, `tags`, and `recentChanges`.
 
 ### Example output — single tenant with -TenantId 482
 
@@ -155,14 +160,17 @@ Get-InforcerBaseline -TenantId 482
 ### Example output
 
 ```
-BaselineId               : bg-001
-BaselineName              : Production baseline
-BaselineClientTenantId    : 103
-BaselineTenantFriendlyName : Contoso Ltd
-members                   : {@{ClientTenantId=482; TenantFriendlyName=Fabrikam Inc}, @{ClientTenantId=501; TenantFriendlyName=Northwind}}
-AlignedThreshold          : 80
-SemiAlignedThreshold      : 60
+BaselineName         : Production baseline
+BaselineId           : bg-001
+Owner                : Contoso Ltd
+OwnerTenantId        : 103
+Members              : Fabrikam (142), Tailspin (201)
+AlignedThreshold     : 80
+SemiAlignedThreshold : 60
+Mode                 : Standard
 ```
+
+Use `| Select-Object *` to see all properties including `autoAddNewPolicies`, `isComplete`, `isShared`, and `items`.
 
 ---
 
@@ -188,58 +196,103 @@ Get-InforcerTenantPolicies -TenantId "a1b2c3d4-e5f6-7890-abcd-ef1234567890" -Out
 ### Example output
 
 ```
-PolicyId   : pol-101
-PolicyName : Require MFA for admins
-PolicyTypeId : mfa-admin
-FriendlyName : Require MFA for admins
-ReadOnly   : False
-Product    : Microsoft 365
-Platform   : Azure AD
+PolicyId       : pol-101
+PolicyName     : Require MFA for admins
+Product        : Microsoft 365
+PrimaryGroup   : Conditional Access
+SecondaryGroup : Policies
+Platform       : Azure AD
+ReadOnly       : False
 
-PolicyId   : pol-102
-PolicyName : Block legacy auth
-PolicyTypeId : block-legacy
-FriendlyName : Block legacy auth
-ReadOnly   : False
-Product    : Microsoft 365
-Platform   : Exchange
+PolicyId       : pol-102
+PolicyName     : Block legacy auth
+Product        : Microsoft 365
+PrimaryGroup   : Conditional Access
+SecondaryGroup : Policies
+Platform       : Exchange
+ReadOnly       : False
 ```
+
+The default view shows 7 key properties. Use `| Select-Object *` to see all properties including `policyData`, `TagsArray`, and raw API fields.
 
 ---
 
-## Get-InforcerAlignmentScore
+## Get-InforcerAlignmentDetails
 
-Retrieves alignment scores. **Format Table** (default): one row per alignment with columns below. **Format Raw**: raw API response. Optional `-TenantId` and `-Tag` filter the table.
+Retrieves alignment scores or detailed alignment data. **Format Table** (default): one row per alignment with columns below. **Format Raw**: raw API response. Optional `-TenantId` and `-Tag` filter the table. With `-BaselineId`, retrieves detailed per-policy alignment data. When `-BaselineId` is used without `-TenantId`, the first member tenant is queried (baseline policies are identical across all members).
 
 **Output schema**: [AlignmentScore](./API-REFERENCE.md#alignmentscore) — includes `score`, `baselineGroupId`, `lastComparisonDateTime`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Table` (default) or `Raw`. |
-| **TenantId** | Object | No | Filter to this tenant. |
-| **Tag** | String | No | When Format is Table, filter to tenants with tag containing this value (case-insensitive). |
-| **OutputType** | String | No | Used when Format is Raw. `PowerShellObject` or `JsonObject`. JSON uses Depth 100. |
+| **TenantId** | Object | No | Filter to this tenant (numeric ID, GUID, or tenant name). When used with `-BaselineId`, queries that specific tenant. |
+| **BaselineId** | String | No | Baseline GUID or friendly name. When used alone (without `-TenantId`), queries the first member tenant (baseline policies are identical across members). |
+| **Tag** | String | No | When Format is Table (without `-BaselineId`), filter to tenants with tag containing this value (case-insensitive). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
 
 ```powershell
-Get-InforcerAlignmentScore
-Get-InforcerAlignmentScore -Format Raw -OutputType JsonObject
-Get-InforcerAlignmentScore -TenantId 482 -Tag Production
+Get-InforcerAlignmentDetails
+Get-InforcerAlignmentDetails -Format Raw -OutputType JsonObject
+Get-InforcerAlignmentDetails -TenantId 482 -Tag Production
+Get-InforcerAlignmentDetails -BaselineId "Provision M365"
+Get-InforcerAlignmentDetails -TenantId 139 -BaselineId "Provision M365"
+Get-InforcerAlignmentDetails -TenantId 139 -BaselineId "91e0b0f7-69f1-453f-8d73-5a6f726b5b21" -Format Raw
 ```
 
-### Example output — Format Table
+### Example output — Format Table (summary)
 
 ```
-BaselineName                 BaselineId AlignmentScore LastComparisonDateTime    TargetTenantFriendlyName TargetTenantClientTenantId
-------------                 ---------- -------------- ---------------------    ----------------------- --------------------------
-Production baseline          bg-001     92             2025-03-05T08:00:00Z       Fabrikam Inc             482
-Production baseline          bg-001     88             2025-03-05T08:00:00Z       Northwind                501
+Tenant                   TenantId Score BaselineName                                       LastComparison
+------                   -------- ----- ------------                                       --------------
+Contoso                  646      100   Inforcer Blueprint Baseline - Tier 0 - Initiate    2026-03-26...
+Inforced by Roy          647      98,9  Inforcer Blueprint Baseline - Tier 1 - Foundations  2026-03-26...
 ```
+
+### Example output — Format Table with -TenantId and -BaselineId (detail)
+
+First object is the metrics summary:
+
+```
+TenantName               : Contoso
+TenantId                 : 646
+AlignmentScore           : 100
+TotalPolicies            : 27
+Aligned                  : 27
+AcceptedDeviation        : 0
+UnacceptedDeviation      : 0
+RecommendedFromBaseline  : 0
+ExistingCustomerPolicies : 0
+CompletedAt              : 2026-03-26T22:03:07Z
+```
+
+Followed by per-policy rows (no repeated metrics):
+
+```
+PolicyName             : Power BI Pro
+AlignmentStatus        : Aligned
+Product                : M365 Admin Center
+PrimaryGroup           : Self-Service Trials and Purchases
+SecondaryGroup         : Products
+InforcerPolicyTypeName : Self Service
+Tags                   : Provision M365, Tier 1
+
+PolicyName             : Enable guest self-service sign up via user flows
+AlignmentStatus        : Unaccepted Deviation
+Product                : Entra
+PrimaryGroup           : Settings
+SecondaryGroup         : All
+InforcerPolicyTypeName : Entra
+Tags                   : IAM - Core, Secure Collaboration, Provision M365, Tier 1
+```
+
+Possible `AlignmentStatus` values: `Aligned`, `Unaccepted Deviation`, `Accepted Deviation`, `Recommended From Baseline`, `Existing Customer Policy`.
 
 ### Example output — Format Raw with -OutputType JsonObject
 
-A JSON string (array of objects) with properties such as `tenantId`, `tenantFriendlyName`, `score`, `baselineGroupId`, `baselineGroupName`, `lastComparisonDateTime`. Depth 100.
+A JSON string (array of objects) with properties such as `tenantId`, `tenantFriendlyName`, `score`, `baselineGroupId`, `baselineGroupName`, `lastComparisonDateTime`. Depth 100. When using `-BaselineId`, the JSON contains the full alignment detail including `metrics`, `alignment`, and `completedAt`.
 
 ---
 
@@ -271,29 +324,26 @@ Get-InforcerAuditEvent -OutputType JsonObject
 ### Example output
 
 ```
-CorrelationId   : corr-abc123
-ClientId        : 103
-RelType         : tenant
-RelId           : 482
 EventType       : authentication
-Message         : User signed in successfully
-Code            : 0
+Code            : USER_SIGNIN_SUCCESS
 User            : admin@contoso.com
 Timestamp       : 2025-03-05T14:25:00Z
+Message         : User signed in successfully
 ClientIpv4      : 192.168.1.1
 UserName        : admin@contoso.com
 UserDisplayName : Admin User
 
-CorrelationId   : corr-def456
-ClientId        : 103
-RelType         : tenant
-RelId           : 482
 EventType       : failedAuthentication
-Message         : Invalid credentials
-Code            : 401
+Code            : USER_SIGNIN_FAILED
 User            : unknown
 Timestamp       : 2025-03-05T14:20:00Z
+Message         : Invalid credentials
+ClientIpv4      :
+UserName        :
+UserDisplayName :
 ```
+
+The default view shows 8 key properties. Use `| Select-Object *` to see all properties including `id`, `correlationId`, `clientId`, `relType`, `relId`, and `ClientIpv6`.
 
 ---
 

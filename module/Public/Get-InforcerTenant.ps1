@@ -5,7 +5,7 @@
     Lists tenants. Optionally filter by -TenantId (numeric ID, Microsoft Tenant ID GUID, or tenant name).
     Output includes PascalCase aliases (e.g. ClientTenantId, TenantFriendlyName). When the API
     returns licenses as an array, it is converted to a comma-separated string in the licenses property.
-    PolicyDiff and PolicyDiffFormatted (from recentChanges) show policy change information when available.
+    PolicyDiff shows policy change information when available.
 .PARAMETER Format
     Output format. Raw = raw API response (default).
 .PARAMETER TenantId
@@ -21,6 +21,8 @@
 .OUTPUTS
     PSObject or String (when -OutputType JsonObject)
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcertenant
+.LINK
     Connect-Inforcer
 #>
 function Get-InforcerTenant {
@@ -31,7 +33,8 @@ param(
     [ValidateSet('Raw')]
     [string]$Format = 'Raw',
 
-    [Parameter(Mandatory = $false, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+    [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
+    [Alias('ClientTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -81,22 +84,27 @@ process {
     # Force to array (API can return single object or array)
     $all = @($tenantData)
     foreach ($item in $all) {
-        if ($item -is [PSObject]) { Add-InforcerPropertyAliases -InputObject $item -ObjectType Tenant | Out-Null }
+        if ($item -is [PSObject]) {
+            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType Tenant
+            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Tenant')
+        }
     }
-    # Dedupe by ClientTenantId
+    # Dedupe by ClientTenantId (aliases already applied above)
     $seen = @{}
-    $result = $all | Where-Object {
-        $id = $_.ClientTenantId; if ($null -eq $id) { $id = $_.clientTenantId }
-        if ($null -eq $id) { return $true }
-        $id = [int]$id
-        if ($seen[$id]) { return $false }
-        $seen[$id] = $true
-        $true
+    $result = foreach ($item in $all) {
+        $id = $item.ClientTenantId
+        if ($null -eq $id) { $id = $item.clientTenantId }
+        if ($null -eq $id) { $item; continue }
+        $idInt = [int]$id
+        if ($seen.ContainsKey($idInt)) { continue }
+        $seen[$idInt] = $true
+        $item
     }
     # Filter to one tenant when -TenantId passed
     if ($null -ne $singleTenantId) {
-        $result = $result | Where-Object {
-            $id = $_.ClientTenantId; if ($null -eq $id) { $id = $_.clientTenantId }
+        $result = @($result) | Where-Object {
+            $id = $_.ClientTenantId
+            if ($null -eq $id) { $id = $_.clientTenantId }
             $null -ne $id -and [int]$id -eq $singleTenantId
         }
         if (-not $result) {
@@ -104,6 +112,6 @@ process {
             return
         }
     }
-    $result | ForEach-Object { $_ }
+    $result
 }
 }

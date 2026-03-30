@@ -21,17 +21,5 @@ function Test-InforcerSession {
         return $false
     }
 
-    try {
-        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($session.ApiKey)
-        try {
-            $plain = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-            $hasKey = -not [string]::IsNullOrWhiteSpace($plain)
-        } finally {
-            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-        }
-    } catch {
-        return $false
-    }
-
-    return $hasKey -and -not [string]::IsNullOrWhiteSpace($session.BaseUrl)
+    return ($session.ApiKey.Length -gt 0) -and -not [string]::IsNullOrWhiteSpace($session.BaseUrl)
 }

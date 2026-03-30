@@ -22,6 +22,8 @@
 .OUTPUTS
     PSObject with Status, Region, BaseUrl, ConnectedAt.
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#connect-inforcer
+.LINK
     Disconnect-Inforcer
 .LINK
     Get-InforcerTenant
@@ -83,19 +85,32 @@ $validateHeaders = @{
 }
 try {
     $null = Invoke-RestMethod -Uri $validateUri -Method GET -Headers $validateHeaders -UseBasicParsing
-} catch [System.Net.WebException] {
+} catch {
+    # Parse response body from PS7 (ErrorDetails) or PS5.1 (WebException)
     $statusCode = 0
-    if ($_.Exception.Response) { $statusCode = [int]$_.Exception.Response.StatusCode }
-    $msg = $_.Exception.Message
-    if ($statusCode -eq 401) {
-        $msg = 'Connection failed: the API key is invalid for this endpoint.'
-    } else {
-        $msg = "Connection validation failed (HTTP $statusCode): $msg"
+    $apiMessage = $null
+    if ($_.Exception -is [System.Net.WebException] -and $_.Exception.Response) {
+        $statusCode = [int]$_.Exception.Response.StatusCode
+    }
+    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+        try {
+            $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($json) {
+                if ($json.PSObject.Properties['statusCode']) { $statusCode = [int]$json.statusCode }
+                $apiMessage = $json.PSObject.Properties['message'].Value -as [string]
+            }
+        } catch { }
+    }
+    $msg = switch ($true) {
+        ($statusCode -eq 401) { 'Connection failed: the API key is invalid for this endpoint.' }
+        ($statusCode -eq 429 -or $statusCode -eq 403 -and $apiMessage -match 'quota|rate.?limit|throttl') {
+            if ($apiMessage) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
+        }
+        default {
+            if ($apiMessage) { "Connection validation failed: $apiMessage" } else { "Connection validation failed: $($_.Exception.Message)" }
+        }
     }
     Write-Error -Message $msg -ErrorId 'ConnectionValidationFailed' -Category AuthenticationError
-    return
-} catch {
-    Write-Error -Message "Connection validation failed: $($_.Exception.Message)" -ErrorId 'ConnectionValidationFailed' -Category AuthenticationError
     return
 }
 

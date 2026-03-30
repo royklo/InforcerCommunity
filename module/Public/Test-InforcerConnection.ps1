@@ -10,6 +10,8 @@
 .OUTPUTS
     None. Writes success or failure to the host.
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#test-inforcerconnection
+.LINK
     Connect-Inforcer
 #>
 function Test-InforcerConnection {

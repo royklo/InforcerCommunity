@@ -14,6 +14,8 @@
 .OUTPUTS
     String (always)
 .LINK
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#disconnect-inforcer
+.LINK
     Connect-Inforcer
 #>
 function Disconnect-Inforcer {

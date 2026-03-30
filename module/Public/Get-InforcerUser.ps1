@@ -45,6 +45,12 @@ function Get-InforcerUser {
         Get-InforcerTenant -TenantId 139 | Get-InforcerUser
 
         Lists all users in the piped tenant.
+
+    .LINK
+        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforceruser
+
+    .LINK
+        Connect-Inforcer
     #>
     [CmdletBinding(DefaultParameterSetName = 'List')]
     param(

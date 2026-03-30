@@ -2,14 +2,14 @@
 .SYNOPSIS
     Retrieves tenant information from the Inforcer API.
 .DESCRIPTION
-    Lists tenants. Optionally filter by -TenantId (Client Tenant ID or Microsoft Tenant ID GUID).
+    Lists tenants. Optionally filter by -TenantId (numeric ID, Microsoft Tenant ID GUID, or tenant name).
     Output includes PascalCase aliases (e.g. ClientTenantId, TenantFriendlyName). When the API
     returns licenses as an array, it is converted to a comma-separated string in the licenses property.
     PolicyDiff shows policy change information when available.
 .PARAMETER Format
     Output format. Raw = raw API response (default).
 .PARAMETER TenantId
-    Optional. Filter to this tenant (integer or GUID).
+    Optional. Filter to this tenant (numeric ID, GUID, or tenant name).
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 .EXAMPLE
@@ -49,52 +49,39 @@ process {
 
     Write-Verbose 'Retrieving tenant information...'
 
+    # Fetch tenant list once — reuse for both name/GUID resolution and output
+    $tenantData = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject)
+    if ($null -eq $tenantData -or $tenantData.Count -eq 0) { return }
+
     $singleTenantId = $null
     if ($null -ne $TenantId) {
-        $tenantIdStr = $TenantId.ToString().Trim()
-        $parsedInt = 0
-        $parsedGuid = [guid]::Empty
-        if ([int]::TryParse($tenantIdStr, [ref]$parsedInt)) {
-            $singleTenantId = $parsedInt
-        } elseif ([guid]::TryParse($tenantIdStr, [ref]$parsedGuid)) {
-            try {
-                $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId
-            } catch {
-                Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
-                return
-            }
-        } else {
-            Write-Error -Message 'Invalid TenantId format. Use numeric Client Tenant ID or GUID.' -ErrorId 'InvalidTenantId' -Category InvalidArgument
+        try {
+            $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId -TenantData $tenantData
+        } catch {
+            Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
             return
         }
     }
 
-    # Always use list endpoint then filter by TenantId when specified (single-tenant GET can return full list)
-    $response = Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType $OutputType
-    if ($null -eq $response) { return }
-
     if ($OutputType -eq 'JsonObject') {
+        # Filter PSObjects first, then convert to JSON once — avoids unnecessary serialize/deserialize round-trip
+        $jsonData = $tenantData
         if ($null -ne $singleTenantId) {
-            $obj = $response | ConvertFrom-Json
-            $arr = if ($obj -is [array]) { @($obj) } else { @($obj) }
-            $filtered = @($arr | Where-Object {
+            $jsonData = @($tenantData | Where-Object {
                 $id = $_.clientTenantId
                 if ($null -eq $id) { $id = $_.ClientTenantId }
-                $id -ne $null -and [int]$id -eq $singleTenantId
+                $null -ne $id -and [int]$id -eq $singleTenantId
             })
-            if ($filtered.Count -eq 0) {
+            if ($jsonData.Count -eq 0) {
                 Write-Error -Message "Tenant or resource not found." -ErrorId 'TenantNotFound' -Category ObjectNotFound
                 return
             }
-            ($filtered | ConvertTo-Json -Depth 100)
-        } else {
-            $response
         }
-        return
+        return ($jsonData | ConvertTo-Json -Depth 100)
     }
 
     # Force to array (API can return single object or array)
-    $all = @($response)
+    $all = @($tenantData)
     foreach ($item in $all) {
         if ($item -is [PSObject]) {
             $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType Tenant

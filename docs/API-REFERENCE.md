@@ -15,6 +15,7 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [Tenants](#tenants)
   - [Tenant Policies](#tenant-policies)
   - [Audit Events](#audit-events)
+  - [Users](#users)
 - [Schemas](#schemas)
   - [BaselineGroup](#baselinegroup)
   - [BaselineMember](#baselinemember)
@@ -28,6 +29,9 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [PolicyTag](#policytag)
   - [EventType](#eventtype)
   - [AuditEvent](#auditevent)
+  - [UserSummary](#usersummary)
+  - [User](#user)
+  - [UserLicense](#userlicense)
 - [Response Wrapper](#response-wrapper)
 - [Error Responses](#error-responses)
 
@@ -153,6 +157,33 @@ Searches the activity log with optional filters.
 ```
 
 **Response**: Paginated array of [AuditEvent](#auditevent) with `continuationToken`
+
+---
+
+### Users
+
+#### `GET /beta/tenants/{tenantId}/users`
+
+Returns a paginated list of user summaries for a tenant.
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `search` | query | string | No | Server-side search filter. |
+| `continuationToken` | query | string | No | Token to continue a previous page. |
+
+**Response**: Paginated array of [UserSummary](#usersummary) with `continuationToken` and `totalCount` at the response root level (siblings of `data`).
+
+#### `GET /beta/tenants/{tenantId}/users/{userId}`
+
+Returns full detail for a single user.
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `userId` | path | string (GUID) | Yes | The user ID. |
+
+**Response**: Single [User](#user) object.
 
 ---
 
@@ -356,6 +387,101 @@ Represents an entry in the activity log.
 | ClientIpv6 | string | Client IPv6 address. |
 | UserName | string | Username associated with the event. |
 | UserDisplayName | string | Display name of the user. |
+
+---
+
+### UserSummary
+
+Returned by the list/search users endpoint. Contains key user properties and counts.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string (GUID) | The user ID. |
+| displayName | string | Display name. |
+| userPrincipalName | string | User principal name (UPN). |
+| userType | string | User type (e.g. Member, Guest). |
+| jobTitle | string | Job title. |
+| department | string | Department. |
+| groups | integer | Number of groups the user is a member of. |
+| roles | integer | Number of roles assigned. |
+| assignedLicenses | array\<[UserLicense](#userlicense)\> | Assigned licenses. |
+| isGlobalAdmin | boolean | Whether the user is a global administrator. |
+| isAccountEnabled | boolean | Whether the account is enabled. |
+| isMfaRegistered | boolean | Whether the user is registered for MFA. |
+| isMfaCapable | boolean | Whether the user is capable of MFA. |
+
+**PascalCase aliases**: Id, DisplayName, UserPrincipalName, UserType, JobTitle, Department, Groups, Roles, AssignedLicenses, IsGlobalAdmin, IsAccountEnabled, IsMfaRegistered, IsMfaCapable
+
+---
+
+### User
+
+Returned by the get-user-by-ID endpoint. Includes all UserSummary fields plus detailed profile, on-premises, group/role/device memberships, risk, and license information.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string (GUID) | The user ID. |
+| displayName | string | Display name. |
+| givenName | string | First name. |
+| surname | string | Last name. |
+| userPrincipalName | string | UPN. |
+| userType | string | User type. |
+| jobTitle | string | Job title. |
+| department | string | Department. |
+| mail | string | Email address. |
+| mobilePhone | string | Mobile phone number. |
+| businessPhones | array\<string\> | Business phone numbers. |
+| officeLocation | string | Office location. |
+| streetAddress | string | Street address. |
+| city | string | City. |
+| state | string | State/province. |
+| postalCode | string | Postal code. |
+| country | string | Country. |
+| preferredLanguage | string | Preferred language. |
+| accountEnabled | boolean | Whether the account is enabled. |
+| usageLocation | string | Usage location (ISO country code). |
+| createdDateTime | datetime | Account creation time. |
+| lastPasswordChangeDateTime | datetime | Last password change. |
+| lastSignInDateTime | datetime | Last sign-in time. |
+| companyName | string | Company name. |
+| employeeId | string | Employee ID. |
+| employeeType | string | Employee type. |
+| employeeHireDate | datetime | Hire date. |
+| mailNickname | string | Mail alias. |
+| onPremisesSyncEnabled | boolean | Whether synced from on-premises AD. |
+| manager | object | Manager reference (`{ id: GUID }`). |
+| groups | array\<object\> | Group memberships (id, displayName, description, groupTypes). |
+| roles | array\<object\> | Directory role assignments (id, displayName, roleTemplateId). |
+| devices | array\<object\> | Registered devices (id, displayName, OS, compliance, etc.). |
+| appRoleAssignments | array\<object\> | App role assignments. |
+| assignedLicenses | array\<[UserLicense](#userlicense)\> | Assigned licenses. |
+| isGlobalAdmin | boolean | Whether global administrator. |
+| isCloudOnly | boolean | Cloud-only account. |
+| isHybrid | boolean | Hybrid (synced) account. |
+| isMfaRegistered | boolean | MFA registered. |
+| isMfaCapable | boolean | MFA capable. |
+| isAllDevicesCompliant | boolean | All devices compliant. |
+| riskState | string | Identity risk state. |
+| riskDetail | string | Risk detail. |
+| riskLevel | string | Risk level. |
+
+**PascalCase aliases**: All properties above are aliased to PascalCase. Nested objects (groups, roles, devices, appRoleAssignments, manager) are left as-is.
+
+---
+
+### UserLicense
+
+License assignment on a user, used in both UserSummary and User schemas.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| sku | string | SKU part number (e.g. `SPB`, `EXCHANGESTANDARD`). |
+| skuId | string (GUID) | SKU unique identifier. |
+| name | string | Display-friendly SKU name (may be null). |
+| capabilityStatus | string | Capability status (e.g. Enabled). |
+| isExpired | boolean | Whether the license is expired. |
+| isCancelled | boolean | Whether the license is cancelled. |
+| state | string | License assignment state. |
 
 ---
 

@@ -74,6 +74,50 @@
       </ListControl>
     </View>
 
+    <!-- USER SUMMARY -->
+    <View>
+      <Name>InforcerCommunity.UserSummary.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.UserSummary</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem>
+                <Label>DisplayName</Label>
+                <PropertyName>DisplayName</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>UserPrincipalName</Label>
+                <PropertyName>UserPrincipalName</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>UserType</Label>
+                <PropertyName>UserType</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Department</Label>
+                <PropertyName>Department</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>AssignedLicenses</Label>
+                <PropertyName>AssignedLicenses</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>IsGlobalAdmin</Label>
+                <PropertyName>IsGlobalAdmin</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>IsMfaCapable</Label>
+                <PropertyName>IsMfaCapable</PropertyName>
+              </ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
     <!-- ALIGNMENT SCORE (Table format of Get-InforcerAlignmentDetails) -->
     <View>
       <Name>InforcerCommunity.AlignmentScore.Default</Name>
@@ -89,6 +133,62 @@
               <ListItem><Label>AlignmentScore</Label><PropertyName>AlignmentScore</PropertyName></ListItem>
               <ListItem><Label>BaselineName</Label><PropertyName>BaselineName</PropertyName></ListItem>
               <ListItem><Label>LastComparisonDateTime</Label><PropertyName>LastComparisonDateTime</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- USER DETAIL -->
+    <View>
+      <Name>InforcerCommunity.User.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.User</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem>
+                <Label>DisplayName</Label>
+                <PropertyName>DisplayName</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>UserPrincipalName</Label>
+                <PropertyName>UserPrincipalName</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>UserType</Label>
+                <PropertyName>UserType</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Department</Label>
+                <PropertyName>Department</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Mail</Label>
+                <PropertyName>Mail</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>AccountEnabled</Label>
+                <PropertyName>AccountEnabled</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>IsGlobalAdmin</Label>
+                <PropertyName>IsGlobalAdmin</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>IsCloudOnly</Label>
+                <PropertyName>IsCloudOnly</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>IsMfaRegistered</Label>
+                <PropertyName>IsMfaRegistered</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>RiskLevel</Label>
+                <PropertyName>RiskLevel</PropertyName>
+              </ListItem>
             </ListItems>
           </ListEntry>
         </ListEntries>

@@ -20,7 +20,8 @@ module/
 │   ├── Get-InforcerTenantPolicies.ps1
 │   ├── Get-InforcerAlignmentDetails.ps1
 │   ├── Get-InforcerAuditEvent.ps1
-│   └── Get-InforcerSupportedEventType.ps1
+│   ├── Get-InforcerSupportedEventType.ps1
+│   └── Get-InforcerUser.ps1
 └── Private/                         # Helpers (not exported)
     ├── Invoke-InforcerApiRequest.ps1
     ├── Test-InforcerSession.ps1

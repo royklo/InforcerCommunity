@@ -17,6 +17,7 @@
         'Get-InforcerTenantPolicies'
         'Get-InforcerAlignmentScore'
         'Get-InforcerAuditEvent'
+        'Get-InforcerUser'
     )
     CmdletsToExport   = @()
     VariablesToExport  = @()

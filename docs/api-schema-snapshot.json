@@ -1,6 +1,5 @@
 {
   "generatedAt": "2026-03-31T06:30:51Z",
-  "generatedFrom": "https://api-uk.uat.inforcerdev.net/api",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {

@@ -381,6 +381,9 @@ tr:hover td { background: var(--accent-soft); }
 /* --- Filter toggle --- */
 .hide-empty .empty-val { display: none; }
 .hide-empty tr:has(td > .empty-val:only-child) { display: none; }
+/* --- Search --- */
+.search-hidden { display: none !important; }
+.search-highlight { background: rgba(250,204,21,0.3); border-radius: 2px; }
 /* --- Sidebar panel (always visible on desktop, slide-out on mobile) --- */
 .sidebar-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 998;
@@ -542,7 +545,19 @@ tr:hover td { background: var(--accent-soft); }
     if ($baselineNames.Count -gt 0) {
         [void]$sb.AppendLine("<span>$($baselineNames.Count) baselines</span>")
     }
+    # Show active filters
+    if ($DocModel.FilterBaseline) {
+        $filterBaselineEsc = [System.Net.WebUtility]::HtmlEncode($DocModel.FilterBaseline)
+        [void]$sb.AppendLine("<span style=`"color:var(--accent);font-weight:600`">Baseline: $filterBaselineEsc</span>")
+    }
+    if ($DocModel.FilterTag) {
+        $filterTagEsc = [System.Net.WebUtility]::HtmlEncode($DocModel.FilterTag)
+        [void]$sb.AppendLine("<span style=`"color:var(--accent);font-weight:600`">Tag: $filterTagEsc</span>")
+    }
     [void]$sb.AppendLine('</div>')
+
+    # --- Search bar ---
+    [void]$sb.AppendLine('<div style="margin-top:0.75rem"><input type="text" id="search-input" placeholder="Search policies, settings, values..." style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text);font-size:0.875rem;font-family:inherit;outline:none" oninput="searchPolicies(this.value)"></div>')
     [void]$sb.AppendLine('</div>')
 
     # --- Baselines summary card (if baselines exist) ---
@@ -749,6 +764,7 @@ tr:hover td { background: var(--accent-soft); }
 function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('sidebar-backdrop').classList.add('open')}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebar-backdrop').classList.remove('open')}
 function scrollToTop(){window.scrollTo({top:0,behavior:'smooth'})}
+function searchPolicies(q){var ps=document.querySelectorAll('.policy-section'),prods=document.querySelectorAll('.product-section');q=q.toLowerCase().trim();prods.forEach(function(pr){pr.querySelectorAll('.search-highlight').forEach(function(h){h.outerHTML=h.textContent});var vis=0;pr.querySelectorAll('.policy-section').forEach(function(p){var txt=p.textContent.toLowerCase();if(!q||txt.indexOf(q)>=0){p.classList.remove('search-hidden');vis++}else{p.classList.add('search-hidden')}});if(q&&vis>0){pr.open=true}else if(q&&vis===0){pr.open=false}});if(!q)return;prods.forEach(function(pr){pr.querySelectorAll('.policy-section:not(.search-hidden) td, .policy-section:not(.search-hidden) h4').forEach(function(el){var h=el.innerHTML;var re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');el.innerHTML=h.replace(re,'<mark class="search-highlight">$1</mark>')})})}
 function toggleEmpty(){document.body.classList.toggle('hide-empty')}
 function toggleExpand(){var c=document.getElementById('chk-expand').checked;document.querySelectorAll('details.product-section').forEach(function(d){d.open=c});document.querySelectorAll('.sidebar-toc details').forEach(function(d){d.open=c})}
 function toggleTheme(){var r=document.documentElement,c=document.getElementById('chk-theme');if(c.checked){r.classList.remove('light');r.classList.add('dark');localStorage.setItem('theme','dark')}else{r.classList.remove('dark');r.classList.add('light');localStorage.setItem('theme','light')}}

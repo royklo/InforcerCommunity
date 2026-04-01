@@ -37,6 +37,14 @@
     via the /directoryObjects endpoint. Requires the Microsoft.Graph.Authentication module and
     an active Graph session (Connect-MgGraph). If Graph is not connected, falls back to raw
     ObjectIDs with a warning.
+.PARAMETER Baseline
+    Filter to only policies that belong to a specific baseline. Accepts a baseline GUID or
+    friendly name (e.g., "Inforcer Blueprint Baseline - Tier 1 - Foundations"). Uses the
+    Inforcer alignment details API to retrieve the list of policies in the baseline, then
+    filters the documentation to only those policies. The baseline name is shown in the header.
+.PARAMETER Tag
+    Filter to only policies that have a specific Inforcer tag (e.g., "IAM - Core", "Tier 1").
+    Matches against the tag name property on each policy (case-insensitive, contains match).
 .OUTPUTS
     System.IO.FileInfo. Returns FileInfo objects for each exported file.
 .EXAMPLE
@@ -51,6 +59,10 @@
     Export-InforcerTenantDocumentation -TenantId "Contoso" -Format Html -SettingsCatalogPath .\settings.json
 
     Uses an explicit settings.json path for Settings Catalog resolution.
+.EXAMPLE
+    Export-InforcerTenantDocumentation -TenantId 139 -Baseline "Inforcer Blueprint Baseline - Tier 1 - Foundations" -Format Html
+
+    Exports only the policies that belong to the specified baseline.
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#export-inforcertenantdocumentation
 .LINK
@@ -75,7 +87,13 @@ param(
     [string]$SettingsCatalogPath,
 
     [Parameter(Mandatory = $false)]
-    [switch]$FetchGraphData
+    [switch]$FetchGraphData,
+
+    [Parameter(Mandatory = $false)]
+    [string]$Baseline,
+
+    [Parameter(Mandatory = $false)]
+    [string]$Tag
 )
 
 if (-not (Test-InforcerSession)) {
@@ -119,6 +137,84 @@ if (-not [string]::IsNullOrEmpty($resolvedCatalogPath)) {
 }
 $docData = Get-InforcerDocData @docDataParams
 if ($null -eq $docData) { return }
+
+# Filter to baseline policies if -Baseline specified
+$baselineFilterName = $null
+if (-not [string]::IsNullOrWhiteSpace($Baseline)) {
+    Write-Host "Filtering to baseline: $Baseline" -ForegroundColor Cyan
+
+    # Resolve baseline name to GUID
+    $baselineGuid = $null
+    $guidTest = [guid]::Empty
+    if ([guid]::TryParse($Baseline.Trim(), [ref]$guidTest)) {
+        $baselineGuid = $Baseline.Trim()
+    } else {
+        # Fetch baselines and resolve by name
+        $allBaselines = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+        $baselineGuid = Resolve-InforcerBaselineId -BaselineId $Baseline -BaselineData $allBaselines
+        # Find the baseline name for display
+        foreach ($bl in $allBaselines) {
+            if ($bl.id -eq $baselineGuid) { $baselineFilterName = $bl.name; break }
+        }
+    }
+    if (-not $baselineFilterName) { $baselineFilterName = $Baseline }
+
+    # Get alignment details to find which policies are in the baseline
+    Write-Host '  Retrieving alignment details...' -ForegroundColor Gray
+    $alignEndpoint = "/beta/tenants/$clientTenantId/alignmentDetails?customBaselineId=$baselineGuid"
+    $alignResponse = Invoke-InforcerApiRequest -Endpoint $alignEndpoint -Method GET -OutputType PowerShellObject -ErrorAction SilentlyContinue
+
+    if ($null -eq $alignResponse) {
+        Write-Warning "Could not retrieve alignment details for baseline. Exporting all policies."
+    } else {
+        # Collect all policy names from all alignment status arrays
+        $baselinePolicyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $alignment = $alignResponse.alignment
+        if ($null -ne $alignment) {
+            $statusArrays = @('matchedPolicies', 'matchedWithAcceptedDeviations', 'deviatedUnaccepted', 'missingFromSubjectUnaccepted', 'additionalInSubjectUnaccepted')
+            foreach ($arrayName in $statusArrays) {
+                $arr = $alignment.PSObject.Properties[$arrayName]
+                if ($arr -and $null -ne $arr.Value) {
+                    foreach ($p in @($arr.Value)) {
+                        if ($p -is [PSObject] -and $p.PSObject.Properties['policyName']) {
+                            [void]$baselinePolicyNames.Add($p.policyName)
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($baselinePolicyNames.Count -gt 0) {
+            # Filter docData.Policies to only those in the baseline
+            $originalCount = @($docData.Policies).Count
+            $docData.Policies = @($docData.Policies | Where-Object {
+                $name = $_.displayName
+                if ([string]::IsNullOrWhiteSpace($name)) { $name = $_.friendlyName }
+                if ([string]::IsNullOrWhiteSpace($name)) { $name = $_.name }
+                $baselinePolicyNames.Contains($name)
+            })
+            Write-Host "  Filtered to $(@($docData.Policies).Count) of $originalCount policies in baseline" -ForegroundColor Gray
+        } else {
+            Write-Warning 'No policies found in baseline alignment data. Exporting all policies.'
+        }
+    }
+}
+
+# Filter by tag if -Tag specified
+if (-not [string]::IsNullOrWhiteSpace($Tag)) {
+    Write-Host "Filtering to tag: $Tag" -ForegroundColor Cyan
+    $originalCount = @($docData.Policies).Count
+    $docData.Policies = @($docData.Policies | Where-Object {
+        $policyTags = $_.tags
+        if ($null -eq $policyTags -or @($policyTags).Count -eq 0) { return $false }
+        foreach ($t in @($policyTags)) {
+            $tagName = if ($t -is [PSObject] -and $t.PSObject.Properties['name']) { $t.name } else { $t.ToString() }
+            if ($tagName -and $tagName.IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+        }
+        return $false
+    })
+    Write-Host "  Filtered to $(@($docData.Policies).Count) of $originalCount policies with tag '$Tag'" -ForegroundColor Gray
+}
 
 # Build Graph enrichment maps before DocModel (so assignments resolve during normalization)
 $groupNameMap = $null
@@ -189,6 +285,10 @@ if ($filterMap)                      { $docModelParams['FilterMap'] = $filterMap
 if ($script:InforcerScopeTagMap)     { $docModelParams['ScopeTagMap'] = $script:InforcerScopeTagMap }
 $docModel = ConvertTo-InforcerDocModel @docModelParams
 if ($null -eq $docModel) { return }
+
+# Add filter metadata so renderers can show what's active
+if ($baselineFilterName) { $docModel['FilterBaseline'] = $baselineFilterName }
+if (-not [string]::IsNullOrWhiteSpace($Tag)) { $docModel['FilterTag'] = $Tag }
 
 $policyCount = 0
 foreach ($product in $docModel.Products.Values) {

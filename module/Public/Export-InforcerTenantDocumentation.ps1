@@ -130,78 +130,57 @@ foreach ($product in $docModel.Products.Values) {
 }
 Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
 
-# Resolve group ObjectIDs to display names via Microsoft Graph
+# Enrich documentation with live Microsoft Graph data
 if ($FetchGraphData) {
-    Write-Host 'Resolving group names via Microsoft Graph...' -ForegroundColor Cyan
+    Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
+    $graphCtx = Connect-InforcerGraph -RequiredScopes @('Directory.Read.All')
 
-    # Check Graph availability (only requires Microsoft.Graph.Authentication)
-    $graphAvailable = $false
-    $graphModule = Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication' -ErrorAction SilentlyContinue
-    if ($graphModule) {
-        Import-Module -Name 'Microsoft.Graph.Authentication' -ErrorAction SilentlyContinue
-        try {
-            $ctx = Get-MgContext -ErrorAction Stop
-            if ($null -ne $ctx) { $graphAvailable = $true }
-        } catch {
-            # Not connected yet — try interactive sign-in
-        }
-
-        if (-not $graphAvailable) {
-            Write-Host '  No active Graph session — launching interactive sign-in...' -ForegroundColor Yellow
-            try {
-                Connect-MgGraph -Scopes 'Directory.Read.All' -NoWelcome -ErrorAction Stop
-                $ctx = Get-MgContext -ErrorAction Stop
-                if ($null -ne $ctx) { $graphAvailable = $true }
-            } catch {
-                Write-Warning "Graph sign-in failed: $($_.Exception.Message)"
-            }
-        }
-    }
-
-    if (-not $graphAvailable) {
-        Write-Warning 'Microsoft Graph not available. Install Microsoft.Graph.Authentication module. Falling back to raw ObjectIDs.'
+    if (-not $graphCtx) {
+        Write-Warning 'Microsoft Graph connection failed. Falling back to raw ObjectIDs.'
     } else {
-        # Collect all unique group IDs across all assignments
-        $groupIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        # Collect all unique ObjectIDs across all assignments
+        $objectIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($product in $docModel.Products.Values) {
             foreach ($policies in $product.Categories.Values) {
                 foreach ($policy in @($policies)) {
                     foreach ($assignment in @($policy.Assignments)) {
                         $gid = $assignment.Group
                         if (-not [string]::IsNullOrWhiteSpace($gid) -and $gid -match '^[0-9a-f]{8}-') {
-                            [void]$groupIds.Add($gid)
+                            [void]$objectIds.Add($gid)
                         }
                     }
                 }
             }
         }
 
-        if ($groupIds.Count -gt 0) {
-            Write-Host "  Resolving $($groupIds.Count) unique group IDs..." -ForegroundColor Gray
-            $groupNameMap = @{}
-            foreach ($gid in $groupIds) {
-                try {
-                    $response = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/directoryObjects/$gid" -ErrorAction Stop
-                    $groupNameMap[$gid] = $response.displayName
-                } catch {
-                    $groupNameMap[$gid] = $gid  # Keep raw ID on failure
+        if ($objectIds.Count -gt 0) {
+            Write-Host "  Resolving $($objectIds.Count) unique ObjectIDs..." -ForegroundColor Gray
+            $nameMap = @{}
+            $resolved = 0
+            foreach ($oid in $objectIds) {
+                $obj = Invoke-InforcerGraphRequest -Uri "https://graph.microsoft.com/v1.0/directoryObjects/$oid" -SingleObject
+                if ($obj -and $obj.displayName) {
+                    $nameMap[$oid] = $obj.displayName
+                    $resolved++
+                } else {
+                    $nameMap[$oid] = $oid
                 }
             }
 
-            # Replace group IDs in assignments with display names
+            # Replace ObjectIDs in assignments with display names
             foreach ($product in $docModel.Products.Values) {
                 foreach ($policies in $product.Categories.Values) {
                     foreach ($policy in @($policies)) {
                         foreach ($assignment in @($policy.Assignments)) {
                             $gid = $assignment.Group
-                            if ($groupNameMap.ContainsKey($gid)) {
-                                $assignment.Group = $groupNameMap[$gid]
+                            if ($nameMap.ContainsKey($gid)) {
+                                $assignment.Group = $nameMap[$gid]
                             }
                         }
                     }
                 }
             }
-            Write-Host "  Resolved $($groupNameMap.Count) group names" -ForegroundColor Gray
+            Write-Host "  Resolved $resolved of $($objectIds.Count) ObjectIDs" -ForegroundColor Gray
         }
     }
 }

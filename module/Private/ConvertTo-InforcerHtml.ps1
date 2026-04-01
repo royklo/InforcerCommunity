@@ -151,6 +151,7 @@ body {
     max-width: 1100px;
     margin: 0 auto;
     padding: 0 1.5rem 3rem;
+    margin-right: 300px;
     line-height: 1.65;
     font-size: 0.9375rem;
     -webkit-font-smoothing: antialiased;
@@ -336,13 +337,12 @@ h4 {
     letter-spacing: 0.08em;
 }
 /* --- Tables --- */
+.table-wrap { overflow-x: auto; margin-bottom: 0.75rem; border-radius: var(--radius-xs); }
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 0.75rem;
     font-size: 0.8125rem;
-    border-radius: var(--radius-xs);
-    overflow: hidden;
+    min-width: 400px;
 }
 th {
     background: var(--header-bg);
@@ -375,21 +375,20 @@ tr:hover td { background: var(--accent-soft); }
 /* --- Filter toggle --- */
 .hide-empty .empty-val { display: none; }
 .hide-empty tr:has(td > .empty-val:only-child) { display: none; }
-/* --- Sidebar panel --- */
+/* --- Sidebar panel (always visible on desktop, slide-out on mobile) --- */
 .sidebar-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 998;
     opacity: 0; pointer-events: none; transition: opacity var(--transition);
+    display: none;
 }
 .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
 .sidebar {
-    position: fixed; top: 0; right: -380px; width: 360px; max-width: 85vw; height: 100vh;
+    position: fixed; top: 0; right: 0; width: 280px; height: 100vh;
     background: var(--bg-card); border-left: 1px solid var(--border);
-    box-shadow: var(--shadow-lg); z-index: 999;
+    z-index: 999;
     display: flex; flex-direction: column;
-    transition: right 300ms cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
 }
-.sidebar.open { right: 0; }
 .sidebar-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
@@ -410,8 +409,10 @@ tr:hover td { background: var(--accent-soft); }
 .toggle-row {
     display: flex; align-items: center; justify-content: space-between;
     padding: 0.5rem 0; font-size: 0.8125rem; color: var(--text-secondary);
+    cursor: pointer; user-select: none;
 }
-.toggle-row label { cursor: pointer; font-weight: 500; }
+.toggle-row:hover { color: var(--text); }
+.toggle-row > span:first-child { font-weight: 500; }
 .toggle-switch {
     position: relative; width: 40px; height: 22px; flex-shrink: 0;
 }
@@ -454,6 +455,21 @@ tr:hover td { background: var(--accent-soft); }
 .fab-top { opacity: 0; pointer-events: none; transform: translateY(8px); }
 .fab-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
 /* --- Responsive --- */
+@media (max-width: 1024px) {
+    body { margin-right: 0; }
+    .sidebar {
+        right: -320px; width: 300px; max-width: 85vw;
+        box-shadow: var(--shadow-lg);
+        transition: right 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .sidebar.open { right: 0; }
+    .sidebar-backdrop { display: block; }
+    .fab-sidebar { display: flex; }
+}
+@media (min-width: 1025px) {
+    .fab-sidebar { display: none; }
+    .sidebar-close { display: none; }
+}
 @media (max-width: 768px) {
     body { padding: 0 1rem 2rem; font-size: 0.875rem; }
     .header h1 { font-size: 1.375rem; }
@@ -530,18 +546,9 @@ tr:hover td { background: var(--accent-soft); }
 
     # Sidebar controls
     [void]$sb.AppendLine('<div class="sidebar-controls">')
-    [void]$sb.AppendLine('<div class="toggle-row">')
-    [void]$sb.AppendLine('<label for="chk-empty">Hide empty fields</label>')
-    [void]$sb.AppendLine('<div class="toggle-switch"><input type="checkbox" id="chk-empty" onchange="toggleEmpty()"><span class="toggle-slider"></span></div>')
-    [void]$sb.AppendLine('</div>')
-    [void]$sb.AppendLine('<div class="toggle-row">')
-    [void]$sb.AppendLine('<label for="chk-expand">Expand all sections</label>')
-    [void]$sb.AppendLine('<div class="toggle-switch"><input type="checkbox" id="chk-expand" onchange="toggleExpand()"><span class="toggle-slider"></span></div>')
-    [void]$sb.AppendLine('</div>')
-    [void]$sb.AppendLine('<div class="toggle-row">')
-    [void]$sb.AppendLine('<label for="chk-theme">Dark mode</label>')
-    [void]$sb.AppendLine('<div class="toggle-switch"><input type="checkbox" id="chk-theme" onchange="toggleTheme()"><span class="toggle-slider"></span></div>')
-    [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('<label class="toggle-row"><span>Hide empty fields</span><span class="toggle-switch"><input type="checkbox" id="chk-empty" onchange="toggleEmpty()"><span class="toggle-slider"></span></span></label>')
+    [void]$sb.AppendLine('<label class="toggle-row"><span>Expand all sections</span><span class="toggle-switch"><input type="checkbox" id="chk-expand" onchange="toggleExpand()"><span class="toggle-slider"></span></span></label>')
+    [void]$sb.AppendLine('<label class="toggle-row"><span>Dark mode</span><span class="toggle-switch"><input type="checkbox" id="chk-theme" onchange="toggleTheme()"><span class="toggle-slider"></span></span></label>')
     [void]$sb.AppendLine('</div>')
 
     # Sidebar TOC
@@ -596,7 +603,7 @@ tr:hover td { background: var(--accent-soft); }
     # SVG arrow up (inline, no CDN)
     [void]$sb.AppendLine('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>')
     [void]$sb.AppendLine('</button>')
-    [void]$sb.AppendLine('<button class="fab" id="btn-sidebar" onclick="openSidebar()" aria-label="Open navigation">')
+    [void]$sb.AppendLine('<button class="fab fab-sidebar" id="btn-sidebar" onclick="openSidebar()" aria-label="Open navigation">')
     # SVG menu/list icon
     [void]$sb.AppendLine('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>')
     [void]$sb.AppendLine('</button>')
@@ -641,20 +648,20 @@ tr:hover td { background: var(--accent-soft); }
 
                 if ($nonEmptyBasics.Count -gt 0) {
                     [void]$sb.AppendLine('<div class="section-label">Basics</div>')
-                    [void]$sb.AppendLine('<table>')
+                    [void]$sb.AppendLine('<div class="table-wrap"><table>')
                     [void]$sb.AppendLine('<tr><th>Property</th><th>Value</th></tr>')
                     foreach ($propName in $nonEmptyBasics) {
                         $propLabel = [System.Net.WebUtility]::HtmlEncode($propName)
                         $propVal   = ConvertTo-SafeHtmlValue -Value $policy.Basics[$propName]
                         [void]$sb.AppendLine("<tr><td>$propLabel</td><td>$propVal</td></tr>")
                     }
-                    [void]$sb.AppendLine('</table>')
+                    [void]$sb.AppendLine('</table></div>')
                 }
 
                 # --- Settings table ---
                 if ($settingsCount -gt 0) {
                     [void]$sb.AppendLine('<div class="section-label">Settings</div>')
-                    [void]$sb.AppendLine('<table>')
+                    [void]$sb.AppendLine('<div class="table-wrap"><table>')
                     [void]$sb.AppendLine('<tr><th>Setting</th><th>Value</th></tr>')
                     foreach ($setting in @($policy.Settings)) {
                         $settingNameEsc = [System.Net.WebUtility]::HtmlEncode($setting.Name)
@@ -669,14 +676,14 @@ tr:hover td { background: var(--accent-soft); }
                             [void]$sb.AppendLine("<tr><td>$settingNameEsc</td><td>$settingVal</td></tr>")
                         }
                     }
-                    [void]$sb.AppendLine('</table>')
+                    [void]$sb.AppendLine('</table></div>')
                 }
 
                 # --- Assignments table ---
                 $assignmentsCount = if ($policy.Assignments) { @($policy.Assignments).Count } else { 0 }
                 if ($assignmentsCount -gt 0) {
                     [void]$sb.AppendLine('<div class="section-label">Assignments</div>')
-                    [void]$sb.AppendLine('<table>')
+                    [void]$sb.AppendLine('<div class="table-wrap"><table>')
                     [void]$sb.AppendLine('<tr><th>Target</th><th>Type</th><th>Filter</th><th>Filter Mode</th></tr>')
                     foreach ($assignment in @($policy.Assignments)) {
                         $targetVal     = ConvertTo-SafeHtmlValue -Value $assignment.Target
@@ -685,7 +692,7 @@ tr:hover td { background: var(--accent-soft); }
                         $filterModeVal = ConvertTo-SafeHtmlValue -Value $assignment.FilterMode
                         [void]$sb.AppendLine("<tr><td>$targetVal</td><td>$typeVal</td><td>$filterVal</td><td>$filterModeVal</td></tr>")
                     }
-                    [void]$sb.AppendLine('</table>')
+                    [void]$sb.AppendLine('</table></div>')
                 }
 
                 [void]$sb.AppendLine('</div>')

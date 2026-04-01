@@ -123,10 +123,16 @@ summary:hover { background: var(--summary-hover); }
 .muted { color: var(--muted); font-style: italic; }
 .toc-section { margin-bottom: 2rem; }
 .toc-section h2 { margin-top: 0; }
-.toc-section ul { margin: 0.25rem 0 0.5rem 1.5rem; padding: 0; }
-.toc-section li { margin: 0.2rem 0; }
 .toc-section a { color: var(--accent); text-decoration: none; }
 .toc-section a:hover { text-decoration: underline; }
+.toc-l1 { list-style: none; padding: 0; margin: 0; }
+.toc-l1 > li { margin-bottom: 0.75rem; }
+.toc-l2 { list-style: none; padding-left: 1.25rem; margin: 0.25rem 0 0 0; border-left: 2px solid var(--border); }
+.toc-l2 > li { margin: 0.2rem 0; padding-left: 0.5rem; }
+.toc-l3 { list-style: none; padding-left: 1rem; margin: 0.15rem 0 0 0; }
+.toc-l3 > li { margin: 0.1rem 0; font-size: 0.85rem; color: var(--muted); }
+.toc-l3 > li a { color: var(--muted); }
+.toc-l3 > li a:hover { color: var(--accent); }
 .header { margin-bottom: 2rem; }
 .header p { margin: 0.25rem 0; color: var(--muted); font-size: 0.9rem; }
 .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.875rem; }
@@ -187,28 +193,44 @@ h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bo
     }
     [void]$sb.AppendLine('</div>')
 
-    # --- TOC ---
+    # --- TOC (3-level: Product > Category > Policy) ---
     [void]$sb.AppendLine('<nav class="toc-section">')
     [void]$sb.AppendLine('<h2>Table of Contents</h2>')
+    [void]$sb.AppendLine('<ul class="toc-l1">')
 
     foreach ($prodName in $DocModel.Products.Keys) {
         $prodEsc    = [System.Net.WebUtility]::HtmlEncode($prodName)
         $prodAnchor = ConvertTo-HtmlAnchorId -Text $prodName
 
-        [void]$sb.AppendLine('<details>')
-        [void]$sb.AppendLine("<summary>$prodEsc</summary>")
-        [void]$sb.AppendLine('<ul>')
+        $prodPolicies = 0
+        foreach ($cp in $DocModel.Products[$prodName].Categories.Values) { $prodPolicies += @($cp).Count }
+
+        [void]$sb.AppendLine("<li><a href=`"#$prodAnchor`"><strong>$prodEsc</strong></a> <span class=`"badge`">$prodPolicies</span>")
+        [void]$sb.AppendLine('<ul class="toc-l2">')
 
         foreach ($catName in $DocModel.Products[$prodName].Categories.Keys) {
             $catEsc    = [System.Net.WebUtility]::HtmlEncode($catName)
             $catAnchor = ConvertTo-HtmlAnchorId -Text "$prodName-$catName"
-            [void]$sb.AppendLine("<li><a href=`"#$catAnchor`">$catEsc</a></li>")
+            $policies  = $DocModel.Products[$prodName].Categories[$catName]
+
+            [void]$sb.AppendLine("<li><a href=`"#$catAnchor`">$catEsc</a>")
+            [void]$sb.AppendLine('<ul class="toc-l3">')
+
+            foreach ($policy in @($policies)) {
+                $pName       = [System.Net.WebUtility]::HtmlEncode($policy.Basics.Name)
+                $pAnchor     = ConvertTo-HtmlAnchorId -Text "$prodName-$catName-$($policy.Basics.Name)"
+                [void]$sb.AppendLine("<li><a href=`"#$pAnchor`">$pName</a></li>")
+            }
+
+            [void]$sb.AppendLine('</ul>')
+            [void]$sb.AppendLine('</li>')
         }
 
         [void]$sb.AppendLine('</ul>')
-        [void]$sb.AppendLine('</details>')
+        [void]$sb.AppendLine('</li>')
     }
 
+    [void]$sb.AppendLine('</ul>')
     [void]$sb.AppendLine('</nav>')
 
     # --- Content sections ---
@@ -236,10 +258,11 @@ h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bo
             foreach ($policy in @($policies)) {
                 $policyNameEsc   = [System.Net.WebUtility]::HtmlEncode($policy.Basics.Name)
                 $settingsCount   = if ($policy.Settings) { @($policy.Settings).Count } else { 0 }
+                $policyAnchor    = ConvertTo-HtmlAnchorId -Text "$prodName-$catName-$($policy.Basics.Name)"
 
                 # Per-policy section (not collapsible -- only products are collapsible)
                 [void]$sb.AppendLine('<div class="policy-section">')
-                [void]$sb.AppendLine("<h4>$policyNameEsc <span class=`"badge`">$settingsCount settings</span></h4>")
+                [void]$sb.AppendLine("<h4 id=`"$policyAnchor`">$policyNameEsc <span class=`"badge`">$settingsCount settings</span></h4>")
 
                 # --- Basics table (only non-empty fields) ---
                 $basicsProps = @('Description', 'ProfileType', 'Platform', 'Created', 'Modified', 'ScopeTags')

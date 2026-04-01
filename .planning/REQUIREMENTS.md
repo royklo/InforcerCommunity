@@ -16,12 +16,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Settings Catalog Resolution
 
-- [ ] **SCAT-01**: Settings Catalog settingDefinitionIDs are resolved to friendly display names using settings.json
-- [ ] **SCAT-02**: Choice option values are resolved to friendly labels (e.g., "Require multifactor authentication" not raw enum)
-- [ ] **SCAT-03**: Settings hierarchy is preserved (parent/child relationships shown via indentation)
-- [ ] **SCAT-04**: Unknown/missing settingDefinitionIDs fall back to raw ID with warning, no error-halt
-- [ ] **SCAT-05**: settings.json is loaded once and cached in $script: scope for performance (62.5MB file)
-- [ ] **SCAT-06**: All 5 settingInstance @odata.type variants handled (Choice, Simple, SimpleCollection, ChoiceCollection, GroupSettingCollection)
+- [x] **SCAT-01**: Settings Catalog settingDefinitionIDs are resolved to friendly display names using settings.json
+- [x] **SCAT-02**: Choice option values are resolved to friendly labels (e.g., "Require multifactor authentication" not raw enum)
+- [x] **SCAT-03**: Settings hierarchy is preserved (parent/child relationships shown via indentation)
+- [x] **SCAT-04**: Unknown/missing settingDefinitionIDs fall back to raw ID with warning, no error-halt
+- [x] **SCAT-05**: settings.json is loaded once and cached in $script: scope for performance (62.5MB file)
+- [x] **SCAT-06**: All 5 settingInstance @odata.type variants handled (Choice, Simple, SimpleCollection, ChoiceCollection, GroupSettingCollection)
 
 ### Data Normalization
 
@@ -114,12 +114,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-02 | Phase 1 | Pending |
 | DATA-03 | Phase 1 | Pending |
 | DATA-04 | Phase 1 | Pending |
-| SCAT-01 | Phase 1 | Pending |
-| SCAT-02 | Phase 1 | Pending |
-| SCAT-03 | Phase 1 | Pending |
-| SCAT-04 | Phase 1 | Pending |
-| SCAT-05 | Phase 1 | Pending |
-| SCAT-06 | Phase 1 | Pending |
+| SCAT-01 | Phase 1 | Complete |
+| SCAT-02 | Phase 1 | Complete |
+| SCAT-03 | Phase 1 | Complete |
+| SCAT-04 | Phase 1 | Complete |
+| SCAT-05 | Phase 1 | Complete |
+| SCAT-06 | Phase 1 | Complete |
 | NORM-01 | Phase 1 | Pending |
 | NORM-02 | Phase 1 | Pending |
 | NORM-03 | Phase 1 | Pending |

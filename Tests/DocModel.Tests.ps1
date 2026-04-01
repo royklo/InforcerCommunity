@@ -271,10 +271,12 @@ Describe 'ConvertTo-InforcerDocModel - DocModel structure' -Skip:(-not $script:I
 # ---------------------------------------------------------------------------
 Describe 'ConvertTo-InforcerDocModel - Category key deduplication' -Skip:(-not $script:IntegrationDataAvailable) {
 
-    It 'Settings/All policies produce category key "Settings" (not "Settings / All")' {
-        # There are known Settings/All policies from Entra product
+    It 'Entra Settings/All policies are remapped to admin portal categories' {
+        # Settings/All policies should be remapped by Get-InforcerPolicyDisplayInfo
+        # to categories like "Authentication methods", "Enterprise applications", etc.
         $entraCategories = $script:DocModel.Products['Entra'].Categories.Keys
-        $entraCategories | Should -Contain 'Settings'
+        $entraCategories | Should -Contain 'Authentication methods'
+        $entraCategories | Should -Not -Contain 'Settings'
         $entraCategories | Should -Not -Contain 'Settings / All'
     }
 

@@ -98,7 +98,20 @@ function ConvertTo-InforcerDocModel {
         $prod = $policy.product
         if ([string]::IsNullOrWhiteSpace($prod)) { $prod = 'Other' }
 
-        $catKey = Get-InforcerCategoryKey -PrimaryGroup $policy.primaryGroup -SecondaryGroup $policy.secondaryGroup
+        # Normalize policy name (per NORM-05, D-13)
+        $policyName = Get-InforcerPolicyName -Policy $policy
+
+        # Map to friendly display name and Microsoft admin portal category
+        $displayInfo = Get-InforcerPolicyDisplayInfo -PolicyName $policyName `
+            -Product $prod -PrimaryGroup $policy.primaryGroup `
+            -SecondaryGroup $policy.secondaryGroup -PolicyTypeId $policy.policyTypeId
+        if ($displayInfo.FriendlyName) { $policyName = $displayInfo.FriendlyName }
+
+        $catKey = if ($displayInfo.Category) {
+            $displayInfo.Category
+        } else {
+            Get-InforcerCategoryKey -PrimaryGroup $policy.primaryGroup -SecondaryGroup $policy.secondaryGroup
+        }
         if ([string]::IsNullOrWhiteSpace($catKey)) { $catKey = 'General' }
 
         # Ensure product and category exist (per NORM-02)
@@ -108,9 +121,6 @@ function ConvertTo-InforcerDocModel {
         if (-not $products[$prod].Categories.Contains($catKey)) {
             $products[$prod].Categories[$catKey] = [System.Collections.Generic.List[object]]::new()
         }
-
-        # Normalize policy name (per NORM-05, D-13)
-        $policyName = Get-InforcerPolicyName -Policy $policy
 
         # Basics section (per NORM-04)
         $basics = @{

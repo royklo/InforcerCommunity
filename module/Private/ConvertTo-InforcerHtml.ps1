@@ -130,7 +130,11 @@ summary:hover { background: var(--summary-hover); }
 .header { margin-bottom: 2rem; }
 .header p { margin: 0.25rem 0; color: var(--muted); font-size: 0.9rem; }
 .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.875rem; }
-.policy-section { margin-left: 0.5rem; margin-bottom: 0.25rem; }
+.product-section { margin-bottom: 1rem; }
+.product-section > summary { font-size: 1.2rem; font-weight: 600; padding: 0.6rem 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 0.5rem; }
+.product-title { font-size: 1.2rem; }
+h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); }
+.policy-section { margin-left: 0.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; }
 .section-label {
     font-weight: 600;
     margin: 0.75rem 0 0.25rem;
@@ -212,7 +216,15 @@ summary:hover { background: var(--summary-hover); }
         $prodEsc    = [System.Net.WebUtility]::HtmlEncode($prodName)
         $prodAnchor = ConvertTo-HtmlAnchorId -Text $prodName
 
-        [void]$sb.AppendLine("<h2 id=`"$prodAnchor`">$prodEsc</h2>")
+        # Count total policies in this product for the badge
+        $prodPolicyCount = 0
+        foreach ($catPolicies in $DocModel.Products[$prodName].Categories.Values) {
+            $prodPolicyCount += @($catPolicies).Count
+        }
+
+        # Product-level collapsible section
+        [void]$sb.AppendLine('<details class="product-section">')
+        [void]$sb.AppendLine("<summary id=`"$prodAnchor`"><span class=`"product-title`">$prodEsc</span> <span class=`"badge`">$prodPolicyCount policies</span></summary>")
 
         foreach ($catName in $DocModel.Products[$prodName].Categories.Keys) {
             $catEsc    = [System.Net.WebUtility]::HtmlEncode($catName)
@@ -225,23 +237,30 @@ summary:hover { background: var(--summary-hover); }
                 $policyNameEsc   = [System.Net.WebUtility]::HtmlEncode($policy.Basics.Name)
                 $settingsCount   = if ($policy.Settings) { @($policy.Settings).Count } else { 0 }
 
-                # Per-policy collapsible section (collapsed by default -- no 'open' attribute per D-06)
-                [void]$sb.AppendLine('<details class="policy-section">')
-                [void]$sb.AppendLine("<summary>$policyNameEsc <span class=`"badge`">$settingsCount settings</span></summary>")
+                # Per-policy section (not collapsible -- only products are collapsible)
+                [void]$sb.AppendLine('<div class="policy-section">')
+                [void]$sb.AppendLine("<h4>$policyNameEsc <span class=`"badge`">$settingsCount settings</span></h4>")
 
-                # --- Basics table ---
-                [void]$sb.AppendLine('<div class="section-label">Basics</div>')
-                [void]$sb.AppendLine('<table>')
-                [void]$sb.AppendLine('<tr><th>Property</th><th>Value</th></tr>')
-
+                # --- Basics table (only non-empty fields) ---
                 $basicsProps = @('Description', 'ProfileType', 'Platform', 'Created', 'Modified', 'ScopeTags')
-                foreach ($propName in $basicsProps) {
-                    $propLabel = [System.Net.WebUtility]::HtmlEncode($propName)
-                    $propVal   = ConvertTo-SafeHtmlValue -Value $policy.Basics[$propName]
-                    [void]$sb.AppendLine("<tr><td>$propLabel</td><td>$propVal</td></tr>")
-                }
+                $nonEmptyBasics = @($basicsProps | Where-Object {
+                    $val = $policy.Basics[$_]
+                    $null -ne $val -and ($val -isnot [string] -or -not [string]::IsNullOrWhiteSpace($val))
+                })
 
-                [void]$sb.AppendLine('</table>')
+                if ($nonEmptyBasics.Count -gt 0) {
+                    [void]$sb.AppendLine('<div class="section-label">Basics</div>')
+                    [void]$sb.AppendLine('<table>')
+                    [void]$sb.AppendLine('<tr><th>Property</th><th>Value</th></tr>')
+
+                    foreach ($propName in $nonEmptyBasics) {
+                        $propLabel = [System.Net.WebUtility]::HtmlEncode($propName)
+                        $propVal   = ConvertTo-SafeHtmlValue -Value $policy.Basics[$propName]
+                        [void]$sb.AppendLine("<tr><td>$propLabel</td><td>$propVal</td></tr>")
+                    }
+
+                    [void]$sb.AppendLine('</table>')
+                }
 
                 # --- Settings table (only if count > 0) ---
                 if ($settingsCount -gt 0) {
@@ -284,9 +303,11 @@ summary:hover { background: var(--summary-hover); }
                     [void]$sb.AppendLine('</table>')
                 }
 
-                [void]$sb.AppendLine('</details>')
+                [void]$sb.AppendLine('</div>')
             }
         }
+
+        [void]$sb.AppendLine('</details>')
     }
 
     # --- Footer ---

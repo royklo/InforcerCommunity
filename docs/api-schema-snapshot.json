@@ -1,6 +1,5 @@
 {
-  "generatedAt": "2026-03-26T21:54:24Z",
-  "generatedFrom": "https://api-uk.inforcer.com/api",
+  "generatedAt": "2026-04-01T09:42:29Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -44,15 +43,7 @@
         "baselineMsTenantId": "string",
         "alignedThreshold": "integer",
         "semiAlignedThreshold": "integer",
-        "members": {
-          "_type": "array",
-          "_itemProperties": {
-            "clientTenantId": "integer",
-            "tenantFriendlyName": "string",
-            "tenantDnsName": "string",
-            "msTenantId": "string"
-          }
-        },
+        "members": "array",
         "mode": "string",
         "autoAddNewPolicies": "boolean",
         "isComplete": "boolean",
@@ -60,11 +51,11 @@
         "items": {
           "_type": "array",
           "_itemProperties": {
-            "policySnapshotId": "null",
+            "policySnapshotId": "string",
             "childCustomBaselineId": "null",
-            "policyCategoryProduct": "string",
-            "policyCategoryPrimaryGroup": "string",
-            "policyCategorySecondaryGroup": "string",
+            "policyCategoryProduct": "null",
+            "policyCategoryPrimaryGroup": "null",
+            "policyCategorySecondaryGroup": "null",
             "alignAssignments": "boolean"
           }
         }
@@ -170,7 +161,14 @@
                 "description": "null",
                 "isPolicyDeleteDisabled": "boolean",
                 "isPolicyDeployable": "boolean",
-                "policyTags": "array",
+                "policyTags": {
+                  "_type": "array",
+                  "_itemProperties": {
+                    "id": "string",
+                    "name": "string",
+                    "description": "null"
+                  }
+                },
                 "readOnly": "boolean",
                 "fullAccessLicenseRequirements": "array"
               }
@@ -208,8 +206,8 @@
             "nameLookup": {
               "_type": "object",
               "_properties": {
-                "user:username:763": "string",
-                "user:displayName:763": "string"
+                "user:username:237": "string",
+                "user:displayName:237": "string"
               }
             }
           }

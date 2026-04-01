@@ -508,7 +508,7 @@ tr:hover td { background: var(--accent-soft); }
     $sb = [System.Text.StringBuilder]::new(65536)
 
     $tenantNameEsc    = [System.Net.WebUtility]::HtmlEncode($DocModel.TenantName)
-    $baselineNameEsc  = if ($DocModel.BaselineName) { [System.Net.WebUtility]::HtmlEncode($DocModel.BaselineName) } else { '' }
+    $baselineNames    = if ($DocModel.Baselines) { $DocModel.Baselines } else { @() }
     $generatedAt      = if ($DocModel.GeneratedAt -is [datetime]) { $DocModel.GeneratedAt.ToString('yyyy-MM-dd HH:mm:ss') } else { [string]$DocModel.GeneratedAt }
 
     # Count totals for header
@@ -539,11 +539,24 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine("<span>$generatedAt UTC</span>")
     [void]$sb.AppendLine("<span>$totalProducts products</span>")
     [void]$sb.AppendLine("<span>$totalPolicies policies</span>")
-    if ($baselineNameEsc) {
-        [void]$sb.AppendLine("<span>$baselineNameEsc</span>")
+    if ($baselineNames.Count -gt 0) {
+        [void]$sb.AppendLine("<span>$($baselineNames.Count) baselines</span>")
     }
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('</div>')
+
+    # --- Baselines summary card (if baselines exist) ---
+    if ($baselineNames.Count -gt 0) {
+        [void]$sb.AppendLine('<div class="card" style="margin-bottom:1rem">')
+        [void]$sb.AppendLine('<div class="section-label">Baselines</div>')
+        [void]$sb.AppendLine('<div style="display:flex;flex-wrap:wrap;gap:0.375rem;margin-top:0.25rem">')
+        foreach ($blName in $baselineNames) {
+            $blEsc = [System.Net.WebUtility]::HtmlEncode($blName)
+            [void]$sb.AppendLine("<span class=`"badge`">$blEsc</span>")
+        }
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('</div>')
+    }
 
     # --- Sidebar backdrop + panel ---
     [void]$sb.AppendLine('<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>')
@@ -649,6 +662,17 @@ tr:hover td { background: var(--accent-soft); }
 
                 [void]$sb.AppendLine('<div class="policy-section">')
                 [void]$sb.AppendLine("<h4 id=`"$policyAnchor`">$policyNameEsc <span class=`"badge`">$settingsCount settings</span></h4>")
+
+                # Show policy tags (baseline membership) as badges
+                $tagsVal = $policy.Basics['Tags']
+                if (-not [string]::IsNullOrWhiteSpace($tagsVal)) {
+                    [void]$sb.AppendLine('<div style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-bottom:0.5rem">')
+                    foreach ($tagName in ($tagsVal -split ',\s*')) {
+                        $tagEsc = [System.Net.WebUtility]::HtmlEncode($tagName.Trim())
+                        [void]$sb.AppendLine("<span class=`"badge`" style=`"background:var(--accent-soft);color:var(--accent);font-size:0.625rem`">$tagEsc</span>")
+                    }
+                    [void]$sb.AppendLine('</div>')
+                }
 
                 # --- Basics table (only non-empty fields) ---
                 $basicsProps = @('Description', 'ProfileType', 'Platform', 'Created', 'Modified', 'ScopeTags')

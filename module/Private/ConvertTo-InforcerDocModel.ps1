@@ -92,10 +92,14 @@ function ConvertTo-InforcerDocModel {
         if ([string]::IsNullOrWhiteSpace($tenantName)) { $tenantName = "Tenant $($DocData.TenantId)" }
     }
 
-    $baselineName = ''
+    # Collect all baseline names for this tenant
+    $baselineNames = @()
     if ($null -ne $baselines -and $baselines.Count -gt 0) {
-        $baselineName = $baselines[0].baselineGroupName
-        if ([string]::IsNullOrWhiteSpace($baselineName)) { $baselineName = $baselines[0].name }
+        foreach ($bl in @($baselines)) {
+            $blName = $bl.name
+            if ([string]::IsNullOrWhiteSpace($blName)) { $blName = $bl.baselineGroupName }
+            if (-not [string]::IsNullOrWhiteSpace($blName)) { $baselineNames += $blName }
+        }
     }
 
     # Group policies by product -> category (per NORM-01, NORM-02, D-04, D-05)
@@ -131,6 +135,14 @@ function ConvertTo-InforcerDocModel {
             $products[$prod].Categories[$catKey] = [System.Collections.Generic.List[object]]::new()
         }
 
+        # Extract policy tags (baseline membership indicators)
+        $policyTags = @()
+        if ($null -ne $policy.tags -and @($policy.tags).Count -gt 0) {
+            $policyTags = @($policy.tags | ForEach-Object {
+                if ($_ -is [PSObject] -and $_.PSObject.Properties['name']) { $_.name } else { $_.ToString() }
+            } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        }
+
         # Basics section (per NORM-04)
         $basics = @{
             Name        = $policyName
@@ -140,6 +152,7 @@ function ConvertTo-InforcerDocModel {
             Created     = if ($policy.policyData -and $policy.policyData.createdDateTime) { $policy.policyData.createdDateTime } else { '' }
             Modified    = if ($policy.policyData -and $policy.policyData.lastModifiedDateTime) { $policy.policyData.lastModifiedDateTime } else { '' }
             ScopeTags   = ''
+            Tags        = if ($policyTags.Count -gt 0) { $policyTags -join ', ' } else { '' }
         }
         # Scope tags normalization (per D-15) -- resolve IDs to names when ScopeTagMap available
         $scopeTags = $policy.policyData.roleScopeTagIds
@@ -198,7 +211,8 @@ function ConvertTo-InforcerDocModel {
         TenantName   = $tenantName
         TenantId     = $DocData.TenantId
         GeneratedAt  = $DocData.CollectedAt
-        BaselineName = $baselineName
+        BaselineName = if ($baselineNames.Count -gt 0) { $baselineNames[0] } else { '' }
+        Baselines    = $baselineNames
         Products     = $products
     }
 }

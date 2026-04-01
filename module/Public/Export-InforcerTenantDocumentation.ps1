@@ -156,5 +156,18 @@ foreach ($fmt in $Format) {
     $fileInfo
 }
 
+# Auto-open HTML output in the default browser (cross-platform)
+$htmlFile = $Format | Where-Object { $_ -eq 'Html' } | ForEach-Object {
+    $safeName = $docModel.TenantName -replace '[^\w\-]', '-'
+    if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) { $OutputPath }
+    else { Join-Path $OutputPath "$safeName-Documentation.html" }
+}
+if ($htmlFile -and (Test-Path -LiteralPath $htmlFile)) {
+    $fullHtmlPath = (Resolve-Path -LiteralPath $htmlFile).Path
+    if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullHtmlPath }
+    elseif ($IsWindows) { Start-Process $fullHtmlPath }
+    elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullHtmlPath }
+}
+
 Write-Host "Done. $($Format.Count) file(s) exported for tenant '$($docModel.TenantName)'." -ForegroundColor Cyan
 }

@@ -193,8 +193,9 @@ Describe 'ConvertTo-InforcerMarkdown' -Tag 'Markdown' {
     }
 
     It 'shows em dash for null or empty values' {
-        # Em dash U+2014
-        $script:MarkdownOutput | Should -Match [char]0x2014
+        # Em dash U+2014 — use a variable so -Match receives the actual character
+        $emDash = [char]0x2014
+        $script:MarkdownOutput | Should -Match ([regex]::Escape($emDash))
     }
 
     It 'indents child settings with arrow marker' {

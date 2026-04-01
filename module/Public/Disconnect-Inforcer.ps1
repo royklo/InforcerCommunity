@@ -26,6 +26,7 @@ param()
 if ($script:InforcerSession -and $script:InforcerSession.ApiKey -and $script:InforcerSession.BaseUrl) {
     if ($PSCmdlet.ShouldProcess('Inforcer session', 'Disconnect')) {
         $script:InforcerSession = $null
+        $script:InforcerSettingsCatalog = $null
         Write-Verbose 'Disconnected from Inforcer API. Session cleared.'
         'Disconnected from Inforcer API.'
     }

@@ -60,3 +60,8 @@ claude.md
 # docs/superpowers
 /docs/superpowers/*
 
+# Settings Catalog data (62.5 MB -- copy from IntuneSettingsCatalogViewer sibling repo)
+module/data/settings.json
+
+# sample data
+/scripts/sample-data/*

@@ -62,7 +62,7 @@ function ConvertTo-InforcerHtml {
     --summary-hover: #f1f5f9;
 }
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not(.light) {
         --bg: #0f172a;
         --text: #e2e8f0;
         --border: #334155;
@@ -74,6 +74,30 @@ function ConvertTo-InforcerHtml {
         --badge-text: #93c5fd;
         --summary-hover: #1e293b;
     }
+}
+:root.dark {
+    --bg: #0f172a;
+    --text: #e2e8f0;
+    --border: #334155;
+    --row-alt: #1e293b;
+    --header-bg: #1e293b;
+    --muted: #64748b;
+    --accent: #60a5fa;
+    --badge-bg: #1e3a5f;
+    --badge-text: #93c5fd;
+    --summary-hover: #1e293b;
+}
+:root.light {
+    --bg: #ffffff;
+    --text: #1e293b;
+    --border: #e2e8f0;
+    --row-alt: #f8fafc;
+    --header-bg: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --badge-bg: #e0f2fe;
+    --badge-text: #0369a1;
+    --summary-hover: #f1f5f9;
 }
 *, *::before, *::after { box-sizing: border-box; }
 body {
@@ -149,6 +173,34 @@ h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bo
     text-transform: uppercase;
     letter-spacing: 0.06em;
 }
+.toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 0;
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.toolbar-btn {
+    background: var(--header-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: inherit;
+    transition: background 0.15s;
+}
+.toolbar-btn:hover { background: var(--summary-hover); }
+.toolbar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.hide-empty .empty-val { display: none; }
+.hide-empty tr:has(td > .empty-val:only-child) { display: none; }
 '@
 
     # -------------------------------------------------------------------------
@@ -157,7 +209,7 @@ h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bo
     function ConvertTo-SafeHtmlValue {
         param([Parameter()][object]$Value)
         if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrEmpty($Value))) {
-            return '<span class="muted">&mdash;</span>'
+            return '<span class="muted empty-val">&mdash;</span>'
         }
         return [System.Net.WebUtility]::HtmlEncode($Value.ToString())
     }
@@ -193,9 +245,16 @@ h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bo
     }
     [void]$sb.AppendLine('</div>')
 
-    # --- TOC (3-level: Product > Category > Policy) ---
+    # --- Toolbar ---
+    [void]$sb.AppendLine('<div class="toolbar">')
+    [void]$sb.AppendLine('<button class="toolbar-btn" id="btn-toggle-empty" onclick="toggleEmpty()">Hide empty fields</button>')
+    [void]$sb.AppendLine('<button class="toolbar-btn" id="btn-theme" onclick="toggleTheme()">Dark mode</button>')
+    [void]$sb.AppendLine('</div>')
+
+    # --- TOC (3-level: Product > Category > Policy, collapsible) ---
     [void]$sb.AppendLine('<nav class="toc-section">')
-    [void]$sb.AppendLine('<h2>Table of Contents</h2>')
+    [void]$sb.AppendLine('<details open>')
+    [void]$sb.AppendLine('<summary><h2 style="display:inline">Table of Contents</h2></summary>')
     [void]$sb.AppendLine('<ul class="toc-l1">')
 
     foreach ($prodName in $DocModel.Products.Keys) {
@@ -231,6 +290,7 @@ h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bo
     }
 
     [void]$sb.AppendLine('</ul>')
+    [void]$sb.AppendLine('</details>')
     [void]$sb.AppendLine('</nav>')
 
     # --- Content sections ---
@@ -337,6 +397,55 @@ h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bo
     [void]$sb.AppendLine('<div class="footer">')
     [void]$sb.AppendLine("<p>Generated: $generatedAt UTC | Tenant: $tenantNameEsc</p>")
     [void]$sb.AppendLine('</div>')
+
+    # --- JavaScript for toolbar ---
+    $jsBlock = @'
+<script>
+function toggleEmpty() {
+    var body = document.body;
+    var btn = document.getElementById('btn-toggle-empty');
+    body.classList.toggle('hide-empty');
+    if (body.classList.contains('hide-empty')) {
+        btn.textContent = 'Show empty fields';
+        btn.classList.add('active');
+    } else {
+        btn.textContent = 'Hide empty fields';
+        btn.classList.remove('active');
+    }
+}
+function toggleTheme() {
+    var root = document.documentElement;
+    var btn = document.getElementById('btn-theme');
+    if (root.classList.contains('dark')) {
+        root.classList.remove('dark');
+        root.classList.add('light');
+        btn.textContent = 'Dark mode';
+        btn.classList.remove('active');
+        localStorage.setItem('theme', 'light');
+    } else {
+        root.classList.remove('light');
+        root.classList.add('dark');
+        btn.textContent = 'Light mode';
+        btn.classList.add('active');
+        localStorage.setItem('theme', 'dark');
+    }
+}
+(function() {
+    var saved = localStorage.getItem('theme');
+    var btn = document.getElementById('btn-theme');
+    if (saved === 'dark') {
+        document.documentElement.classList.add('dark');
+        btn.textContent = 'Light mode';
+        btn.classList.add('active');
+    } else if (saved === 'light') {
+        document.documentElement.classList.add('light');
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        btn.textContent = 'Light mode';
+    }
+})();
+</script>
+'@
+    [void]$sb.AppendLine($jsBlock)
 
     [void]$sb.AppendLine('</body>')
     [void]$sb.Append('</html>')

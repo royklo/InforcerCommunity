@@ -349,8 +349,10 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
         $script:HtmlOutput | Should -Not -Match 'src="http'
     }
 
-    It 'has no JavaScript' {
-        $script:HtmlOutput | Should -Not -Match '<script'
+    It 'has toolbar JavaScript for theme toggle and empty field filter' {
+        $script:HtmlOutput | Should -Match '<script'
+        $script:HtmlOutput | Should -Match 'toggleTheme'
+        $script:HtmlOutput | Should -Match 'toggleEmpty'
     }
 
     It 'contains TOC with details elements' {
@@ -358,11 +360,12 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
         $script:HtmlOutput | Should -Match '<details'
     }
 
-    It 'TOC is collapsed by default - no open attributes on any details element' {
-        $allDetails  = ([regex]::Matches($script:HtmlOutput, '<details')).Count
-        $openDetails = ([regex]::Matches($script:HtmlOutput, '<details[^>]*open')).Count
-        $allDetails  | Should -BeGreaterThan 0
-        $openDetails | Should -Be 0
+    It 'TOC is open by default, product sections are collapsed by default' {
+        # TOC has open attribute
+        $script:HtmlOutput | Should -Match '<details open>'
+        # Product sections do not have open attribute
+        $productOpen = ([regex]::Matches($script:HtmlOutput, '<details class="product-section"[^>]*open')).Count
+        $productOpen | Should -Be 0
     }
 
     It 'contains policy details/summary elements with policy-section class' {

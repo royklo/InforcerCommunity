@@ -48,7 +48,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 02-01-PLAN.md — JSON and CSV renderers with test scaffold (JSON-01..02, CSV-01..02)
+- [x] 02-01-PLAN.md — JSON and CSV renderers with test scaffold (JSON-01..02, CSV-01..02)
 - [ ] 02-02-PLAN.md — Markdown renderer with TOC, pipe escaping, and indent markers (MD-01..04)
 - [ ] 02-03-PLAN.md — HTML renderer with embedded CSS, collapsible TOC, dark/light mode, setting badges (HTML-01..10)
 

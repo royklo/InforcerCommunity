@@ -211,7 +211,7 @@ Describe 'ConvertTo-InforcerDocCsv' -Tag 'Csv' {
         $lines = $result -split [Environment]::NewLine
         $encMethodRow = $lines | Where-Object { $_ -match '"Encryption Method"' }
         $encMethodRow | Should -Not -BeNullOrEmpty
-        $encMethodRow | Should -Match '"Encryption Method","",1'
+        $encMethodRow | Should -Match '"Encryption Method","","1"'
     }
 
     It 'Policies with no settings produce no CSV rows (D-26)' {

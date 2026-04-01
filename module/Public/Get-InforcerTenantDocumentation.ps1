@@ -2,7 +2,7 @@
 .SYNOPSIS
     Generates comprehensive tenant documentation across all M365 products managed via Inforcer.
 .DESCRIPTION
-    Export-InforcerDocumentation collects configuration data for the specified tenant by calling
+    Get-InforcerTenantDocumentation collects configuration data for the specified tenant by calling
     Get-InforcerBaseline, Get-InforcerTenant, and Get-InforcerTenantPolicies (each using
     -OutputType JsonObject), normalizes the raw API data into a format-agnostic DocModel via
     ConvertTo-InforcerDocModel, and renders the DocModel to one or more output formats.
@@ -34,23 +34,23 @@
 .OUTPUTS
     None. Files are written to OutputPath.
 .EXAMPLE
-    Export-InforcerDocumentation -TenantId 482 -Format Html
+    Get-InforcerTenantDocumentation -TenantId 482 -Format Html
 
     Writes Contoso-Documentation.html to the current directory.
 .EXAMPLE
-    Export-InforcerDocumentation -TenantId 482 -Format Html,Markdown,Json,Csv -OutputPath C:\Reports
+    Get-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Json,Csv -OutputPath C:\Reports
 
     Writes four documentation files to C:\Reports.
 .EXAMPLE
-    Export-InforcerDocumentation -TenantId "Contoso" -Format Html -SettingsCatalogPath .\settings.json
+    Get-InforcerTenantDocumentation -TenantId "Contoso" -Format Html -SettingsCatalogPath .\settings.json
 
     Uses an explicit settings.json path for Settings Catalog resolution.
 .LINK
-    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#export-inforcerdocumentation
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcertenantdocumentation
 .LINK
     Connect-Inforcer
 #>
-function Export-InforcerDocumentation {
+function Get-InforcerTenantDocumentation {
 [CmdletBinding()]
 [OutputType([void])]
 param(

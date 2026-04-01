@@ -136,17 +136,30 @@ if ($FetchGraphData) {
 
     # Check Graph availability (only requires Microsoft.Graph.Authentication)
     $graphAvailable = $false
-    if (Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication' -ErrorAction SilentlyContinue) {
+    $graphModule = Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication' -ErrorAction SilentlyContinue
+    if ($graphModule) {
+        Import-Module -Name 'Microsoft.Graph.Authentication' -ErrorAction SilentlyContinue
         try {
             $ctx = Get-MgContext -ErrorAction Stop
             if ($null -ne $ctx) { $graphAvailable = $true }
         } catch {
-            # Not connected
+            # Not connected yet — try interactive sign-in
+        }
+
+        if (-not $graphAvailable) {
+            Write-Host '  No active Graph session — launching interactive sign-in...' -ForegroundColor Yellow
+            try {
+                Connect-MgGraph -Scopes 'Directory.Read.All' -NoWelcome -ErrorAction Stop
+                $ctx = Get-MgContext -ErrorAction Stop
+                if ($null -ne $ctx) { $graphAvailable = $true }
+            } catch {
+                Write-Warning "Graph sign-in failed: $($_.Exception.Message)"
+            }
         }
     }
 
     if (-not $graphAvailable) {
-        Write-Warning 'Microsoft Graph not available. Install Microsoft.Graph.Authentication and run Connect-MgGraph first. Falling back to raw ObjectIDs.'
+        Write-Warning 'Microsoft Graph not available. Install Microsoft.Graph.Authentication module. Falling back to raw ObjectIDs.'
     } else {
         # Collect all unique group IDs across all assignments
         $groupIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)

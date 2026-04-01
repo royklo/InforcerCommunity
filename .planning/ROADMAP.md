@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md — Settings Catalog loading, resolution, and settingInstance traversal (SCAT-01..06)
-- [ ] 01-02-PLAN.md — Data collection from existing cmdlets and DocModel normalization (DATA-01..04, NORM-01..06)
+- [x] 01-02-PLAN.md — Data collection from existing cmdlets and DocModel normalization (DATA-01..04, NORM-01..06)
 
 ### Phase 2: Output Format Renderers
 **Goal**: All four output formats are produced as pure functions that accept $DocModel and return formatted output, with no API calls or file I/O inside the renderers

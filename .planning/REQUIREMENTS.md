@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Data Collection
 
-- [ ] **DATA-01**: Cmdlet collects tenant info via Get-InforcerTenant -OutputType JsonObject
-- [ ] **DATA-02**: Cmdlet collects baseline data via Get-InforcerBaseline -OutputType JsonObject
-- [ ] **DATA-03**: Cmdlet collects all policies via Get-InforcerTenantPolicies -OutputType JsonObject
-- [ ] **DATA-04**: Data collection script provided for development/testing that captures raw JSON from all 3 cmdlets
+- [x] **DATA-01**: Cmdlet collects tenant info via Get-InforcerTenant -OutputType JsonObject
+- [x] **DATA-02**: Cmdlet collects baseline data via Get-InforcerBaseline -OutputType JsonObject
+- [x] **DATA-03**: Cmdlet collects all policies via Get-InforcerTenantPolicies -OutputType JsonObject
+- [x] **DATA-04**: Data collection script provided for development/testing that captures raw JSON from all 3 cmdlets
 
 ### Settings Catalog Resolution
 
@@ -25,12 +25,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Data Normalization
 
-- [ ] **NORM-01**: Policies are grouped by M365 product area (Intune, Conditional Access, etc.) using API product/category fields
-- [ ] **NORM-02**: Two-level hierarchy: Product → Category → Policies
-- [ ] **NORM-03**: Per-policy data normalized into sections: Basics, Settings, Assignments
-- [ ] **NORM-04**: Basics section includes: Name, Description, Profile type, Platform, Created/Modified dates, Scope tags
-- [ ] **NORM-05**: Null/missing displayName handled via fallback chain (displayName → name → friendlyName → "Policy {id}")
-- [ ] **NORM-06**: Normalized data model ($DocModel) is format-agnostic — renderers receive only the model, no API calls
+- [x] **NORM-01**: Policies are grouped by M365 product area (Intune, Conditional Access, etc.) using API product/category fields
+- [x] **NORM-02**: Two-level hierarchy: Product → Category → Policies
+- [x] **NORM-03**: Per-policy data normalized into sections: Basics, Settings, Assignments
+- [x] **NORM-04**: Basics section includes: Name, Description, Profile type, Platform, Created/Modified dates, Scope tags
+- [x] **NORM-05**: Null/missing displayName handled via fallback chain (displayName → name → friendlyName → "Policy {id}")
+- [x] **NORM-06**: Normalized data model ($DocModel) is format-agnostic — renderers receive only the model, no API calls
 
 ### HTML Output
 
@@ -110,22 +110,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | Phase 1 | Pending |
-| DATA-02 | Phase 1 | Pending |
-| DATA-03 | Phase 1 | Pending |
-| DATA-04 | Phase 1 | Pending |
+| DATA-01 | Phase 1 | Complete |
+| DATA-02 | Phase 1 | Complete |
+| DATA-03 | Phase 1 | Complete |
+| DATA-04 | Phase 1 | Complete |
 | SCAT-01 | Phase 1 | Complete |
 | SCAT-02 | Phase 1 | Complete |
 | SCAT-03 | Phase 1 | Complete |
 | SCAT-04 | Phase 1 | Complete |
 | SCAT-05 | Phase 1 | Complete |
 | SCAT-06 | Phase 1 | Complete |
-| NORM-01 | Phase 1 | Pending |
-| NORM-02 | Phase 1 | Pending |
-| NORM-03 | Phase 1 | Pending |
-| NORM-04 | Phase 1 | Pending |
-| NORM-05 | Phase 1 | Pending |
-| NORM-06 | Phase 1 | Pending |
+| NORM-01 | Phase 1 | Complete |
+| NORM-02 | Phase 1 | Complete |
+| NORM-03 | Phase 1 | Complete |
+| NORM-04 | Phase 1 | Complete |
+| NORM-05 | Phase 1 | Complete |
+| NORM-06 | Phase 1 | Complete |
 | HTML-01 | Phase 2 | Pending |
 | HTML-02 | Phase 2 | Pending |
 | HTML-03 | Phase 2 | Pending |

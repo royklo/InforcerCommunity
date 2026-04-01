@@ -31,6 +31,10 @@
     2. Sibling IntuneSettingsCatalogViewer repo at ../IntuneSettingsCatalogViewer/data/settings.json
     If not found in either location, Settings Catalog policies show raw settingDefinitionId values
     and a warning is emitted.
+.PARAMETER ResolveGroupNames
+    When specified, connects to Microsoft Graph to resolve assignment group ObjectIDs to their
+    display names. Requires the Microsoft.Graph.Groups module and an active Graph session
+    (Connect-MgGraph). If Graph is not connected, falls back to raw ObjectIDs with a warning.
 .OUTPUTS
     System.IO.FileInfo. Returns FileInfo objects for each exported file.
 .EXAMPLE
@@ -66,7 +70,10 @@ param(
     [string]$OutputPath = '.',
 
     [Parameter(Mandatory = $false)]
-    [string]$SettingsCatalogPath
+    [string]$SettingsCatalogPath,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$ResolveGroupNames
 )
 
 if (-not (Test-InforcerSession)) {
@@ -120,6 +127,69 @@ foreach ($product in $docModel.Products.Values) {
     foreach ($policies in $product.Categories.Values) { $policyCount += @($policies).Count }
 }
 Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
+
+# Resolve group ObjectIDs to display names via Microsoft Graph
+if ($ResolveGroupNames) {
+    Write-Host 'Resolving group names via Microsoft Graph...' -ForegroundColor Cyan
+
+    # Check Graph availability
+    $graphAvailable = $false
+    if (Get-Module -ListAvailable -Name 'Microsoft.Graph.Groups' -ErrorAction SilentlyContinue) {
+        try {
+            $ctx = Get-MgContext -ErrorAction Stop
+            if ($null -ne $ctx) { $graphAvailable = $true }
+        } catch {
+            # Not connected
+        }
+    }
+
+    if (-not $graphAvailable) {
+        Write-Warning 'Microsoft Graph not available. Install Microsoft.Graph.Groups and run Connect-MgGraph first. Falling back to raw ObjectIDs.'
+    } else {
+        # Collect all unique group IDs across all assignments
+        $groupIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($product in $docModel.Products.Values) {
+            foreach ($policies in $product.Categories.Values) {
+                foreach ($policy in @($policies)) {
+                    foreach ($assignment in @($policy.Assignments)) {
+                        $gid = $assignment.Group
+                        if (-not [string]::IsNullOrWhiteSpace($gid) -and $gid -match '^[0-9a-f]{8}-') {
+                            [void]$groupIds.Add($gid)
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($groupIds.Count -gt 0) {
+            Write-Host "  Resolving $($groupIds.Count) unique group IDs..." -ForegroundColor Gray
+            $groupNameMap = @{}
+            foreach ($gid in $groupIds) {
+                try {
+                    $group = Get-MgGroup -GroupId $gid -Property 'displayName' -ErrorAction Stop
+                    $groupNameMap[$gid] = $group.DisplayName
+                } catch {
+                    $groupNameMap[$gid] = $gid  # Keep raw ID on failure
+                }
+            }
+
+            # Replace group IDs in assignments with display names
+            foreach ($product in $docModel.Products.Values) {
+                foreach ($policies in $product.Categories.Values) {
+                    foreach ($policy in @($policies)) {
+                        foreach ($assignment in @($policy.Assignments)) {
+                            $gid = $assignment.Group
+                            if ($groupNameMap.ContainsKey($gid)) {
+                                $assignment.Group = $groupNameMap[$gid]
+                            }
+                        }
+                    }
+                }
+            }
+            Write-Host "  Resolved $($groupNameMap.Count) group names" -ForegroundColor Gray
+        }
+    }
+}
 
 # Render each requested format and write to disk
 $extensionMap = @{ Html = 'html'; Markdown = 'md'; Json = 'json'; Csv = 'csv' }

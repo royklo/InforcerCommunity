@@ -32,9 +32,10 @@
     If not found in either location, Settings Catalog policies show raw settingDefinitionId values
     and a warning is emitted.
 .PARAMETER ResolveGroupNames
-    When specified, connects to Microsoft Graph to resolve assignment group ObjectIDs to their
-    display names. Requires the Microsoft.Graph.Groups module and an active Graph session
-    (Connect-MgGraph). If Graph is not connected, falls back to raw ObjectIDs with a warning.
+    When specified, uses Invoke-MgGraphRequest to resolve assignment ObjectIDs to their display
+    names via the /directoryObjects endpoint. Requires the Microsoft.Graph.Authentication module
+    and an active Graph session (Connect-MgGraph). If Graph is not connected, falls back to raw
+    ObjectIDs with a warning.
 .OUTPUTS
     System.IO.FileInfo. Returns FileInfo objects for each exported file.
 .EXAMPLE
@@ -132,9 +133,9 @@ Write-Host "  Found $policyCount policies across $($docModel.Products.Count) pro
 if ($ResolveGroupNames) {
     Write-Host 'Resolving group names via Microsoft Graph...' -ForegroundColor Cyan
 
-    # Check Graph availability
+    # Check Graph availability (only requires Microsoft.Graph.Authentication)
     $graphAvailable = $false
-    if (Get-Module -ListAvailable -Name 'Microsoft.Graph.Groups' -ErrorAction SilentlyContinue) {
+    if (Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication' -ErrorAction SilentlyContinue) {
         try {
             $ctx = Get-MgContext -ErrorAction Stop
             if ($null -ne $ctx) { $graphAvailable = $true }
@@ -144,7 +145,7 @@ if ($ResolveGroupNames) {
     }
 
     if (-not $graphAvailable) {
-        Write-Warning 'Microsoft Graph not available. Install Microsoft.Graph.Groups and run Connect-MgGraph first. Falling back to raw ObjectIDs.'
+        Write-Warning 'Microsoft Graph not available. Install Microsoft.Graph.Authentication and run Connect-MgGraph first. Falling back to raw ObjectIDs.'
     } else {
         # Collect all unique group IDs across all assignments
         $groupIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -166,8 +167,8 @@ if ($ResolveGroupNames) {
             $groupNameMap = @{}
             foreach ($gid in $groupIds) {
                 try {
-                    $group = Get-MgGroup -GroupId $gid -Property 'displayName' -ErrorAction Stop
-                    $groupNameMap[$gid] = $group.DisplayName
+                    $response = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/directoryObjects/$gid" -ErrorAction Stop
+                    $groupNameMap[$gid] = $response.displayName
                 } catch {
                     $groupNameMap[$gid] = $gid  # Keep raw ID on failure
                 }

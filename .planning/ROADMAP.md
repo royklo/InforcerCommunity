@@ -28,7 +28,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. An unknown settingDefinitionID produces a warning but does not halt execution — the raw ID appears in the output
   4. The settings.json file (62.5 MB) is loaded only once per session; a second invocation does not reload it
   5. Policies in $DocModel are organized as Product -> Category -> Policies, and each policy has Basics, Settings, and Assignments sections populated
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Settings Catalog loading, resolution, and settingInstance traversal (SCAT-01..06)
+- [ ] 01-02-PLAN.md — Data collection from existing cmdlets and DocModel normalization (DATA-01..04, NORM-01..06)
 
 ### Phase 2: Output Format Renderers
 **Goal**: All four output formats are produced as pure functions that accept $DocModel and return formatted output, with no API calls or file I/O inside the renderers
@@ -61,6 +65,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Pipeline and Normalization | 0/TBD | Not started | - |
+| 1. Data Pipeline and Normalization | 0/2 | Planning complete | - |
 | 2. Output Format Renderers | 0/TBD | Not started | - |
 | 3. Public Cmdlet and Module Integration | 0/TBD | Not started | - |

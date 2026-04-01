@@ -360,7 +360,13 @@ td {
     border-bottom: 1px solid var(--border-subtle);
     vertical-align: top;
     color: var(--text);
+    word-break: break-word;
+    max-width: 500px;
 }
+.long-val { display: block; max-height: 3.3em; overflow: hidden; position: relative; cursor: pointer; transition: max-height 300ms ease; }
+.long-val.expanded { max-height: none; }
+.long-val::after { content: 'Show more...'; display: block; font-size: 0.75rem; color: var(--accent); font-weight: 500; margin-top: 0.125rem; }
+.long-val.expanded::after { content: 'Show less'; }
 tr:last-child td { border-bottom: none; }
 tr:nth-child(even) td { background: var(--row-alt); }
 tr:hover td { background: var(--accent-soft); }
@@ -488,7 +494,12 @@ tr:hover td { background: var(--accent-soft); }
         if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrEmpty($Value))) {
             return '<span class="muted empty-val">&mdash;</span>'
         }
-        return [System.Net.WebUtility]::HtmlEncode($Value.ToString())
+        $str = [System.Net.WebUtility]::HtmlEncode($Value.ToString())
+        # Wrap long values (>200 chars) in a collapsible span
+        if ($str.Length -gt 200) {
+            return "<span class=`"long-val`" onclick=`"this.classList.toggle('expanded')`">$str</span>"
+        }
+        return $str
     }
 
     # -------------------------------------------------------------------------

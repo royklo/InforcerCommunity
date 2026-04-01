@@ -64,14 +64,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Module Integration
 
-- [ ] **MOD-01**: Export-InforcerDocumentation cmdlet follows module conventions (parameter order, session auth, error handling)
-- [ ] **MOD-02**: Cmdlet accepts -TenantId parameter (numeric, GUID, or name) consistent with other cmdlets
-- [ ] **MOD-03**: Cmdlet accepts -Format parameter supporting: Html, Markdown, Json, Csv (multiple allowed)
-- [ ] **MOD-04**: Cmdlet accepts -OutputPath parameter for file destination
-- [ ] **MOD-05**: Cmdlet accepts -SettingsCatalogPath parameter to specify settings.json location (with auto-discover default)
-- [ ] **MOD-06**: Module manifest (.psd1) updated with new cmdlet export
+- [x] **MOD-01**: Export-InforcerDocumentation cmdlet follows module conventions (parameter order, session auth, error handling)
+- [x] **MOD-02**: Cmdlet accepts -TenantId parameter (numeric, GUID, or name) consistent with other cmdlets
+- [x] **MOD-03**: Cmdlet accepts -Format parameter supporting: Html, Markdown, Json, Csv (multiple allowed)
+- [x] **MOD-04**: Cmdlet accepts -OutputPath parameter for file destination
+- [x] **MOD-05**: Cmdlet accepts -SettingsCatalogPath parameter to specify settings.json location (with auto-discover default)
+- [x] **MOD-06**: Module manifest (.psd1) updated with new cmdlet export
 - [ ] **MOD-07**: Consistency tests updated for new cmdlet
-- [ ] **MOD-08**: Cmdlet help documentation with examples
+- [x] **MOD-08**: Cmdlet help documentation with examples
 
 ## v2 Requirements
 
@@ -144,14 +144,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | JSON-02 | Phase 2 | Complete |
 | CSV-01 | Phase 2 | Complete |
 | CSV-02 | Phase 2 | Complete |
-| MOD-01 | Phase 3 | Pending |
-| MOD-02 | Phase 3 | Pending |
-| MOD-03 | Phase 3 | Pending |
-| MOD-04 | Phase 3 | Pending |
-| MOD-05 | Phase 3 | Pending |
-| MOD-06 | Phase 3 | Pending |
+| MOD-01 | Phase 3 | Complete |
+| MOD-02 | Phase 3 | Complete |
+| MOD-03 | Phase 3 | Complete |
+| MOD-04 | Phase 3 | Complete |
+| MOD-05 | Phase 3 | Complete |
+| MOD-06 | Phase 3 | Complete |
 | MOD-07 | Phase 3 | Pending |
-| MOD-08 | Phase 3 | Pending |
+| MOD-08 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 40 total

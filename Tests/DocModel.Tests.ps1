@@ -20,34 +20,46 @@ BeforeAll {
     $manifestPath = [System.IO.Path]::GetFullPath($manifestPath)
     Import-Module $manifestPath -Force -ErrorAction Stop
 
-    if ($script:IntegrationDataAvailable) {
-        $tenantPoliciesPath = [System.IO.Path]::GetFullPath((Join-Path $here '..' 'scripts' 'sample-data' 'tenant-policies.json'))
-        $tenantsPath        = [System.IO.Path]::GetFullPath((Join-Path $here '..' 'scripts' 'sample-data' 'tenants.json'))
-        $baselinesPath      = [System.IO.Path]::GetFullPath((Join-Path $here '..' 'scripts' 'sample-data' 'baselines.json'))
-        $catalogPath        = [System.IO.Path]::GetFullPath((Join-Path $here '..' 'module' 'data' 'settings.json'))
+    # Re-evaluate data availability inside BeforeAll (script-scope vars from discovery not accessible here).
+    $tenantPoliciesPath = [System.IO.Path]::GetFullPath((Join-Path $here '..' 'scripts' 'sample-data' 'tenant-policies.json'))
+    $tenantsPath        = [System.IO.Path]::GetFullPath((Join-Path $here '..' 'scripts' 'sample-data' 'tenants.json'))
+    $baselinesPath      = [System.IO.Path]::GetFullPath((Join-Path $here '..' 'scripts' 'sample-data' 'baselines.json'))
+    $catalogPath        = [System.IO.Path]::GetFullPath((Join-Path $here '..' 'module' 'data' 'settings.json'))
 
+    $integrationAvailable = (Test-Path $tenantPoliciesPath) -and (Test-Path $tenantsPath) -and (Test-Path $baselinesPath)
+    $catalogAvailable     = Test-Path $catalogPath
+
+    if ($integrationAvailable) {
         $script:TenantPolicies = Get-Content $tenantPoliciesPath -Raw | ConvertFrom-Json -Depth 100
         $script:Tenants        = Get-Content $tenantsPath -Raw        | ConvertFrom-Json -Depth 100
         $script:Baselines      = Get-Content $baselinesPath -Raw      | ConvertFrom-Json -Depth 100
 
         # Load settings catalog inside module scope so $script:InforcerSettingsCatalog is populated
-        if ($script:SettingsCatalogAvailable) {
+        if ($catalogAvailable) {
             InModuleScope InforcerCommunity -Parameters @{ CatalogPath = $catalogPath } {
                 Import-InforcerSettingsCatalog -Path $CatalogPath -Force
             }
         }
 
-        $script:DocData = @{
-            Tenant      = $script:Tenants[0]
-            Baselines   = $script:Baselines
-            Policies    = $script:TenantPolicies
-            TenantId    = $script:Tenants[0].clientTenantId
-            CollectedAt = [datetime]::UtcNow
-        }
+        # Build DocData and run ConvertTo-InforcerDocModel by passing file paths into the module
+        # scope so all data loading and transformation happens within the same PS session scope.
+        $script:DocModel = InModuleScope InforcerCommunity -Parameters @{
+            TenantPoliciesPath = $tenantPoliciesPath
+            TenantsPath        = $tenantsPath
+            BaselinesPath      = $baselinesPath
+        } {
+            $tenantPolicies = Get-Content $TenantPoliciesPath -Raw | ConvertFrom-Json -Depth 100
+            $tenants        = Get-Content $TenantsPath -Raw        | ConvertFrom-Json -Depth 100
+            $baselines      = Get-Content $BaselinesPath -Raw      | ConvertFrom-Json -Depth 100
 
-        # Generate the DocModel (private function -- use InModuleScope)
-        $script:DocModel = InModuleScope InforcerCommunity -Parameters @{ DocData = $script:DocData } {
-            ConvertTo-InforcerDocModel -DocData $DocData
+            $docData = @{
+                Tenant      = $tenants[0]
+                Baselines   = $baselines
+                Policies    = $tenantPolicies
+                TenantId    = $tenants[0].clientTenantId
+                CollectedAt = [datetime]::UtcNow
+            }
+            ConvertTo-InforcerDocModel -DocData $docData
         }
     }
 }

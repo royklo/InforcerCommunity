@@ -36,7 +36,10 @@ PesterResult*.xml
 TestResults/
 
 # Claude
-.claude/
+.claude/*
+claude.md
+.planning
+.planning/*
 
 # Cursor
 .cursor/
@@ -56,3 +59,4 @@ TestResults/
 
 # docs/superpowers
 /docs/superpowers/*
+

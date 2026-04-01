@@ -74,7 +74,10 @@ function ConvertTo-InforcerDocModel {
         [hashtable]$GroupNameMap,
 
         [Parameter()]
-        [hashtable]$FilterMap
+        [hashtable]$FilterMap,
+
+        [Parameter()]
+        [hashtable]$ScopeTagMap
     )
 
     $tenant   = $DocData.Tenant
@@ -138,10 +141,18 @@ function ConvertTo-InforcerDocModel {
             Modified    = if ($policy.policyData -and $policy.policyData.lastModifiedDateTime) { $policy.policyData.lastModifiedDateTime } else { '' }
             ScopeTags   = ''
         }
-        # Scope tags normalization (per D-15)
+        # Scope tags normalization (per D-15) -- resolve IDs to names when ScopeTagMap available
         $scopeTags = $policy.policyData.roleScopeTagIds
         if ($null -ne $scopeTags -and $scopeTags.Count -gt 0) {
-            $basics.ScopeTags = ($scopeTags -join ', ')
+            if ($ScopeTagMap -and $ScopeTagMap.Count -gt 0) {
+                $resolvedTags = @($scopeTags | ForEach-Object {
+                    $tagId = $_.ToString()
+                    if ($ScopeTagMap.ContainsKey($tagId)) { $ScopeTagMap[$tagId] } else { $tagId }
+                })
+                $basics.ScopeTags = ($resolvedTags -join ', ')
+            } else {
+                $basics.ScopeTags = ($scopeTags -join ', ')
+            }
         }
 
         # Settings section: route by policyTypeId (per D-06, D-07, SCAT-01..06)

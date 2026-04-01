@@ -356,13 +356,13 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
     }
 
     It 'contains TOC with details elements' {
-        $script:HtmlOutput | Should -Match '<nav'
+        $script:HtmlOutput | Should -Match 'toc-section'
         $script:HtmlOutput | Should -Match '<details'
     }
 
-    It 'TOC is open by default, product sections are collapsed by default' {
-        # TOC has open attribute
-        $script:HtmlOutput | Should -Match '<details open>'
+    It 'TOC has collapsible product entries, content product sections are collapsed by default' {
+        # TOC contains per-product details elements
+        $script:HtmlOutput | Should -Match 'toc-l1'
         # Product sections do not have open attribute
         $productOpen = ([regex]::Matches($script:HtmlOutput, '<details class="product-section"[^>]*open')).Count
         $productOpen | Should -Be 0

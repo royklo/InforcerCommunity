@@ -170,13 +170,23 @@ if ($FetchGraphData) {
             foreach ($f in $rawFilters) { $filterMap[$f.id] = $f }
             Write-Host "  Loaded $($filterMap.Count) assignment filters" -ForegroundColor Gray
         }
+
+        # Fetch scope tags from Intune and build ID -> displayName map
+        Write-Host '  Fetching scope tags...' -ForegroundColor Gray
+        $rawScopeTags = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/beta/deviceManagement/roleScopeTags'
+        $script:InforcerScopeTagMap = @{}
+        if ($rawScopeTags) {
+            foreach ($st in $rawScopeTags) { $script:InforcerScopeTagMap[$st.id.ToString()] = $st.displayName }
+            Write-Host "  Loaded $($script:InforcerScopeTagMap.Count) scope tags" -ForegroundColor Gray
+        }
     }
 }
 
 Write-Host 'Building documentation model...' -ForegroundColor Cyan
 $docModelParams = @{ DocData = $docData }
-if ($groupNameMap) { $docModelParams['GroupNameMap'] = $groupNameMap }
-if ($filterMap)    { $docModelParams['FilterMap'] = $filterMap }
+if ($groupNameMap)                   { $docModelParams['GroupNameMap'] = $groupNameMap }
+if ($filterMap)                      { $docModelParams['FilterMap'] = $filterMap }
+if ($script:InforcerScopeTagMap)     { $docModelParams['ScopeTagMap'] = $script:InforcerScopeTagMap }
 $docModel = ConvertTo-InforcerDocModel @docModelParams
 if ($null -eq $docModel) { return }
 

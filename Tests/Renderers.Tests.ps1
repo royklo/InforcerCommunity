@@ -245,3 +245,201 @@ Describe 'ConvertTo-InforcerDocCsv' -Tag 'Csv' {
         $result | Should -Match '"Defender Policy"'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerHtml
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
+
+    BeforeAll {
+        # HTML-specific DocModel with fixed date for timestamp assertions
+        $script:HtmlTestDocModel = @{
+            TenantName   = 'Test Tenant'
+            TenantId     = 99999
+            GeneratedAt  = [datetime]::new(2026, 1, 15, 10, 30, 0, [System.DateTimeKind]::Utc)
+            BaselineName = 'Test Baseline'
+            Products     = [ordered]@{
+                'Intune' = @{
+                    Categories = [ordered]@{
+                        'Compliance' = [System.Collections.Generic.List[object]]@(
+                            @{
+                                Basics = @{
+                                    Name        = 'Windows Compliance Policy'
+                                    Description = 'Requires BitLocker'
+                                    ProfileType = 'deviceCompliancePolicy'
+                                    Platform    = 'windows10AndLater'
+                                    Created     = '2025-06-01T00:00:00Z'
+                                    Modified    = '2025-12-01T00:00:00Z'
+                                    ScopeTags   = 'Production'
+                                }
+                                Settings    = @(
+                                    [PSCustomObject]@{ Name = 'BitLocker Required'; Value = 'True';  Indent = 0; IsConfigured = $true }
+                                    [PSCustomObject]@{ Name = 'Storage Encryption';  Value = 'True';  Indent = 1; IsConfigured = $true }
+                                    [PSCustomObject]@{ Name = 'Firewall Required';   Value = $null;   Indent = 0; IsConfigured = $true }
+                                )
+                                Assignments = @(
+                                    [PSCustomObject]@{ Group = 'aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb'; Filter = ''; FilterMode = 'include'; Type = 'groupAssignmentTarget' }
+                                )
+                            }
+                        )
+                        'Configuration' = [System.Collections.Generic.List[object]]@(
+                            @{
+                                Basics = @{
+                                    Name        = 'Windows Defender Config'
+                                    Description = 'AV settings'
+                                    ProfileType = 'deviceConfiguration'
+                                    Platform    = 'windows10AndLater'
+                                    Created     = '2025-05-01T00:00:00Z'
+                                    Modified    = '2025-10-01T00:00:00Z'
+                                    ScopeTags   = ''
+                                }
+                                Settings    = @(
+                                    [PSCustomObject]@{ Name = 'Real-time Protection'; Value = '';     Indent = 0; IsConfigured = $true }
+                                    [PSCustomObject]@{ Name = 'Cloud Protection';     Value = 'High'; Indent = 0; IsConfigured = $true }
+                                    [PSCustomObject]@{ Name = 'Block at First Sight'; Value = 'True'; Indent = 1; IsConfigured = $true }
+                                )
+                                Assignments = @(
+                                    [PSCustomObject]@{ Group = 'cccccccc-1111-2222-3333-dddddddddddd'; Filter = 'filter-id-1'; FilterMode = 'include'; Type = 'groupAssignmentTarget' }
+                                )
+                            }
+                        )
+                    }
+                }
+                'Entra' = @{
+                    Categories = [ordered]@{
+                        'Conditional Access / Policies' = [System.Collections.Generic.List[object]]@(
+                            @{
+                                Basics = @{
+                                    Name        = 'Block Legacy Auth'
+                                    Description = 'Blocks legacy authentication protocols'
+                                    ProfileType = 'conditionalAccessPolicy'
+                                    Platform    = ''
+                                    Created     = '2025-01-01T00:00:00Z'
+                                    Modified    = '2025-09-01T00:00:00Z'
+                                    ScopeTags   = ''
+                                }
+                                Settings    = @()
+                                Assignments = @(
+                                    [PSCustomObject]@{ Group = 'eeeeeeee-1111-2222-3333-ffffffffffff'; Filter = ''; FilterMode = ''; Type = 'allLicensedUsersAssignmentTarget' }
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        $script:HtmlOutput = InModuleScope InforcerCommunity -Parameters @{ DocModel = $script:HtmlTestDocModel } {
+            ConvertTo-InforcerHtml -DocModel $DocModel
+        }
+    }
+
+    It 'produces valid HTML document structure' {
+        $script:HtmlOutput | Should -Match '(?s)^<!DOCTYPE html>'
+        $script:HtmlOutput | Should -Match '</html>\s*$'
+    }
+
+    It 'contains embedded CSS style block' {
+        $script:HtmlOutput | Should -Match '<style>'
+        $script:HtmlOutput | Should -Match '</style>'
+    }
+
+    It 'has no external resource references' {
+        $script:HtmlOutput | Should -Not -Match 'href="http'
+        $script:HtmlOutput | Should -Not -Match 'src="http'
+    }
+
+    It 'has no JavaScript' {
+        $script:HtmlOutput | Should -Not -Match '<script'
+    }
+
+    It 'contains TOC with details elements' {
+        $script:HtmlOutput | Should -Match '<nav'
+        $script:HtmlOutput | Should -Match '<details'
+    }
+
+    It 'TOC is collapsed by default - no open attributes on any details element' {
+        $allDetails  = ([regex]::Matches($script:HtmlOutput, '<details')).Count
+        $openDetails = ([regex]::Matches($script:HtmlOutput, '<details[^>]*open')).Count
+        $allDetails  | Should -BeGreaterThan 0
+        $openDetails | Should -Be 0
+    }
+
+    It 'contains policy details/summary elements with policy-section class' {
+        $script:HtmlOutput | Should -Match 'class="policy-section"'
+    }
+
+    It 'shows setting count badge in policy summary' {
+        $script:HtmlOutput | Should -Match '<span class="badge">\d+ settings</span>'
+    }
+
+    It 'renders basics table with Property/Value headers' {
+        $script:HtmlOutput | Should -Match '<th>Property</th>'
+        $script:HtmlOutput | Should -Match '<th>Value</th>'
+    }
+
+    It 'renders settings table with Setting/Value headers' {
+        $script:HtmlOutput | Should -Match '<th>Setting</th>'
+    }
+
+    It 'applies padding-left for settings with Indent greater than 0' {
+        # Indent=1 should produce padding-left: 1.5rem
+        $script:HtmlOutput | Should -Match 'padding-left:\s*1\.5rem'
+    }
+
+    It 'uses em dash for null or empty setting values' {
+        $script:HtmlOutput | Should -Match '(&mdash;|class="muted")'
+    }
+
+    It 'contains prefers-color-scheme media query in CSS' {
+        $script:HtmlOutput | Should -Match 'prefers-color-scheme'
+    }
+
+    It 'contains system font stack in CSS' {
+        $script:HtmlOutput | Should -Match '-apple-system'
+    }
+
+    It 'shows tenant name in h1 header element' {
+        $script:HtmlOutput | Should -Match '<h1[^>]*>.*Test Tenant.*</h1>'
+    }
+
+    It 'shows generation timestamp in output' {
+        $script:HtmlOutput | Should -Match '2026-01-15'
+    }
+
+    It 'shows tenant info in footer section' {
+        $script:HtmlOutput | Should -Match 'class="footer"'
+        $script:HtmlOutput | Should -Match 'Test Tenant'
+    }
+
+    It 'renders assignments table when assignments exist' {
+        $script:HtmlOutput | Should -Match '<th>Group</th>'
+    }
+
+    It 'uses HtmlEncode for XSS prevention' {
+        $fnDef = InModuleScope InforcerCommunity {
+            (Get-Command ConvertTo-InforcerHtml -ErrorAction Stop).ScriptBlock.ToString()
+        }
+        $fnDef | Should -Match 'HtmlEncode'
+    }
+
+    It 'returns a non-empty string longer than 1000 characters' {
+        $script:HtmlOutput | Should -Not -BeNullOrEmpty
+        $script:HtmlOutput.Length | Should -BeGreaterThan 1000
+    }
+
+    It 'handles DocModel with no products without throwing' {
+        $emptyModel = @{
+            TenantName   = 'Empty Tenant'
+            TenantId     = 0
+            GeneratedAt  = [datetime]::UtcNow
+            BaselineName = ''
+            Products     = [ordered]@{}
+        }
+        $result = InModuleScope InforcerCommunity -Parameters @{ M = $emptyModel } {
+            ConvertTo-InforcerHtml -DocModel $M
+        }
+        $result | Should -Match '<!DOCTYPE html>'
+        $result | Should -Match 'Empty Tenant'
+    }
+}

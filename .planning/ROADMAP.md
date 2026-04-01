@@ -61,7 +61,11 @@ Plans:
   2. The cmdlet follows the module parameter order convention (Format -> TenantId -> Tag -> OutputType) and passes Invoke-Pester ./Tests/Consistency.Tests.ps1 with no failures
   3. The -SettingsCatalogPath parameter auto-discovers the sibling IntuneSettingsCatalogViewer repo when not specified; when the file is absent, the cmdlet degrades gracefully rather than throwing
   4. The module manifest (.psd1) exports Export-InforcerDocumentation and Get-Module InforcerCommunity lists it in ExportedCommands
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Create Export-InforcerDocumentation cmdlet and update module manifest (MOD-01..06, MOD-08)
+- [ ] 03-02-PLAN.md — Update consistency tests for new cmdlet (MOD-07)
 
 ## Progress
 
@@ -72,4 +76,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. Data Pipeline and Normalization | 2/2 | Complete |  |
 | 2. Output Format Renderers | 3/3 | Complete   | 2026-04-01 |
-| 3. Public Cmdlet and Module Integration | 0/TBD | Not started | - |
+| 3. Public Cmdlet and Module Integration | 0/2 | Not started | - |

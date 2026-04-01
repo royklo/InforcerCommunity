@@ -1,5 +1,6 @@
 {
-  "generatedAt": "2026-03-31T06:30:51Z",
+  "generatedAt": "2026-04-01T06:36:44Z",
+  "generatedFrom": "https://api-uk.uat.inforcerdev.net/api",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -7,7 +8,7 @@
         "tenantFriendlyName": "string",
         "tenantDnsName": "string",
         "msTenantId": "string",
-        "secureScore": "integer",
+        "secureScore": "number",
         "isBaseline": "boolean",
         "lastBackupTimestamp": "datetime",
         "recentChanges": "integer",

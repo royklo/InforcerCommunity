@@ -132,12 +132,14 @@ Write-Host "  Found $policyCount policies across $($docModel.Products.Count) pro
 
 # Enrich documentation with live Microsoft Graph data
 if ($FetchGraphData) {
+    # Always do a fresh Graph sign-in to ensure the session is current
     Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
     $graphCtx = Connect-InforcerGraph -RequiredScopes @('Directory.Read.All')
 
     if (-not $graphCtx) {
         Write-Warning 'Microsoft Graph connection failed. Falling back to raw ObjectIDs.'
     } else {
+        Write-Host "  Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
         # Collect all unique ObjectIDs across all assignments
         $objectIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($product in $docModel.Products.Values) {

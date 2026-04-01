@@ -1,11 +1,14 @@
 function Connect-InforcerGraph {
     <#
     .SYNOPSIS
-        Ensures Microsoft Graph is connected with required scopes for documentation enrichment.
+        Connects to Microsoft Graph for documentation enrichment (group name resolution etc.).
     .DESCRIPTION
-        Checks for an existing Graph session and validates scopes. If missing scopes are detected,
-        reconnects interactively. If no session exists, launches interactive sign-in.
-        Auto-installs Microsoft.Graph.Authentication if not present.
+        Always performs a fresh interactive sign-in to Microsoft Graph. This ensures the session
+        is current each time the module is used. Auto-installs Microsoft.Graph.Authentication
+        if not present.
+
+        The Graph session is stored in $script:InforcerGraphConnected so Disconnect-Inforcer
+        knows to also disconnect Graph.
 
         Based on the Connect-ToMgGraph pattern from RKSolutions-Module.
     #>
@@ -26,34 +29,18 @@ function Connect-InforcerGraph {
         Import-Module -Name 'Microsoft.Graph.Authentication' -Force -ErrorAction Stop
     }
 
-    $contextInfo = Get-MgContext -ErrorAction SilentlyContinue
-    $reconnect = $false
-
-    if ($contextInfo) {
-        $currentScopes = $contextInfo.Scopes
-        $missingScopes = $RequiredScopes | Where-Object { $_ -notin $currentScopes }
-        if ($missingScopes) {
-            Write-Host "  Missing required scopes ($($missingScopes -join ', ')); reconnecting..." -ForegroundColor Yellow
-            $reconnect = $true
-        } else {
-            Write-Verbose 'Already connected to Graph with required scopes.'
-            return $contextInfo
+    # Always do a fresh sign-in so the session is current
+    try {
+        Connect-MgGraph -Scopes $RequiredScopes -NoWelcome -ErrorAction Stop
+        $newContext = Get-MgContext
+        if ($newContext) {
+            $script:InforcerGraphConnected = $true
+            return $newContext
         }
-    } else {
-        $reconnect = $true
+        throw 'Connection attempt completed but unable to confirm connection'
+    } catch {
+        Write-Error "Error connecting to Microsoft Graph: $_"
+        $script:InforcerGraphConnected = $false
+        return $null
     }
-
-    if ($reconnect) {
-        try {
-            Connect-MgGraph -Scopes $RequiredScopes -NoWelcome -ErrorAction Stop
-            $newContext = Get-MgContext
-            if ($newContext) { return $newContext }
-            throw 'Connection attempt completed but unable to confirm connection'
-        } catch {
-            Write-Error "Error connecting to Microsoft Graph: $_"
-            return $null
-        }
-    }
-
-    return $contextInfo
 }

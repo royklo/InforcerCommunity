@@ -19,6 +19,13 @@
 .EXAMPLE
     Connect-Inforcer -ApiKey $key -BaseUrl "https://api.example.com/api"
     Connects using a custom base URL (use your actual API base URL in place of the example).
+.EXAMPLE
+    Connect-Inforcer -ApiKey "your-api-key" -Region uk -FetchGraphData
+    Connects to Inforcer and also launches Microsoft Graph interactive sign-in for group name resolution.
+.PARAMETER FetchGraphData
+    Also connect to Microsoft Graph via interactive sign-in. This enables group name resolution
+    in Export-InforcerTenantDocumentation. Requires Microsoft.Graph.Authentication module
+    (auto-installed if missing).
 .OUTPUTS
     PSObject with Status, Region, BaseUrl, ConnectedAt.
 .LINK
@@ -43,7 +50,10 @@ param(
     [string]$Region = 'uk',
 
     [Parameter(Mandatory = $false)]
-    [string]$BaseUrl
+    [string]$BaseUrl,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$FetchGraphData
 )
 
 $rawApiKey = $ApiKey
@@ -122,6 +132,15 @@ $script:InforcerSession = @{
 }
 
 Write-Verbose "Successfully connected to Inforcer API at $baseUrlValue"
+
+# Also connect to Microsoft Graph if requested
+if ($FetchGraphData) {
+    Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
+    $graphCtx = Connect-InforcerGraph -RequiredScopes @('Directory.Read.All')
+    if ($graphCtx) {
+        Write-Host "  Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
+    }
+}
 
 $out = [PSCustomObject]@{
     Status      = 'Connected'

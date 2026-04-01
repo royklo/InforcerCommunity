@@ -34,16 +34,16 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### HTML Output
 
-- [ ] **HTML-01**: Self-contained single HTML file with embedded CSS (no CDN dependencies, no external files)
-- [ ] **HTML-02**: Collapsible table of contents collapsed by default, showing products and subcategories
-- [ ] **HTML-03**: Per-policy sections with Basics/Settings/Assignments tables
-- [ ] **HTML-04**: Settings displayed as clear Name/Value pairs with hierarchical indentation for child settings
-- [ ] **HTML-05**: Collapsible policy sections using HTML5 details/summary elements
-- [ ] **HTML-06**: Modern visual styling (clean typography, alternating row colors, visual hierarchy)
-- [ ] **HTML-07**: Generation timestamp and tenant name in header/footer
-- [ ] **HTML-08**: Dark/light mode support via CSS prefers-color-scheme
-- [ ] **HTML-09**: Per-policy setting count badge in collapsed header
-- [ ] **HTML-10**: HTML generation uses StringBuilder for performance (not string concatenation)
+- [x] **HTML-01**: Self-contained single HTML file with embedded CSS (no CDN dependencies, no external files)
+- [x] **HTML-02**: Collapsible table of contents collapsed by default, showing products and subcategories
+- [x] **HTML-03**: Per-policy sections with Basics/Settings/Assignments tables
+- [x] **HTML-04**: Settings displayed as clear Name/Value pairs with hierarchical indentation for child settings
+- [x] **HTML-05**: Collapsible policy sections using HTML5 details/summary elements
+- [x] **HTML-06**: Modern visual styling (clean typography, alternating row colors, visual hierarchy)
+- [x] **HTML-07**: Generation timestamp and tenant name in header/footer
+- [x] **HTML-08**: Dark/light mode support via CSS prefers-color-scheme
+- [x] **HTML-09**: Per-policy setting count badge in collapsed header
+- [x] **HTML-10**: HTML generation uses StringBuilder for performance (not string concatenation)
 
 ### Markdown Output
 
@@ -126,16 +126,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NORM-04 | Phase 1 | Complete |
 | NORM-05 | Phase 1 | Complete |
 | NORM-06 | Phase 1 | Complete |
-| HTML-01 | Phase 2 | Pending |
-| HTML-02 | Phase 2 | Pending |
-| HTML-03 | Phase 2 | Pending |
-| HTML-04 | Phase 2 | Pending |
-| HTML-05 | Phase 2 | Pending |
-| HTML-06 | Phase 2 | Pending |
-| HTML-07 | Phase 2 | Pending |
-| HTML-08 | Phase 2 | Pending |
-| HTML-09 | Phase 2 | Pending |
-| HTML-10 | Phase 2 | Pending |
+| HTML-01 | Phase 2 | Complete |
+| HTML-02 | Phase 2 | Complete |
+| HTML-03 | Phase 2 | Complete |
+| HTML-04 | Phase 2 | Complete |
+| HTML-05 | Phase 2 | Complete |
+| HTML-06 | Phase 2 | Complete |
+| HTML-07 | Phase 2 | Complete |
+| HTML-08 | Phase 2 | Complete |
+| HTML-09 | Phase 2 | Complete |
+| HTML-10 | Phase 2 | Complete |
 | MD-01 | Phase 2 | Complete |
 | MD-02 | Phase 2 | Complete |
 | MD-03 | Phase 2 | Complete |

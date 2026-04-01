@@ -13,7 +13,7 @@ Three phases deliver a collect-normalize-render pipeline. Phase 1 builds the pri
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Data Pipeline and Normalization** - Collect raw API data, resolve Settings Catalog IDs to friendly names, and build a validated format-agnostic $DocModel
-- [ ] **Phase 2: Output Format Renderers** - Build all four pure renderer functions (HTML, Markdown, JSON, CSV) that consume $DocModel and produce output
+- [x] **Phase 2: Output Format Renderers** - Build all four pure renderer functions (HTML, Markdown, JSON, CSV) that consume $DocModel and produce output (completed 2026-04-01)
 - [ ] **Phase 3: Public Cmdlet and Module Integration** - Wire the pipeline via Export-InforcerDocumentation, update the module manifest, add tests, and write help docs
 
 ## Phase Details
@@ -44,13 +44,13 @@ Plans:
   3. The Markdown output has an anchor TOC, per-policy tables with pipe characters properly escaped, and a generation timestamp header
   4. The JSON output is structured by product -> category -> policy -> sections at full depth (depth 100) with no truncated arrays
   5. The CSV output produces one row per setting value with Product, Category, PolicyName, SettingName, and Value columns — importable directly into Excel
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 **UI hint**: yes
 
 Plans:
 - [x] 02-01-PLAN.md — JSON and CSV renderers with test scaffold (JSON-01..02, CSV-01..02)
 - [x] 02-02-PLAN.md — Markdown renderer with TOC, pipe escaping, and indent markers (MD-01..04)
-- [ ] 02-03-PLAN.md — HTML renderer with embedded CSS, collapsible TOC, dark/light mode, setting badges (HTML-01..10)
+- [x] 02-03-PLAN.md — HTML renderer with embedded CSS, collapsible TOC, dark/light mode, setting badges (HTML-01..10)
 
 ### Phase 3: Public Cmdlet and Module Integration
 **Goal**: Export-InforcerDocumentation is a public cmdlet that passes all consistency tests, accepts all required parameters, and ships with help documentation and an updated module manifest
@@ -71,5 +71,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Data Pipeline and Normalization | 2/2 | Complete |  |
-| 2. Output Format Renderers | 2/3 | In Progress|  |
+| 2. Output Format Renderers | 3/3 | Complete   | 2026-04-01 |
 | 3. Public Cmdlet and Module Integration | 0/TBD | Not started | - |

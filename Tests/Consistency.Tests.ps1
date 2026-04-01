@@ -30,12 +30,12 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 10
+        $script:expectedCount = 11
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
-            'Get-InforcerUser'
+            'Get-InforcerUser', 'Export-InforcerTenantDocumentation'
         )
         $script:expectedParameters = @{
             'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl')
@@ -48,6 +48,7 @@ Describe 'Consistency contract' {
             'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'PageSize', 'MaxResults', 'Format', 'OutputType')
             'Get-InforcerSupportedEventType'    = @()
             'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'OutputType')
+            'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath')
         }
     }
 
@@ -168,6 +169,12 @@ Describe 'No-silent-failure contract' {
     It 'Get-InforcerUser produces an error when not connected' {
         $err = $null
         Get-InforcerUser -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Export-InforcerTenantDocumentation produces an error when not connected' {
+        $err = $null
+        Export-InforcerTenantDocumentation -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 }
@@ -316,6 +323,19 @@ Describe 'Parameter binding and behavior' {
             $result | Should -BeOfType [string]
         } else {
             $err | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    It 'Export-InforcerTenantDocumentation with key parameters binds and produces output or error' {
+        $out = @(); $err = @()
+        $out = Export-InforcerTenantDocumentation -Format Html -TenantId 1 -OutputPath $TestDrive `
+            -ErrorVariable err -ErrorAction SilentlyContinue
+        $err = @($err)
+        $hasOutput = $null -ne $out
+        $hasError = $err.Count -gt 0
+        ($hasOutput -or $hasError) | Should -BeTrue -Because 'Export-InforcerTenantDocumentation must not silently do nothing'
+        if ($hasError -and $err[0].ToString() -match 'Cannot bind|Parameter.*not found|Unknown parameter') {
+            Set-ItResult -Inconclusive -Because 'Parameter binding failed; check parameter names'
         }
     }
 }

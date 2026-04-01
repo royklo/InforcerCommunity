@@ -48,7 +48,7 @@ Describe 'Consistency contract' {
             'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'PageSize', 'MaxResults', 'Format', 'OutputType')
             'Get-InforcerSupportedEventType'    = @()
             'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'OutputType')
-            'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath', 'ResolveGroupNames')
+            'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath', 'FetchGraphData')
         }
     }
 

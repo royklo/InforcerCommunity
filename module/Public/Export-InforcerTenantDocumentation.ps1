@@ -31,10 +31,11 @@
     2. Sibling IntuneSettingsCatalogViewer repo at ../IntuneSettingsCatalogViewer/data/settings.json
     If not found in either location, Settings Catalog policies show raw settingDefinitionId values
     and a warning is emitted.
-.PARAMETER ResolveGroupNames
-    When specified, uses Invoke-MgGraphRequest to resolve assignment ObjectIDs to their display
-    names via the /directoryObjects endpoint. Requires the Microsoft.Graph.Authentication module
-    and an active Graph session (Connect-MgGraph). If Graph is not connected, falls back to raw
+.PARAMETER FetchGraphData
+    When specified, uses Invoke-MgGraphRequest to enrich the documentation with live data from
+    Microsoft Graph. Currently resolves assignment group/user ObjectIDs to their display names
+    via the /directoryObjects endpoint. Requires the Microsoft.Graph.Authentication module and
+    an active Graph session (Connect-MgGraph). If Graph is not connected, falls back to raw
     ObjectIDs with a warning.
 .OUTPUTS
     System.IO.FileInfo. Returns FileInfo objects for each exported file.
@@ -74,7 +75,7 @@ param(
     [string]$SettingsCatalogPath,
 
     [Parameter(Mandatory = $false)]
-    [switch]$ResolveGroupNames
+    [switch]$FetchGraphData
 )
 
 if (-not (Test-InforcerSession)) {
@@ -130,7 +131,7 @@ foreach ($product in $docModel.Products.Values) {
 Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
 
 # Resolve group ObjectIDs to display names via Microsoft Graph
-if ($ResolveGroupNames) {
+if ($FetchGraphData) {
     Write-Host 'Resolving group names via Microsoft Graph...' -ForegroundColor Cyan
 
     # Check Graph availability (only requires Microsoft.Graph.Authentication)

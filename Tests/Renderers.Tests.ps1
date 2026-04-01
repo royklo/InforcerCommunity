@@ -40,7 +40,7 @@ BeforeAll {
                                 [PSCustomObject]@{ Name = 'Startup PIN'; Value = ''; Indent = 1; IsConfigured = $false }
                             )
                             Assignments = @(
-                                [PSCustomObject]@{ Group = 'group-001'; Filter = ''; FilterMode = ''; Type = 'allDevicesAssignmentTarget' }
+                                [PSCustomObject]@{ Target = 'All Devices'; Type = 'All Devices'; Filter = ''; FilterMode = '' }
                             )
                         }
                         # Policy 2: 2 settings at Indent 0
@@ -278,7 +278,7 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
                                     [PSCustomObject]@{ Name = 'Firewall Required';   Value = $null;   Indent = 0; IsConfigured = $true }
                                 )
                                 Assignments = @(
-                                    [PSCustomObject]@{ Group = 'aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb'; Filter = ''; FilterMode = 'include'; Type = 'groupAssignmentTarget' }
+                                    [PSCustomObject]@{ Target = 'aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb'; Type = 'Group (Include)'; Filter = ''; FilterMode = 'Include' }
                                 )
                             }
                         )
@@ -299,7 +299,7 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
                                     [PSCustomObject]@{ Name = 'Block at First Sight'; Value = 'True'; Indent = 1; IsConfigured = $true }
                                 )
                                 Assignments = @(
-                                    [PSCustomObject]@{ Group = 'cccccccc-1111-2222-3333-dddddddddddd'; Filter = 'filter-id-1'; FilterMode = 'include'; Type = 'groupAssignmentTarget' }
+                                    [PSCustomObject]@{ Target = 'cccccccc-1111-2222-3333-dddddddddddd'; Type = 'Group (Include)'; Filter = 'filter-id-1'; FilterMode = 'Include' }
                                 )
                             }
                         )
@@ -320,7 +320,7 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
                                 }
                                 Settings    = @()
                                 Assignments = @(
-                                    [PSCustomObject]@{ Group = 'eeeeeeee-1111-2222-3333-ffffffffffff'; Filter = ''; FilterMode = ''; Type = 'allLicensedUsersAssignmentTarget' }
+                                    [PSCustomObject]@{ Target = 'All Users'; Type = 'All Users'; Filter = ''; FilterMode = '' }
                                 )
                             }
                         )
@@ -413,7 +413,7 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
     }
 
     It 'renders assignments table when assignments exist' {
-        $script:HtmlOutput | Should -Match '<th>Group</th>'
+        $script:HtmlOutput | Should -Match '<th>Target</th>'
     }
 
     It 'uses HtmlEncode for XSS prevention' {
@@ -453,7 +453,7 @@ Describe 'ConvertTo-InforcerMarkdown' -Tag 'Markdown' {
         $pipeValueSetting = [PSCustomObject]@{ Name = 'Pipe Setting'; Value = 'value|with|pipes'; Indent = 0; IsConfigured = $true }
         $nullValueSetting = [PSCustomObject]@{ Name = 'Null Setting';  Value = $null;            Indent = 0; IsConfigured = $false }
         $childSetting     = [PSCustomObject]@{ Name = 'Child Setting'; Value = 'child value';     Indent = 1; IsConfigured = $true }
-        $assignmentRow    = [PSCustomObject]@{ Group = 'group-guid-1234'; Filter = 'filter-guid-abcd'; FilterMode = 'include'; Type = 'groupAssignmentTarget' }
+        $assignmentRow    = [PSCustomObject]@{ Target = 'group-guid-1234'; Type = 'Group (Include)'; Filter = 'filter-guid-abcd'; FilterMode = 'Include' }
         $plainSetting     = [PSCustomObject]@{ Name = 'Plain Setting'; Value = 'plain value';     Indent = 0; IsConfigured = $true }
 
         $script:MdTestDocModel = @{
@@ -587,7 +587,7 @@ Describe 'ConvertTo-InforcerMarkdown' -Tag 'Markdown' {
     }
 
     It 'renders assignments table with correct headers' {
-        $script:MarkdownOutput | Should -Match '\| Group \| Filter \| Filter Mode \| Type \|'
+        $script:MarkdownOutput | Should -Match '\| Target \| Type \| Filter \| Filter Mode \|'
     }
 
     It 'skips settings table when policy has no settings' {

@@ -163,9 +163,9 @@ function ConvertTo-InforcerMarkdown {
                 if ($policy.Assignments -and $policy.Assignments.Count -gt 0) {
                     $assignmentRows = @()
                     foreach ($assignment in @($policy.Assignments)) {
-                        $assignmentRows += ,@($assignment.Group, $assignment.Filter, $assignment.FilterMode, $assignment.Type)
+                        $assignmentRows += ,@($assignment.Target, $assignment.Type, $assignment.Filter, $assignment.FilterMode)
                     }
-                    [void]$sb.AppendLine((ConvertTo-MarkdownTable -Headers @('Group', 'Filter', 'Filter Mode', 'Type') -Rows $assignmentRows))
+                    [void]$sb.AppendLine((ConvertTo-MarkdownTable -Headers @('Target', 'Type', 'Filter', 'Filter Mode') -Rows $assignmentRows))
                     [void]$sb.AppendLine()
                 }
             }

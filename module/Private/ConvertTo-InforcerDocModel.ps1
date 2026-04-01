@@ -68,7 +68,13 @@ function ConvertTo-InforcerDocModel {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [hashtable]$DocData
+        [hashtable]$DocData,
+
+        [Parameter()]
+        [hashtable]$GroupNameMap,
+
+        [Parameter()]
+        [hashtable]$FilterMap
     )
 
     $tenant   = $DocData.Tenant
@@ -158,42 +164,19 @@ function ConvertTo-InforcerDocModel {
             }
         }
 
-        # Assignments section (per NORM-03)
-        $assignments = [System.Collections.Generic.List[object]]::new()
+        # Assignments section (per NORM-03) -- uses Resolve-InforcerAssignments
         $rawAssignments = $policy.policyData.assignments
         if ($null -eq $rawAssignments) { $rawAssignments = $policy.assignments }
-        if ($null -ne $rawAssignments) {
-            foreach ($assignment in @($rawAssignments)) {
-                if ($null -eq $assignment) { continue }
-                $target = $assignment.target
-                if ($null -eq $target) { $target = $assignment }
-                $groupId    = ''
-                $filter     = ''
-                $filterMode = ''
-                $type       = ''
-                if ($target.'@odata.type') { $type = $target.'@odata.type' -replace '#microsoft\.graph\.', '' }
-                if ($target.groupId) { $groupId = $target.groupId }
-                if ($target.deviceAndAppManagementAssignmentFilterId) {
-                    $filter = $target.deviceAndAppManagementAssignmentFilterId
-                }
-                if ($target.deviceAndAppManagementAssignmentFilterType) {
-                    $filterMode = $target.deviceAndAppManagementAssignmentFilterType
-                }
-
-                [void]$assignments.Add([PSCustomObject]@{
-                    Group      = $groupId
-                    Filter     = $filter
-                    FilterMode = $filterMode
-                    Type       = $type
-                })
-            }
-        }
+        $resolveParams = @{ RawAssignments = $rawAssignments }
+        if ($null -ne $GroupNameMap)  { $resolveParams['GroupNameMap'] = $GroupNameMap }
+        if ($null -ne $FilterMap)     { $resolveParams['FilterMap'] = $FilterMap }
+        $assignments = @(Resolve-InforcerAssignments @resolveParams)
 
         # Assemble normalized policy (per NORM-03)
         $normalizedPolicy = @{
             Basics      = $basics
             Settings    = $settings.ToArray()
-            Assignments = $assignments.ToArray()
+            Assignments = $assignments
         }
 
         [void]$products[$prod].Categories[$catKey].Add($normalizedPolicy)

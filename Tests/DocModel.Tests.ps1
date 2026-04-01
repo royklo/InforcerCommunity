@@ -316,7 +316,7 @@ Describe 'ConvertTo-InforcerDocModel - Assignments' -Skip:(-not $script:Integrat
         $found | Should -BeTrue
     }
 
-    It 'Assignments array contains objects with Group, Filter, FilterMode, Type properties' {
+    It 'Assignments array contains objects with Target, Type, Filter, FilterMode properties' {
         $assignedPol = $null
         foreach ($prod in $script:DocModel.Products.Values) {
             foreach ($cat in $prod.Categories.Values) {
@@ -331,10 +331,10 @@ Describe 'ConvertTo-InforcerDocModel - Assignments' -Skip:(-not $script:Integrat
             if ($assignedPol) { break }
         }
         $a = $assignedPol.Assignments[0]
-        $a.PSObject.Properties.Name | Should -Contain 'Group'
+        $a.PSObject.Properties.Name | Should -Contain 'Target'
+        $a.PSObject.Properties.Name | Should -Contain 'Type'
         $a.PSObject.Properties.Name | Should -Contain 'Filter'
         $a.PSObject.Properties.Name | Should -Contain 'FilterMode'
-        $a.PSObject.Properties.Name | Should -Contain 'Type'
     }
 }
 

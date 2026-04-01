@@ -120,19 +120,10 @@ if (-not [string]::IsNullOrEmpty($resolvedCatalogPath)) {
 $docData = Get-InforcerDocData @docDataParams
 if ($null -eq $docData) { return }
 
-Write-Host 'Building documentation model...' -ForegroundColor Cyan
-$docModel = ConvertTo-InforcerDocModel -DocData $docData
-if ($null -eq $docModel) { return }
-
-$policyCount = 0
-foreach ($product in $docModel.Products.Values) {
-    foreach ($policies in $product.Categories.Values) { $policyCount += @($policies).Count }
-}
-Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
-
-# Enrich documentation with live Microsoft Graph data
+# Build Graph enrichment maps before DocModel (so assignments resolve during normalization)
+$groupNameMap = $null
+$filterMap = $null
 if ($FetchGraphData) {
-    # Always do a fresh Graph sign-in to ensure the session is current
     Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
     $graphCtx = Connect-InforcerGraph -RequiredScopes @('Directory.Read.All')
 
@@ -140,52 +131,60 @@ if ($FetchGraphData) {
         Write-Warning 'Microsoft Graph connection failed. Falling back to raw ObjectIDs.'
     } else {
         Write-Host "  Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
-        # Collect all unique ObjectIDs across all assignments
+
+        # Collect all unique group ObjectIDs from raw policy data
         $objectIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($product in $docModel.Products.Values) {
-            foreach ($policies in $product.Categories.Values) {
-                foreach ($policy in @($policies)) {
-                    foreach ($assignment in @($policy.Assignments)) {
-                        $gid = $assignment.Group
-                        if (-not [string]::IsNullOrWhiteSpace($gid) -and $gid -match '^[0-9a-f]{8}-') {
-                            [void]$objectIds.Add($gid)
-                        }
-                    }
+        foreach ($policy in @($docData.Policies)) {
+            $rawAssign = $policy.policyData.assignments
+            if ($null -eq $rawAssign) { $rawAssign = $policy.assignments }
+            if ($null -eq $rawAssign) { continue }
+            foreach ($a in @($rawAssign)) {
+                $t = $a.target; if ($null -eq $t) { $t = $a }
+                if ($t.groupId -and $t.groupId -match '^[0-9a-f]{8}-') {
+                    [void]$objectIds.Add($t.groupId)
                 }
             }
         }
 
         if ($objectIds.Count -gt 0) {
-            Write-Host "  Resolving $($objectIds.Count) unique ObjectIDs..." -ForegroundColor Gray
-            $nameMap = @{}
+            Write-Host "  Resolving $($objectIds.Count) unique group/object IDs..." -ForegroundColor Gray
+            $groupNameMap = @{}
             $resolved = 0
             foreach ($oid in $objectIds) {
                 $obj = Invoke-InforcerGraphRequest -Uri "https://graph.microsoft.com/v1.0/directoryObjects/$oid" -SingleObject
                 if ($obj -and $obj.displayName) {
-                    $nameMap[$oid] = $obj.displayName
+                    $groupNameMap[$oid] = $obj.displayName
                     $resolved++
                 } else {
-                    $nameMap[$oid] = $oid
+                    $groupNameMap[$oid] = $oid
                 }
             }
+            Write-Host "  Resolved $resolved of $($objectIds.Count) group names" -ForegroundColor Gray
+        }
 
-            # Replace ObjectIDs in assignments with display names
-            foreach ($product in $docModel.Products.Values) {
-                foreach ($policies in $product.Categories.Values) {
-                    foreach ($policy in @($policies)) {
-                        foreach ($assignment in @($policy.Assignments)) {
-                            $gid = $assignment.Group
-                            if ($nameMap.ContainsKey($gid)) {
-                                $assignment.Group = $nameMap[$gid]
-                            }
-                        }
-                    }
-                }
-            }
-            Write-Host "  Resolved $resolved of $($objectIds.Count) ObjectIDs" -ForegroundColor Gray
+        # Fetch assignment filters from Intune
+        Write-Host '  Fetching assignment filters...' -ForegroundColor Gray
+        $rawFilters = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/beta/deviceManagement/assignmentFilters'
+        $filterMap = @{}
+        if ($rawFilters) {
+            foreach ($f in $rawFilters) { $filterMap[$f.id] = $f }
+            Write-Host "  Loaded $($filterMap.Count) assignment filters" -ForegroundColor Gray
         }
     }
 }
+
+Write-Host 'Building documentation model...' -ForegroundColor Cyan
+$docModelParams = @{ DocData = $docData }
+if ($groupNameMap) { $docModelParams['GroupNameMap'] = $groupNameMap }
+if ($filterMap)    { $docModelParams['FilterMap'] = $filterMap }
+$docModel = ConvertTo-InforcerDocModel @docModelParams
+if ($null -eq $docModel) { return }
+
+$policyCount = 0
+foreach ($product in $docModel.Products.Values) {
+    foreach ($policies in $product.Categories.Values) { $policyCount += @($policies).Count }
+}
+Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
 
 # Render each requested format and write to disk
 $extensionMap = @{ Html = 'html'; Markdown = 'md'; Json = 'json'; Csv = 'csv' }

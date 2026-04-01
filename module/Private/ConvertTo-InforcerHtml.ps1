@@ -313,14 +313,14 @@ h4 { font-size: 1rem; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bo
                 if ($assignmentsCount -gt 0) {
                     [void]$sb.AppendLine('<div class="section-label">Assignments</div>')
                     [void]$sb.AppendLine('<table>')
-                    [void]$sb.AppendLine('<tr><th>Group</th><th>Filter</th><th>Filter Mode</th><th>Type</th></tr>')
+                    [void]$sb.AppendLine('<tr><th>Target</th><th>Type</th><th>Filter</th><th>Filter Mode</th></tr>')
 
                     foreach ($assignment in @($policy.Assignments)) {
-                        $grpVal        = ConvertTo-SafeHtmlValue -Value $assignment.Group
+                        $targetVal     = ConvertTo-SafeHtmlValue -Value $assignment.Target
+                        $typeVal       = ConvertTo-SafeHtmlValue -Value $assignment.Type
                         $filterVal     = ConvertTo-SafeHtmlValue -Value $assignment.Filter
                         $filterModeVal = ConvertTo-SafeHtmlValue -Value $assignment.FilterMode
-                        $typeVal       = ConvertTo-SafeHtmlValue -Value $assignment.Type
-                        [void]$sb.AppendLine("<tr><td>$grpVal</td><td>$filterVal</td><td>$filterModeVal</td><td>$typeVal</td></tr>")
+                        [void]$sb.AppendLine("<tr><td>$targetVal</td><td>$typeVal</td><td>$filterVal</td><td>$filterModeVal</td></tr>")
                     }
 
                     [void]$sb.AppendLine('</table>')

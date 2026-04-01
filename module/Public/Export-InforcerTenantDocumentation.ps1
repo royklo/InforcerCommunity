@@ -32,7 +32,7 @@
     If not found in either location, Settings Catalog policies show raw settingDefinitionId values
     and a warning is emitted.
 .OUTPUTS
-    None. Files are written to OutputPath.
+    System.IO.FileInfo. Returns FileInfo objects for each exported file.
 .EXAMPLE
     Export-InforcerTenantDocumentation -TenantId 482 -Format Html
 
@@ -52,7 +52,7 @@
 #>
 function Export-InforcerTenantDocumentation {
 [CmdletBinding()]
-[OutputType([void])]
+[OutputType([System.IO.FileInfo])]
 param(
     [Parameter(Mandatory = $false)]
     [ValidateSet('Html', 'Markdown', 'Json', 'Csv')]
@@ -103,6 +103,7 @@ if ([string]::IsNullOrEmpty($resolvedCatalogPath)) {
 }
 
 # Collect data from the 3 source cmdlets and build DocModel
+Write-Host 'Collecting tenant data...' -ForegroundColor Cyan
 $docDataParams = @{ TenantId = $clientTenantId }
 if (-not [string]::IsNullOrEmpty($resolvedCatalogPath)) {
     $docDataParams['SettingsCatalogPath'] = $resolvedCatalogPath
@@ -110,13 +111,22 @@ if (-not [string]::IsNullOrEmpty($resolvedCatalogPath)) {
 $docData = Get-InforcerDocData @docDataParams
 if ($null -eq $docData) { return }
 
+Write-Host 'Building documentation model...' -ForegroundColor Cyan
 $docModel = ConvertTo-InforcerDocModel -DocData $docData
 if ($null -eq $docModel) { return }
 
+$policyCount = 0
+foreach ($product in $docModel.Products.Values) {
+    foreach ($policies in $product.Categories.Values) { $policyCount += @($policies).Count }
+}
+Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
+
 # Render each requested format and write to disk
 $extensionMap = @{ Html = 'html'; Markdown = 'md'; Json = 'json'; Csv = 'csv' }
+$formatIndex = 0
 
 foreach ($fmt in $Format) {
+    $formatIndex++
     $ext = $extensionMap[$fmt]
 
     if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) {
@@ -131,6 +141,7 @@ foreach ($fmt in $Format) {
         [void](New-Item -ItemType Directory -Force -Path $parentDir)
     }
 
+    Write-Host "Rendering $fmt ($formatIndex/$($Format.Count))..." -ForegroundColor Cyan
     $content = switch ($fmt) {
         'Html'     { ConvertTo-InforcerHtml     -DocModel $docModel }
         'Markdown' { ConvertTo-InforcerMarkdown -DocModel $docModel }
@@ -139,6 +150,11 @@ foreach ($fmt in $Format) {
     }
 
     Set-Content -Path $filePath -Value $content -Encoding UTF8
-    Write-Verbose "Wrote $fmt documentation to: $filePath"
+    $fileInfo = Get-Item -LiteralPath $filePath
+    $sizeKb = [math]::Round($fileInfo.Length / 1KB, 1)
+    Write-Host "  Exported: $filePath ($sizeKb KB)" -ForegroundColor Green
+    $fileInfo
 }
+
+Write-Host "Done. $($Format.Count) file(s) exported for tenant '$($docModel.TenantName)'." -ForegroundColor Cyan
 }

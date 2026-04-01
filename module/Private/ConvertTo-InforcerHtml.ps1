@@ -155,42 +155,7 @@ body {
     font-size: 0.9375rem;
     -webkit-font-smoothing: antialiased;
 }
-/* --- Toolbar (sticky glass) --- */
-.toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: var(--bg-glass);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--border);
-    padding: 0.625rem 0;
-    margin: 0 -1.5rem 1.5rem;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    flex-wrap: wrap;
-}
-.toolbar-btn {
-    background: var(--bg-card);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
-    padding: 0.375rem 0.875rem;
-    border-radius: var(--radius-xs);
-    cursor: pointer;
-    font-size: 0.8125rem;
-    font-family: inherit;
-    font-weight: 500;
-    transition: all var(--transition);
-    white-space: nowrap;
-}
-.toolbar-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
-.toolbar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.toolbar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.toolbar-btn.active:hover { background: var(--accent-hover); }
-.toolbar-spacer { flex: 1; }
+/* (toolbar removed -- controls are now in the sidebar panel) */
 /* --- Header --- */
 .header {
     padding: 2.5rem 0 1.5rem;
@@ -410,14 +375,92 @@ tr:hover td { background: var(--accent-soft); }
 /* --- Filter toggle --- */
 .hide-empty .empty-val { display: none; }
 .hide-empty tr:has(td > .empty-val:only-child) { display: none; }
+/* --- Sidebar panel --- */
+.sidebar-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 998;
+    opacity: 0; pointer-events: none; transition: opacity var(--transition);
+}
+.sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+.sidebar {
+    position: fixed; top: 0; right: -380px; width: 360px; max-width: 85vw; height: 100vh;
+    background: var(--bg-card); border-left: 1px solid var(--border);
+    box-shadow: var(--shadow-lg); z-index: 999;
+    display: flex; flex-direction: column;
+    transition: right 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+.sidebar.open { right: 0; }
+.sidebar-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.sidebar-header h2 { font-size: 0.875rem; font-weight: 700; }
+.sidebar-close {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: 1.25rem; line-height: 1; padding: 0.25rem;
+    transition: color var(--transition);
+}
+.sidebar-close:hover { color: var(--text); }
+/* --- Sidebar controls --- */
+.sidebar-controls {
+    padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0;
+}
+.toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.5rem 0; font-size: 0.8125rem; color: var(--text-secondary);
+}
+.toggle-row label { cursor: pointer; font-weight: 500; }
+.toggle-switch {
+    position: relative; width: 40px; height: 22px; flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute; inset: 0; background: var(--border);
+    border-radius: 11px; cursor: pointer; transition: background var(--transition);
+}
+.toggle-slider::before {
+    content: ''; position: absolute; left: 3px; top: 3px;
+    width: 16px; height: 16px; background: #fff;
+    border-radius: 50%; transition: transform var(--transition);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+.toggle-switch input:focus-visible + .toggle-slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* --- Sidebar TOC --- */
+.sidebar-toc {
+    flex: 1; overflow-y: auto; padding: 0.75rem 1rem;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.sidebar-toc::-webkit-scrollbar { width: 4px; }
+.sidebar-toc::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+/* --- Floating buttons --- */
+.fab-group {
+    position: fixed; bottom: 1.5rem; right: 1.5rem;
+    display: flex; flex-direction: column; gap: 0.5rem; z-index: 200;
+}
+.fab {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--accent); color: #fff; border: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition);
+    font-size: 1.125rem;
+}
+.fab:hover { background: var(--accent-hover); box-shadow: var(--shadow-lg); transform: scale(1.05); }
+.fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.fab-top { opacity: 0; pointer-events: none; transform: translateY(8px); }
+.fab-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
 /* --- Responsive --- */
 @media (max-width: 768px) {
     body { padding: 0 1rem 2rem; font-size: 0.875rem; }
-    .toolbar { margin: 0 -1rem 1rem; padding-left: 1rem; padding-right: 1rem; }
     .header h1 { font-size: 1.375rem; }
     .product-section > summary { padding: 0.75rem; font-size: 0.9375rem; }
     .policy-section { padding: 0.75rem; }
     td, th { padding: 0.375rem 0.5rem; }
+    .fab-group { bottom: 1rem; right: 1rem; }
 }
 '@
 
@@ -461,15 +504,8 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('</head>')
     [void]$sb.AppendLine('<body>')
 
-    # --- Toolbar ---
-    [void]$sb.AppendLine('<div class="toolbar">')
-    [void]$sb.AppendLine('<button class="toolbar-btn" id="btn-toggle-empty" onclick="toggleEmpty()">Hide empty fields</button>')
-    [void]$sb.AppendLine('<button class="toolbar-btn" id="btn-expand" onclick="toggleExpand()">Expand all</button>')
-    [void]$sb.AppendLine('<div class="toolbar-spacer"></div>')
-    [void]$sb.AppendLine('<button class="toolbar-btn" id="btn-theme" onclick="toggleTheme()">Dark mode</button>')
-    [void]$sb.AppendLine('</div>')
-
     # --- Header ---
+    [void]$sb.AppendLine('<div id="top"></div>')
     [void]$sb.AppendLine('<div class="header">')
     [void]$sb.AppendLine("<h1>$tenantNameEsc</h1>")
     [void]$sb.AppendLine('<div class="header-meta">')
@@ -482,10 +518,34 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('</div>')
 
-    # --- TOC (collapsible per product and category) ---
-    [void]$sb.AppendLine('<div class="toc-section">')
-    [void]$sb.AppendLine('<div class="card">')
-    [void]$sb.AppendLine('<div class="toc-title">Table of Contents</div>')
+    # --- Sidebar backdrop + panel ---
+    [void]$sb.AppendLine('<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>')
+    [void]$sb.AppendLine('<aside class="sidebar" id="sidebar">')
+
+    # Sidebar header
+    [void]$sb.AppendLine('<div class="sidebar-header">')
+    [void]$sb.AppendLine('<h2>Navigation</h2>')
+    [void]$sb.AppendLine('<button class="sidebar-close" onclick="closeSidebar()" aria-label="Close">&times;</button>')
+    [void]$sb.AppendLine('</div>')
+
+    # Sidebar controls
+    [void]$sb.AppendLine('<div class="sidebar-controls">')
+    [void]$sb.AppendLine('<div class="toggle-row">')
+    [void]$sb.AppendLine('<label for="chk-empty">Hide empty fields</label>')
+    [void]$sb.AppendLine('<div class="toggle-switch"><input type="checkbox" id="chk-empty" onchange="toggleEmpty()"><span class="toggle-slider"></span></div>')
+    [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('<div class="toggle-row">')
+    [void]$sb.AppendLine('<label for="chk-expand">Expand all sections</label>')
+    [void]$sb.AppendLine('<div class="toggle-switch"><input type="checkbox" id="chk-expand" onchange="toggleExpand()"><span class="toggle-slider"></span></div>')
+    [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('<div class="toggle-row">')
+    [void]$sb.AppendLine('<label for="chk-theme">Dark mode</label>')
+    [void]$sb.AppendLine('<div class="toggle-switch"><input type="checkbox" id="chk-theme" onchange="toggleTheme()"><span class="toggle-slider"></span></div>')
+    [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('</div>')
+
+    # Sidebar TOC
+    [void]$sb.AppendLine('<div class="sidebar-toc toc-section">')
     [void]$sb.AppendLine('<ul class="toc-l1">')
 
     foreach ($prodName in $DocModel.Products.Keys) {
@@ -497,7 +557,7 @@ tr:hover td { background: var(--accent-soft); }
 
         [void]$sb.AppendLine('<li>')
         [void]$sb.AppendLine('<details>')
-        [void]$sb.AppendLine("<summary><a href=`"#$prodAnchor`">$prodEsc</a> <span class=`"badge`">$prodPolicies</span></summary>")
+        [void]$sb.AppendLine("<summary><a href=`"#$prodAnchor`" onclick=`"closeSidebar()`">$prodEsc</a> <span class=`"badge`">$prodPolicies</span></summary>")
         [void]$sb.AppendLine('<ul class="toc-l2">')
 
         foreach ($catName in $DocModel.Products[$prodName].Categories.Keys) {
@@ -507,13 +567,13 @@ tr:hover td { background: var(--accent-soft); }
 
             [void]$sb.AppendLine('<li>')
             [void]$sb.AppendLine('<details>')
-            [void]$sb.AppendLine("<summary><a href=`"#$catAnchor`">$catEsc</a></summary>")
+            [void]$sb.AppendLine("<summary><a href=`"#$catAnchor`" onclick=`"closeSidebar()`">$catEsc</a></summary>")
             [void]$sb.AppendLine('<ul class="toc-l3">')
 
             foreach ($policy in @($policies)) {
                 $pName   = [System.Net.WebUtility]::HtmlEncode($policy.Basics.Name)
                 $pAnchor = ConvertTo-HtmlAnchorId -Text "$prodName-$catName-$($policy.Basics.Name)"
-                [void]$sb.AppendLine("<li><a href=`"#$pAnchor`">$pName</a></li>")
+                [void]$sb.AppendLine("<li><a href=`"#$pAnchor`" onclick=`"closeSidebar()`">$pName</a></li>")
             }
 
             [void]$sb.AppendLine('</ul>')
@@ -528,6 +588,18 @@ tr:hover td { background: var(--accent-soft); }
 
     [void]$sb.AppendLine('</ul>')
     [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('</aside>')
+
+    # --- Floating action buttons ---
+    [void]$sb.AppendLine('<div class="fab-group">')
+    [void]$sb.AppendLine('<button class="fab fab-top" id="btn-top" onclick="scrollToTop()" aria-label="Back to top">')
+    # SVG arrow up (inline, no CDN)
+    [void]$sb.AppendLine('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>')
+    [void]$sb.AppendLine('</button>')
+    [void]$sb.AppendLine('<button class="fab" id="btn-sidebar" onclick="openSidebar()" aria-label="Open navigation">')
+    # SVG menu/list icon
+    [void]$sb.AppendLine('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>')
+    [void]$sb.AppendLine('</button>')
     [void]$sb.AppendLine('</div>')
 
     # --- Content sections ---
@@ -632,10 +704,14 @@ tr:hover td { background: var(--accent-soft); }
     # --- JavaScript ---
     $jsBlock = @'
 <script>
-function toggleEmpty(){var b=document.body,n=document.getElementById('btn-toggle-empty');b.classList.toggle('hide-empty');if(b.classList.contains('hide-empty')){n.textContent='Show empty fields';n.classList.add('active')}else{n.textContent='Hide empty fields';n.classList.remove('active')}}
-function toggleExpand(){var all=document.querySelectorAll('details.product-section'),btn=document.getElementById('btn-expand'),open=btn.classList.contains('active');all.forEach(function(d){d.open=!open});var toc=document.querySelectorAll('.toc-section details');toc.forEach(function(d){d.open=!open});if(!open){btn.textContent='Collapse all';btn.classList.add('active')}else{btn.textContent='Expand all';btn.classList.remove('active')}}
-function toggleTheme(){var r=document.documentElement,b=document.getElementById('btn-theme');if(r.classList.contains('dark')){r.classList.remove('dark');r.classList.add('light');b.textContent='Dark mode';b.classList.remove('active');localStorage.setItem('theme','light')}else{r.classList.remove('light');r.classList.add('dark');b.textContent='Light mode';b.classList.add('active');localStorage.setItem('theme','dark')}}
-(function(){var s=localStorage.getItem('theme'),b=document.getElementById('btn-theme');if(s==='dark'){document.documentElement.classList.add('dark');b.textContent='Light mode';b.classList.add('active')}else if(s==='light'){document.documentElement.classList.add('light')}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){b.textContent='Light mode'}})();
+function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('sidebar-backdrop').classList.add('open')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebar-backdrop').classList.remove('open')}
+function scrollToTop(){window.scrollTo({top:0,behavior:'smooth'})}
+function toggleEmpty(){document.body.classList.toggle('hide-empty')}
+function toggleExpand(){var c=document.getElementById('chk-expand').checked;document.querySelectorAll('details.product-section').forEach(function(d){d.open=c});document.querySelectorAll('.sidebar-toc details').forEach(function(d){d.open=c})}
+function toggleTheme(){var r=document.documentElement,c=document.getElementById('chk-theme');if(c.checked){r.classList.remove('light');r.classList.add('dark');localStorage.setItem('theme','dark')}else{r.classList.remove('dark');r.classList.add('light');localStorage.setItem('theme','light')}}
+(function(){var s=localStorage.getItem('theme'),ct=document.getElementById('chk-theme');if(s==='dark'){document.documentElement.classList.add('dark');ct.checked=true}else if(s==='light'){document.documentElement.classList.add('light')}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){ct.checked=true;document.documentElement.classList.add('dark')}
+window.addEventListener('scroll',function(){var b=document.getElementById('btn-top');if(window.scrollY>400){b.classList.add('visible')}else{b.classList.remove('visible')}})})();
 </script>
 '@
     [void]$sb.AppendLine($jsBlock)

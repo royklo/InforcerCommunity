@@ -457,17 +457,15 @@ Describe 'ConvertTo-FlatSettingRows' {
 # ---------------------------------------------------------------------------
 # Describe: Integration test (requires real settings.json)
 # ---------------------------------------------------------------------------
+# Integration tests are conditional on settings.json being present (it is gitignored -- 62.5 MB).
+# Resolve at script scope (outside Describe/BeforeAll) so -Skip can reference it at discovery time.
+$script:IntegrationSettingsPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..' 'module' 'data' 'settings.json'))
+$script:IntegrationSettingsAvailable = Test-Path -LiteralPath $script:IntegrationSettingsPath
+
 Describe 'Integration: Load real settings.json and resolve known ID' {
 
-    BeforeAll {
-        $settingsPath = Join-Path $PSScriptRoot '..' 'module' 'data' 'settings.json'
-        $settingsPath = [System.IO.Path]::GetFullPath($settingsPath)
-        $script:settingsAvailable = Test-Path -LiteralPath $settingsPath
-        $script:settingsPath = $settingsPath
-    }
-
-    It 'loads real settings.json and resolves a known settingDefinitionId' -Skip:(-not $script:settingsAvailable) {
-        InModuleScope InforcerCommunity -Parameters @{ SettingsPath = $script:settingsPath } {
+    It 'loads real settings.json and resolves a known settingDefinitionId' -Skip:(-not $script:IntegrationSettingsAvailable) {
+        InModuleScope InforcerCommunity -Parameters @{ SettingsPath = $script:IntegrationSettingsPath } {
             Import-InforcerSettingsCatalog -Path $SettingsPath -Force
         }
         # sirisettings_enabled is the first entry in settings.json
@@ -478,7 +476,7 @@ Describe 'Integration: Load real settings.json and resolve known ID' {
         $result.DisplayName | Should -Be 'Enabled'
     }
 
-    It 'resolves choice value label from real settings.json' -Skip:(-not $script:settingsAvailable) {
+    It 'resolves choice value label from real settings.json' -Skip:(-not $script:IntegrationSettingsAvailable) {
         $result = InModuleScope InforcerCommunity {
             Resolve-InforcerSettingName -SettingDefinitionId 'sirisettings_enabled' -ChoiceValue 'sirisettings_enabled_false'
         }

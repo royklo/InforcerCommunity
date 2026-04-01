@@ -44,12 +44,12 @@ Plans:
   3. The Markdown output has an anchor TOC, per-policy tables with pipe characters properly escaped, and a generation timestamp header
   4. The JSON output is structured by product -> category -> policy -> sections at full depth (depth 100) with no truncated arrays
   5. The CSV output produces one row per setting value with Product, Category, PolicyName, SettingName, and Value columns — importable directly into Excel
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 **UI hint**: yes
 
 Plans:
 - [x] 02-01-PLAN.md — JSON and CSV renderers with test scaffold (JSON-01..02, CSV-01..02)
-- [ ] 02-02-PLAN.md — Markdown renderer with TOC, pipe escaping, and indent markers (MD-01..04)
+- [x] 02-02-PLAN.md — Markdown renderer with TOC, pipe escaping, and indent markers (MD-01..04)
 - [ ] 02-03-PLAN.md — HTML renderer with embedded CSS, collapsible TOC, dark/light mode, setting badges (HTML-01..10)
 
 ### Phase 3: Public Cmdlet and Module Integration
@@ -71,5 +71,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Data Pipeline and Normalization | 2/2 | Complete |  |
-| 2. Output Format Renderers | 0/3 | Planning complete | - |
+| 2. Output Format Renderers | 2/3 | In Progress|  |
 | 3. Public Cmdlet and Module Integration | 0/TBD | Not started | - |

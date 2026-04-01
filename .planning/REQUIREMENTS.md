@@ -47,10 +47,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Markdown Output
 
-- [ ] **MD-01**: Structured Markdown with table of contents linking to product/category/policy sections
-- [ ] **MD-02**: Per-policy sections with Basics/Settings/Assignments as Markdown tables
-- [ ] **MD-03**: Settings values with pipe characters properly escaped for Markdown table compatibility
-- [ ] **MD-04**: Generation timestamp and tenant name in document header
+- [x] **MD-01**: Structured Markdown with table of contents linking to product/category/policy sections
+- [x] **MD-02**: Per-policy sections with Basics/Settings/Assignments as Markdown tables
+- [x] **MD-03**: Settings values with pipe characters properly escaped for Markdown table compatibility
+- [x] **MD-04**: Generation timestamp and tenant name in document header
 
 ### JSON Output
 
@@ -136,10 +136,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HTML-08 | Phase 2 | Pending |
 | HTML-09 | Phase 2 | Pending |
 | HTML-10 | Phase 2 | Pending |
-| MD-01 | Phase 2 | Pending |
-| MD-02 | Phase 2 | Pending |
-| MD-03 | Phase 2 | Pending |
-| MD-04 | Phase 2 | Pending |
+| MD-01 | Phase 2 | Complete |
+| MD-02 | Phase 2 | Complete |
+| MD-03 | Phase 2 | Complete |
+| MD-04 | Phase 2 | Complete |
 | JSON-01 | Phase 2 | Complete |
 | JSON-02 | Phase 2 | Complete |
 | CSV-01 | Phase 2 | Complete |

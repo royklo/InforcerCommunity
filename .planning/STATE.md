@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md (JSON + CSV renderers)
-last_updated: "2026-04-01T18:03:29.241Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-04-01T18:05:48.362Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 ## Current Position
 
 Phase: 02 (output-format-renderers) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-01
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-data-pipeline-and-normalization P01 | 7min | 2 tasks | 7 files |
 | Phase 01-data-pipeline-and-normalization P02 | 9min | 2 tasks | 3 files |
 | Phase 02-output-format-renderers P01 | 2min | 1 tasks | 3 files |
+| Phase 02-output-format-renderers P02 | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase 01-data-pipeline-and-normalization]: Pester 5 BeforeAll: discovery-time script-scope vars not accessible in run phase -- re-evaluate paths locally in BeforeAll
 - [Phase 02-output-format-renderers]: D-22/D-23: DocModel serialized directly with ConvertTo-Json -Depth 100; no custom mapping needed
 - [Phase 02-output-format-renderers]: D-24/D-25/D-26: CSV uses PSCustomObject row projection, settings-only export (no Assignments/Basics)
+- [Phase 02-output-format-renderers]: Use [char] expressions (not literal Unicode) in .ps1 files to avoid PSUseBOMForUnicodeEncodedFile ScriptAnalyzer warning
+- [Phase 02-output-format-renderers]: File-private helpers ConvertTo-MarkdownTable and ConvertTo-MarkdownAnchor defined in same file as ConvertTo-InforcerMarkdown (no separate files)
 
 ### Pending Todos
 
@@ -83,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-01T18:03:29.238Z
-Stopped at: Completed 02-01-PLAN.md (JSON + CSV renderers)
+Last session: 2026-04-01T18:05:48.358Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

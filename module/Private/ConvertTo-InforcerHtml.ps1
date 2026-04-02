@@ -245,6 +245,7 @@ body {
     white-space: nowrap;
 }
 .muted { color: var(--muted); font-style: italic; }
+.tag-badge { background: var(--accent-soft) !important; color: var(--accent) !important; }
 /* --- Summary / Details (shared) --- */
 details { border-radius: var(--radius-xs); }
 summary {
@@ -343,7 +344,10 @@ table {
     border-collapse: collapse;
     font-size: 0.8125rem;
     min-width: 400px;
+    table-layout: fixed;
 }
+table th:first-child, table td:first-child { width: 40%; }
+table th:last-child, table td:last-child { width: 60%; }
 th {
     background: var(--header-bg);
     text-align: left;
@@ -836,17 +840,16 @@ tr:hover td { background: var(--accent-soft); }
                     $tagsAttr = " data-tags=`"$([System.Net.WebUtility]::HtmlEncode($tagsVal))`""
                 }
                 [void]$sb.AppendLine("<div class=`"policy-section`"$tagsAttr>")
-                [void]$sb.AppendLine("<h4 id=`"$policyAnchor`">$policyNameEsc <span class=`"badge`">$settingsCount settings</span></h4>")
 
-                # Show policy tags (baseline membership) as badges
+                # Build tag badges HTML inline with the policy title
+                $tagBadgesHtml = ''
                 if (-not [string]::IsNullOrWhiteSpace($tagsVal)) {
-                    [void]$sb.AppendLine('<div style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-bottom:0.5rem">')
                     foreach ($tagName in ($tagsVal -split ',\s*')) {
                         $tagEsc = [System.Net.WebUtility]::HtmlEncode($tagName.Trim())
-                        [void]$sb.AppendLine("<span class=`"badge`" style=`"background:var(--accent-soft);color:var(--accent)`">$tagEsc</span>")
+                        $tagBadgesHtml += " <span class=`"badge tag-badge`">$tagEsc</span>"
                     }
-                    [void]$sb.AppendLine('</div>')
                 }
+                [void]$sb.AppendLine("<h4 id=`"$policyAnchor`">$policyNameEsc <span class=`"badge`">$settingsCount settings</span>$tagBadgesHtml</h4>")
 
                 # --- Basics table (only non-empty fields) ---
                 $basicsProps = @('Description', 'ProfileType', 'Platform', 'Created', 'Modified', 'ScopeTags')

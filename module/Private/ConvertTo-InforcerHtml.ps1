@@ -417,7 +417,8 @@ tr:hover td { background: var(--accent-soft); }
     font-size: 0.75rem;
 }
 /* --- Filter toggle (only hide rows where the VALUE column is empty, not any column) --- */
-.hide-empty tr:has(td:last-child > .empty-val:only-child):not(:has(td:first-child > .empty-val)) { display: none; }
+/* Only hide empty rows in 2-column tables (Basics/Settings), never in assignments (t4) */
+.hide-empty table.t2 tr:has(td:last-child > .empty-val:only-child):not(:has(td:first-child > .empty-val)) { display: none; }
 /* --- Search --- */
 .search-hidden { display: none !important; }
 .tag-hidden { display: none !important; }

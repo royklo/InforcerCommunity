@@ -4,31 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
-## [Unreleased]
-
-### Features
-
-- **Settings Catalog runtime fetch:** The module now automatically downloads and caches the Intune Settings Catalog data (~65 MB) from [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub Releases. Replaces the bundled static `settings.json`. Cache stored at `~/.inforcercommunity/data/` with 24-hour TTL, atomic writes, single retry, and offline fallback.
-- **Excel export (`-Format Excel`):** Replaces CSV. Creates an `.xlsx` workbook with one sheet per product, auto-sized columns, filters, and frozen header row. Requires the `ImportExcel` module.
-
-### New Private Functions
-
-- `Get-InforcerSettingsCatalogPath` — 6-tier cache resolution strategy: explicit path → fresh cache → stale remote check → first-time download → fallback → offline with stale cache.
-- `Export-InforcerDocExcel` — Renders DocModel to multi-sheet Excel workbook via ImportExcel.
-
-### Changes
-
-- `Import-InforcerSettingsCatalog` now delegates path resolution to `Get-InforcerSettingsCatalogPath` instead of looking for bundled/sibling files.
-- `Export-InforcerTenantDocumentation` removed inline discovery chain (bundled → sibling → warn). `-SettingsCatalogPath` parameter now documents the auto-download behavior.
-- `Export-InforcerTenantDocumentation` `-Format` replaced `Csv` with `Excel`. Removed `ConvertTo-InforcerDocCsv` renderer.
-- Removed `module/data/.gitkeep` — settings catalog data is no longer bundled with the module.
-
 ## [0.2.0] - 2026-04-02
 
 ### Features
 
 - **New cmdlet: `Export-InforcerTenantDocumentation`** — generates comprehensive, human-readable documentation of an entire M365 tenant's configuration. Supports HTML, Markdown, and Excel output formats. Parameters: `-Format`, `-TenantId`, `-OutputPath`, `-SettingsCatalogPath`, `-FetchGraphData`, `-Baseline`, `-Tag`.
+- **Settings Catalog runtime fetch:** The module now automatically downloads and caches the Intune Settings Catalog data (~65 MB) from [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub Releases. Replaces the bundled static `settings.json`. Cache stored at `~/.inforcercommunity/data/` with 24-hour TTL, atomic writes, single retry, and offline fallback.
 - **HTML output:** Modern 2025 admin dashboard design with glassmorphism sidebar, collapsible Product > Category > Policy navigation, tag filter pills (AND/OR), real-time search with text highlighting, dark/light mode toggle (localStorage persistence), hide empty fields toggle, show metadata toggle, back-to-top button, notch-style status bar, collapsible long values. Self-contained with embedded CSS and JavaScript (no CDN dependencies).
+- **Excel export (`-Format Excel`):** Replaces CSV. Creates an `.xlsx` workbook with one sheet per product, auto-sized columns, filters, and frozen header row. Requires the `ImportExcel` module.
 - **Graph integration (`-FetchGraphData`):** Resolves group ObjectIDs to display names, assignment filter IDs to names, and scope tag IDs to names via Microsoft Graph. Validates Graph tenant matches Inforcer tenant.
 - **Baseline and tag filtering:** `-Baseline` filters to policies in a specific baseline via alignment details API. `-Tag` filters by Inforcer tag name (case-insensitive).
 - **`Connect-Inforcer` updated:** Added `-FetchGraphData` switch to simultaneously connect to Microsoft Graph alongside Inforcer API.
@@ -36,10 +19,19 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 
 ### New Private Functions
 
+- `Get-InforcerSettingsCatalogPath` — 6-tier cache resolution strategy: explicit path → fresh cache → stale remote check → first-time download → fallback → offline with stale cache.
+- `Export-InforcerDocExcel` — Renders DocModel to multi-sheet Excel workbook via ImportExcel.
 - `Get-InforcerPolicyDisplayInfo` — maps API internal names to Microsoft admin portal categories (Entra 21 settings, SharePoint 11, M365 Admin Center 3).
 - `Resolve-InforcerAssignments` — translates assignment `@odata.type` to friendly names (All Devices, All Users, Group Include/Exclude).
 - `Connect-InforcerGraph` — auto-installs `Microsoft.Graph.Authentication`, handles Graph sign-in with tenant targeting.
 - `Invoke-InforcerGraphRequest` — wraps `Invoke-MgGraphRequest` with retry logic and automatic paging.
+
+### Changes
+
+- `Import-InforcerSettingsCatalog` now delegates path resolution to `Get-InforcerSettingsCatalogPath` instead of looking for bundled/sibling files.
+- `Export-InforcerTenantDocumentation` removed inline discovery chain (bundled → sibling → warn). `-SettingsCatalogPath` parameter now documents the auto-download behavior.
+- `Export-InforcerTenantDocumentation` `-Format` replaced `Csv` with `Excel`. Removed `ConvertTo-InforcerDocCsv` renderer.
+- Removed `module/data/.gitkeep` — settings catalog data is no longer bundled with the module.
 
 ### Improvements
 

@@ -209,7 +209,7 @@ body {
 .score-bar-fill.green { background: linear-gradient(90deg, #059669, #34d399); }
 .score-bar-fill.yellow { background: linear-gradient(90deg, #d97706, #fbbf24); }
 .score-bar-fill.red { background: linear-gradient(90deg, #dc2626, #f87171); }
-.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1rem; }
 .summary-tile {
     background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 1.25rem; text-align: center; box-shadow: var(--shadow-sm); transition: box-shadow var(--transition);
@@ -360,6 +360,8 @@ tr:hover td { background: var(--accent-soft); }
     $conflicting     = $ComparisonModel.Counters.Conflicting
     $sourceOnly      = $ComparisonModel.Counters.SourceOnly
     $destOnly        = $ComparisonModel.Counters.DestOnly
+    $manualCount     = if ($ComparisonModel.Counters.Manual) { $ComparisonModel.Counters.Manual } else { 0 }
+    $manualReview    = $ComparisonModel.ManualReview
     $products        = $ComparisonModel.Products
     $inclAssignments = $ComparisonModel.IncludingAssignments
 
@@ -387,6 +389,7 @@ tr:hover td { background: var(--accent-soft); }
 
     # ── Notch bar ──────────────────────────────────────────────────────────
     $notchDetail = "$totalItems settings compared"
+    if ($manualCount -gt 0) { $notchDetail += " &middot; $manualCount require manual review" }
     [void]$sb.AppendLine("<div class=`"notch-bar`">Environment Comparison<span class=`"notch-warn`">$notchDetail</span></div>")
 
     # ── Header ─────────────────────────────────────────────────────────────
@@ -412,6 +415,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <div class="summary-tile conflicting"><div class="count" id="countConflicting">0</div><div class="label">Conflicting</div></div>')
     [void]$sb.AppendLine('    <div class="summary-tile source-only"><div class="count" id="countSource">0</div><div class="label">Source Only</div></div>')
     [void]$sb.AppendLine('    <div class="summary-tile dest-only"><div class="count" id="countDest">0</div><div class="label">Destination Only</div></div>')
+    [void]$sb.AppendLine('    <div class="summary-tile manual"><div class="count" id="countManual">0</div><div class="label">Manual Review</div></div>')
     [void]$sb.AppendLine('</div>')
 
     # ── Search bar ─────────────────────────────────────────────────────────
@@ -419,8 +423,14 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search policies, settings, values..." oninput="searchAll(this.value)">')
     [void]$sb.AppendLine('</div>')
 
-    # ── Comparison content ─────────────────────────────────────────────────
-    [void]$sb.AppendLine('<div id="comparison-content">')
+    # ── Tabs ─────────────────────────────────────────────────────────────
+    [void]$sb.AppendLine('<div class="tabs">')
+    [void]$sb.AppendLine('    <button class="tab active" onclick="switchTab(this,''comparison'')">Comparison</button>')
+    [void]$sb.AppendLine("    <button class=`"tab`" onclick=`"switchTab(this,'manual')`">Manual Review <span class=`"badge`">$manualCount</span></button>")
+    [void]$sb.AppendLine('</div>')
+
+    # ── Comparison tab ───────────────────────────────────────────────────
+    [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
 
     $isFirstProduct = $true
     foreach ($productName in $products.Keys) {
@@ -533,8 +543,56 @@ tr:hover td { background: var(--accent-soft); }
         [void]$sb.AppendLine('</details>')
     }
 
-    [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('</div>')  # end tab-comparison
 
+    # ── Manual Review tab ────────────────────────────────────────────────
+    [void]$sb.AppendLine('<div class="tab-content" id="tab-manual">')
+
+    if ($manualCount -gt 0) {
+        [void]$sb.AppendLine("<div class=`"card`" style=`"background:var(--manual-bg);border-color:var(--manual)`"><p style=`"font-size:0.875rem;color:var(--text)`"><strong>$manualCount policies require manual review.</strong> These are non-Settings-Catalog policies that cannot be automatically compared at the setting level.</p></div>")
+
+        foreach ($mrProductName in $manualReview.Keys) {
+            $mrProduct = $manualReview[$mrProductName]
+            $encMrProdName = [System.Net.WebUtility]::HtmlEncode($mrProductName)
+
+            [void]$sb.AppendLine('<details class="product-section" open>')
+            [void]$sb.AppendLine("<summary><span class=`"product-title`">$encMrProdName</span><span class=`"status-badge status-manual`">&#9888; $($mrProduct.Count) policies</span></summary>")
+            [void]$sb.AppendLine('<div class="product-content">')
+
+            foreach ($mrCatName in $mrProduct.Categories.Keys) {
+                $encMrCatName = [System.Net.WebUtility]::HtmlEncode($mrCatName)
+                $mrItems = $mrProduct.Categories[$mrCatName]
+
+                [void]$sb.AppendLine("<h3>$encMrCatName</h3>")
+                [void]$sb.AppendLine('<div class="table-wrap"><table>')
+                [void]$sb.AppendLine('<thead><tr><th style="width:10%">Environment</th><th style="width:30%">Policy Name</th><th style="width:20%">Policy Type</th><th style="width:40%">Reason</th></tr></thead>')
+                [void]$sb.AppendLine('<tbody>')
+
+                foreach ($mrItem in $mrItems) {
+                    $envClass = if ($mrItem.Environment -eq 'Source') { 'env-source' } else { 'env-dest' }
+                    $envLabel = [System.Net.WebUtility]::HtmlEncode($mrItem.Environment)
+                    $mrPolicyName = [System.Net.WebUtility]::HtmlEncode($mrItem.PolicyName)
+                    $mrPolicyType = [System.Net.WebUtility]::HtmlEncode($mrItem.PolicyType)
+                    $mrReason = [System.Net.WebUtility]::HtmlEncode($mrItem.Reason)
+
+                    [void]$sb.AppendLine('<tr>')
+                    [void]$sb.AppendLine("    <td><span class=`"env-label $envClass`">$envLabel</span></td>")
+                    [void]$sb.AppendLine("    <td class=`"policy-name`">$mrPolicyName</td>")
+                    [void]$sb.AppendLine("    <td><span class=`"policy-type-badge type-admin`">$mrPolicyType</span></td>")
+                    [void]$sb.AppendLine("    <td class=`"manual-reason`">$mrReason</td>")
+                    [void]$sb.AppendLine('</tr>')
+                }
+
+                [void]$sb.AppendLine('</tbody></table></div>')
+            }
+
+            [void]$sb.AppendLine('</div></details>')
+        }
+    } else {
+        [void]$sb.AppendLine('<p style="color:var(--muted);font-style:italic;text-align:center;padding:2rem 0">No policies require manual review.</p>')
+    }
+
+    [void]$sb.AppendLine('</div>')  # end tab-manual
 
     # ── Footer ─────────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="footer">')
@@ -555,7 +613,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<script>')
     [void]$sb.AppendLine('(function() {')
     [void]$sb.AppendLine("    var TARGET = $alignmentScore;")
-    [void]$sb.AppendLine("    var MATCHED = $matched, CONFLICTING = $conflicting, SOURCE = $sourceOnly, DEST = $destOnly;")
+    [void]$sb.AppendLine("    var MATCHED = $matched, CONFLICTING = $conflicting, SOURCE = $sourceOnly, DEST = $destOnly, MANUAL = $manualCount;")
     [void]$sb.AppendLine("    var TOTAL = $totalItems;")
     [void]$sb.AppendLine('    var DURATION = 1500, INTERVAL = 16;')
     [void]$sb.AppendLine('    var steps = Math.ceil(DURATION / INTERVAL), step = 0;')
@@ -566,6 +624,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    var elConflicting = document.getElementById(''countConflicting'');')
     [void]$sb.AppendLine('    var elSource = document.getElementById(''countSource'');')
     [void]$sb.AppendLine('    var elDest = document.getElementById(''countDest'');')
+    [void]$sb.AppendLine('    var elManual = document.getElementById(''countManual'');')
     [void]$sb.AppendLine('    function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }')
     [void]$sb.AppendLine('    setTimeout(function() {')
     [void]$sb.AppendLine('        var timer = setInterval(function() {')
@@ -579,6 +638,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('            elConflicting.textContent = Math.round(CONFLICTING * progress);')
     [void]$sb.AppendLine('            elSource.textContent = Math.round(SOURCE * progress);')
     [void]$sb.AppendLine('            elDest.textContent = Math.round(DEST * progress);')
+    [void]$sb.AppendLine('            if (elManual) elManual.textContent = Math.round(MANUAL * progress);')
     [void]$sb.AppendLine('            if (step >= steps) {')
     [void]$sb.AppendLine('                clearInterval(timer);')
     [void]$sb.AppendLine('                elScore.textContent = TARGET + ''%'';')
@@ -588,10 +648,17 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('                elConflicting.textContent = CONFLICTING;')
     [void]$sb.AppendLine('                elSource.textContent = SOURCE;')
     [void]$sb.AppendLine('                elDest.textContent = DEST;')
+    [void]$sb.AppendLine('                if (elManual) elManual.textContent = MANUAL;')
     [void]$sb.AppendLine('            }')
     [void]$sb.AppendLine('        }, INTERVAL);')
     [void]$sb.AppendLine('    }, 300);')
     [void]$sb.AppendLine('})();')
+    [void]$sb.AppendLine('function switchTab(btn, id) {')
+    [void]$sb.AppendLine('    document.querySelectorAll(''.tab'').forEach(function(t) { t.classList.remove(''active''); });')
+    [void]$sb.AppendLine('    document.querySelectorAll(''.tab-content'').forEach(function(c) { c.classList.remove(''active''); });')
+    [void]$sb.AppendLine('    btn.classList.add(''active'');')
+    [void]$sb.AppendLine('    document.getElementById(''tab-'' + id).classList.add(''active'');')
+    [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function scrollToTop() { document.getElementById(''top'').scrollIntoView({ behavior: ''smooth'' }); }')
     [void]$sb.AppendLine('window.addEventListener(''scroll'', function() {')
     [void]$sb.AppendLine('    var btn = document.getElementById(''btn-top'');')

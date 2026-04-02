@@ -121,7 +121,7 @@ function Get-InforcerComparisonData {
             $sourceTenantJson = Get-InforcerTenant -OutputType JsonObject
             $sourceTenants    = $sourceTenantJson | ConvertFrom-Json -Depth 100
             $sourceTenant     = $sourceTenants | Where-Object { $_.clientTenantId -eq $resolvedSourceTenantId } | Select-Object -First 1
-            $sourceName       = if ($sourceTenant) { $sourceTenant.clientTenantName } else { "$resolvedSourceTenantId" }
+            $sourceName       = if ($sourceTenant) { $sourceTenant.tenantFriendlyName } else { "$resolvedSourceTenantId" }
 
             Write-Host "  Source tenant: $sourceName ($resolvedSourceTenantId)" -ForegroundColor Gray
             $sourcePoliciesJson = Get-InforcerTenantPolicies -TenantId $resolvedSourceTenantId -OutputType JsonObject
@@ -159,7 +159,7 @@ function Get-InforcerComparisonData {
             $destTenantJson = Get-InforcerTenant -OutputType JsonObject
             $destTenants    = $destTenantJson | ConvertFrom-Json -Depth 100
             $destTenant     = $destTenants | Where-Object { $_.clientTenantId -eq $resolvedDestTenantId } | Select-Object -First 1
-            $destName       = if ($destTenant) { $destTenant.clientTenantName } else { "$resolvedDestTenantId" }
+            $destName       = if ($destTenant) { $destTenant.tenantFriendlyName } else { "$resolvedDestTenantId" }
 
             Write-Host "  Destination tenant: $destName ($resolvedDestTenantId)" -ForegroundColor Gray
             $destPoliciesJson = Get-InforcerTenantPolicies -TenantId $resolvedDestTenantId -OutputType JsonObject

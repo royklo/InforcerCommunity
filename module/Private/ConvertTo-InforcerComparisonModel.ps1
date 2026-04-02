@@ -285,7 +285,66 @@ function ConvertTo-InforcerComparisonModel {
         }
     }
 
+    # ── Manual Review: non-Settings-Catalog Intune policies ────────────────
+    # These cannot be compared at the setting level — list them for manual review
+    $manualReview = [ordered]@{}
+    $manualCount = 0
+
+    $ensureManualCategory = {
+        param([string]$Product, [string]$Category)
+        if (-not $manualReview.Contains($Product)) {
+            $manualReview[$Product] = @{
+                Count      = 0
+                Categories = [ordered]@{}
+            }
+        }
+        if (-not $manualReview[$Product].Categories.Contains($Category)) {
+            $manualReview[$Product].Categories[$Category] = [System.Collections.Generic.List[object]]::new()
+        }
+    }
+
+    foreach ($p in $sourcePolicies) {
+        if ($null -eq $p) { continue }
+        if ($p.policyTypeId -eq 10) { continue }   # SC policies are already handled above
+        $prod = & $getProduct $p
+        $cat  = & $getCategoryKey $p
+        if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
+        $policyName = Get-InforcerPolicyName -Policy $p
+
+        & $ensureManualCategory $prod $cat
+        [void]$manualReview[$prod].Categories[$cat].Add(@{
+            Environment = 'Source'
+            PolicyName  = $policyName
+            PolicyType  = if ($p.inforcerPolicyTypeName) { $p.inforcerPolicyTypeName } else { "Type $($p.policyTypeId)" }
+            Reason      = 'Non-Settings-Catalog policy — cannot auto-compare at setting level'
+        })
+        $manualReview[$prod].Count++
+        $manualCount++
+    }
+
+    foreach ($p in $destPolicies) {
+        if ($null -eq $p) { continue }
+        if ($p.policyTypeId -eq 10) { continue }
+        $prod = & $getProduct $p
+        $cat  = & $getCategoryKey $p
+        if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
+        $policyName = Get-InforcerPolicyName -Policy $p
+
+        & $ensureManualCategory $prod $cat
+        [void]$manualReview[$prod].Categories[$cat].Add(@{
+            Environment = 'Destination'
+            PolicyName  = $policyName
+            PolicyType  = if ($p.inforcerPolicyTypeName) { $p.inforcerPolicyTypeName } else { "Type $($p.policyTypeId)" }
+            Reason      = 'Non-Settings-Catalog policy — cannot auto-compare at setting level'
+        })
+        $manualReview[$prod].Count++
+        $manualCount++
+    }
+
+    $counters.Manual = $manualCount
+
     # ── Alignment score ───────────────────────────────────────────────────
+    # Manual review items are excluded from the score
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly
     $alignmentScore = if ($totalItems -eq 0) { 100 }
                       else { [math]::Round(($counters.Matched / $totalItems) * 100) }
@@ -301,7 +360,7 @@ function ConvertTo-InforcerComparisonModel {
         TotalItems           = $totalItems
         Counters             = $counters
         Products             = $products
-        ManualReview         = [ordered]@{}
+        ManualReview         = $manualReview
         IncludingAssignments = $includingAssignments
     }
 }

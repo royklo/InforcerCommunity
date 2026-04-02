@@ -294,11 +294,11 @@ summary:hover { background: var(--summary-hover); }
     border: 1px solid var(--border);
     border-top: none;
     border-radius: 0 0 var(--radius) var(--radius);
-    padding: 0.5rem 1.25rem 1rem;
+    padding: 0.25rem 1.25rem 1rem;
     box-shadow: var(--shadow-sm);
     margin-bottom: 0.5rem;
 }
-.product-content > h3:first-child { margin-top: 0.5rem; }
+.product-content > h3:first-child { margin-top: 0.375rem; }
 .product-title { flex: 1; }
 /* --- Category headings --- */
 h3 {
@@ -346,10 +346,15 @@ table {
     border-collapse: collapse;
     font-size: 0.8125rem;
     min-width: 400px;
-    table-layout: fixed;
 }
-table th:first-child, table td:first-child { width: 40%; }
-table th:last-child, table td:last-child { width: 60%; }
+/* 2-column tables (Basics, Settings): fixed layout with 40/60 split */
+table.t2 { table-layout: fixed; }
+table.t2 th:first-child, table.t2 td:first-child { width: 40%; }
+table.t2 th:last-child, table.t2 td:last-child { width: 60%; }
+/* 4-column tables (Assignments): auto layout, even columns */
+table.t4 { table-layout: auto; }
+table.t4 th, table.t4 td { white-space: nowrap; }
+table.t4 th:first-child, table.t4 td:first-child { white-space: normal; width: 35%; }
 th {
     background: var(--header-bg);
     text-align: left;
@@ -862,7 +867,7 @@ tr:hover td { background: var(--accent-soft); }
 
                 if ($nonEmptyBasics.Count -gt 0) {
                     [void]$sb.AppendLine('<div class="section-label">Basics</div>')
-                    [void]$sb.AppendLine('<div class="table-wrap"><table>')
+                    [void]$sb.AppendLine('<div class="table-wrap"><table class="t2">')
                     [void]$sb.AppendLine('<tr><th>Property</th><th>Value</th></tr>')
                     foreach ($propName in $nonEmptyBasics) {
                         $propLabel = [System.Net.WebUtility]::HtmlEncode($propName)
@@ -875,7 +880,7 @@ tr:hover td { background: var(--accent-soft); }
                 # --- Settings table ---
                 if ($settingsCount -gt 0) {
                     [void]$sb.AppendLine('<div class="section-label">Settings</div>')
-                    [void]$sb.AppendLine('<div class="table-wrap"><table>')
+                    [void]$sb.AppendLine('<div class="table-wrap"><table class="t2">')
                     [void]$sb.AppendLine('<tr><th>Setting</th><th>Value</th></tr>')
                     foreach ($setting in @($policy.Settings)) {
                         $settingNameEsc = [System.Net.WebUtility]::HtmlEncode($setting.Name)
@@ -903,7 +908,7 @@ tr:hover td { background: var(--accent-soft); }
                 $assignmentsCount = if ($policy.Assignments) { @($policy.Assignments).Count } else { 0 }
                 [void]$sb.AppendLine('<div class="section-label">Assignments</div>')
                 if ($assignmentsCount -gt 0) {
-                    [void]$sb.AppendLine('<div class="table-wrap"><table>')
+                    [void]$sb.AppendLine('<div class="table-wrap"><table class="t4">')
                     [void]$sb.AppendLine('<tr><th>Target</th><th>Type</th><th>Filter</th><th>Filter Mode</th></tr>')
                     foreach ($assignment in @($policy.Assignments)) {
                         $targetVal     = ConvertTo-SafeHtmlValue -Value $assignment.Target

@@ -171,7 +171,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
-    max-width: 1100px;
+    max-width: 1600px;
     margin: 0 auto;
     padding: 0 1.5rem 3rem;
     line-height: 1.65;
@@ -327,6 +327,12 @@ tr:hover td { background: var(--accent-soft); }
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }
+.policy-detail-row td { padding: 0.25rem 0.75rem; border-bottom: 1px solid var(--border-subtle); }
+.policy-detail-row:hover td { background: transparent; }
+.policy-detail-row .settings-table { font-size: 0.8rem; margin: 0.5rem 0; }
+.policy-detail-row .settings-table th { font-size: 0.7rem; }
+.policy-detail-row .settings-table td { font-size: 0.8rem; }
+.policy-detail-row .settings-table .value-diff { color: var(--danger); font-weight: 600; }
 .env-label {
     font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
     padding: 0.125rem 0.5rem; border-radius: 4px; display: inline-block; text-align: center; min-width: 3.25rem;
@@ -529,12 +535,8 @@ tr:hover td { background: var(--accent-soft); }
                 [void]$sb.Append($statusHtml)
                 [void]$sb.Append('</td>')
 
-                # Setting/Policy name (with type indicator for policies)
-                if ($itemType -eq 'Policy') {
-                    [void]$sb.Append("<td class=`"setting-name`">$encName <span class=`"policy-type-badge type-admin`" style=`"font-size:0.625rem`">Policy</span></td>")
-                } else {
-                    [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
-                }
+                # Setting/Policy name
+                [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
 
                 # Category column
                 [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCategory</td>")
@@ -569,6 +571,73 @@ tr:hover td { background: var(--accent-soft); }
                 }
 
                 [void]$sb.AppendLine('</tr>')
+
+                # For non-SC policy rows (Conflicting, SourceOnly, DestOnly), add collapsible settings detail row
+                if ($itemType -eq 'Policy' -and $status -ne 'Matched') {
+                    $metadataSkipNames = @('@odata.type', '@odata.context', 'id', 'createdDateTime', 'lastModifiedDateTime',
+                        'roleScopeTagIds', 'version', 'templateId', 'displayName', 'description',
+                        'assignments', 'settings', 'name', 'deletedDateTime', 'policyGuid')
+
+                    $srcSettingsRaw = if ($row.SourceSettings) { $row.SourceSettings } else { @() }
+                    $dstSettingsRaw = if ($row.DestSettings) { $row.DestSettings } else { @() }
+
+                    # Filter to configured, non-metadata settings
+                    $srcVisible = @($srcSettingsRaw | Where-Object {
+                        $_.IsConfigured -eq $true -and
+                        -not ($_.Name -like '@odata*') -and
+                        $_.Name -notin $metadataSkipNames
+                    })
+                    $dstVisible = @($dstSettingsRaw | Where-Object {
+                        $_.IsConfigured -eq $true -and
+                        -not ($_.Name -like '@odata*') -and
+                        $_.Name -notin $metadataSkipNames
+                    })
+
+                    # Build lookup from name to value for both sides
+                    $srcLookup = @{}
+                    foreach ($s in $srcVisible) { $srcLookup[$s.Name] = [string]$s.Value }
+                    $dstLookup = @{}
+                    foreach ($s in $dstVisible) { $dstLookup[$s.Name] = [string]$s.Value }
+
+                    $allSettingNames = @(@($srcVisible | ForEach-Object { $_.Name }) + @($dstVisible | ForEach-Object { $_.Name })) | Sort-Object -Unique
+                    $settingCount = $allSettingNames.Count
+
+                    if ($settingCount -gt 0) {
+                        $colSpan = if ($inclAssignments) { 9 } else { 7 }
+                        [void]$sb.AppendLine("                <tr class=`"policy-detail-row`" data-status=`"$status`"><td colspan=`"$colSpan`">")
+                        [void]$sb.AppendLine("                    <details>")
+                        [void]$sb.AppendLine("                        <summary>Show settings ($settingCount)</summary>")
+                        [void]$sb.AppendLine('                        <table class="settings-table">')
+                        [void]$sb.AppendLine('                            <thead><tr><th>Setting</th><th>Source Value</th><th>Dest Value</th></tr></thead>')
+                        [void]$sb.AppendLine('                            <tbody>')
+
+                        foreach ($settingName in $allSettingNames) {
+                            $encSName = [System.Net.WebUtility]::HtmlEncode($settingName)
+                            $srcVal = if ($srcLookup.ContainsKey($settingName)) { $srcLookup[$settingName] } else { '' }
+                            $dstVal = if ($dstLookup.ContainsKey($settingName)) { $dstLookup[$settingName] } else { '' }
+                            $encSrcVal = [System.Net.WebUtility]::HtmlEncode($srcVal)
+                            $encDstVal = [System.Net.WebUtility]::HtmlEncode($dstVal)
+
+                            $srcCls = 'value-cell'
+                            $dstCls = 'value-cell'
+                            if ($srcVal -ne $dstVal) {
+                                $srcCls = 'value-cell value-diff'
+                                $dstCls = 'value-cell value-diff'
+                            }
+
+                            # Show em-dash for missing side
+                            $srcDisplay = if ([string]::IsNullOrEmpty($srcVal) -and -not $srcLookup.ContainsKey($settingName)) { '<span style="color:var(--muted)">&#8212;</span>' } else { $encSrcVal }
+                            $dstDisplay = if ([string]::IsNullOrEmpty($dstVal) -and -not $dstLookup.ContainsKey($settingName)) { '<span style="color:var(--muted)">&#8212;</span>' } else { $encDstVal }
+
+                            [void]$sb.AppendLine("                                <tr><td>$encSName</td><td class=`"$srcCls`">$srcDisplay</td><td class=`"$dstCls`">$dstDisplay</td></tr>")
+                        }
+
+                        [void]$sb.AppendLine('                            </tbody>')
+                        [void]$sb.AppendLine('                        </table>')
+                        [void]$sb.AppendLine('                    </details>')
+                        [void]$sb.AppendLine('                </td></tr>')
+                    }
+                }
             }
 
             [void]$sb.AppendLine('            </tbody>')

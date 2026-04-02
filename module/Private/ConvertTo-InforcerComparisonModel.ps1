@@ -220,6 +220,38 @@ function ConvertTo-InforcerComparisonModel {
         }
     }
 
+    # ── Deduplicate friendly names ─────────────────────────────────────────
+    # Multiple settingDefinitionIds can resolve to the same friendly name.
+    # When duplicates exist, append a short disambiguator from the defId.
+    $deduplicateNames = {
+        param([hashtable]$SettingsHash)
+        # Group by friendly name
+        $nameGroups = @{}
+        foreach ($defId in $SettingsHash.Keys) {
+            $name = $SettingsHash[$defId].FriendlyName
+            if (-not $nameGroups.ContainsKey($name)) {
+                $nameGroups[$name] = [System.Collections.Generic.List[string]]::new()
+            }
+            [void]$nameGroups[$name].Add($defId)
+        }
+        # For groups with >1 entry, disambiguate
+        foreach ($name in $nameGroups.Keys) {
+            $ids = $nameGroups[$name]
+            if ($ids.Count -gt 1) {
+                $counter = 1
+                foreach ($defId in $ids) {
+                    # Extract last meaningful segment of the defId for context
+                    $segments = $defId -split '[_/]'
+                    $suffix = if ($segments.Count -ge 2) { $segments[-2] } else { "$counter" }
+                    $SettingsHash[$defId].FriendlyName = "$name ($suffix)"
+                    $counter++
+                }
+            }
+        }
+    }
+    & $deduplicateNames $srcSettings
+    & $deduplicateNames $dstSettings
+
     # ── Compare settings by settingDefinitionId ───────────────────────────
     $allDefIds = @($srcSettings.Keys) + @($dstSettings.Keys) | Sort-Object -Unique
 
@@ -384,15 +416,25 @@ function ConvertTo-InforcerComparisonModel {
 
             $status = if ($srcJson -eq $dstJson) { 'Matched' } else { 'Conflicting' }
 
+            # Extract flat settings for non-SC policies so users can see actual values
+            $srcFlatSettings = @()
+            $dstFlatSettings = @()
+            if ($status -ne 'Matched') {
+                if ($srcP.policyData) { $srcFlatSettings = @(ConvertTo-FlatSettingRows -PolicyData $srcP.policyData) }
+                if ($dstP.policyData) { $dstFlatSettings = @(ConvertTo-FlatSettingRows -PolicyData $dstP.policyData) }
+            }
+
             $row = @{
-                ItemType     = 'Policy'
-                Name         = $policyName
-                Category     = $cat
-                Status       = $status
-                SourcePolicy = $policyName
-                SourceValue  = if ($status -eq 'Matched') { 'Identical' } else { 'Differs' }
-                DestPolicy   = Get-InforcerPolicyName -Policy $dstP
-                DestValue    = if ($status -eq 'Matched') { 'Identical' } else { 'Differs' }
+                ItemType       = 'Policy'
+                Name           = $policyName
+                Category       = $cat
+                Status         = $status
+                SourcePolicy   = $policyName
+                SourceValue    = if ($status -eq 'Matched') { 'Identical' } else { 'Differs' }
+                DestPolicy     = Get-InforcerPolicyName -Policy $dstP
+                DestValue      = if ($status -eq 'Matched') { 'Identical' } else { 'Differs' }
+                SourceSettings = $srcFlatSettings
+                DestSettings   = $dstFlatSettings
             }
 
             if ($includingAssignments) {
@@ -412,15 +454,20 @@ function ConvertTo-InforcerComparisonModel {
             if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
             $policyName = Get-InforcerPolicyName -Policy $srcP
 
+            $srcFlatSettings = @()
+            if ($srcP.policyData) { $srcFlatSettings = @(ConvertTo-FlatSettingRows -PolicyData $srcP.policyData) }
+
             $row = @{
-                ItemType     = 'Policy'
-                Name         = $policyName
-                Category     = $cat
-                Status       = 'SourceOnly'
-                SourcePolicy = $policyName
-                SourceValue  = 'Configured'
-                DestPolicy   = ''
-                DestValue    = ''
+                ItemType       = 'Policy'
+                Name           = $policyName
+                Category       = $cat
+                Status         = 'SourceOnly'
+                SourcePolicy   = $policyName
+                SourceValue    = 'Configured'
+                DestPolicy     = ''
+                DestValue      = ''
+                SourceSettings = $srcFlatSettings
+                DestSettings   = @()
             }
 
             if ($includingAssignments) {
@@ -440,15 +487,20 @@ function ConvertTo-InforcerComparisonModel {
             if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
             $policyName = Get-InforcerPolicyName -Policy $dstP
 
+            $dstFlatSettings = @()
+            if ($dstP.policyData) { $dstFlatSettings = @(ConvertTo-FlatSettingRows -PolicyData $dstP.policyData) }
+
             $row = @{
-                ItemType     = 'Policy'
-                Name         = $policyName
-                Category     = $cat
-                Status       = 'DestOnly'
-                SourcePolicy = ''
-                SourceValue  = ''
-                DestPolicy   = $policyName
-                DestValue    = 'Configured'
+                ItemType       = 'Policy'
+                Name           = $policyName
+                Category       = $cat
+                Status         = 'DestOnly'
+                SourcePolicy   = ''
+                SourceValue    = ''
+                DestPolicy     = $policyName
+                DestValue      = 'Configured'
+                SourceSettings = @()
+                DestSettings   = $dstFlatSettings
             }
 
             if ($includingAssignments) {

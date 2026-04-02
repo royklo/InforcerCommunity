@@ -77,16 +77,14 @@ function ConvertTo-InforcerComparisonModel {
     # ── Split policies by type: Settings Catalog (policyTypeId 10) vs all others ──
     $srcSC    = [System.Collections.Generic.List[object]]::new()
     $dstSC    = [System.Collections.Generic.List[object]]::new()
-    $srcNonSC = [System.Collections.Generic.List[object]]::new()
-    $dstNonSC = [System.Collections.Generic.List[object]]::new()
 
     foreach ($p in $sourcePolicies) {
         if ($null -eq $p) { continue }
-        if ($p.policyTypeId -eq 10) { [void]$srcSC.Add($p) } else { [void]$srcNonSC.Add($p) }
+        if ($p.policyTypeId -eq 10) { [void]$srcSC.Add($p) }
     }
     foreach ($p in $destPolicies) {
         if ($null -eq $p) { continue }
-        if ($p.policyTypeId -eq 10) { [void]$dstSC.Add($p) } else { [void]$dstNonSC.Add($p) }
+        if ($p.policyTypeId -eq 10) { [void]$dstSC.Add($p) }
     }
 
     # ── Result containers ─────────────────────────────────────────────────
@@ -128,6 +126,23 @@ function ConvertTo-InforcerComparisonModel {
         $prod = $Policy.product
         if ([string]::IsNullOrWhiteSpace($prod)) { $prod = 'Other' }
         return $prod
+    }
+
+    # ── Dynamically determine Intune products (those with SC policies) ────
+    $scProductNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($p in $srcSC) { [void]$scProductNames.Add((& $getProduct $p)) }
+    foreach ($p in $dstSC) { [void]$scProductNames.Add((& $getProduct $p)) }
+
+    # Non-SC policies: only from products that also have SC policies (= Intune)
+    $srcNonSC = [System.Collections.Generic.List[object]]::new()
+    $dstNonSC = [System.Collections.Generic.List[object]]::new()
+    foreach ($p in $sourcePolicies) {
+        if ($null -eq $p -or $p.policyTypeId -eq 10) { continue }
+        if ($scProductNames.Contains((& $getProduct $p))) { [void]$srcNonSC.Add($p) }
+    }
+    foreach ($p in $destPolicies) {
+        if ($null -eq $p -or $p.policyTypeId -eq 10) { continue }
+        if ($scProductNames.Contains((& $getProduct $p))) { [void]$dstNonSC.Add($p) }
     }
 
     # ── Extract settings from SC policies ─────────────────────────────────

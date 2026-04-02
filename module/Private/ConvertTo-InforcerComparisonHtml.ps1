@@ -240,6 +240,22 @@ body {
 .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
 .filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .status-hidden { display: none !important; }
+.toggle-switch {
+    position: relative; width: 36px; height: 20px; flex-shrink: 0; display: inline-block;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-slider {
+    position: absolute; inset: 0; background: var(--border);
+    border-radius: 10px; cursor: pointer; transition: background var(--transition);
+}
+.toggle-slider::before {
+    content: ''; position: absolute; left: 2px; top: 2px;
+    width: 16px; height: 16px; background: #fff;
+    border-radius: 50%; transition: transform var(--transition);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
 .manual-item {
     background: var(--bg);
     border: 1px solid var(--border-subtle);
@@ -451,7 +467,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''Conflicting'')">Conflicting</button>')
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''SourceOnly'')">Source Only</button>')
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''DestOnly'')">Dest Only</button>')
-    [void]$sb.AppendLine('    <span style="margin-left:auto"><label class="toggle-row" style="gap:0.5rem;font-size:0.75rem;cursor:pointer"><span>Hide empty values</span><input type="checkbox" id="chk-hide-empty" onchange="applyFilters()" style="cursor:pointer"></label></span>')
+    [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Hide empty</span><span class="toggle-switch"><input type="checkbox" id="chk-hide-empty" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
     [void]$sb.AppendLine('</div>')
 
     # ── Tabs ─────────────────────────────────────────────────────────────

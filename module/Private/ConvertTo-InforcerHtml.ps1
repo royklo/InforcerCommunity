@@ -363,10 +363,15 @@ td {
     word-break: break-word;
     max-width: 500px;
 }
-.long-val { display: block; max-height: 3.3em; overflow: hidden; position: relative; cursor: pointer; transition: max-height 300ms ease; }
+.long-val { display: block; max-height: 2.6em; overflow: hidden; position: relative; word-break: break-all; }
 .long-val.expanded { max-height: none; }
-.long-val::after { content: 'Show more...'; display: block; font-size: 0.75rem; color: var(--accent); font-weight: 500; margin-top: 0.125rem; }
-.long-val.expanded::after { content: 'Show less'; }
+.long-val-btn {
+    display: inline-block; margin-top: 0.25rem; padding: 0.125rem 0.5rem;
+    background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
+    border-radius: var(--radius-xs); font-size: 0.6875rem; font-weight: 600;
+    cursor: pointer; transition: all var(--transition);
+}
+.long-val-btn:hover { background: var(--accent); color: #fff; }
 tr:last-child td { border-bottom: none; }
 tr:nth-child(even) td { background: var(--row-alt); }
 tr:hover td { background: var(--accent-soft); }
@@ -542,9 +547,9 @@ tr:hover td { background: var(--accent-soft); }
             return '<span class="muted empty-val">&mdash;</span>'
         }
         $str = [System.Net.WebUtility]::HtmlEncode($Value.ToString())
-        # Wrap long values (>200 chars) in a collapsible span
+        # Wrap long values (>200 chars) in a collapsible block with ellipsis button
         if ($str.Length -gt 200) {
-            return "<span class=`"long-val`" onclick=`"this.classList.toggle('expanded')`">$str</span>"
+            return "<span class=`"long-val`" id=`"lv$(Get-Random)`">$str</span><span class=`"long-val-btn`" onclick=`"var v=this.previousElementSibling;v.classList.toggle('expanded');this.textContent=v.classList.contains('expanded')?'Collapse':'Expand'`">Expand</span>"
         }
         return $str
     }
@@ -556,7 +561,7 @@ tr:hover td { background: var(--accent-soft); }
         param([Parameter()][string]$Name)
         if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
         if ($Name -match '@odata') { return $true }
-        if ($Name -eq 'state' -or $Name -eq 'templateId' -or $Name -eq 'version' -or $Name -eq 'partialEnablementStrategy') { return $true }
+        if ($Name -eq 'policyGuid') { return $true }
         return $false
     }
 
@@ -889,10 +894,10 @@ tr:hover td { background: var(--accent-soft); }
                     [void]$sb.AppendLine('</table></div>')
                 }
 
-                # --- Assignments table ---
+                # --- Assignments ---
                 $assignmentsCount = if ($policy.Assignments) { @($policy.Assignments).Count } else { 0 }
+                [void]$sb.AppendLine('<div class="section-label">Assignments</div>')
                 if ($assignmentsCount -gt 0) {
-                    [void]$sb.AppendLine('<div class="section-label">Assignments</div>')
                     [void]$sb.AppendLine('<div class="table-wrap"><table>')
                     [void]$sb.AppendLine('<tr><th>Target</th><th>Type</th><th>Filter</th><th>Filter Mode</th></tr>')
                     foreach ($assignment in @($policy.Assignments)) {
@@ -903,6 +908,8 @@ tr:hover td { background: var(--accent-soft); }
                         [void]$sb.AppendLine("<tr><td>$targetVal</td><td>$typeVal</td><td>$filterVal</td><td>$filterModeVal</td></tr>")
                     }
                     [void]$sb.AppendLine('</table></div>')
+                } else {
+                    [void]$sb.AppendLine('<p class="muted" style="font-size:0.8125rem;margin:0.25rem 0">None</p>')
                 }
 
                 [void]$sb.AppendLine('</div>')

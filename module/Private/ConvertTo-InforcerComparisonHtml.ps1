@@ -467,6 +467,14 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''Conflicting'')">Conflicting</button>')
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''SourceOnly'')">Source Only</button>')
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''DestOnly'')">Dest Only</button>')
+    # Category filter dropdown
+    [void]$sb.Append('    <select id="category-filter" onchange="applyFilters()" style="margin-left:0.75rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text);font-size:0.75rem;font-family:inherit;cursor:pointer">')
+    [void]$sb.Append('<option value="All">All categories</option>')
+    foreach ($catName in $allCategories) {
+        $encCat = [System.Net.WebUtility]::HtmlEncode($catName)
+        [void]$sb.Append("<option value=`"$encCat`">$encCat</option>")
+    }
+    [void]$sb.AppendLine('</select>')
     [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Hide empty</span><span class="toggle-switch"><input type="checkbox" id="chk-hide-empty" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
     [void]$sb.AppendLine('</div>')
 
@@ -475,6 +483,19 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <button class="tab active" onclick="switchTab(this,''comparison'')">Comparison</button>')
     [void]$sb.AppendLine("    <button class=`"tab`" onclick=`"switchTab(this,'manual')`">Manual Review <span class=`"badge`">$manualCount</span></button>")
     [void]$sb.AppendLine('</div>')
+
+    # ── Collect all unique categories for the filter dropdown ────────────
+    $allCategories = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($productName in $products.Keys) {
+        $productData = $products[$productName]
+        foreach ($categoryName in $productData.Categories.Keys) {
+            $categoryData = $productData.Categories[$categoryName]
+            foreach ($r in $categoryData.ComparisonRows) {
+                $cat = if ($r.Category) { $r.Category } else { $categoryName }
+                if (-not [string]::IsNullOrWhiteSpace($cat)) { [void]$allCategories.Add($cat) }
+            }
+        }
+    }
 
     # ── Comparison tab ───────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
@@ -554,7 +575,14 @@ tr:hover td { background: var(--accent-soft); }
                 $encCategory = [System.Net.WebUtility]::HtmlEncode($row.Category)
                 $itemType = if ($row.ItemType) { $row.ItemType } else { 'Setting' }
 
-                [void]$sb.Append("                <tr data-status=`"$status`"><td>")
+                # Determine if both source and dest values are empty
+                $srcValRaw = "$($row.SourceValue)".Trim()
+                $dstValRaw = "$($row.DestValue)".Trim()
+                $bothEmpty = (([string]::IsNullOrEmpty($srcValRaw) -or $srcValRaw -eq [char]0x2014) -and
+                              ([string]::IsNullOrEmpty($dstValRaw) -or $dstValRaw -eq [char]0x2014))
+                $emptyAttr = if ($bothEmpty) { ' data-empty="true"' } else { '' }
+
+                [void]$sb.Append("                <tr data-status=`"$status`" data-category=`"$encCategory`"$emptyAttr><td>")
                 [void]$sb.Append($statusHtml)
                 [void]$sb.Append('</td>')
 
@@ -623,18 +651,25 @@ tr:hover td { background: var(--accent-soft); }
                     foreach ($s in $dstVisible) { $dstLookup[$s.Name] = [string]$s.Value }
 
                     $allSettingNames = @(@($srcVisible | ForEach-Object { $_.Name }) + @($dstVisible | ForEach-Object { $_.Name })) | Sort-Object -Unique
-                    $settingCount = $allSettingNames.Count
+
+                    # Fix 4: Only show settings that actually differ between source and dest
+                    $diffSettingNames = @($allSettingNames | Where-Object {
+                        $sVal = if ($srcLookup.ContainsKey($_)) { $srcLookup[$_] } else { $null }
+                        $dVal = if ($dstLookup.ContainsKey($_)) { $dstLookup[$_] } else { $null }
+                        $sVal -ne $dVal
+                    })
+                    $settingCount = $diffSettingNames.Count
 
                     if ($settingCount -gt 0) {
                         $colSpan = if ($inclAssignments) { 9 } else { 7 }
-                        [void]$sb.AppendLine("                <tr class=`"policy-detail-row`" data-status=`"$status`"><td colspan=`"$colSpan`">")
+                        [void]$sb.AppendLine("                <tr class=`"policy-detail-row`" data-status=`"$status`" data-category=`"$encCategory`"><td colspan=`"$colSpan`">")
                         [void]$sb.AppendLine("                    <details>")
                         [void]$sb.AppendLine("                        <summary>Show settings ($settingCount)</summary>")
                         [void]$sb.AppendLine('                        <table class="settings-table">')
                         [void]$sb.AppendLine('                            <thead><tr><th>Setting</th><th>Source Value</th><th>Dest Value</th></tr></thead>')
                         [void]$sb.AppendLine('                            <tbody>')
 
-                        foreach ($settingName in $allSettingNames) {
+                        foreach ($settingName in $diffSettingNames) {
                             $encSName = [System.Net.WebUtility]::HtmlEncode($settingName)
                             $srcVal = if ($srcLookup.ContainsKey($settingName)) { $srcLookup[$settingName] } else { '' }
                             $dstVal = if ($dstLookup.ContainsKey($settingName)) { $dstLookup[$settingName] } else { '' }
@@ -842,21 +877,17 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    var q = (document.getElementById("search-input").value || "").toLowerCase().trim();')
     [void]$sb.AppendLine('    var showAll = activeFilters.size === 0 || activeFilters.has("All");')
     [void]$sb.AppendLine('    var hideEmpty = document.getElementById("chk-hide-empty") && document.getElementById("chk-hide-empty").checked;')
+    [void]$sb.AppendLine('    var catFilter = document.getElementById("category-filter");')
+    [void]$sb.AppendLine('    var selectedCat = catFilter ? catFilter.value : "All";')
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-comparison");')
     [void]$sb.AppendLine('    if (!tab) return;')
-    [void]$sb.AppendLine('    // Filter individual rows by search + status + empty')
+    [void]$sb.AppendLine('    // Filter individual rows by search + status + category + empty')
     [void]$sb.AppendLine('    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {')
     [void]$sb.AppendLine('        var matchesSearch = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;')
     [void]$sb.AppendLine('        var matchesFilter = showAll || activeFilters.has(tr.getAttribute("data-status"));')
-    [void]$sb.AppendLine('        var isEmpty = false;')
-    [void]$sb.AppendLine('        if (hideEmpty) {')
-    [void]$sb.AppendLine('            var cells = tr.querySelectorAll("td.value-cell");')
-    [void]$sb.AppendLine('            if (cells.length > 0) {')
-    [void]$sb.AppendLine('                isEmpty = true;')
-    [void]$sb.AppendLine('                cells.forEach(function(c) { if (c.textContent.trim()) isEmpty = false; });')
-    [void]$sb.AppendLine('            }')
-    [void]$sb.AppendLine('        }')
-    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || isEmpty;')
+    [void]$sb.AppendLine('        var matchesCategory = selectedCat === "All" || tr.getAttribute("data-category") === selectedCat;')
+    [void]$sb.AppendLine('        var isEmpty = hideEmpty && tr.getAttribute("data-empty") === "true";')
+    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || !matchesCategory || isEmpty;')
     [void]$sb.AppendLine('        tr.style.display = hidden ? "none" : "";')
     [void]$sb.AppendLine('        // Also hide/show associated detail row')
     [void]$sb.AppendLine('        var next = tr.nextElementSibling;')

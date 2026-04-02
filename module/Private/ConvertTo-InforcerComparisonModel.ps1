@@ -128,21 +128,34 @@ function ConvertTo-InforcerComparisonModel {
         return $prod
     }
 
-    # ── Dynamically determine Intune products (those with SC policies) ────
-    $scProductNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($p in $srcSC) { [void]$scProductNames.Add((& $getProduct $p)) }
-    foreach ($p in $dstSC) { [void]$scProductNames.Add((& $getProduct $p)) }
+    # ── Build set of category prefixes from SC policies ───────────────────
+    # Filter non-SC policies by CATEGORY prefix, not product. This avoids
+    # including unrelated categories (e.g. Exchange/*) that happen to share
+    # a product name (e.g. "Microsoft Defender for Endpoint") with SC policies.
+    $scCategoryPrefixes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($p in ($srcSC + $dstSC)) {
+        $catKey = & $getCategoryKey $p
+        # Use the first part of the category (before " / ") as the prefix
+        $prefix = if ($catKey -match '^([^/]+)') { $Matches[1].Trim() } else { $catKey }
+        if (-not [string]::IsNullOrWhiteSpace($prefix)) { [void]$scCategoryPrefixes.Add($prefix) }
+    }
 
-    # Non-SC policies: only from products that also have SC policies (= Intune)
+    # Non-SC policies: only those whose category prefix matches an SC category
     $srcNonSC = [System.Collections.Generic.List[object]]::new()
     $dstNonSC = [System.Collections.Generic.List[object]]::new()
     foreach ($p in $sourcePolicies) {
         if ($null -eq $p -or $p.policyTypeId -eq 10) { continue }
-        if ($scProductNames.Contains((& $getProduct $p))) { [void]$srcNonSC.Add($p) }
+        $catKey = & $getCategoryKey $p
+        $prefix = if ($catKey -match '^([^/]+)') { $Matches[1].Trim() } else { $catKey }
+        if (-not $scCategoryPrefixes.Contains($prefix)) { continue }
+        [void]$srcNonSC.Add($p)
     }
     foreach ($p in $destPolicies) {
         if ($null -eq $p -or $p.policyTypeId -eq 10) { continue }
-        if ($scProductNames.Contains((& $getProduct $p))) { [void]$dstNonSC.Add($p) }
+        $catKey = & $getCategoryKey $p
+        $prefix = if ($catKey -match '^([^/]+)') { $Matches[1].Trim() } else { $catKey }
+        if (-not $scCategoryPrefixes.Contains($prefix)) { continue }
+        [void]$dstNonSC.Add($p)
     }
 
     # ── Extract settings from SC policies ─────────────────────────────────
@@ -222,9 +235,32 @@ function ConvertTo-InforcerComparisonModel {
         }
     }
 
+    # ── Helper: extract application name from settingDefinitionId ──────────
+    $appNamePatterns = @{
+        'word16v2'    = 'Word'
+        'excel16v2'   = 'Excel'
+        'ppt16v2'     = 'PowerPoint'
+        'access16v2'  = 'Access'
+        'outlook16v2' = 'Outlook'
+        'edge~'       = 'Edge'
+        'edge_v\d'    = 'Edge'
+        'onent16v2'   = 'OneNote'
+        'pub16v2'     = 'Publisher'
+        'visio16v2'   = 'Visio'
+        'proj16v2'    = 'Project'
+    }
+    $getAppNameFromDefId = {
+        param([string]$DefId)
+        $lower = $DefId.ToLowerInvariant()
+        foreach ($pattern in $appNamePatterns.Keys) {
+            if ($lower -match $pattern) { return $appNamePatterns[$pattern] }
+        }
+        return $null
+    }
+
     # ── Deduplicate friendly names ─────────────────────────────────────────
     # Multiple settingDefinitionIds can resolve to the same friendly name.
-    # When duplicates exist, append a short disambiguator from the defId.
+    # When duplicates exist, append the application name extracted from the defId.
     $deduplicateNames = {
         param([hashtable]$SettingsHash)
         # Group by friendly name
@@ -236,16 +272,21 @@ function ConvertTo-InforcerComparisonModel {
             }
             [void]$nameGroups[$name].Add($defId)
         }
-        # For groups with >1 entry, disambiguate
+        # For groups with >1 entry, disambiguate using app name
         foreach ($name in $nameGroups.Keys) {
             $ids = $nameGroups[$name]
             if ($ids.Count -gt 1) {
                 $counter = 1
                 foreach ($defId in $ids) {
-                    # Extract last meaningful segment of the defId for context
-                    $segments = $defId -split '[_/]'
-                    $suffix = if ($segments.Count -ge 2) { $segments[-2] } else { "$counter" }
-                    $SettingsHash[$defId].FriendlyName = "$name ($suffix)"
+                    $appName = & $getAppNameFromDefId $defId
+                    if ($appName) {
+                        $SettingsHash[$defId].FriendlyName = "$name — $appName"
+                    } else {
+                        # Fallback: extract last meaningful segment of the defId
+                        $segments = $defId -split '[_/]'
+                        $suffix = if ($segments.Count -ge 2) { $segments[-2] } else { "$counter" }
+                        $SettingsHash[$defId].FriendlyName = "$name ($suffix)"
+                    }
                     $counter++
                 }
             }

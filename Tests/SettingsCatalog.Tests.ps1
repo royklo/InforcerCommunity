@@ -81,9 +81,11 @@ Describe 'Import-InforcerSettingsCatalog' {
         Remove-Item $tmpFile -ErrorAction SilentlyContinue
     }
 
-    It 'writes an error when the path does not exist' {
+    It 'returns without loading catalog when explicit path does not exist' {
         InModuleScope InforcerCommunity {
-            { Import-InforcerSettingsCatalog -Path 'C:\DoesNotExist\settings.json' -ErrorAction Stop } | Should -Throw
+            $script:InforcerSettingsCatalog = $null
+            Import-InforcerSettingsCatalog -Path 'C:\DoesNotExist\settings.json'
+            $script:InforcerSettingsCatalog | Should -BeNullOrEmpty
         }
     }
 }
@@ -459,7 +461,7 @@ Describe 'ConvertTo-FlatSettingRows' {
 # ---------------------------------------------------------------------------
 # Integration tests are conditional on settings.json being present (it is gitignored -- 62.5 MB).
 # Resolve at script scope (outside Describe/BeforeAll) so -Skip can reference it at discovery time.
-$script:IntegrationSettingsPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..' 'module' 'data' 'settings.json'))
+$script:IntegrationSettingsPath = Join-Path ([System.Environment]::GetFolderPath('UserProfile')) '.inforcercommunity' 'data' 'settings.json'
 $script:IntegrationSettingsAvailable = Test-Path -LiteralPath $script:IntegrationSettingsPath
 
 Describe 'Integration: Load real settings.json and resolve known ID' {

@@ -3,18 +3,20 @@ function Import-InforcerSettingsCatalog {
     .SYNOPSIS
         Loads the Settings Catalog definition data into a session-scoped cache.
     .DESCRIPTION
-        Reads settings.json (a bundled copy of the IntuneSettingsCatalogViewer dataset) and
-        populates $script:InforcerSettingsCatalog as a hashtable keyed by settingDefinitionId.
+        Resolves settings.json via Get-InforcerSettingsCatalogPath (which auto-downloads and
+        caches from the IntuneSettingsCatalogData GitHub repository) and populates
+        $script:InforcerSettingsCatalog as a hashtable keyed by settingDefinitionId.
         Each entry contains DisplayName, Description, and an Options hashtable (itemId -> label).
 
         The catalog is loaded once per session. Subsequent calls are no-ops unless -Force is used.
     .PARAMETER Path
-        Path to settings.json. Defaults to module/data/settings.json relative to the Private directory.
+        Explicit path to settings.json. When omitted, uses the cache strategy in
+        Get-InforcerSettingsCatalogPath (auto-download from GitHub with 24h TTL).
     .PARAMETER Force
         Reload the catalog even if it is already cached.
     .EXAMPLE
         Import-InforcerSettingsCatalog
-        # Loads from default path (module/data/settings.json) the first time; no-op on subsequent calls.
+        # Auto-resolves settings.json via cache strategy the first time; no-op on subsequent calls.
     .EXAMPLE
         Import-InforcerSettingsCatalog -Force
         # Reloads the catalog even if already cached.
@@ -31,15 +33,15 @@ function Import-InforcerSettingsCatalog {
     # Guard: already loaded and -Force not requested
     if (-not $Force -and $null -ne $script:InforcerSettingsCatalog) { return }
 
-    # Default path: module/data/settings.json (Private/ -> data/)
+    # Resolve path via cache strategy if not explicit
     if ([string]::IsNullOrEmpty($Path)) {
-        $Path = Join-Path $PSScriptRoot '..' 'data' 'settings.json'
-        $Path = [System.IO.Path]::GetFullPath($Path)
+        $Path = Get-InforcerSettingsCatalogPath
+    } else {
+        $Path = Get-InforcerSettingsCatalogPath -ExplicitPath $Path
     }
 
-    if (-not (Test-Path -LiteralPath $Path)) {
-        Write-Error -Message "Settings catalog file not found: $Path. Copy settings.json from IntuneSettingsCatalogViewer to module/data/settings.json" `
-            -ErrorId 'SettingsCatalogNotFound' -Category ObjectNotFound
+    if ([string]::IsNullOrEmpty($Path)) {
+        # No catalog available -- caller proceeds without resolution
         return
     }
 

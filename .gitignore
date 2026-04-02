@@ -38,6 +38,7 @@ TestResults/
 # AI tooling and planning
 .claude/
 .planning/
+.superpowers/
 CLAUDE.md
 /docs/superpowers/
 

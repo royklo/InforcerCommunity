@@ -410,7 +410,7 @@ The HTML output features a modern admin dashboard design with a collapsible side
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
-| **Format** | String | No | Output format: `Html` (default), `Markdown`, `Csv`. |
+| **Format** | String | No | Output format: `Html` (default), `Markdown`, `Excel`. Excel creates an .xlsx workbook with one sheet per product (requires `ImportExcel` module). |
 | **TenantId** | Object | Yes | Tenant to document (numeric ID, GUID, or tenant name). |
 | **OutputPath** | String | No | Directory to write the output file. Defaults to current directory. |
 | **SettingsCatalogPath** | String | No | Path to a local `settings.json` file for Intune Settings Catalog name resolution. When omitted, automatically downloads and caches the latest data from the [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub repository (~65 MB, cached at `~/.inforcercommunity/data/settings.json` with a 24-hour TTL). |
@@ -427,8 +427,8 @@ Export-InforcerTenantDocumentation -Format Html -TenantId 482
 # Generate Markdown with baseline filter
 Export-InforcerTenantDocumentation -Format Markdown -TenantId 482 -Baseline "Production"
 
-# Generate CSV for spreadsheet analysis
-Export-InforcerTenantDocumentation -Format Csv -TenantId 482
+# Generate Excel workbook with one sheet per product
+Export-InforcerTenantDocumentation -Format Excel -TenantId 482
 
 # Full HTML with Graph data resolution (group names, filter names, scope tags)
 Connect-Inforcer -ApiKey $key -Region uk -FetchGraphData

@@ -9,15 +9,18 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 ### Features
 
 - **Settings Catalog runtime fetch:** The module now automatically downloads and caches the Intune Settings Catalog data (~65 MB) from [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub Releases. Replaces the bundled static `settings.json`. Cache stored at `~/.inforcercommunity/data/` with 24-hour TTL, atomic writes, single retry, and offline fallback.
+- **Excel export (`-Format Excel`):** Replaces CSV. Creates an `.xlsx` workbook with one sheet per product, auto-sized columns, filters, and frozen header row. Requires the `ImportExcel` module.
 
 ### New Private Functions
 
 - `Get-InforcerSettingsCatalogPath` — 6-tier cache resolution strategy: explicit path → fresh cache → stale remote check → first-time download → fallback → offline with stale cache.
+- `Export-InforcerDocExcel` — Renders DocModel to multi-sheet Excel workbook via ImportExcel.
 
 ### Changes
 
 - `Import-InforcerSettingsCatalog` now delegates path resolution to `Get-InforcerSettingsCatalogPath` instead of looking for bundled/sibling files.
 - `Export-InforcerTenantDocumentation` removed inline discovery chain (bundled → sibling → warn). `-SettingsCatalogPath` parameter now documents the auto-download behavior.
+- `Export-InforcerTenantDocumentation` `-Format` replaced `Csv` with `Excel`. Removed `ConvertTo-InforcerDocCsv` renderer.
 - Removed `module/data/.gitkeep` — settings catalog data is no longer bundled with the module.
 
 ## [0.2.0] - 2026-04-02

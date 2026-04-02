@@ -17,8 +17,9 @@
     Output files are written to the specified OutputPath directory and auto-named as
     {TenantName}-Documentation.{ext} (e.g., Contoso-Documentation.html).
 .PARAMETER Format
-    Output format(s) to generate. Accepted values: Html, Markdown, Csv. Multiple formats
-    can be specified as a comma-separated list or array. Defaults to Html.
+    Output format(s) to generate. Accepted values: Html, Markdown, Excel. Multiple formats
+    can be specified as a comma-separated list or array. Defaults to Html. Excel format
+    creates an .xlsx workbook with one sheet per product (requires ImportExcel module).
 .PARAMETER TenantId
     Tenant to document. Accepts a numeric ID, GUID, or tenant name. Required.
 .PARAMETER OutputPath
@@ -52,7 +53,7 @@
 
     Writes Contoso-Documentation.html to the current directory.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Csv -OutputPath C:\Reports
+    Export-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Excel -OutputPath C:\Reports
 
     Writes four documentation files to C:\Reports.
 .EXAMPLE
@@ -73,7 +74,7 @@ function Export-InforcerTenantDocumentation {
 [OutputType([System.IO.FileInfo])]
 param(
     [Parameter(Mandatory = $false)]
-    [ValidateSet('Html', 'Markdown', 'Csv')]
+    [ValidateSet('Html', 'Markdown', 'Excel')]
     [string[]]$Format = @('Html'),
 
     [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
@@ -294,7 +295,7 @@ foreach ($product in $docModel.Products.Values) {
 Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
 
 # Render each requested format and write to disk
-$extensionMap = @{ Html = 'html'; Markdown = 'md'; Csv = 'csv' }
+$extensionMap = @{ Html = 'html'; Markdown = 'md'; Excel = 'xlsx' }
 $formatIndex = 0
 
 foreach ($fmt in $Format) {
@@ -314,13 +315,19 @@ foreach ($fmt in $Format) {
     }
 
     Write-Host "Rendering $fmt ($formatIndex/$($Format.Count))..." -ForegroundColor Cyan
-    $content = switch ($fmt) {
-        'Html'     { ConvertTo-InforcerHtml     -DocModel $docModel }
-        'Markdown' { ConvertTo-InforcerMarkdown -DocModel $docModel }
-        'Csv'      { ConvertTo-InforcerDocCsv   -DocModel $docModel }
+
+    if ($fmt -eq 'Excel') {
+        # Excel writes directly to disk via ImportExcel
+        Export-InforcerDocExcel -DocModel $docModel -FilePath $filePath
+        if (-not (Test-Path -LiteralPath $filePath)) { continue }
+    } else {
+        $content = switch ($fmt) {
+            'Html'     { ConvertTo-InforcerHtml     -DocModel $docModel }
+            'Markdown' { ConvertTo-InforcerMarkdown -DocModel $docModel }
+        }
+        Set-Content -Path $filePath -Value $content -Encoding UTF8
     }
 
-    Set-Content -Path $filePath -Value $content -Encoding UTF8
     $fileInfo = Get-Item -LiteralPath $filePath
     $sizeKb = [math]::Round($fileInfo.Length / 1KB, 1)
     Write-Host "  Exported: $filePath ($sizeKb KB)" -ForegroundColor Green

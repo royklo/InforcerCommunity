@@ -451,6 +451,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''Conflicting'')">Conflicting</button>')
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''SourceOnly'')">Source Only</button>')
     [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''DestOnly'')">Dest Only</button>')
+    [void]$sb.AppendLine('    <span style="margin-left:auto"><label class="toggle-row" style="gap:0.5rem;font-size:0.75rem;cursor:pointer"><span>Hide empty values</span><input type="checkbox" id="chk-hide-empty" onchange="applyFilters()" style="cursor:pointer"></label></span>')
     [void]$sb.AppendLine('</div>')
 
     # ── Tabs ─────────────────────────────────────────────────────────────
@@ -465,6 +466,12 @@ tr:hover td { background: var(--accent-soft); }
     $isFirstProduct = $true
     foreach ($productName in $products.Keys) {
         $productData    = $products[$productName]
+
+        # Skip products with no rows
+        $totalProductRows = 0
+        foreach ($cd in $productData.Categories.Values) { $totalProductRows += $cd.ComparisonRows.Count }
+        if ($totalProductRows -eq 0) { continue }
+
         $encProductName = [System.Net.WebUtility]::HtmlEncode($productName)
         $pMatched       = $productData.Counters.Matched
         $pConflicting   = $productData.Counters.Conflicting
@@ -659,6 +666,7 @@ tr:hover td { background: var(--accent-soft); }
 
         foreach ($mrProductName in $manualReview.Keys) {
             $mrProduct = $manualReview[$mrProductName]
+            if ($mrProduct.Count -eq 0) { continue }  # skip empty products
             $encMrProdName = [System.Net.WebUtility]::HtmlEncode($mrProductName)
 
             [void]$sb.AppendLine('<details class="product-section" open>')
@@ -817,14 +825,26 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('function applyFilters() {')
     [void]$sb.AppendLine('    var q = (document.getElementById("search-input").value || "").toLowerCase().trim();')
     [void]$sb.AppendLine('    var showAll = activeFilters.size === 0 || activeFilters.has("All");')
+    [void]$sb.AppendLine('    var hideEmpty = document.getElementById("chk-hide-empty") && document.getElementById("chk-hide-empty").checked;')
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-comparison");')
     [void]$sb.AppendLine('    if (!tab) return;')
-    [void]$sb.AppendLine('    // Filter individual rows by search + status (multi-select OR logic)')
+    [void]$sb.AppendLine('    // Filter individual rows by search + status + empty')
     [void]$sb.AppendLine('    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {')
     [void]$sb.AppendLine('        var matchesSearch = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;')
     [void]$sb.AppendLine('        var matchesFilter = showAll || activeFilters.has(tr.getAttribute("data-status"));')
-    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter;')
+    [void]$sb.AppendLine('        var isEmpty = false;')
+    [void]$sb.AppendLine('        if (hideEmpty) {')
+    [void]$sb.AppendLine('            var cells = tr.querySelectorAll("td.value-cell");')
+    [void]$sb.AppendLine('            if (cells.length > 0) {')
+    [void]$sb.AppendLine('                isEmpty = true;')
+    [void]$sb.AppendLine('                cells.forEach(function(c) { if (c.textContent.trim()) isEmpty = false; });')
+    [void]$sb.AppendLine('            }')
+    [void]$sb.AppendLine('        }')
+    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || isEmpty;')
     [void]$sb.AppendLine('        tr.style.display = hidden ? "none" : "";')
+    [void]$sb.AppendLine('        // Also hide/show associated detail row')
+    [void]$sb.AppendLine('        var next = tr.nextElementSibling;')
+    [void]$sb.AppendLine('        if (next && next.classList.contains("policy-detail-row")) next.style.display = hidden ? "none" : "";')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    // Hide product sections where all rows are hidden')
     [void]$sb.AppendLine('    tab.querySelectorAll(".product-section").forEach(function(ps) {')

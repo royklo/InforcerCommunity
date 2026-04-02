@@ -35,8 +35,8 @@ InforcerCommunity/
 │   ├── InforcerCommunity.Format.ps1xml
 │   ├── InforcerCommunity.Types.ps1xml
 │   ├── README.md
-│   ├── Public/               # Exported cmdlets
-│   └── Private/              # Helpers (API, session, aliases, etc.)
+│   ├── Public/               # Exported cmdlets (incl. Export-InforcerTenantDocumentation)
+│   └── Private/              # Helpers (API, session, aliases, renderers, Graph, etc.)
 └── Tests/
     └── Consistency.Tests.ps1  # Pester tests
 ```
@@ -82,6 +82,13 @@ Get-InforcerTenantPolicies -TenantId 482
 # Show policy changes (PolicyDiff on each tenant when available)
 Get-InforcerTenant | Select-Object ClientTenantId, TenantFriendlyName, PolicyDiff
 
+# Generate tenant documentation as HTML
+Export-InforcerTenantDocumentation -Format Html -TenantId 482 -OutputPath ./docs
+
+# Generate documentation for a specific baseline with Graph group name resolution
+Connect-Inforcer -ApiKey "your-api-key" -Region uk -FetchGraphData
+Export-InforcerTenantDocumentation -Format Html -TenantId 482 -Baseline "Production" -FetchGraphData
+
 # Disconnect when done
 Disconnect-Inforcer
 ```
@@ -91,8 +98,8 @@ Disconnect-Inforcer
 
 | Cmdlet                         | Description                                                 |
 | ------------------------------ | ----------------------------------------------------------- |
-| **Connect-Inforcer**           | Establishes a secure connection to the Inforcer REST API.   |
-| **Disconnect-Inforcer**        | Disconnects and clears the session.                         |
+| **Connect-Inforcer**           | Establishes a secure connection to the Inforcer REST API. Supports `-FetchGraphData` to also connect Microsoft Graph. |
+| **Disconnect-Inforcer**        | Disconnects and clears the session (including Graph if connected). |
 | **Test-InforcerConnection**    | Tests the API connection.                                   |
 | **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId). |
 | **Get-InforcerBaseline**       | Retrieves baseline groups and members.                      |
@@ -100,6 +107,7 @@ Disconnect-Inforcer
 | **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 | **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId). |
+| **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, JSON, or CSV format. |
 
 
 For full parameter details and example output, see **[Cmdlet Reference](docs/CMDLET-REFERENCE.md)**. For detailed API schemas and response structures, see **[API Reference](docs/API-REFERENCE.md)**.

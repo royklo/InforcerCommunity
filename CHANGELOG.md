@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
+## [0.2.0] - 2026-04-02
+
+### Features
+
+- **New cmdlet: `Export-InforcerTenantDocumentation`** — generates comprehensive, human-readable documentation of an entire M365 tenant's configuration. Supports HTML, Markdown, JSON, and CSV output formats. Parameters: `-Format`, `-TenantId`, `-OutputPath`, `-SettingsCatalogPath`, `-FetchGraphData`, `-Baseline`, `-Tag`.
+- **HTML output:** Modern 2025 admin dashboard design with glassmorphism sidebar, collapsible Product > Category > Policy navigation, tag filter pills (AND/OR), real-time search with text highlighting, dark/light mode toggle (localStorage persistence), hide empty fields toggle, show metadata toggle, back-to-top button, notch-style status bar, collapsible long values. Self-contained with embedded CSS and JavaScript (no CDN dependencies).
+- **Graph integration (`-FetchGraphData`):** Resolves group ObjectIDs to display names, assignment filter IDs to names, and scope tag IDs to names via Microsoft Graph. Validates Graph tenant matches Inforcer tenant.
+- **Baseline and tag filtering:** `-Baseline` filters to policies in a specific baseline via alignment details API. `-Tag` filters by Inforcer tag name (case-insensitive).
+- **`Connect-Inforcer` updated:** Added `-FetchGraphData` switch to simultaneously connect to Microsoft Graph alongside Inforcer API.
+- **`Disconnect-Inforcer` updated:** Now also disconnects Microsoft Graph session when active.
+
+### New Private Functions
+
+- `Get-InforcerPolicyDisplayInfo` — maps API internal names to Microsoft admin portal categories (Entra 21 settings, SharePoint 11, M365 Admin Center 3).
+- `Resolve-InforcerAssignments` — translates assignment `@odata.type` to friendly names (All Devices, All Users, Group Include/Exclude).
+- `Connect-InforcerGraph` — auto-installs `Microsoft.Graph.Authentication`, handles Graph sign-in with tenant targeting.
+- `Invoke-InforcerGraphRequest` — wraps `Invoke-MgGraphRequest` with retry logic and automatic paging.
+
+### Improvements
+
+- Object arrays (apps, approvedKeyboards) now display item count plus individual items instead of comma-separated empty strings.
+- Categories sorted alphabetically and grouped by platform (e.g., Windows > subcategories).
+- "All /" prefix stripped from category display names.
+- Policy tags shown inline as blue-bordered badges; "None" shown for policies without assignments.
+- Progress reporting during export; auto-opens HTML in browser after export.
+- Returns `FileInfo` objects for exported files.
+
 ## [0.1.0] - 2026-03-30
 
 ### Features

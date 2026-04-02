@@ -402,6 +402,74 @@ RiskLevel        :
 
 ---
 
+## Export-InforcerTenantDocumentation
+
+Generates comprehensive, human-readable documentation of an entire M365 tenant's configuration as managed through the Inforcer API. Pulls data from existing cmdlets (`Get-InforcerBaseline`, `Get-InforcerTenant`, `Get-InforcerTenantPolicies`), resolves Intune Settings Catalog settingDefinitionIDs to friendly names, and outputs in multiple formats.
+
+The HTML output features a modern admin dashboard design with a collapsible sidebar navigation, search, tag filtering, dark/light mode toggle, and hide-empty-fields toggle. All output is self-contained (no external dependencies or CDN links).
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|--------------|
+| **Format** | String | No | Output format: `Html` (default), `Markdown`, `Json`, `Csv`. |
+| **TenantId** | Object | Yes | Tenant to document (numeric ID, GUID, or tenant name). |
+| **OutputPath** | String | No | Directory to write the output file. Defaults to current directory. |
+| **SettingsCatalogPath** | String | No | Path to a custom `settings.json` file for Intune Settings Catalog name resolution. Uses the bundled dataset if omitted. |
+| **FetchGraphData** | Switch | No | When set, resolves group ObjectIDs to display names, assignment filter IDs to names, and scope tag IDs to names via Microsoft Graph. Requires a Graph connection (use `Connect-Inforcer -FetchGraphData` or `Connect-InforcerGraph`). |
+| **Baseline** | String | No | Filter to policies belonging to a specific baseline (name or ID). |
+| **Tag** | String | No | Filter to policies with a specific Inforcer tag (case-insensitive). |
+
+### Examples
+
+```powershell
+# Generate HTML documentation for a tenant
+Export-InforcerTenantDocumentation -Format Html -TenantId 482
+
+# Generate Markdown with baseline filter
+Export-InforcerTenantDocumentation -Format Markdown -TenantId 482 -Baseline "Production"
+
+# Generate JSON export to a specific directory
+Export-InforcerTenantDocumentation -Format Json -TenantId 482 -OutputPath ./reports
+
+# Generate CSV for spreadsheet analysis
+Export-InforcerTenantDocumentation -Format Csv -TenantId 482
+
+# Full HTML with Graph data resolution (group names, filter names, scope tags)
+Connect-Inforcer -ApiKey $key -Region uk -FetchGraphData
+Export-InforcerTenantDocumentation -Format Html -TenantId 482 -FetchGraphData
+
+# Filter by tag
+Export-InforcerTenantDocumentation -Format Html -TenantId 482 -Tag "Tier 1"
+```
+
+### Output
+
+Returns `FileInfo` objects for the exported file(s). HTML output auto-opens in the default browser.
+
+### HTML features
+
+- Modern glassmorphism sidebar with collapsible Product > Category > Policy hierarchy
+- Tag filter pills for AND/OR filtering by Inforcer tags
+- Real-time search bar with text highlighting
+- Dark/Light mode toggle (persisted via localStorage)
+- Hide empty fields toggle (scoped to Basics/Settings sections only)
+- Show metadata toggle for @odata properties
+- Back-to-top floating button
+- Notch-style status bar showing tenant/baseline name and policy count
+- Collapsible long values with Expand/Collapse button
+- Categories sorted alphabetically, grouped by platform
+- Policy tags shown inline as blue-bordered badges
+- "None" displayed for policies without assignments
+
+### Graph integration (`-FetchGraphData`)
+
+When `-FetchGraphData` is specified and a Graph connection is available:
+- Group ObjectIDs in assignments are resolved to display names via `/directoryObjects`
+- Assignment filter IDs are resolved to names via `/beta/deviceManagement/assignmentFilters`
+- Scope tag IDs are resolved to names via `/beta/deviceManagement/roleScopeTags`
+- The Graph tenant is validated against the Inforcer tenant's `msTenantId`
+
+---
+
 ## See also
 
 - **[API-REFERENCE.md](./API-REFERENCE.md)** — Detailed API schemas and response structures.

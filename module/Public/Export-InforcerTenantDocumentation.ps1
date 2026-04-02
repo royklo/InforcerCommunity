@@ -221,7 +221,14 @@ $groupNameMap = $null
 $filterMap = $null
 if ($FetchGraphData) {
     Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
-    $graphCtx = Connect-InforcerGraph -RequiredScopes @('Directory.Read.All')
+    # Extract Azure AD tenant GUID from the Inforcer tenant data so Graph targets the correct tenant
+    $msTenantId = $null
+    if ($docData.Tenant -and $docData.Tenant.PSObject.Properties['msTenantId']) {
+        $msTenantId = $docData.Tenant.msTenantId
+    }
+    $graphConnectParams = @{ RequiredScopes = @('Directory.Read.All') }
+    if ($msTenantId) { $graphConnectParams['TenantId'] = $msTenantId }
+    $graphCtx = Connect-InforcerGraph @graphConnectParams
 
     if (-not $graphCtx) {
         Write-Warning 'Microsoft Graph connection failed. Falling back to raw ObjectIDs.'

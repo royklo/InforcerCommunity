@@ -15,7 +15,10 @@ function Connect-InforcerGraph {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]
-        [string[]]$RequiredScopes = @('Directory.Read.All')
+        [string[]]$RequiredScopes = @('Directory.Read.All'),
+
+        [Parameter(Mandatory = $false)]
+        [string]$TenantId
     )
 
     # Auto-install Microsoft.Graph.Authentication if missing
@@ -31,7 +34,12 @@ function Connect-InforcerGraph {
 
     # Always do a fresh sign-in so the session is current
     try {
-        Connect-MgGraph -Scopes $RequiredScopes -NoWelcome -ErrorAction Stop
+        $connectParams = @{ Scopes = $RequiredScopes; NoWelcome = $true }
+        if (-not [string]::IsNullOrWhiteSpace($TenantId)) {
+            $connectParams['TenantId'] = $TenantId
+            Write-Host "  Targeting Azure AD tenant: $TenantId" -ForegroundColor Gray
+        }
+        Connect-MgGraph @connectParams -ErrorAction Stop
         $newContext = Get-MgContext
         if ($newContext) {
             $script:InforcerGraphConnected = $true

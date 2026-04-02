@@ -38,7 +38,7 @@ Describe 'Consistency contract' {
             'Get-InforcerUser', 'Export-InforcerTenantDocumentation'
         )
         $script:expectedParameters = @{
-            'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl', 'FetchGraphData')
+            'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl', 'FetchGraphData', 'PassThru')
             'Disconnect-Inforcer'           = @()
             'Test-InforcerConnection'       = @()
             'Get-InforcerTenant'            = @('Format', 'TenantId', 'OutputType')

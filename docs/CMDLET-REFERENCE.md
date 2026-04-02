@@ -410,7 +410,7 @@ The HTML output features a modern admin dashboard design with a collapsible side
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
-| **Format** | String | No | Output format: `Html` (default), `Markdown`, `Json`, `Csv`. |
+| **Format** | String | No | Output format: `Html` (default), `Markdown`, `Csv`. |
 | **TenantId** | Object | Yes | Tenant to document (numeric ID, GUID, or tenant name). |
 | **OutputPath** | String | No | Directory to write the output file. Defaults to current directory. |
 | **SettingsCatalogPath** | String | No | Path to a local `settings.json` file for Intune Settings Catalog name resolution. When omitted, automatically downloads and caches the latest data from the [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub repository (~65 MB, cached at `~/.inforcercommunity/data/settings.json` with a 24-hour TTL). |
@@ -426,9 +426,6 @@ Export-InforcerTenantDocumentation -Format Html -TenantId 482
 
 # Generate Markdown with baseline filter
 Export-InforcerTenantDocumentation -Format Markdown -TenantId 482 -Baseline "Production"
-
-# Generate JSON export to a specific directory
-Export-InforcerTenantDocumentation -Format Json -TenantId 482 -OutputPath ./reports
 
 # Generate CSV for spreadsheet analysis
 Export-InforcerTenantDocumentation -Format Csv -TenantId 482

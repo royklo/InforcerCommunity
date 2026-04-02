@@ -17,7 +17,7 @@
     Output files are written to the specified OutputPath directory and auto-named as
     {TenantName}-Documentation.{ext} (e.g., Contoso-Documentation.html).
 .PARAMETER Format
-    Output format(s) to generate. Accepted values: Html, Markdown, Json, Csv. Multiple formats
+    Output format(s) to generate. Accepted values: Html, Markdown, Csv. Multiple formats
     can be specified as a comma-separated list or array. Defaults to Html.
 .PARAMETER TenantId
     Tenant to document. Accepts a numeric ID, GUID, or tenant name. Required.
@@ -52,7 +52,7 @@
 
     Writes Contoso-Documentation.html to the current directory.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Json,Csv -OutputPath C:\Reports
+    Export-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Csv -OutputPath C:\Reports
 
     Writes four documentation files to C:\Reports.
 .EXAMPLE
@@ -73,7 +73,7 @@ function Export-InforcerTenantDocumentation {
 [OutputType([System.IO.FileInfo])]
 param(
     [Parameter(Mandatory = $false)]
-    [ValidateSet('Html', 'Markdown', 'Json', 'Csv')]
+    [ValidateSet('Html', 'Markdown', 'Csv')]
     [string[]]$Format = @('Html'),
 
     [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
@@ -294,7 +294,7 @@ foreach ($product in $docModel.Products.Values) {
 Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
 
 # Render each requested format and write to disk
-$extensionMap = @{ Html = 'html'; Markdown = 'md'; Json = 'json'; Csv = 'csv' }
+$extensionMap = @{ Html = 'html'; Markdown = 'md'; Csv = 'csv' }
 $formatIndex = 0
 
 foreach ($fmt in $Format) {
@@ -317,7 +317,6 @@ foreach ($fmt in $Format) {
     $content = switch ($fmt) {
         'Html'     { ConvertTo-InforcerHtml     -DocModel $docModel }
         'Markdown' { ConvertTo-InforcerMarkdown -DocModel $docModel }
-        'Json'     { ConvertTo-InforcerDocJson  -DocModel $docModel }
         'Csv'      { ConvertTo-InforcerDocCsv   -DocModel $docModel }
     }
 

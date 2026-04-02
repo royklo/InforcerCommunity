@@ -107,7 +107,7 @@ Disconnect-Inforcer
 | **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 | **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId). |
-| **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, JSON, or CSV format. |
+| **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, or CSV format. |
 
 
 For full parameter details and example output, see **[Cmdlet Reference](docs/CMDLET-REFERENCE.md)**. For detailed API schemas and response structures, see **[API Reference](docs/API-REFERENCE.md)**.

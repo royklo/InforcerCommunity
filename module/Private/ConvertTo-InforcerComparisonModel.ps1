@@ -149,7 +149,11 @@ function ConvertTo-InforcerComparisonModel {
                 # Use ConvertTo-InforcerSettingRows for friendly name and value
                 $rows = @(ConvertTo-InforcerSettingRows -SettingInstance $settingGroup.settingInstance)
                 $friendlyName = if ($rows.Count -gt 0) { $rows[0].Name } else { $defId }
-                $value = if ($rows.Count -gt 0) { "$($rows[0].Value)" } else { '' }
+                # Use first configured value; for group settings the header row has empty value
+                $configuredRows = @($rows | Where-Object { $_.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($_.Value)") })
+                $value = if ($configuredRows.Count -gt 0) { "$($configuredRows[0].Value)" }
+                         elseif ($rows.Count -gt 0) { "$($rows[0].Value)" }
+                         else { '' }
 
                 # First occurrence wins for each settingDefinitionId
                 if (-not $srcSettings.ContainsKey($defId)) {
@@ -181,7 +185,11 @@ function ConvertTo-InforcerComparisonModel {
 
                 $rows = @(ConvertTo-InforcerSettingRows -SettingInstance $settingGroup.settingInstance)
                 $friendlyName = if ($rows.Count -gt 0) { $rows[0].Name } else { $defId }
-                $value = if ($rows.Count -gt 0) { "$($rows[0].Value)" } else { '' }
+                # Use first configured value; for group settings the header row has empty value
+                $configuredRows = @($rows | Where-Object { $_.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($_.Value)") })
+                $value = if ($configuredRows.Count -gt 0) { "$($configuredRows[0].Value)" }
+                         elseif ($rows.Count -gt 0) { "$($rows[0].Value)" }
+                         else { '' }
 
                 if (-not $dstSettings.ContainsKey($defId)) {
                     $dstSettings[$defId] = @{
@@ -285,9 +293,14 @@ function ConvertTo-InforcerComparisonModel {
         }
     }
 
-    # ── Manual Review: non-SC policies ─────────────────────────────────────
-    # All non-Settings-Catalog policies need manual review — they are all
-    # Intune-scoped policies from Get-InforcerTenantPolicies.
+    # ── Manual Review: non-SC policies from Intune products only ────────────
+    # Only include non-SC policies whose product matches a product that has SC policies.
+    # This filters out non-Intune products (Entra ID, Exchange, SharePoint, etc.).
+    # Policies with empty/null product are included if they share a policyTypeId with SC policies.
+    $scProductNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($p in $srcSC) { [void]$scProductNames.Add((& $getProduct $p)) }
+    foreach ($p in $dstSC) { [void]$scProductNames.Add((& $getProduct $p)) }
+
     $manualReview = [ordered]@{}
     $manualCount = 0
 
@@ -308,6 +321,7 @@ function ConvertTo-InforcerComparisonModel {
         if ($null -eq $p) { continue }
         if ($p.policyTypeId -eq 10) { continue }   # SC policies are already handled above
         $prod = & $getProduct $p
+        if (-not $scProductNames.Contains($prod)) { continue }   # skip non-Intune products
         $cat  = & $getCategoryKey $p
         if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
         $policyName = Get-InforcerPolicyName -Policy $p
@@ -333,6 +347,7 @@ function ConvertTo-InforcerComparisonModel {
         if ($null -eq $p) { continue }
         if ($p.policyTypeId -eq 10) { continue }
         $prod = & $getProduct $p
+        if (-not $scProductNames.Contains($prod)) { continue }   # skip non-Intune products
         $cat  = & $getCategoryKey $p
         if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
         $policyName = Get-InforcerPolicyName -Policy $p

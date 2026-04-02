@@ -684,26 +684,69 @@ tr:hover td { background: var(--accent-soft); }
         [void]$sb.AppendLine("<summary><a href=`"#$prodAnchor`" onclick=`"navClick(event,'$prodAnchor')`">$prodEsc</a> <span class=`"badge`">$prodPolicies</span></summary>")
         [void]$sb.AppendLine('<ul class="toc-l2">')
 
+        # Group categories by their first part (before " / ") for nested display
+        $catGroups = [ordered]@{}
         foreach ($catName in ($DocModel.Products[$prodName].Categories.Keys | Sort-Object)) {
-            $catDisplayName = $catName -replace '^All / ', ''
-            $catEsc    = [System.Net.WebUtility]::HtmlEncode($catDisplayName)
-            $catAnchor = ConvertTo-HtmlAnchorId -Text "$prodName-$catName"
-            $catPolicies = @($DocModel.Products[$prodName].Categories[$catName])
-
-            [void]$sb.AppendLine('<li>')
-            [void]$sb.AppendLine('<details>')
-            [void]$sb.AppendLine("<summary><a href=`"#$catAnchor`" onclick=`"navClick(event,'$catAnchor')`" style=`"font-size:0.8rem;color:var(--muted)`">$catEsc</a></summary>")
-            [void]$sb.AppendLine('<ul class="toc-l3">')
-
-            foreach ($pol in $catPolicies) {
-                $polNameEsc = [System.Net.WebUtility]::HtmlEncode($pol.Basics.Name)
-                $polAnchor  = ConvertTo-HtmlAnchorId -Text "$prodName-$catName-$($pol.Basics.Name)"
-                [void]$sb.AppendLine("<li><a href=`"#$polAnchor`" onclick=`"navClick(event,'$polAnchor')`">$polNameEsc</a></li>")
+            if ($catName -match '^(.+?) / (.+)$') {
+                $groupName = $Matches[1]
+                if ($groupName -eq 'All') { $groupName = $Matches[2]; $subName = $null }
+                else { $subName = $Matches[2] }
+            } else {
+                $groupName = $catName; $subName = $null
             }
+            if (-not $catGroups.Contains($groupName)) { $catGroups[$groupName] = [System.Collections.Generic.List[object]]::new() }
+            [void]$catGroups[$groupName].Add(@{ CatName = $catName; SubName = $subName })
+        }
 
-            [void]$sb.AppendLine('</ul>')
-            [void]$sb.AppendLine('</details>')
-            [void]$sb.AppendLine('</li>')
+        foreach ($groupName in $catGroups.Keys) {
+            $groupEntries = $catGroups[$groupName]
+            $groupEsc = [System.Net.WebUtility]::HtmlEncode($groupName)
+
+            if ($groupEntries.Count -eq 1 -and $null -eq $groupEntries[0].SubName) {
+                # Single category with no subcategory — show directly with policies
+                $catName = $groupEntries[0].CatName
+                $catAnchor = ConvertTo-HtmlAnchorId -Text "$prodName-$catName"
+                $catPolicies = @($DocModel.Products[$prodName].Categories[$catName])
+
+                [void]$sb.AppendLine('<li>')
+                [void]$sb.AppendLine('<details>')
+                [void]$sb.AppendLine("<summary><a href=`"#$catAnchor`" onclick=`"navClick(event,'$catAnchor')`" style=`"font-size:0.8rem;color:var(--muted)`">$groupEsc</a></summary>")
+                [void]$sb.AppendLine('<ul class="toc-l3">')
+                foreach ($pol in $catPolicies) {
+                    $polNameEsc = [System.Net.WebUtility]::HtmlEncode($pol.Basics.Name)
+                    $polAnchor  = ConvertTo-HtmlAnchorId -Text "$prodName-$catName-$($pol.Basics.Name)"
+                    [void]$sb.AppendLine("<li><a href=`"#$polAnchor`" onclick=`"navClick(event,'$polAnchor')`">$polNameEsc</a></li>")
+                }
+                [void]$sb.AppendLine('</ul>')
+                [void]$sb.AppendLine('</details>')
+                [void]$sb.AppendLine('</li>')
+            } else {
+                # Group with subcategories — nest them
+                [void]$sb.AppendLine('<li>')
+                [void]$sb.AppendLine('<details>')
+                $firstCatAnchor = ConvertTo-HtmlAnchorId -Text "$prodName-$($groupEntries[0].CatName)"
+                [void]$sb.AppendLine("<summary><a href=`"#$firstCatAnchor`" onclick=`"navClick(event,'$firstCatAnchor')`" style=`"font-size:0.8rem;color:var(--muted)`">$groupEsc</a></summary>")
+                [void]$sb.AppendLine('<ul class="toc-l3">')
+
+                foreach ($entry in $groupEntries) {
+                    $catName = $entry.CatName
+                    $subDisplay = if ($entry.SubName) { $entry.SubName } else { $groupName }
+                    $subEsc = [System.Net.WebUtility]::HtmlEncode($subDisplay)
+                    $catAnchor = ConvertTo-HtmlAnchorId -Text "$prodName-$catName"
+                    [void]$sb.AppendLine("<li><a href=`"#$catAnchor`" onclick=`"navClick(event,'$catAnchor')`"><strong>$subEsc</strong></a></li>")
+
+                    # Show policies under each subcategory
+                    foreach ($pol in @($DocModel.Products[$prodName].Categories[$catName])) {
+                        $polNameEsc = [System.Net.WebUtility]::HtmlEncode($pol.Basics.Name)
+                        $polAnchor  = ConvertTo-HtmlAnchorId -Text "$prodName-$catName-$($pol.Basics.Name)"
+                        [void]$sb.AppendLine("<li style=`"padding-left:0.75rem`"><a href=`"#$polAnchor`" onclick=`"navClick(event,'$polAnchor')`">$polNameEsc</a></li>")
+                    }
+                }
+
+                [void]$sb.AppendLine('</ul>')
+                [void]$sb.AppendLine('</details>')
+                [void]$sb.AppendLine('</li>')
+            }
         }
 
         [void]$sb.AppendLine('</ul>')

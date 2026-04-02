@@ -245,7 +245,8 @@ body {
     white-space: nowrap;
 }
 .muted { color: var(--muted); font-style: italic; }
-.tag-badge { background: var(--accent-soft) !important; color: var(--accent) !important; }
+.tag-badge { background: #dbeafe !important; color: #1e40af !important; border: 1px solid #93c5fd; }
+:root.dark .tag-badge { background: rgba(59,130,246,0.2) !important; color: #93c5fd !important; border-color: rgba(59,130,246,0.4); }
 /* --- Summary / Details (shared) --- */
 details { border-radius: var(--radius-xs); }
 summary {
@@ -293,10 +294,11 @@ summary:hover { background: var(--summary-hover); }
     border: 1px solid var(--border);
     border-top: none;
     border-radius: 0 0 var(--radius) var(--radius);
-    padding: 1rem 1.25rem;
+    padding: 0.5rem 1.25rem 1rem;
     box-shadow: var(--shadow-sm);
     margin-bottom: 0.5rem;
 }
+.product-content > h3:first-child { margin-top: 0.5rem; }
 .product-title { flex: 1; }
 /* --- Category headings --- */
 h3 {

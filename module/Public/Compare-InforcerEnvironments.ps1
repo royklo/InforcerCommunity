@@ -185,6 +185,12 @@ $fileInfo = Get-Item -LiteralPath $filePath
 $sizeKb   = [math]::Round($fileInfo.Length / 1KB, 1)
 Write-Host "  Exported: $filePath ($sizeKb KB)" -ForegroundColor Green
 
+# Auto-open HTML output in the default browser (cross-platform)
+$fullPath = (Resolve-Path -LiteralPath $filePath).Path
+if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullPath }
+elseif ($IsWindows) { Start-Process $fullPath }
+elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullPath }
+
 Write-Host "Done. Comparison report generated for '$($compData.SourceName)' vs '$($compData.DestinationName)'." -ForegroundColor Cyan
 
 $fileInfo

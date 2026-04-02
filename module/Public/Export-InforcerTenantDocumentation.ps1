@@ -26,11 +26,11 @@
     When a single format is specified and this path has a file extension, it is treated as an
     explicit output file path. Defaults to the current directory.
 .PARAMETER SettingsCatalogPath
-    Path to the IntuneSettingsCatalog settings.json file. When omitted, the cmdlet searches:
-    1. module/data/settings.json (bundled copy shipped with the module)
-    2. Sibling IntuneSettingsCatalogViewer repo at ../IntuneSettingsCatalogViewer/data/settings.json
-    If not found in either location, Settings Catalog policies show raw settingDefinitionId values
-    and a warning is emitted.
+    Path to a local settings.json file for Settings Catalog resolution. When omitted, the cmdlet
+    automatically downloads and caches the latest data from the IntuneSettingsCatalogData GitHub
+    repository (~65 MB, cached at ~/.inforcercommunity/data/settings.json with a 24-hour TTL).
+    If download fails and no cached copy exists, Settings Catalog policies show raw
+    settingDefinitionId values and a warning is emitted.
 .PARAMETER FetchGraphData
     When specified, uses Invoke-MgGraphRequest to enrich the documentation with live data from
     Microsoft Graph. Currently resolves assignment group/user ObjectIDs to their display names
@@ -109,25 +109,8 @@ try {
     return
 }
 
-# Settings.json discovery chain (D-06, D-07, D-08):
-# 1. Explicit -SettingsCatalogPath parameter
-# 2. Bundled module/data/settings.json
-# 3. Sibling IntuneSettingsCatalogViewer repo
-# 4. Not found - warn and proceed without resolution
+# Settings catalog path: explicit override or auto-resolved via cache strategy
 $resolvedCatalogPath = $SettingsCatalogPath
-if ([string]::IsNullOrEmpty($resolvedCatalogPath)) {
-    $bundled = Join-Path $PSScriptRoot '..' 'data' 'settings.json'
-    $bundled = [System.IO.Path]::GetFullPath($bundled)
-    if (Test-Path -LiteralPath $bundled) { $resolvedCatalogPath = $bundled }
-}
-if ([string]::IsNullOrEmpty($resolvedCatalogPath)) {
-    $sibling = Join-Path $PSScriptRoot '..' '..' '..' 'IntuneSettingsCatalogViewer' 'data' 'settings.json'
-    $sibling = [System.IO.Path]::GetFullPath($sibling)
-    if (Test-Path -LiteralPath $sibling) { $resolvedCatalogPath = $sibling }
-}
-if ([string]::IsNullOrEmpty($resolvedCatalogPath)) {
-    Write-Warning 'Settings catalog (settings.json) not found. Settings Catalog policies will show raw settingDefinitionId values.'
-}
 
 # Collect data from the 3 source cmdlets and build DocModel
 Write-Host 'Collecting tenant data...' -ForegroundColor Cyan

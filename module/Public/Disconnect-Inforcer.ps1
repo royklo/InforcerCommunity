@@ -26,6 +26,17 @@ param()
 if ($script:InforcerSession -and $script:InforcerSession.ApiKey -and $script:InforcerSession.BaseUrl) {
     if ($PSCmdlet.ShouldProcess('Inforcer session', 'Disconnect')) {
         $script:InforcerSession = $null
+        $script:InforcerSettingsCatalog = $null
+
+        # Also disconnect Microsoft Graph if it was connected via this module
+        if ($script:InforcerGraphConnected) {
+            try {
+                Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+                Write-Verbose 'Disconnected from Microsoft Graph.'
+            } catch { }
+            $script:InforcerGraphConnected = $false
+        }
+
         Write-Verbose 'Disconnected from Inforcer API. Session cleared.'
         'Disconnected from Inforcer API.'
     }

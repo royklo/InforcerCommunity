@@ -35,8 +35,11 @@ packages/
 PesterResult*.xml
 TestResults/
 
-# Claude
+# AI tooling and planning
 .claude/
+.planning/
+CLAUDE.md
+/docs/superpowers/
 
 # Cursor
 .cursor/
@@ -46,13 +49,24 @@ TestResults/
 
 # Agents
 /AGENTS.md
-
-# Skills
 /SKILLS.md
 
 # ignore test files
-/*.html
 /**/*.html
 
-# docs/superpowers
-/docs/superpowers/*
+# Settings Catalog data (62.5 MB -- copy from IntuneSettingsCatalogViewer sibling repo)
+module/data/settings.json
+
+# Sample data
+/scripts/sample-data/
+/**/sample-data/
+
+# Data collection scripts (dev-only)
+/scripts/Collect-InforcerData.ps1
+
+# TODO (local dev notes)
+TODO.md
+
+# Generated documentation output
+*.xlsx
+*.md.bak

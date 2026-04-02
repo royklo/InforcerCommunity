@@ -631,33 +631,6 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<div style="margin-top:0.75rem"><input type="text" id="search-input" placeholder="Search policies, settings, values..." style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text);font-size:0.875rem;font-family:inherit;outline:none" oninput="searchPolicies(this.value)"></div>')
     [void]$sb.AppendLine('</div>')
 
-    # --- Tag filter bar (in main content area, prominently visible) ---
-    $allTagsMain = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($prodVal in $DocModel.Products.Values) {
-        foreach ($catPols in $prodVal.Categories.Values) {
-            foreach ($pol in @($catPols)) {
-                $t = $pol.Basics['Tags']
-                if (-not [string]::IsNullOrWhiteSpace($t)) {
-                    foreach ($tn in ($t -split ',\s*')) {
-                        if (-not [string]::IsNullOrWhiteSpace($tn)) { [void]$allTagsMain.Add($tn.Trim()) }
-                    }
-                }
-            }
-        }
-    }
-    if ($allTagsMain.Count -gt 0) {
-        [void]$sb.AppendLine('<div class="card" style="padding:0.75rem 1rem;margin-bottom:1rem">')
-        [void]$sb.AppendLine('<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">')
-        [void]$sb.AppendLine('<span style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);white-space:nowrap">Filter by tag</span>')
-        foreach ($tn in $allTagsMain) {
-            $tnEsc = [System.Net.WebUtility]::HtmlEncode($tn)
-            $tnSafe = $tn -replace '[^a-zA-Z0-9 \-]', ''
-            [void]$sb.AppendLine("<span class=`"tag-pill`" data-tag=`"$tnSafe`" onclick=`"toggleTagFilter(this,this.getAttribute('data-tag'))`">$tnEsc</span>")
-        }
-        [void]$sb.AppendLine('</div>')
-        [void]$sb.AppendLine('</div>')
-    }
-
     # --- Notch warning bar ---
     $notchLabel = if ($DocModel.FilterBaseline) {
         [System.Net.WebUtility]::HtmlEncode($DocModel.FilterBaseline)

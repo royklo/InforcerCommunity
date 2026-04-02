@@ -285,16 +285,11 @@ function ConvertTo-InforcerComparisonModel {
         }
     }
 
-    # ── Manual Review: non-SC policies in products that HAVE SC policies ───
-    # Only show manual review for products where we're actively comparing settings.
-    # Non-Intune products (Entra ID, Exchange, etc.) are out of scope entirely.
+    # ── Manual Review: non-SC policies ─────────────────────────────────────
+    # All non-Settings-Catalog policies need manual review — they are all
+    # Intune-scoped policies from Get-InforcerTenantPolicies.
     $manualReview = [ordered]@{}
     $manualCount = 0
-
-    # Collect product names that have SC policies (from the comparison above)
-    $scProductNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($p in $srcSC) { [void]$scProductNames.Add((& $getProduct $p)) }
-    foreach ($p in $dstSC) { [void]$scProductNames.Add((& $getProduct $p)) }
 
     $ensureManualCategory = {
         param([string]$Product, [string]$Category)
@@ -313,7 +308,6 @@ function ConvertTo-InforcerComparisonModel {
         if ($null -eq $p) { continue }
         if ($p.policyTypeId -eq 10) { continue }   # SC policies are already handled above
         $prod = & $getProduct $p
-        if (-not $scProductNames.Contains($prod)) { continue }   # skip non-Intune products
         $cat  = & $getCategoryKey $p
         if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
         $policyName = Get-InforcerPolicyName -Policy $p
@@ -339,7 +333,6 @@ function ConvertTo-InforcerComparisonModel {
         if ($null -eq $p) { continue }
         if ($p.policyTypeId -eq 10) { continue }
         $prod = & $getProduct $p
-        if (-not $scProductNames.Contains($prod)) { continue }   # skip non-Intune products
         $cat  = & $getCategoryKey $p
         if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
         $policyName = Get-InforcerPolicyName -Policy $p

@@ -413,8 +413,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<div class="header">')
     [void]$sb.AppendLine('    <h1>Environment Comparison Report</h1>')
     [void]$sb.AppendLine('    <div class="header-meta">')
-    [void]$sb.AppendLine("        <div class=`"env-row`"><strong>$sourceName</strong><span class=`"env-arrow`">&#10132;</span><strong>$destName</strong></div>")
-    [void]$sb.AppendLine("        <div class=`"env-row`" style=`"font-size: 0.75rem; color: var(--muted);`"><span>$sourceType</span><span class=`"env-arrow`" style=`"visibility:hidden`">&#10132;</span><span>$destType</span></div>")
+    [void]$sb.AppendLine("        <div class=`"env-row`"><div><strong>$sourceName</strong> <span class=`"badge`">$sourceType</span></div><span class=`"env-arrow`">&#10132;</span><div><strong>$destName</strong> <span class=`"badge`">$destType</span></div></div>")
     [void]$sb.AppendLine("        <div class=`"generated`">Generated $generatedAt</div>")
     [void]$sb.AppendLine('    </div>')
     [void]$sb.AppendLine('</div>')
@@ -481,14 +480,17 @@ tr:hover td { background: var(--accent-soft); }
         [void]$sb.AppendLine('</summary>')
         [void]$sb.AppendLine('    <div class="product-content">')
 
+        # Collect ALL rows from ALL categories into a single flat list, sorted by name
+        $allRows = [System.Collections.Generic.List[object]]::new()
         foreach ($categoryName in $productData.Categories.Keys) {
-            $categoryData   = $productData.Categories[$categoryName]
-            $encCategoryName = [System.Net.WebUtility]::HtmlEncode($categoryName)
-            $rows           = $categoryData.ComparisonRows
+            $categoryData = $productData.Categories[$categoryName]
+            foreach ($r in $categoryData.ComparisonRows) {
+                [void]$allRows.Add($r)
+            }
+        }
+        $allRows = @($allRows | Sort-Object { $_.Name })
 
-            if ($rows.Count -eq 0) { continue }
-
-            [void]$sb.AppendLine("        <h3>$encCategoryName</h3>")
+        if ($allRows.Count -gt 0) {
             [void]$sb.AppendLine('        <div class="table-wrap">')
 
             # 6-column Settings Catalog table (+ optional assignment columns)
@@ -508,7 +510,7 @@ tr:hover td { background: var(--accent-soft); }
             [void]$sb.AppendLine('            </tr></thead>')
             [void]$sb.AppendLine('            <tbody>')
 
-            foreach ($row in $rows) {
+            foreach ($row in $allRows) {
                 $status = $row.Status
 
                 # Status badge
@@ -586,13 +588,15 @@ tr:hover td { background: var(--accent-soft); }
             [void]$sb.AppendLine("<summary><span class=`"product-title`">$encMrProdName</span><span class=`"status-badge status-manual`">&#9888; $($mrProduct.Count) policies</span></summary>")
             [void]$sb.AppendLine('<div class="product-content">')
 
+            # Flatten all manual review items from all categories into one list
+            $allMrItems = [System.Collections.Generic.List[object]]::new()
             foreach ($mrCatName in $mrProduct.Categories.Keys) {
-                $encMrCatName = [System.Net.WebUtility]::HtmlEncode($mrCatName)
-                $mrItems = $mrProduct.Categories[$mrCatName]
+                foreach ($item in $mrProduct.Categories[$mrCatName]) {
+                    [void]$allMrItems.Add($item)
+                }
+            }
 
-                [void]$sb.AppendLine("<h3>$encMrCatName</h3>")
-
-                foreach ($mrItem in $mrItems) {
+            foreach ($mrItem in $allMrItems) {
                     $envClass = if ($mrItem.Environment -eq 'Source') { 'env-source' } else { 'env-dest' }
                     $envLabel = [System.Net.WebUtility]::HtmlEncode($mrItem.Environment)
                     $mrPolicyName = [System.Net.WebUtility]::HtmlEncode($mrItem.PolicyName)
@@ -643,7 +647,6 @@ tr:hover td { background: var(--accent-soft); }
 
                     [void]$sb.AppendLine('</div>')
                 }
-            }
 
             [void]$sb.AppendLine('</div></details>')
         }

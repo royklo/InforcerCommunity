@@ -121,7 +121,12 @@ function Get-InforcerComparisonData {
             $sourceTenantJson = Get-InforcerTenant -OutputType JsonObject
             $sourceTenants    = $sourceTenantJson | ConvertFrom-Json -Depth 100
             $sourceTenant     = $sourceTenants | Where-Object { $_.clientTenantId -eq $resolvedSourceTenantId } | Select-Object -First 1
-            $sourceName       = if ($sourceTenant) { $sourceTenant.tenantFriendlyName } else { "$resolvedSourceTenantId" }
+            $sourceName = ''
+            if ($sourceTenant) {
+                $sourceName = $sourceTenant.tenantFriendlyName
+                if ([string]::IsNullOrWhiteSpace($sourceName)) { $sourceName = $sourceTenant.tenantDnsName }
+            }
+            if ([string]::IsNullOrWhiteSpace($sourceName)) { $sourceName = "$resolvedSourceTenantId" }
 
             Write-Host "  Source tenant: $sourceName ($resolvedSourceTenantId)" -ForegroundColor Gray
             $sourcePoliciesJson = Get-InforcerTenantPolicies -TenantId $resolvedSourceTenantId -OutputType JsonObject
@@ -159,7 +164,12 @@ function Get-InforcerComparisonData {
             $destTenantJson = Get-InforcerTenant -OutputType JsonObject
             $destTenants    = $destTenantJson | ConvertFrom-Json -Depth 100
             $destTenant     = $destTenants | Where-Object { $_.clientTenantId -eq $resolvedDestTenantId } | Select-Object -First 1
-            $destName       = if ($destTenant) { $destTenant.tenantFriendlyName } else { "$resolvedDestTenantId" }
+            $destName = ''
+            if ($destTenant) {
+                $destName = $destTenant.tenantFriendlyName
+                if ([string]::IsNullOrWhiteSpace($destName)) { $destName = $destTenant.tenantDnsName }
+            }
+            if ([string]::IsNullOrWhiteSpace($destName)) { $destName = "$resolvedDestTenantId" }
 
             Write-Host "  Destination tenant: $destName ($resolvedDestTenantId)" -ForegroundColor Gray
             $destPoliciesJson = Get-InforcerTenantPolicies -TenantId $resolvedDestTenantId -OutputType JsonObject

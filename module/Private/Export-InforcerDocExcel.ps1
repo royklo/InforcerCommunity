@@ -5,9 +5,12 @@ function Export-InforcerDocExcel {
     .DESCRIPTION
         Takes the format-agnostic DocModel produced by ConvertTo-InforcerDocModel and writes
         an .xlsx file with one worksheet per product. Each sheet contains all policies for that
-        product with columns: Category, PolicyName, SettingName, Value, Indent, IsConfigured.
+        product with policy metadata, settings, and assignments.
 
-        Requires the ImportExcel module. If not installed, emits an error with install instructions.
+        Columns: Category, PolicyName, Description, ProfileType, Platform, Tags, Created,
+        Modified, ScopeTags, SettingName, Value, IsConfigured, Assignments.
+
+        Requires the ImportExcel module. If not installed, offers to install it.
 
         This function handles its own file I/O (ImportExcel writes directly to disk).
     .PARAMETER DocModel
@@ -55,14 +58,63 @@ function Export-InforcerDocExcel {
         foreach ($catName in $product.Categories.Keys) {
             $policies = $product.Categories[$catName]
             foreach ($policy in $policies) {
-                foreach ($setting in $policy.Settings) {
+                $basics = $policy.Basics
+
+                # Format assignments as a single string (e.g. "All Users; Group (Include): SG-Intune")
+                $assignStr = ''
+                if ($policy.Assignments -and $policy.Assignments.Count -gt 0) {
+                    $parts = [System.Collections.Generic.List[string]]::new()
+                    foreach ($a in $policy.Assignments) {
+                        $entry = $a.Type
+                        if (-not [string]::IsNullOrWhiteSpace($a.Target) -and $a.Target -ne $a.Type) {
+                            $entry = "$($a.Type): $($a.Target)"
+                        }
+                        if (-not [string]::IsNullOrWhiteSpace($a.Filter)) {
+                            $filterPart = "Filter ($($a.FilterMode)): $($a.Filter)"
+                            $entry = "$entry [$filterPart]"
+                        }
+                        [void]$parts.Add($entry)
+                    }
+                    $assignStr = $parts -join '; '
+                }
+
+                if ($policy.Settings -and $policy.Settings.Count -gt 0) {
+                    # One row per setting — policy metadata repeated on each row for filtering
+                    $isFirst = $true
+                    foreach ($setting in $policy.Settings) {
+                        [void]$rows.Add([PSCustomObject]@{
+                            Category     = $catName
+                            PolicyName   = $basics.Name
+                            Description  = if ($isFirst) { $basics.Description } else { '' }
+                            ProfileType  = if ($isFirst) { $basics.ProfileType } else { '' }
+                            Platform     = if ($isFirst) { $basics.Platform } else { '' }
+                            Tags         = if ($isFirst) { $basics.Tags } else { '' }
+                            Created      = if ($isFirst) { $basics.Created } else { '' }
+                            Modified     = if ($isFirst) { $basics.Modified } else { '' }
+                            ScopeTags    = if ($isFirst) { $basics.ScopeTags } else { '' }
+                            SettingName  = $setting.Name
+                            Value        = if ([string]::IsNullOrEmpty($setting.Value)) { '' } else { $setting.Value }
+                            IsConfigured = $setting.IsConfigured
+                            Assignments  = if ($isFirst) { $assignStr } else { '' }
+                        })
+                        $isFirst = $false
+                    }
+                } else {
+                    # Policy with no settings — still export one row with metadata
                     [void]$rows.Add([PSCustomObject]@{
                         Category     = $catName
-                        PolicyName   = $policy.Basics.Name
-                        SettingName  = $setting.Name
-                        Value        = if ([string]::IsNullOrEmpty($setting.Value)) { '' } else { $setting.Value }
-                        Indent       = $setting.Indent
-                        IsConfigured = $setting.IsConfigured
+                        PolicyName   = $basics.Name
+                        Description  = $basics.Description
+                        ProfileType  = $basics.ProfileType
+                        Platform     = $basics.Platform
+                        Tags         = $basics.Tags
+                        Created      = $basics.Created
+                        Modified     = $basics.Modified
+                        ScopeTags    = $basics.ScopeTags
+                        SettingName  = ''
+                        Value        = ''
+                        IsConfigured = ''
+                        Assignments  = $assignStr
                     })
                 }
             }

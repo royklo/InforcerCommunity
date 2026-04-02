@@ -17,7 +17,7 @@ function ConvertTo-InforcerComparisonHtml {
         - No external dependencies (CSS/JS fully embedded)
     .PARAMETER ComparisonModel
         Hashtable from ConvertTo-InforcerComparisonModel containing: SourceName,
-        DestinationName, SourceType, DestinationType, GeneratedAt, AlignmentScore,
+        DestinationName, GeneratedAt, AlignmentScore,
         TotalItems, Counters, Products, ManualReview, IncludingAssignments.
     .OUTPUTS
         System.String -- complete HTML document as a single string.
@@ -368,8 +368,6 @@ tr:hover td { background: var(--accent-soft); }
     # ── Extract model values ───────────────────────────────────────────────
     $sourceName      = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.SourceName)
     $destName        = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.DestinationName)
-    $sourceType      = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.SourceType)
-    $destType        = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.DestinationType)
     $generatedAt     = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.GeneratedAt)
     $alignmentScore  = $ComparisonModel.AlignmentScore
     $totalItems      = $ComparisonModel.TotalItems
@@ -413,7 +411,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<div class="header">')
     [void]$sb.AppendLine('    <h1>Environment Comparison Report</h1>')
     [void]$sb.AppendLine('    <div class="header-meta">')
-    [void]$sb.AppendLine("        <div class=`"env-row`"><div><strong>$sourceName</strong> <span class=`"badge`">$sourceType</span></div><span class=`"env-arrow`">&#10132;</span><div><strong>$destName</strong> <span class=`"badge`">$destType</span></div></div>")
+    [void]$sb.AppendLine("        <div class=`"env-row`"><strong>$sourceName</strong><span class=`"env-arrow`">&#10132;</span><strong>$destName</strong></div>")
     [void]$sb.AppendLine("        <div class=`"generated`">Generated $generatedAt</div>")
     [void]$sb.AppendLine('    </div>')
     [void]$sb.AppendLine('</div>')

@@ -112,8 +112,6 @@ BeforeAll {
             DestinationPolicies  = $DestPolicies
             SourceName           = 'Source Tenant'
             DestinationName      = 'Dest Tenant'
-            SourceType           = 'Tenant'
-            DestinationType      = 'Tenant'
             SettingsCatalog      = @{}
             IncludingAssignments = $IncludingAssignments
             CollectedAt          = [datetime]::UtcNow
@@ -133,8 +131,6 @@ Describe 'ConvertTo-InforcerComparisonModel - Model structure' {
         }
         $model.Keys | Should -Contain 'SourceName'
         $model.Keys | Should -Contain 'DestinationName'
-        $model.Keys | Should -Contain 'SourceType'
-        $model.Keys | Should -Contain 'DestinationType'
         $model.Keys | Should -Contain 'GeneratedAt'
         $model.Keys | Should -Contain 'AlignmentScore'
         $model.Keys | Should -Contain 'TotalItems'

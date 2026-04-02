@@ -59,7 +59,7 @@ function ConvertTo-InforcerComparisonModel {
         - Classifies as Matched, Conflicting, SourceOnly, or DestOnly
     .PARAMETER ComparisonData
         Hashtable from Get-InforcerComparisonData containing: SourcePolicies,
-        DestinationPolicies, SourceName, DestinationName, SourceType, DestinationType,
+        DestinationPolicies, SourceName, DestinationName,
         SettingsCatalog, IncludingAssignments, CollectedAt.
     .OUTPUTS
         Hashtable representing the ComparisonModel.
@@ -366,8 +366,6 @@ function ConvertTo-InforcerComparisonModel {
     @{
         SourceName           = $ComparisonData.SourceName
         DestinationName      = $ComparisonData.DestinationName
-        SourceType           = $ComparisonData.SourceType
-        DestinationType      = $ComparisonData.DestinationType
         GeneratedAt          = $ComparisonData.CollectedAt
         AlignmentScore       = $alignmentScore
         TotalItems           = $totalItems

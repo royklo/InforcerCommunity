@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Compares the policy configuration of two M365 environments and generates an HTML report.
+    Compares the Intune policy configuration of two tenants and generates an HTML report.
 .DESCRIPTION
-    Fetches policies from a source and destination environment (each can be a tenant or baseline),
-    compares them at the Intune Settings Catalog setting level (settingDefinitionId matching),
-    and produces a self-contained HTML report showing alignment score, matches, conflicts,
-    and source-only/destination-only items.
+    Fetches all policies from two tenants via Get-InforcerTenantPolicies, compares Intune
+    Settings Catalog settings at the settingDefinitionId level, and produces a self-contained
+    HTML report showing alignment score, matches, conflicts, source-only/destination-only items,
+    and non-Settings-Catalog policies for manual review.
 
     For cross-account comparison, use Connect-Inforcer -PassThru to obtain session objects
     and pass them via -SourceSession / -DestinationSession.
@@ -17,10 +17,6 @@
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
 .PARAMETER DestinationSession
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
-.PARAMETER SourceBaselineId
-    Source baseline GUID or friendly name. Use instead of -SourceTenantId for baseline comparison.
-.PARAMETER DestinationBaselineId
-    Destination baseline GUID or friendly name. Use instead of -DestinationTenantId.
 .PARAMETER IncludingAssignments
     When specified, fetches and displays Graph assignment data in the report.
     Assignments are informational only and do not affect the alignment score.
@@ -39,7 +35,7 @@
     $dst = Connect-Inforcer -ApiKey $key2 -Region eu -PassThru
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -SourceSession $src -DestinationSession $dst
 .EXAMPLE
-    Compare-InforcerEnvironments -SourceBaselineId 'Production Baseline' -DestinationTenantId 482 -IncludingAssignments
+    Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 -IncludingAssignments
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#compare-inforcerenvironments
 .LINK
@@ -49,10 +45,10 @@ function Compare-InforcerEnvironments {
 [CmdletBinding()]
 [OutputType([System.IO.FileInfo])]
 param(
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $true, Position = 0)]
     [object]$SourceTenantId,
 
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $true, Position = 1)]
     [object]$DestinationTenantId,
 
     [Parameter(Mandatory = $false)]
@@ -60,12 +56,6 @@ param(
 
     [Parameter(Mandatory = $false)]
     [hashtable]$DestinationSession,
-
-    [Parameter(Mandatory = $false)]
-    [string]$SourceBaselineId,
-
-    [Parameter(Mandatory = $false)]
-    [string]$DestinationBaselineId,
 
     [Parameter(Mandatory = $false)]
     [switch]$IncludingAssignments,
@@ -85,24 +75,6 @@ if (-not $hasExplicitSessions -and -not (Test-InforcerSession)) {
     return
 }
 
-# Source validation: must supply either SourceTenantId or SourceBaselineId
-$hasSource = ($null -ne $SourceTenantId -and -not [string]::IsNullOrWhiteSpace("$SourceTenantId")) -or
-             (-not [string]::IsNullOrWhiteSpace($SourceBaselineId))
-if (-not $hasSource) {
-    Write-Error -Message 'You must specify either -SourceTenantId or -SourceBaselineId.' `
-        -ErrorId 'MissingSource' -Category InvalidArgument
-    return
-}
-
-# Destination validation: must supply either DestinationTenantId or DestinationBaselineId
-$hasDest = ($null -ne $DestinationTenantId -and -not [string]::IsNullOrWhiteSpace("$DestinationTenantId")) -or
-           (-not [string]::IsNullOrWhiteSpace($DestinationBaselineId))
-if (-not $hasDest) {
-    Write-Error -Message 'You must specify either -DestinationTenantId or -DestinationBaselineId.' `
-        -ErrorId 'MissingDestination' -Category InvalidArgument
-    return
-}
-
 # Warn that assignments are informational only
 if ($IncludingAssignments) {
     Write-Warning 'Assignment data is informational only and does not affect the alignment score.'
@@ -111,18 +83,13 @@ if ($IncludingAssignments) {
 # ── Stage 1: Collect data from both environments ─────────────────────────────
 Write-Host 'Stage 1: Collecting environment data...' -ForegroundColor Cyan
 
-$compDataParams = @{}
-if ($null -ne $SourceTenantId -and -not [string]::IsNullOrWhiteSpace("$SourceTenantId")) {
-    $compDataParams['SourceTenantId'] = $SourceTenantId
+$compDataParams = @{
+    SourceTenantId      = $SourceTenantId
+    DestinationTenantId = $DestinationTenantId
 }
-if ($null -ne $DestinationTenantId -and -not [string]::IsNullOrWhiteSpace("$DestinationTenantId")) {
-    $compDataParams['DestinationTenantId'] = $DestinationTenantId
-}
-if ($null -ne $SourceSession)         { $compDataParams['SourceSession']      = $SourceSession }
-if ($null -ne $DestinationSession)    { $compDataParams['DestinationSession'] = $DestinationSession }
-if (-not [string]::IsNullOrWhiteSpace($SourceBaselineId))      { $compDataParams['SourceBaselineId']      = $SourceBaselineId }
-if (-not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) { $compDataParams['DestinationBaselineId'] = $DestinationBaselineId }
-if (-not [string]::IsNullOrWhiteSpace($SettingsCatalogPath))   { $compDataParams['SettingsCatalogPath']   = $SettingsCatalogPath }
+if ($null -ne $SourceSession)       { $compDataParams['SourceSession']      = $SourceSession }
+if ($null -ne $DestinationSession)  { $compDataParams['DestinationSession'] = $DestinationSession }
+if (-not [string]::IsNullOrWhiteSpace($SettingsCatalogPath)) { $compDataParams['SettingsCatalogPath'] = $SettingsCatalogPath }
 if ($IncludingAssignments) { $compDataParams['IncludingAssignments'] = $true }
 
 $compData = $null

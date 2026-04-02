@@ -151,7 +151,7 @@ body {
     max-width: 1100px;
     margin: 0 auto;
     padding: 0 1.5rem 3rem;
-    margin-right: 300px;
+    margin-right: 340px;
     line-height: 1.65;
     font-size: 0.9375rem;
     -webkit-font-smoothing: antialiased;
@@ -378,12 +378,33 @@ tr:hover td { background: var(--accent-soft); }
     color: var(--muted);
     font-size: 0.75rem;
 }
-/* --- Filter toggle --- */
-.hide-empty .empty-val { display: none; }
-.hide-empty tr:has(td > .empty-val:only-child) { display: none; }
+/* --- Filter toggle (only hide rows where the VALUE column is empty, not any column) --- */
+.hide-empty tr:has(td:last-child > .empty-val:only-child):not(:has(td:first-child > .empty-val)) { display: none; }
 /* --- Search --- */
 .search-hidden { display: none !important; }
+.tag-hidden { display: none !important; }
 .search-highlight { background: rgba(250,204,21,0.3); border-radius: 2px; }
+/* --- Notch warning bar --- */
+.notch-bar {
+    position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 1000;
+    background: var(--accent); color: #fff; font-size: 0.75rem; font-weight: 600;
+    padding: 0.25rem 1.5rem 0.3rem;
+    border-radius: 0 0 var(--radius) var(--radius);
+    box-shadow: var(--shadow-md);
+    white-space: nowrap; letter-spacing: 0.02em;
+    pointer-events: none;
+}
+/* --- Tag filter pills in sidebar --- */
+.tag-filter { padding: 0 1.25rem 0.75rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.tag-filter-title { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.375rem; }
+.tag-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.tag-pill {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text-secondary);
+    padding: 0.2rem 0.5rem; border-radius: 999px; font-size: 0.6875rem; cursor: pointer;
+    transition: all var(--transition); user-select: none; font-weight: 500;
+}
+.tag-pill:hover { border-color: var(--accent); color: var(--accent); }
+.tag-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* --- Sidebar panel (always visible on desktop, slide-out on mobile) --- */
 .sidebar-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 998;
@@ -392,7 +413,7 @@ tr:hover td { background: var(--accent-soft); }
 }
 .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
 .sidebar {
-    position: fixed; top: 0; right: 0; width: 280px; height: 100vh;
+    position: fixed; top: 0; right: 0; width: 320px; height: 100vh;
     background: var(--bg-card); border-left: 1px solid var(--border);
     z-index: 999;
     display: flex; flex-direction: column;
@@ -560,18 +581,8 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<div style="margin-top:0.75rem"><input type="text" id="search-input" placeholder="Search policies, settings, values..." style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text);font-size:0.875rem;font-family:inherit;outline:none" oninput="searchPolicies(this.value)"></div>')
     [void]$sb.AppendLine('</div>')
 
-    # --- Baselines summary card (if baselines exist) ---
-    if ($baselineNames.Count -gt 0) {
-        [void]$sb.AppendLine('<div class="card" style="margin-bottom:1rem">')
-        [void]$sb.AppendLine('<div class="section-label">Baselines</div>')
-        [void]$sb.AppendLine('<div style="display:flex;flex-wrap:wrap;gap:0.375rem;margin-top:0.25rem">')
-        foreach ($blName in $baselineNames) {
-            $blEsc = [System.Net.WebUtility]::HtmlEncode($blName)
-            [void]$sb.AppendLine("<span class=`"badge`">$blEsc</span>")
-        }
-        [void]$sb.AppendLine('</div>')
-        [void]$sb.AppendLine('</div>')
-    }
+    # --- Notch warning bar ---
+    [void]$sb.AppendLine("<div class=`"notch-bar`">$tenantNameEsc &middot; $totalPolicies policies</div>")
 
     # --- Sidebar backdrop + panel ---
     [void]$sb.AppendLine('<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>')
@@ -590,6 +601,33 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<label class="toggle-row"><span>Dark mode</span><span class="toggle-switch"><input type="checkbox" id="chk-theme" onchange="toggleTheme()"><span class="toggle-slider"></span></span></label>')
     [void]$sb.AppendLine('</div>')
 
+    # Sidebar tag filter pills (collect all unique tags from policies)
+    $allTags = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($prodVal in $DocModel.Products.Values) {
+        foreach ($catPols in $prodVal.Categories.Values) {
+            foreach ($pol in @($catPols)) {
+                $t = $pol.Basics['Tags']
+                if (-not [string]::IsNullOrWhiteSpace($t)) {
+                    foreach ($tagName in ($t -split ',\s*')) {
+                        if (-not [string]::IsNullOrWhiteSpace($tagName)) { [void]$allTags.Add($tagName.Trim()) }
+                    }
+                }
+            }
+        }
+    }
+    if ($allTags.Count -gt 0) {
+        [void]$sb.AppendLine('<div class="tag-filter">')
+        [void]$sb.AppendLine('<div class="tag-filter-title">Filter by Tag</div>')
+        [void]$sb.AppendLine('<div class="tag-pills">')
+        foreach ($tagName in $allTags) {
+            $tagEsc = [System.Net.WebUtility]::HtmlEncode($tagName)
+            $tagSafe = $tagName -replace '[^a-zA-Z0-9 \-]', ''
+            [void]$sb.AppendLine("<span class=`"tag-pill`" data-tag=`"$tagSafe`" onclick=`"toggleTagFilter(this,this.getAttribute('data-tag'))`">$tagEsc</span>")
+        }
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('</div>')
+    }
+
     # Sidebar TOC
     [void]$sb.AppendLine('<div class="sidebar-toc toc-section">')
     [void]$sb.AppendLine('<ul class="toc-l1">')
@@ -603,27 +641,15 @@ tr:hover td { background: var(--accent-soft); }
 
         [void]$sb.AppendLine('<li>')
         [void]$sb.AppendLine('<details>')
-        [void]$sb.AppendLine("<summary><a href=`"#$prodAnchor`" onclick=`"closeSidebar()`">$prodEsc</a> <span class=`"badge`">$prodPolicies</span></summary>")
+        [void]$sb.AppendLine("<summary><a href=`"#$prodAnchor`" onclick=`"navClick()`">$prodEsc</a> <span class=`"badge`">$prodPolicies</span></summary>")
         [void]$sb.AppendLine('<ul class="toc-l2">')
 
         foreach ($catName in $DocModel.Products[$prodName].Categories.Keys) {
             $catEsc    = [System.Net.WebUtility]::HtmlEncode($catName)
             $catAnchor = ConvertTo-HtmlAnchorId -Text "$prodName-$catName"
-            $policies  = $DocModel.Products[$prodName].Categories[$catName]
 
             [void]$sb.AppendLine('<li>')
-            [void]$sb.AppendLine('<details>')
-            [void]$sb.AppendLine("<summary><a href=`"#$catAnchor`" onclick=`"closeSidebar()`">$catEsc</a></summary>")
-            [void]$sb.AppendLine('<ul class="toc-l3">')
-
-            foreach ($policy in @($policies)) {
-                $pName   = [System.Net.WebUtility]::HtmlEncode($policy.Basics.Name)
-                $pAnchor = ConvertTo-HtmlAnchorId -Text "$prodName-$catName-$($policy.Basics.Name)"
-                [void]$sb.AppendLine("<li><a href=`"#$pAnchor`" onclick=`"closeSidebar()`">$pName</a></li>")
-            }
-
-            [void]$sb.AppendLine('</ul>')
-            [void]$sb.AppendLine('</details>')
+            [void]$sb.AppendLine("<a href=`"#$catAnchor`" onclick=`"navClick()`" style=`"display:block;padding:0.2rem 0.5rem;border-radius:4px;font-size:0.8rem;color:var(--muted);transition:all var(--transition)`">$catEsc</a>")
             [void]$sb.AppendLine('</li>')
         }
 
@@ -675,11 +701,15 @@ tr:hover td { background: var(--accent-soft); }
                 $settingsCount   = if ($policy.Settings) { @($policy.Settings).Count } else { 0 }
                 $policyAnchor    = ConvertTo-HtmlAnchorId -Text "$prodName-$catName-$($policy.Basics.Name)"
 
-                [void]$sb.AppendLine('<div class="policy-section">')
+                $tagsAttr = ''
+                $tagsVal = $policy.Basics['Tags']
+                if (-not [string]::IsNullOrWhiteSpace($tagsVal)) {
+                    $tagsAttr = " data-tags=`"$([System.Net.WebUtility]::HtmlEncode($tagsVal))`""
+                }
+                [void]$sb.AppendLine("<div class=`"policy-section`"$tagsAttr>")
                 [void]$sb.AppendLine("<h4 id=`"$policyAnchor`">$policyNameEsc <span class=`"badge`">$settingsCount settings</span></h4>")
 
                 # Show policy tags (baseline membership) as badges
-                $tagsVal = $policy.Basics['Tags']
                 if (-not [string]::IsNullOrWhiteSpace($tagsVal)) {
                     [void]$sb.AppendLine('<div style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-bottom:0.5rem">')
                     foreach ($tagName in ($tagsVal -split ',\s*')) {
@@ -764,7 +794,11 @@ tr:hover td { background: var(--accent-soft); }
 function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('sidebar-backdrop').classList.add('open')}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebar-backdrop').classList.remove('open')}
 function scrollToTop(){window.scrollTo({top:0,behavior:'smooth'})}
-function searchPolicies(q){var ps=document.querySelectorAll('.policy-section'),prods=document.querySelectorAll('.product-section');q=q.toLowerCase().trim();prods.forEach(function(pr){pr.querySelectorAll('.search-highlight').forEach(function(h){h.outerHTML=h.textContent});var vis=0;pr.querySelectorAll('.policy-section').forEach(function(p){var txt=p.textContent.toLowerCase();if(!q||txt.indexOf(q)>=0){p.classList.remove('search-hidden');vis++}else{p.classList.add('search-hidden')}});if(q&&vis>0){pr.open=true}else if(q&&vis===0){pr.open=false}});if(!q)return;prods.forEach(function(pr){pr.querySelectorAll('.policy-section:not(.search-hidden) td, .policy-section:not(.search-hidden) h4').forEach(function(el){var h=el.innerHTML;var re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');el.innerHTML=h.replace(re,'<mark class="search-highlight">$1</mark>')})})}
+var _activeTags=[];
+function searchPolicies(q){var prods=document.querySelectorAll('.product-section');q=q.toLowerCase().trim();prods.forEach(function(pr){pr.querySelectorAll('mark.search-highlight').forEach(function(h){var p=h.parentNode;p.replaceChild(document.createTextNode(h.textContent),h);p.normalize()});var vis=0;pr.querySelectorAll('.policy-section').forEach(function(p){if(p.classList.contains('tag-hidden')){return}var txt=p.textContent.toLowerCase();if(!q||txt.indexOf(q)>=0){p.classList.remove('search-hidden');vis++}else{p.classList.add('search-hidden')}});if(q&&vis>0)pr.open=true;else if(q&&vis===0)pr.open=false});if(!q)return;var re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');prods.forEach(function(pr){pr.querySelectorAll('.policy-section:not(.search-hidden):not(.tag-hidden) td, .policy-section:not(.search-hidden):not(.tag-hidden) h4').forEach(function(el){el.childNodes.forEach(function(n){if(n.nodeType===3&&re.test(n.textContent)){var s=document.createElement('span');s.innerHTML=n.textContent.replace(re,'<mark class="search-highlight">$1</mark>');n.parentNode.replaceChild(s,n)}})})})}
+function toggleTagFilter(el,tag){el.classList.toggle('active');var i=_activeTags.indexOf(tag);if(i>=0)_activeTags.splice(i,1);else _activeTags.push(tag);applyTagFilter()}
+function applyTagFilter(){document.querySelectorAll('.policy-section').forEach(function(p){if(_activeTags.length===0){p.classList.remove('tag-hidden');return}var t=p.getAttribute('data-tags')||'';var found=_activeTags.some(function(tag){return t.toLowerCase().indexOf(tag.toLowerCase())>=0});if(found)p.classList.remove('tag-hidden');else p.classList.add('tag-hidden')});document.querySelectorAll('.product-section').forEach(function(pr){var vis=pr.querySelectorAll('.policy-section:not(.tag-hidden)').length;if(_activeTags.length>0&&vis>0)pr.open=true});var si=document.getElementById('search-input');if(si.value)searchPolicies(si.value)}
+function navClick(){document.getElementById('search-input').value='';searchPolicies('');closeSidebar()}
 function toggleEmpty(){document.body.classList.toggle('hide-empty')}
 function toggleExpand(){var c=document.getElementById('chk-expand').checked;document.querySelectorAll('details.product-section').forEach(function(d){d.open=c});document.querySelectorAll('.sidebar-toc details').forEach(function(d){d.open=c})}
 function toggleTheme(){var r=document.documentElement,c=document.getElementById('chk-theme');if(c.checked){r.classList.remove('light');r.classList.add('dark');localStorage.setItem('theme','dark')}else{r.classList.remove('dark');r.classList.add('light');localStorage.setItem('theme','light')}}

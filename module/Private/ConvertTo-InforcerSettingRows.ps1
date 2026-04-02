@@ -166,9 +166,9 @@ function ConvertTo-FlatSettingRows {
     if ($null -eq $PolicyData) { return $rows }
 
     $skip = @(
-        '@odata.type', 'id', 'createdDateTime', 'lastModifiedDateTime',
+        '@odata.type', '@odata.context', 'id', 'createdDateTime', 'lastModifiedDateTime',
         'roleScopeTagIds', 'version', 'templateId', 'displayName',
-        'description', 'assignments', 'settings'
+        'description', 'assignments', 'settings', 'name', 'deletedDateTime'
     )
 
     foreach ($prop in $PolicyData.PSObject.Properties) {

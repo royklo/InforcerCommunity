@@ -74,16 +74,31 @@ function ConvertTo-InforcerComparisonModel {
     $destPolicies         = @($ComparisonData.DestinationPolicies)
     $includingAssignments = $ComparisonData.IncludingAssignments
 
+    # ── Excluded products (non-Intune) ─────────────────────────────────────
+    $excludedProducts = @('Microsoft Defender for Office 365', 'Defender for Office 365', 'Microsoft 365')
+
+    $isExcludedProduct = {
+        param([string]$ProductName)
+        foreach ($ep in $excludedProducts) {
+            if ($ProductName -like "*$ep*") { return $true }
+        }
+        return $false
+    }
+
     # ── Filter to Settings Catalog only (policyTypeId 10) ─────────────────
     $srcSC = [System.Collections.Generic.List[object]]::new()
     $dstSC = [System.Collections.Generic.List[object]]::new()
 
     foreach ($p in $sourcePolicies) {
         if ($null -eq $p) { continue }
+        $prod = $p.product
+        if (-not [string]::IsNullOrWhiteSpace($prod) -and (& $isExcludedProduct $prod)) { continue }
         if ($p.policyTypeId -eq 10) { [void]$srcSC.Add($p) }
     }
     foreach ($p in $destPolicies) {
         if ($null -eq $p) { continue }
+        $prod = $p.product
+        if (-not [string]::IsNullOrWhiteSpace($prod) -and (& $isExcludedProduct $prod)) { continue }
         if ($p.policyTypeId -eq 10) { [void]$dstSC.Add($p) }
     }
 
@@ -224,6 +239,7 @@ function ConvertTo-InforcerComparisonModel {
             $category = $srcInfo.Category
 
             $row.Name         = $srcInfo.FriendlyName
+            $row.Category     = $category
             $row.SourcePolicy = $srcInfo.PolicyName
             $row.SourceValue  = $srcInfo.Value
             $row.DestPolicy   = $dstInfo.PolicyName
@@ -253,6 +269,7 @@ function ConvertTo-InforcerComparisonModel {
             $category = $srcInfo.Category
 
             $row.Name         = $srcInfo.FriendlyName
+            $row.Category     = $category
             $row.Status       = 'SourceOnly'
             $row.SourcePolicy = $srcInfo.PolicyName
             $row.SourceValue  = $srcInfo.Value
@@ -275,6 +292,7 @@ function ConvertTo-InforcerComparisonModel {
             $category = $dstInfo.Category
 
             $row.Name         = $dstInfo.FriendlyName
+            $row.Category     = $category
             $row.Status       = 'DestOnly'
             $row.SourcePolicy = ''
             $row.SourceValue  = ''
@@ -293,14 +311,161 @@ function ConvertTo-InforcerComparisonModel {
         }
     }
 
-    # ── Manual Review: non-SC policies from Intune products only ────────────
-    # Only include non-SC policies whose product matches a product that has SC policies.
-    # This filters out non-Intune products (Entra ID, Exchange, SharePoint, etc.).
-    # Policies with empty/null product are included if they share a policyTypeId with SC policies.
+    # ── Policy-level comparison for non-SC policies ──────────────────────
+    # Non-Settings-Catalog Intune policies with flat JSON can be compared at
+    # the policy level by matching on product|primaryGroup|displayName.
     $scProductNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($p in $srcSC) { [void]$scProductNames.Add((& $getProduct $p)) }
     foreach ($p in $dstSC) { [void]$scProductNames.Add((& $getProduct $p)) }
 
+    # Collect non-SC policies from both sides (excluding filtered products)
+    $srcNonSC = [System.Collections.Generic.List[object]]::new()
+    $dstNonSC = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($p in $sourcePolicies) {
+        if ($null -eq $p) { continue }
+        if ($p.policyTypeId -eq 10) { continue }
+        $prod = & $getProduct $p
+        if (-not [string]::IsNullOrWhiteSpace($prod) -and (& $isExcludedProduct $prod)) { continue }
+        if (-not $scProductNames.Contains($prod)) { continue }
+        [void]$srcNonSC.Add($p)
+    }
+    foreach ($p in $destPolicies) {
+        if ($null -eq $p) { continue }
+        if ($p.policyTypeId -eq 10) { continue }
+        $prod = & $getProduct $p
+        if (-not [string]::IsNullOrWhiteSpace($prod) -and (& $isExcludedProduct $prod)) { continue }
+        if (-not $scProductNames.Contains($prod)) { continue }
+        [void]$dstNonSC.Add($p)
+    }
+
+    # Build match key: product|primaryGroup|displayName (lowercased)
+    $buildMatchKey = {
+        param($Policy)
+        $prod = (& $getProduct $Policy).ToLowerInvariant()
+        $pg = if ($Policy.primaryGroup) { $Policy.primaryGroup.ToLowerInvariant() } else { '' }
+        $dn = (Get-InforcerPolicyName -Policy $Policy).ToLowerInvariant()
+        return "$prod|$pg|$dn"
+    }
+
+    # Index source non-SC by match key
+    $srcNonSCIndex = @{}
+    foreach ($p in $srcNonSC) {
+        $key = & $buildMatchKey $p
+        if (-not $srcNonSCIndex.ContainsKey($key)) { $srcNonSCIndex[$key] = $p }
+    }
+    # Index dest non-SC by match key
+    $dstNonSCIndex = @{}
+    foreach ($p in $dstNonSC) {
+        $key = & $buildMatchKey $p
+        if (-not $dstNonSCIndex.ContainsKey($key)) { $dstNonSCIndex[$key] = $p }
+    }
+
+    $allNonSCKeys = @($srcNonSCIndex.Keys) + @($dstNonSCIndex.Keys) | Sort-Object -Unique
+    $matchedNonSCKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($key in $allNonSCKeys) {
+        $inSrc = $srcNonSCIndex.ContainsKey($key)
+        $inDst = $dstNonSCIndex.ContainsKey($key)
+
+        if ($inSrc -and $inDst) {
+            $srcP = $srcNonSCIndex[$key]
+            $dstP = $dstNonSCIndex[$key]
+            [void]$matchedNonSCKeys.Add($key)
+
+            $prod = & $getProduct $srcP
+            $cat  = & $getCategoryKey $srcP
+            if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
+            $policyName = Get-InforcerPolicyName -Policy $srcP
+
+            # Compare policyData as JSON
+            $srcJson = if ($srcP.policyData) { $srcP.policyData | ConvertTo-Json -Depth 50 -Compress } else { '' }
+            $dstJson = if ($dstP.policyData) { $dstP.policyData | ConvertTo-Json -Depth 50 -Compress } else { '' }
+
+            $status = if ($srcJson -eq $dstJson) { 'Matched' } else { 'Conflicting' }
+
+            $row = @{
+                ItemType     = 'Policy'
+                Name         = $policyName
+                Category     = $cat
+                Status       = $status
+                SourcePolicy = $policyName
+                SourceValue  = if ($status -eq 'Matched') { 'Identical' } else { 'Differs' }
+                DestPolicy   = Get-InforcerPolicyName -Policy $dstP
+                DestValue    = if ($status -eq 'Matched') { 'Identical' } else { 'Differs' }
+            }
+
+            if ($includingAssignments) {
+                $row.SourceAssignment = Get-InforcerAssignmentString -Policy $srcP
+                $row.DestAssignment   = Get-InforcerAssignmentString -Policy $dstP
+            }
+
+            $counters[$status]++
+            & $ensureProductCategory $prod $cat
+            $products[$prod].Counters[$status]++
+            & $addRow $prod $cat $row
+
+        } elseif ($inSrc) {
+            $srcP = $srcNonSCIndex[$key]
+            $prod = & $getProduct $srcP
+            $cat  = & $getCategoryKey $srcP
+            if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
+            $policyName = Get-InforcerPolicyName -Policy $srcP
+
+            $row = @{
+                ItemType     = 'Policy'
+                Name         = $policyName
+                Category     = $cat
+                Status       = 'SourceOnly'
+                SourcePolicy = $policyName
+                SourceValue  = 'Configured'
+                DestPolicy   = ''
+                DestValue    = ''
+            }
+
+            if ($includingAssignments) {
+                $row.SourceAssignment = Get-InforcerAssignmentString -Policy $srcP
+                $row.DestAssignment   = ''
+            }
+
+            $counters.SourceOnly++
+            & $ensureProductCategory $prod $cat
+            $products[$prod].Counters.SourceOnly++
+            & $addRow $prod $cat $row
+
+        } else {
+            $dstP = $dstNonSCIndex[$key]
+            $prod = & $getProduct $dstP
+            $cat  = & $getCategoryKey $dstP
+            if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
+            $policyName = Get-InforcerPolicyName -Policy $dstP
+
+            $row = @{
+                ItemType     = 'Policy'
+                Name         = $policyName
+                Category     = $cat
+                Status       = 'DestOnly'
+                SourcePolicy = ''
+                SourceValue  = ''
+                DestPolicy   = $policyName
+                DestValue    = 'Configured'
+            }
+
+            if ($includingAssignments) {
+                $row.SourceAssignment = ''
+                $row.DestAssignment   = Get-InforcerAssignmentString -Policy $dstP
+            }
+
+            $counters.DestOnly++
+            & $ensureProductCategory $prod $cat
+            $products[$prod].Counters.DestOnly++
+            & $addRow $prod $cat $row
+        }
+    }
+
+    # ── Manual Review: only truly non-comparable policies ────────────────
+    # Policies that could not be matched by the non-SC comparison above
+    # (i.e., from products not in the SC product set) are sent to manual review.
     $manualReview = [ordered]@{}
     $manualCount = 0
 
@@ -317,11 +482,21 @@ function ConvertTo-InforcerComparisonModel {
         }
     }
 
+    $getPolicyTypeFriendly = {
+        param($Policy)
+        if ($Policy.inforcerPolicyTypeName) { return $Policy.inforcerPolicyTypeName }
+        if ($Policy.primaryGroup) { return $Policy.primaryGroup }
+        if ($Policy.product) { return $Policy.product }
+        return "Type $($Policy.policyTypeId)"
+    }
+
     foreach ($p in $sourcePolicies) {
         if ($null -eq $p) { continue }
-        if ($p.policyTypeId -eq 10) { continue }   # SC policies are already handled above
+        if ($p.policyTypeId -eq 10) { continue }
         $prod = & $getProduct $p
-        if (-not $scProductNames.Contains($prod)) { continue }   # skip non-Intune products
+        if (-not [string]::IsNullOrWhiteSpace($prod) -and (& $isExcludedProduct $prod)) { continue }
+        # Skip policies already handled by non-SC comparison
+        if ($scProductNames.Contains($prod)) { continue }
         $cat  = & $getCategoryKey $p
         if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
         $policyName = Get-InforcerPolicyName -Policy $p
@@ -335,8 +510,9 @@ function ConvertTo-InforcerComparisonModel {
         [void]$manualReview[$prod].Categories[$cat].Add(@{
             Environment = 'Source'
             PolicyName  = $policyName
-            PolicyType  = if ($p.inforcerPolicyTypeName) { $p.inforcerPolicyTypeName } else { "Type $($p.policyTypeId)" }
-            Reason      = 'Non-Settings-Catalog policy — cannot auto-compare at setting level'
+            PolicyType  = & $getPolicyTypeFriendly $p
+            Category    = $cat
+            Reason      = 'Non-Intune policy — cannot auto-compare'
             Settings    = $flatSettings
         })
         $manualReview[$prod].Count++
@@ -347,7 +523,9 @@ function ConvertTo-InforcerComparisonModel {
         if ($null -eq $p) { continue }
         if ($p.policyTypeId -eq 10) { continue }
         $prod = & $getProduct $p
-        if (-not $scProductNames.Contains($prod)) { continue }   # skip non-Intune products
+        if (-not [string]::IsNullOrWhiteSpace($prod) -and (& $isExcludedProduct $prod)) { continue }
+        # Skip policies already handled by non-SC comparison
+        if ($scProductNames.Contains($prod)) { continue }
         $cat  = & $getCategoryKey $p
         if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
         $policyName = Get-InforcerPolicyName -Policy $p
@@ -361,8 +539,9 @@ function ConvertTo-InforcerComparisonModel {
         [void]$manualReview[$prod].Categories[$cat].Add(@{
             Environment = 'Destination'
             PolicyName  = $policyName
-            PolicyType  = if ($p.inforcerPolicyTypeName) { $p.inforcerPolicyTypeName } else { "Type $($p.policyTypeId)" }
-            Reason      = 'Non-Settings-Catalog policy — cannot auto-compare at setting level'
+            PolicyType  = & $getPolicyTypeFriendly $p
+            Category    = $cat
+            Reason      = 'Non-Intune policy — cannot auto-compare'
             Settings    = $flatSettings
         })
         $manualReview[$prod].Count++

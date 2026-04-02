@@ -495,11 +495,12 @@ tr:hover td { background: var(--accent-soft); }
             [void]$sb.AppendLine('        <table>')
             [void]$sb.AppendLine('            <thead><tr>')
             [void]$sb.Append('                <th style="width:4%">Status</th>')
-            [void]$sb.Append('<th style="width:24%">Setting</th>')
-            [void]$sb.Append('<th style="width:18%">Source Policy</th>')
-            [void]$sb.Append('<th style="width:18%">Source Value</th>')
-            [void]$sb.Append('<th style="width:18%">Dest Policy</th>')
-            [void]$sb.Append('<th style="width:18%">Dest Value</th>')
+            [void]$sb.Append('<th style="width:20%">Setting</th>')
+            [void]$sb.Append('<th style="width:14%">Category</th>')
+            [void]$sb.Append('<th style="width:15%">Source Policy</th>')
+            [void]$sb.Append('<th style="width:15%">Source Value</th>')
+            [void]$sb.Append('<th style="width:15%">Dest Policy</th>')
+            [void]$sb.Append('<th style="width:15%">Dest Value</th>')
             if ($inclAssignments) {
                 [void]$sb.Append('<th>Source Assignment</th>')
                 [void]$sb.Append('<th>Dest Assignment</th>')
@@ -521,13 +522,22 @@ tr:hover td { background: var(--accent-soft); }
                 }
 
                 $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
+                $encCategory = [System.Net.WebUtility]::HtmlEncode($row.Category)
+                $itemType = if ($row.ItemType) { $row.ItemType } else { 'Setting' }
 
                 [void]$sb.Append("                <tr data-status=`"$status`"><td>")
                 [void]$sb.Append($statusHtml)
                 [void]$sb.Append('</td>')
 
-                # Setting name
-                [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
+                # Setting/Policy name (with type indicator for policies)
+                if ($itemType -eq 'Policy') {
+                    [void]$sb.Append("<td class=`"setting-name`">$encName <span class=`"policy-type-badge type-admin`" style=`"font-size:0.625rem`">Policy</span></td>")
+                } else {
+                    [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
+                }
+
+                # Category column
+                [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCategory</td>")
 
                 # Source columns
                 if ($status -eq 'DestOnly') {
@@ -599,12 +609,16 @@ tr:hover td { background: var(--accent-soft); }
                     $envLabel = [System.Net.WebUtility]::HtmlEncode($mrItem.Environment)
                     $mrPolicyName = [System.Net.WebUtility]::HtmlEncode($mrItem.PolicyName)
                     $mrPolicyType = [System.Net.WebUtility]::HtmlEncode($mrItem.PolicyType)
+                    $mrCategory   = [System.Net.WebUtility]::HtmlEncode($mrItem.Category)
 
                     [void]$sb.AppendLine('<div class="manual-item">')
-                    [void]$sb.AppendLine("    <div style=`"display:flex;align-items:center;gap:0.625rem;margin-bottom:0.5rem`">")
+                    [void]$sb.AppendLine("    <div style=`"display:flex;align-items:center;gap:0.625rem;margin-bottom:0.5rem;flex-wrap:wrap`">")
                     [void]$sb.AppendLine("        <span class=`"env-label $envClass`">$envLabel</span>")
                     [void]$sb.AppendLine("        <span style=`"font-weight:600`">$mrPolicyName</span>")
                     [void]$sb.AppendLine("        <span class=`"policy-type-badge type-admin`">$mrPolicyType</span>")
+                    if (-not [string]::IsNullOrWhiteSpace($mrCategory)) {
+                        [void]$sb.AppendLine("        <span class=`"badge`">$mrCategory</span>")
+                    }
                     [void]$sb.AppendLine('    </div>')
 
                     # Filter settings: only IsConfigured, skip @odata and metadata
@@ -747,6 +761,18 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('        var rows = ps.querySelectorAll("tbody tr[data-status]");')
     [void]$sb.AppendLine('        var anyVisible = false;')
     [void]$sb.AppendLine('        rows.forEach(function(r) { if (r.style.display !== "none") anyVisible = true; });')
+    [void]$sb.AppendLine('        ps.style.display = anyVisible ? "" : "none";')
+    [void]$sb.AppendLine('    });')
+    [void]$sb.AppendLine('    // Also search manual review tab')
+    [void]$sb.AppendLine('    document.querySelectorAll("#tab-manual .manual-item").forEach(function(item) {')
+    [void]$sb.AppendLine('        var matches = !q || item.textContent.toLowerCase().indexOf(q) >= 0;')
+    [void]$sb.AppendLine('        item.style.display = matches ? "" : "none";')
+    [void]$sb.AppendLine('    });')
+    [void]$sb.AppendLine('    // Hide empty product sections in manual review')
+    [void]$sb.AppendLine('    document.querySelectorAll("#tab-manual .product-section").forEach(function(ps) {')
+    [void]$sb.AppendLine('        var items = ps.querySelectorAll(".manual-item");')
+    [void]$sb.AppendLine('        var anyVisible = false;')
+    [void]$sb.AppendLine('        items.forEach(function(i) { if (i.style.display !== "none") anyVisible = true; });')
     [void]$sb.AppendLine('        ps.style.display = anyVisible ? "" : "none";')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('}')

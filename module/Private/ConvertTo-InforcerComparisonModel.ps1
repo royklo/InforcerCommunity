@@ -347,7 +347,7 @@ function ConvertTo-InforcerComparisonModel {
     # Manual review items are excluded from the score
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly
     $alignmentScore = if ($totalItems -eq 0) { 100 }
-                      else { [math]::Round(($counters.Matched / $totalItems) * 100) }
+                      else { [math]::Round(($counters.Matched / $totalItems) * 100, 1) }
 
     # ── Return model ──────────────────────────────────────────────────────
     @{

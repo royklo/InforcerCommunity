@@ -413,7 +413,7 @@ The HTML output features a modern admin dashboard design with a collapsible side
 | **Format** | String | No | Output format: `Html` (default), `Markdown`, `Json`, `Csv`. |
 | **TenantId** | Object | Yes | Tenant to document (numeric ID, GUID, or tenant name). |
 | **OutputPath** | String | No | Directory to write the output file. Defaults to current directory. |
-| **SettingsCatalogPath** | String | No | Path to a custom `settings.json` file for Intune Settings Catalog name resolution. Uses the bundled dataset if omitted. |
+| **SettingsCatalogPath** | String | No | Path to a local `settings.json` file for Intune Settings Catalog name resolution. When omitted, automatically downloads and caches the latest data from the [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub repository (~65 MB, cached at `~/.inforcercommunity/data/settings.json` with a 24-hour TTL). |
 | **FetchGraphData** | Switch | No | When set, resolves group ObjectIDs to display names, assignment filter IDs to names, and scope tag IDs to names via Microsoft Graph. Requires a Graph connection (use `Connect-Inforcer -FetchGraphData` or `Connect-InforcerGraph`). |
 | **Baseline** | String | No | Filter to policies belonging to a specific baseline (name or ID). |
 | **Tag** | String | No | Filter to policies with a specific Inforcer tag (case-insensitive). |

@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
+## [Unreleased]
+
+### Features
+
+- **Settings Catalog runtime fetch:** The module now automatically downloads and caches the Intune Settings Catalog data (~65 MB) from [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub Releases. Replaces the bundled static `settings.json`. Cache stored at `~/.inforcercommunity/data/` with 24-hour TTL, atomic writes, single retry, and offline fallback.
+
+### New Private Functions
+
+- `Get-InforcerSettingsCatalogPath` — 6-tier cache resolution strategy: explicit path → fresh cache → stale remote check → first-time download → fallback → offline with stale cache.
+
+### Changes
+
+- `Import-InforcerSettingsCatalog` now delegates path resolution to `Get-InforcerSettingsCatalogPath` instead of looking for bundled/sibling files.
+- `Export-InforcerTenantDocumentation` removed inline discovery chain (bundled → sibling → warn). `-SettingsCatalogPath` parameter now documents the auto-download behavior.
+- Removed `module/data/.gitkeep` — settings catalog data is no longer bundled with the module.
+
 ## [0.2.0] - 2026-04-02
 
 ### Features

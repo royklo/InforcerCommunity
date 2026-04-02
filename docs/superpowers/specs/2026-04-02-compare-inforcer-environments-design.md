@@ -25,7 +25,7 @@ Compare-InforcerEnvironments
     [-DestinationSession] <hashtable>   # Session object from Connect-Inforcer -PassThru
     [-SourceBaselineId] <string>        # GUID or baseline name (use baseline policies as source)
     [-DestinationBaselineId] <string>   # GUID or baseline name (use baseline policies as destination)
-    [-IncludingAssignments]             # Switch — reserved for future use (v2: fetch Graph assignment data)
+    [-IncludingAssignments]             # Switch — fetch and display Graph assignment data (informational only, not scored)
     [-SettingsCatalogPath] <string>     # Path to settings.json (auto-discovers sibling repo if omitted)
     [-OutputPath] <string>              # Directory for HTML output file
 ```
@@ -120,7 +120,7 @@ Compare at the **individual setting level**, not the policy level:
 
 This correctly handles the case where Setting A is in Policy 1 in tenant A and Policy 5 in tenant B — it's still aligned because the setting-level match is what matters.
 
-#### Strategy B: Non-Settings-Catalog Policies
+#### Strategy B: Non-Settings-Catalog Policies (including Administrative Templates)
 
 Compare at the **policy level** using the match key: `PolicyTypeId + Product + PrimaryGroup + PolicyName` (case-insensitive):
 
@@ -132,9 +132,17 @@ Compare at the **policy level** using the match key: `PolicyTypeId + Product + P
    - **Source Only**: exists only in source
    - **Destination Only**: exists only in destination
 
+This applies to **all** non-Settings-Catalog policies, including Intune Administrative Templates. If both the source and destination have an Admin Template with the same match key, they can be compared at the policy level — the flat JSON properties can be diffed directly. Admin Templates are only a problem when you try to compare them against Settings Catalog policies, not against each other.
+
 #### Manual Review Classification
 
-Any Intune policy that does NOT contain settingDefinitionID properties (Administrative Templates, old-school flat JSON) is classified as **manual review**. These are listed individually — no assumptions about relationships between source and destination policies.
+A policy is classified as **manual review** only when automated comparison is not possible:
+
+1. **Cross-structure mismatch**: An Intune policy area where one side uses Settings Catalog and the other uses Administrative Templates. The JSON structures are entirely different and have no comparable properties.
+2. **Unmatched Admin Templates**: An Administrative Template that has no match-key counterpart in the other environment AND exists in a product area where the other side has Settings Catalog policies. The consultant needs to determine whether the Settings Catalog policies on the other side cover the same functionality.
+3. **Unmatched with ambiguity**: Any unmatched policy where the comparison engine cannot confidently classify it as simply "source only" or "destination only" because of structural differences in the same area.
+
+Policies that are clearly source-only or destination-only (no structural ambiguity) remain in the Comparison tab, not in Manual Review.
 
 **Output — ComparisonModel:**
 ```
@@ -161,6 +169,8 @@ Any Intune policy that does NOT contain settingDefinitionID properties (Administ
                             SourceValue      = 'Enabled'
                             DestPolicy       = 'Endpoint Protection Policy'
                             DestValue        = 'Enabled'
+                            SourceAssignment = 'All Users'      # Only populated when -IncludingAssignments
+                            DestAssignment   = 'All Devices'    # Only populated when -IncludingAssignments
                         }
                         # ...more rows
                     )
@@ -216,8 +226,14 @@ Any Intune policy that does NOT contain settingDefinitionID properties (Administ
 **Comparison table columns (Intune Settings Catalog):**
 | Status | Setting | Source Policy | Source Value | Dest Policy | Dest Value |
 
+With `-IncludingAssignments`:
+| Status | Setting | Source Policy | Source Value | Source Assignment | Dest Policy | Dest Value | Dest Assignment |
+
 **Comparison table columns (non-Settings-Catalog):**
 | Status | Policy | Source | Destination |
+
+With `-IncludingAssignments`:
+| Status | Policy | Source | Source Assignment | Destination | Dest Assignment |
 
 **Manual review table columns:**
 | Environment | Policy Name | Policy Type | Reason |
@@ -273,11 +289,22 @@ To determine if an Intune policy is a Settings Catalog policy (and therefore aut
 - **Identical environments**: 100% alignment score, all items matched, no conflicts.
 - **No `-SourceSession`/`-DestinationSession`**: Both sides use `$script:InforcerSession`. Works for comparing two tenants under the same API key.
 - **Same tenant compared to itself**: Valid use case (sanity check). Should show 100% alignment.
-- **`-IncludingAssignments` used in v1**: Write-Warning that assignment comparison is reserved for a future version, continue without it.
+- **`-IncludingAssignments` without Graph connection**: Write-Warning and continue without assignment columns — don't fail the comparison.
+
+## Assignment Display (`-IncludingAssignments`)
+
+When `-IncludingAssignments` is specified:
+
+1. **Data collection**: Stage 1 fetches assignment data from the Graph API for each policy (requires `Connect-Inforcer -FetchGraphData` on the relevant sessions)
+2. **Model**: Each `ComparisonRow` gains `SourceAssignment` and `DestAssignment` string properties (comma-separated group/user targets)
+3. **HTML rendering**: The comparison tables gain two additional columns: "Source Assignment" and "Dest Assignment"
+4. **NOT scored**: Assignments are purely informational — they do not affect the alignment score, do not contribute to matched/conflicting/source-only/dest-only counts, and are never flagged as conflicts. The purpose is to give consultants a heads-up about the impact scope of each policy.
+5. **Error handling**: If `-IncludingAssignments` is used but the session was not connected with `-FetchGraphData`, Write-Warning and continue without assignment data (don't fail the whole comparison).
+
+Without `-IncludingAssignments`, the assignment columns are omitted entirely from the HTML output.
 
 ## Out of Scope (v1)
 
 - Non-HTML output formats (Markdown, JSON, CSV) — can be added later following the same renderer pattern
-- Assignment comparison: the `-IncludingAssignments` parameter is defined in the parameter block as reserved. In v1 it writes a warning that assignment comparison is not yet implemented and continues without it. The parameter exists so that scripts written against v1 won't break when v2 adds the feature.
 - Interactive policy deployment/remediation from the report
 - Sidebar navigation (keep the simpler tab-based layout for v1)

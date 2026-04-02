@@ -126,6 +126,17 @@ function Export-InforcerDocExcel {
         $sheetName = $prodName -replace '[\[\]:*?/\\]', ''
         if ($sheetName.Length -gt 31) { $sheetName = $sheetName.Substring(0, 31) }
 
-        $rows | Export-Excel -Path $FilePath -WorksheetName $sheetName -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+        # -AutoSize requires libgdiplus on macOS/Linux; skip if not available
+        $excelParams = @{
+            Path          = $FilePath
+            WorksheetName = $sheetName
+            AutoFilter    = $true
+            FreezeTopRow  = $true
+            BoldTopRow    = $true
+        }
+        if ($IsWindows -or $null -eq $IsWindows) {
+            $excelParams['AutoSize'] = $true
+        }
+        $rows | Export-Excel @excelParams
     }
 }

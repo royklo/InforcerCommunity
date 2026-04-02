@@ -11,8 +11,35 @@ BeforeAll {
     $manifestPath = [System.IO.Path]::GetFullPath($manifestPath)
     Import-Module $manifestPath -Force -ErrorAction Stop
 
+    # Set up a minimal settings catalog so Resolve-InforcerSettingName works
+    InModuleScope InforcerCommunity {
+        $script:InforcerSettingsCatalog = @{
+            'device_vendor_msft_bitlocker_requiredeviceencryption' = @{
+                DisplayName = 'Require Device Encryption'
+                Description = 'Requires BitLocker encryption'
+                Options     = @{
+                    'device_vendor_msft_bitlocker_requiredeviceencryption_1' = 'Enabled'
+                    'device_vendor_msft_bitlocker_requiredeviceencryption_0' = 'Disabled'
+                }
+            }
+            'device_vendor_msft_firewall_enabled' = @{
+                DisplayName = 'Firewall Enabled'
+                Description = 'Windows Firewall'
+                Options     = @{
+                    'device_vendor_msft_firewall_enabled_true'  = 'True'
+                    'device_vendor_msft_firewall_enabled_false' = 'False'
+                }
+            }
+            'simple_setting_1' = @{
+                DisplayName = 'Simple Setting One'
+                Description = 'A simple setting'
+                Options     = @{}
+            }
+        }
+    }
+
     # -----------------------------------------------------------------------
-    # Test helpers — must be in BeforeAll so Pester 5 "run" phase can see them
+    # Test helpers
     # -----------------------------------------------------------------------
     function New-SCPolicy {
         param(
@@ -20,8 +47,7 @@ BeforeAll {
             [string]$Product,
             [string]$PrimaryGroup,
             [string]$SecondaryGroup = '',
-            [int]$PolicyTypeId = 10,
-            [array]$SettingDefinitions,
+            [array]$Settings,
             [object]$Assignments = $null
         )
         [PSCustomObject]@{
@@ -32,22 +58,21 @@ BeforeAll {
             product                = $Product
             primaryGroup           = $PrimaryGroup
             secondaryGroup         = $SecondaryGroup
-            policyTypeId           = $PolicyTypeId
+            policyTypeId           = 10
             inforcerPolicyTypeName = 'Settings Catalog'
             policyData             = [PSCustomObject]@{
-                displayName            = $DisplayName
-                description            = ''
-                createdDateTime        = '2025-01-01T00:00:00Z'
-                lastModifiedDateTime   = '2025-06-01T00:00:00Z'
-                settings               = @()
-                settingDefinitions     = $SettingDefinitions
-                assignments            = $Assignments
+                displayName          = $DisplayName
+                description          = ''
+                createdDateTime      = '2025-01-01T00:00:00Z'
+                lastModifiedDateTime = '2025-06-01T00:00:00Z'
+                settings             = $Settings
+                assignments          = $Assignments
             }
             tags = @()
         }
     }
 
-    function New-SettingDefinition {
+    function New-Setting {
         param(
             [string]$SettingDefinitionId,
             [string]$ODataType = '#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance',
@@ -62,7 +87,7 @@ BeforeAll {
         }
     }
 
-    function New-SimpleSettingDefinition {
+    function New-SimpleSetting {
         param(
             [string]$SettingDefinitionId,
             [object]$Value
@@ -73,41 +98,6 @@ BeforeAll {
                 settingDefinitionId = $SettingDefinitionId
                 simpleSettingValue  = [PSCustomObject]@{ value = $Value }
             }
-        }
-    }
-
-    function New-NonSCPolicy {
-        param(
-            [string]$DisplayName,
-            [string]$Product,
-            [string]$PrimaryGroup,
-            [string]$SecondaryGroup = '',
-            [int]$PolicyTypeId = 5,
-            [hashtable]$PolicyDataProps = @{},
-            [object]$Assignments = $null
-        )
-        $pdBase = @{
-            displayName          = $DisplayName
-            description          = ''
-            createdDateTime      = '2025-01-01T00:00:00Z'
-            lastModifiedDateTime = '2025-06-01T00:00:00Z'
-            assignments          = $Assignments
-        }
-        foreach ($k in $PolicyDataProps.Keys) { $pdBase[$k] = $PolicyDataProps[$k] }
-        $pd = [PSCustomObject]$pdBase
-
-        [PSCustomObject]@{
-            displayName            = $DisplayName
-            friendlyName           = $null
-            name                   = $null
-            id                     = [guid]::NewGuid().ToString()
-            product                = $Product
-            primaryGroup           = $PrimaryGroup
-            secondaryGroup         = $SecondaryGroup
-            policyTypeId           = $PolicyTypeId
-            inforcerPolicyTypeName = 'Admin Template'
-            policyData             = $pd
-            tags = @()
         }
     }
 
@@ -154,7 +144,7 @@ Describe 'ConvertTo-InforcerComparisonModel - Model structure' {
         $model.Keys | Should -Contain 'IncludingAssignments'
     }
 
-    It 'Counters has Matched, Conflicting, SourceOnly, DestOnly, Manual keys' {
+    It 'Counters has Matched, Conflicting, SourceOnly, DestOnly keys' {
         $data = New-ComparisonData
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
             ConvertTo-InforcerComparisonModel -ComparisonData $D
@@ -163,7 +153,6 @@ Describe 'ConvertTo-InforcerComparisonModel - Model structure' {
         $model.Counters.Keys | Should -Contain 'Conflicting'
         $model.Counters.Keys | Should -Contain 'SourceOnly'
         $model.Counters.Keys | Should -Contain 'DestOnly'
-        $model.Counters.Keys | Should -Contain 'Manual'
     }
 
     It 'Products is an OrderedDictionary' {
@@ -173,19 +162,28 @@ Describe 'ConvertTo-InforcerComparisonModel - Model structure' {
         }
         $model.Products.GetType().Name | Should -Be 'OrderedDictionary'
     }
+
+    It 'ManualReview is an empty OrderedDictionary' {
+        $data = New-ComparisonData
+        $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
+            ConvertTo-InforcerComparisonModel -ComparisonData $D
+        }
+        $model.ManualReview.GetType().Name | Should -Be 'OrderedDictionary'
+        $model.ManualReview.Count | Should -Be 0
+    }
 }
 
 # ---------------------------------------------------------------------------
-# Describe: Settings Catalog matching (Strategy A)
+# Describe: Settings Catalog matching
 # ---------------------------------------------------------------------------
 Describe 'ConvertTo-InforcerComparisonModel - Settings Catalog matching' {
 
     It 'identical settings in different policies are Matched' {
-        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy A' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'value_enabled')
+        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy A' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
         )
-        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy B' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'value_enabled')
+        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy B' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
         )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
@@ -197,11 +195,11 @@ Describe 'ConvertTo-InforcerComparisonModel - Settings Catalog matching' {
     }
 
     It 'same settingDefinitionId with different values is Conflicting' {
-        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy A' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'value_enabled')
+        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy A' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
         )
-        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy B' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'value_disabled')
+        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy B' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_0')
         )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
@@ -213,8 +211,8 @@ Describe 'ConvertTo-InforcerComparisonModel - Settings Catalog matching' {
     }
 
     It 'settings only in source are SourceOnly' {
-        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy A' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_src_only' -Value 'value_1')
+        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy A' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_firewall_enabled' -Value 'device_vendor_msft_firewall_enabled_true')
         )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @()
 
@@ -225,8 +223,8 @@ Describe 'ConvertTo-InforcerComparisonModel - Settings Catalog matching' {
     }
 
     It 'settings only in destination are DestOnly' {
-        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy B' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_dst_only' -Value 'value_1')
+        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy B' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_firewall_enabled' -Value 'device_vendor_msft_firewall_enabled_true')
         )
         $data = New-ComparisonData -SourcePolicies @() -DestPolicies @($dstPolicy)
 
@@ -237,11 +235,11 @@ Describe 'ConvertTo-InforcerComparisonModel - Settings Catalog matching' {
     }
 
     It 'handles simple setting instances correctly' {
-        $srcPolicy = New-SCPolicy -DisplayName 'SC Simple' -Product 'Intune' -PrimaryGroup 'Config' -SettingDefinitions @(
-            (New-SimpleSettingDefinition -SettingDefinitionId 'simple_1' -Value 42)
+        $srcPolicy = New-SCPolicy -DisplayName 'SC Simple' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-SimpleSetting -SettingDefinitionId 'simple_setting_1' -Value 42)
         )
-        $dstPolicy = New-SCPolicy -DisplayName 'SC Simple Dest' -Product 'Intune' -PrimaryGroup 'Config' -SettingDefinitions @(
-            (New-SimpleSettingDefinition -SettingDefinitionId 'simple_1' -Value 42)
+        $dstPolicy = New-SCPolicy -DisplayName 'SC Simple Dest' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-SimpleSetting -SettingDefinitionId 'simple_setting_1' -Value 42)
         )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
@@ -251,12 +249,12 @@ Describe 'ConvertTo-InforcerComparisonModel - Settings Catalog matching' {
         $model.Counters.Matched | Should -Be 1
     }
 
-    It 'comparison rows have correct ItemType "Setting" for SC policies' {
-        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'value_enabled')
+    It 'comparison rows have correct ItemType "Setting"' {
+        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
         )
-        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy Dest' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'value_enabled')
+        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy Dest' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
         )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
@@ -266,79 +264,63 @@ Describe 'ConvertTo-InforcerComparisonModel - Settings Catalog matching' {
         $row = $model.Products['Intune'].Categories.Values | ForEach-Object { $_.ComparisonRows } | Select-Object -First 1
         $row.ItemType | Should -Be 'Setting'
     }
-}
 
-# ---------------------------------------------------------------------------
-# Describe: Policy-level matching (Strategy B)
-# ---------------------------------------------------------------------------
-Describe 'ConvertTo-InforcerComparisonModel - Policy-level matching' {
-
-    It 'same match key and same policyData is Matched' {
-        $srcPolicy = New-NonSCPolicy -DisplayName 'Admin Template 1' -Product 'Intune' -PrimaryGroup 'Admin Templates' -PolicyTypeId 5 -PolicyDataProps @{ settingA = 'valueA'; settingB = 100 }
-        $dstPolicy = New-NonSCPolicy -DisplayName 'Admin Template 1' -Product 'Intune' -PrimaryGroup 'Admin Templates' -PolicyTypeId 5 -PolicyDataProps @{ settingA = 'valueA'; settingB = 100 }
-        $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
-
-        $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
-            ConvertTo-InforcerComparisonModel -ComparisonData $D
-        }
-        $model.Counters.Matched | Should -Be 1
-        $model.Counters.Conflicting | Should -Be 0
-    }
-
-    It 'same match key but different policyData is Conflicting' {
-        $srcPolicy = New-NonSCPolicy -DisplayName 'Admin Template 1' -Product 'Intune' -PrimaryGroup 'Admin Templates' -PolicyTypeId 5 -PolicyDataProps @{ settingA = 'valueA' }
-        $dstPolicy = New-NonSCPolicy -DisplayName 'Admin Template 1' -Product 'Intune' -PrimaryGroup 'Admin Templates' -PolicyTypeId 5 -PolicyDataProps @{ settingA = 'valueB' }
-        $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
-
-        $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
-            ConvertTo-InforcerComparisonModel -ComparisonData $D
-        }
-        $model.Counters.Conflicting | Should -Be 1
-    }
-
-    It 'unmatched non-SC policy without SC overlap is SourceOnly or DestOnly' {
-        $srcPolicy = New-NonSCPolicy -DisplayName 'Admin Template Src' -Product 'Intune' -PrimaryGroup 'Admin Templates' -PolicyTypeId 5 -PolicyDataProps @{ settingA = 'valueA' }
-        $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @()
-
-        $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
-            ConvertTo-InforcerComparisonModel -ComparisonData $D
-        }
-        $model.Counters.SourceOnly | Should -Be 1
-    }
-
-    It 'comparison rows have correct ItemType "Policy" for non-SC policies' {
-        $srcPolicy = New-NonSCPolicy -DisplayName 'Admin Template 1' -Product 'Intune' -PrimaryGroup 'Admin Templates' -PolicyTypeId 5 -PolicyDataProps @{ settingA = 'valueA' }
-        $dstPolicy = New-NonSCPolicy -DisplayName 'Admin Template 1' -Product 'Intune' -PrimaryGroup 'Admin Templates' -PolicyTypeId 5 -PolicyDataProps @{ settingA = 'valueA' }
+    It 'comparison rows include SettingDefinitionId' {
+        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
+        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy Dest' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
             ConvertTo-InforcerComparisonModel -ComparisonData $D
         }
         $row = $model.Products['Intune'].Categories.Values | ForEach-Object { $_.ComparisonRows } | Select-Object -First 1
-        $row.ItemType | Should -Be 'Policy'
+        $row.SettingDefinitionId | Should -Be 'device_vendor_msft_bitlocker_requiredeviceencryption'
     }
-}
 
-# ---------------------------------------------------------------------------
-# Describe: Manual review detection
-# ---------------------------------------------------------------------------
-Describe 'ConvertTo-InforcerComparisonModel - Manual review' {
-
-    It 'unmatched non-SC policy in area with SC policies triggers manual review' {
-        # SC policy in same product/category
-        $scPolicy = New-SCPolicy -DisplayName 'SC Policy' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'value_enabled')
+    It 'resolves friendly names from settings catalog' {
+        $srcPolicy = New-SCPolicy -DisplayName 'SC Policy' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
         )
-        # Unmatched admin template in same product/category
-        $adminPolicy = New-NonSCPolicy -DisplayName 'Admin Unmatched' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -PolicyTypeId 5 -PolicyDataProps @{ settingA = 'valueA' }
-
-        $data = New-ComparisonData -SourcePolicies @($scPolicy, $adminPolicy) -DestPolicies @($scPolicy)
+        $dstPolicy = New-SCPolicy -DisplayName 'SC Policy Dest' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
+        $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
             ConvertTo-InforcerComparisonModel -ComparisonData $D
         }
-        $model.Counters.Manual | Should -BeGreaterOrEqual 1
-        $model.ManualReview.Count | Should -BeGreaterOrEqual 1
+        $row = $model.Products['Intune'].Categories.Values | ForEach-Object { $_.ComparisonRows } | Select-Object -First 1
+        $row.Name | Should -Be 'Require Device Encryption'
+    }
+
+    It 'ignores non-SC policies (policyTypeId != 10)' {
+        $nonScPolicy = [PSCustomObject]@{
+            displayName            = 'Admin Template'
+            friendlyName           = $null
+            name                   = $null
+            id                     = [guid]::NewGuid().ToString()
+            product                = 'Intune'
+            primaryGroup           = 'Admin Templates'
+            secondaryGroup         = ''
+            policyTypeId           = 5
+            inforcerPolicyTypeName = 'Admin Template'
+            policyData             = [PSCustomObject]@{
+                displayName = 'Admin Template'
+                settingA    = 'valueA'
+            }
+            tags = @()
+        }
+        $data = New-ComparisonData -SourcePolicies @($nonScPolicy) -DestPolicies @()
+
+        $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
+            ConvertTo-InforcerComparisonModel -ComparisonData $D
+        }
+        $model.TotalItems | Should -Be 0
+        $model.Products.Count | Should -Be 0
     }
 }
 
@@ -356,8 +338,10 @@ Describe 'ConvertTo-InforcerComparisonModel - Empty environments' {
         $model.TotalItems | Should -Be 0
     }
 
-    It 'source empty, destination has policies gives all DestOnly' {
-        $dstPolicy = New-NonSCPolicy -DisplayName 'Dest Only' -Product 'Intune' -PrimaryGroup 'Config' -PolicyDataProps @{ a = 1 }
+    It 'source empty, destination has SC policies gives all DestOnly' {
+        $dstPolicy = New-SCPolicy -DisplayName 'Dest SC' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_firewall_enabled' -Value 'device_vendor_msft_firewall_enabled_true')
+        )
         $data = New-ComparisonData -SourcePolicies @() -DestPolicies @($dstPolicy)
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
@@ -368,8 +352,10 @@ Describe 'ConvertTo-InforcerComparisonModel - Empty environments' {
         $model.Counters.Matched | Should -Be 0
     }
 
-    It 'destination empty, source has policies gives all SourceOnly' {
-        $srcPolicy = New-NonSCPolicy -DisplayName 'Src Only' -Product 'Intune' -PrimaryGroup 'Config' -PolicyDataProps @{ a = 1 }
+    It 'destination empty, source has SC policies gives all SourceOnly' {
+        $srcPolicy = New-SCPolicy -DisplayName 'Src SC' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_firewall_enabled' -Value 'device_vendor_msft_firewall_enabled_true')
+        )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @()
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
@@ -385,9 +371,13 @@ Describe 'ConvertTo-InforcerComparisonModel - Empty environments' {
 # ---------------------------------------------------------------------------
 Describe 'ConvertTo-InforcerComparisonModel - Alignment score' {
 
-    It '100% when all items match' {
-        $srcPolicy = New-NonSCPolicy -DisplayName 'Policy A' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
-        $dstPolicy = New-NonSCPolicy -DisplayName 'Policy A' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
+    It '100% when all settings match' {
+        $srcPolicy = New-SCPolicy -DisplayName 'SC A' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
+        $dstPolicy = New-SCPolicy -DisplayName 'SC B' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
@@ -396,9 +386,13 @@ Describe 'ConvertTo-InforcerComparisonModel - Alignment score' {
         $model.AlignmentScore | Should -Be 100
     }
 
-    It '0% when no items match (all conflicting or one-sided)' {
-        $srcPolicy = New-NonSCPolicy -DisplayName 'Policy A' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
-        $dstPolicy = New-NonSCPolicy -DisplayName 'Policy B' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ b = 2 }
+    It '0% when no items match (all one-sided)' {
+        $srcPolicy = New-SCPolicy -DisplayName 'SC A' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
+        $dstPolicy = New-SCPolicy -DisplayName 'SC B' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_firewall_enabled' -Value 'device_vendor_msft_firewall_enabled_true')
+        )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
@@ -409,35 +403,20 @@ Describe 'ConvertTo-InforcerComparisonModel - Alignment score' {
 
     It 'calculates correct percentage for mixed results' {
         # 1 matched + 1 source-only = 50%
-        $matched1 = New-NonSCPolicy -DisplayName 'Matched' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
-        $matched2 = New-NonSCPolicy -DisplayName 'Matched' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
-        $srcOnly = New-NonSCPolicy -DisplayName 'SrcOnly' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ b = 2 }
+        $srcPolicy = New-SCPolicy -DisplayName 'SC Src' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1'),
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_firewall_enabled' -Value 'device_vendor_msft_firewall_enabled_true')
+        )
+        $dstPolicy = New-SCPolicy -DisplayName 'SC Dst' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
 
-        $data = New-ComparisonData -SourcePolicies @($matched1, $srcOnly) -DestPolicies @($matched2)
+        $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy)
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
             ConvertTo-InforcerComparisonModel -ComparisonData $D
         }
         $model.AlignmentScore | Should -Be 50
-    }
-
-    It 'manual review items are excluded from alignment score' {
-        # SC policy matched + unmatched admin template in same area (manual review)
-        $scSrc = New-SCPolicy -DisplayName 'SC A' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'v1')
-        )
-        $scDst = New-SCPolicy -DisplayName 'SC B' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'setting_1' -Value 'v1')
-        )
-        $adminSrc = New-NonSCPolicy -DisplayName 'Admin Unmatched' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -PolicyTypeId 5 -PolicyDataProps @{ x = 1 }
-
-        $data = New-ComparisonData -SourcePolicies @($scSrc, $adminSrc) -DestPolicies @($scDst)
-
-        $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
-            ConvertTo-InforcerComparisonModel -ComparisonData $D
-        }
-        # 1 matched SC setting, admin template goes to manual review (excluded from score)
-        $model.AlignmentScore | Should -Be 100
     }
 }
 
@@ -447,9 +426,15 @@ Describe 'ConvertTo-InforcerComparisonModel - Alignment score' {
 Describe 'ConvertTo-InforcerComparisonModel - Product counters' {
 
     It 'each product has its own Counters' {
-        $src1 = New-NonSCPolicy -DisplayName 'P1' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
-        $dst1 = New-NonSCPolicy -DisplayName 'P1' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
-        $src2 = New-NonSCPolicy -DisplayName 'P2' -Product 'Entra' -PrimaryGroup 'Settings' -PolicyTypeId 3 -PolicyDataProps @{ b = 2 }
+        $src1 = New-SCPolicy -DisplayName 'SC1' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
+        $dst1 = New-SCPolicy -DisplayName 'SC1D' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
+        $src2 = New-SCPolicy -DisplayName 'SC2' -Product 'Entra' -PrimaryGroup 'Settings' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_firewall_enabled' -Value 'device_vendor_msft_firewall_enabled_true')
+        )
 
         $data = New-ComparisonData -SourcePolicies @($src1, $src2) -DestPolicies @($dst1)
 
@@ -474,8 +459,12 @@ Describe 'ConvertTo-InforcerComparisonModel - Assignments' {
                 }
             }
         )
-        $srcPolicy = New-NonSCPolicy -DisplayName 'WithAssign' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 } -Assignments $assignments
-        $dstPolicy = New-NonSCPolicy -DisplayName 'WithAssign' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 } -Assignments $assignments
+        $srcPolicy = New-SCPolicy -DisplayName 'WithAssign' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        ) -Assignments $assignments
+        $dstPolicy = New-SCPolicy -DisplayName 'WithAssignDst' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        ) -Assignments $assignments
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy) -IncludingAssignments $true
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
@@ -484,41 +473,21 @@ Describe 'ConvertTo-InforcerComparisonModel - Assignments' {
         $model.IncludingAssignments | Should -BeTrue
         $row = $model.Products['Intune'].Categories.Values | ForEach-Object { $_.ComparisonRows } | Select-Object -First 1
         $row.Keys -contains 'SourceAssignment' | Should -BeTrue
+        $row.SourceAssignment | Should -Be 'All Devices'
     }
 
     It 'omits assignment fields when IncludingAssignments is false' {
-        $srcPolicy = New-NonSCPolicy -DisplayName 'NoAssign' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
-        $dstPolicy = New-NonSCPolicy -DisplayName 'NoAssign' -Product 'Intune' -PrimaryGroup 'Config' -PolicyTypeId 5 -PolicyDataProps @{ a = 1 }
+        $srcPolicy = New-SCPolicy -DisplayName 'NoAssign' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
+        $dstPolicy = New-SCPolicy -DisplayName 'NoAssignDst' -Product 'Intune' -PrimaryGroup 'Config' -Settings @(
+            (New-Setting -SettingDefinitionId 'device_vendor_msft_bitlocker_requiredeviceencryption' -Value 'device_vendor_msft_bitlocker_requiredeviceencryption_1')
+        )
         $data = New-ComparisonData -SourcePolicies @($srcPolicy) -DestPolicies @($dstPolicy) -IncludingAssignments $false
 
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
             ConvertTo-InforcerComparisonModel -ComparisonData $D
         }
         $model.IncludingAssignments | Should -BeFalse
-    }
-}
-
-# ---------------------------------------------------------------------------
-# Describe: Mixed SC and non-SC policies
-# ---------------------------------------------------------------------------
-Describe 'ConvertTo-InforcerComparisonModel - Mixed policy types' {
-
-    It 'handles both SC and non-SC policies in the same comparison' {
-        $scSrc = New-SCPolicy -DisplayName 'SC Policy' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'sc_setting_1' -Value 'enabled')
-        )
-        $scDst = New-SCPolicy -DisplayName 'SC Policy Dest' -Product 'Intune' -PrimaryGroup 'Endpoint Security' -SettingDefinitions @(
-            (New-SettingDefinition -SettingDefinitionId 'sc_setting_1' -Value 'enabled')
-        )
-        $nonScSrc = New-NonSCPolicy -DisplayName 'Admin T' -Product 'Exchange' -PrimaryGroup 'Transport' -PolicyTypeId 5 -PolicyDataProps @{ rule = 'block' }
-        $nonScDst = New-NonSCPolicy -DisplayName 'Admin T' -Product 'Exchange' -PrimaryGroup 'Transport' -PolicyTypeId 5 -PolicyDataProps @{ rule = 'block' }
-
-        $data = New-ComparisonData -SourcePolicies @($scSrc, $nonScSrc) -DestPolicies @($scDst, $nonScDst)
-
-        $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
-            ConvertTo-InforcerComparisonModel -ComparisonData $D
-        }
-        $model.Counters.Matched | Should -Be 2
-        $model.TotalItems | Should -Be 2
     }
 }

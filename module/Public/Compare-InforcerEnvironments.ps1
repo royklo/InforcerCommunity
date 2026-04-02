@@ -3,9 +3,9 @@
     Compares the policy configuration of two M365 environments and generates an HTML report.
 .DESCRIPTION
     Fetches policies from a source and destination environment (each can be a tenant or baseline),
-    compares them at the setting level (Intune Settings Catalog) or policy level (everything else),
+    compares them at the Intune Settings Catalog setting level (settingDefinitionId matching),
     and produces a self-contained HTML report showing alignment score, matches, conflicts,
-    source-only/destination-only items, and policies requiring manual review.
+    and source-only/destination-only items.
 
     For cross-account comparison, use Connect-Inforcer -PassThru to obtain session objects
     and pass them via -SourceSession / -DestinationSession.

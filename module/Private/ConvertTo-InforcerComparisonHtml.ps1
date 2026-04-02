@@ -12,8 +12,7 @@ function ConvertTo-InforcerComparisonHtml {
         - Dark/light theme toggle with localStorage persistence
         - Animated alignment score card with counter tiles
         - Collapsible product sections with status badges
-        - Settings Catalog rows (6-column) and Policy-level rows (4-column)
-        - Manual review tab with environment labels
+        - Settings Catalog rows (6-column layout)
         - Search filter, scroll-to-top, responsive layout
         - No external dependencies (CSS/JS fully embedded)
     .PARAMETER ComparisonModel
@@ -210,7 +209,7 @@ body {
 .score-bar-fill.green { background: linear-gradient(90deg, #059669, #34d399); }
 .score-bar-fill.yellow { background: linear-gradient(90deg, #d97706, #fbbf24); }
 .score-bar-fill.red { background: linear-gradient(90deg, #dc2626, #f87171); }
-.summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
 .summary-tile {
     background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 1.25rem; text-align: center; box-shadow: var(--shadow-sm); transition: box-shadow var(--transition);
@@ -361,9 +360,7 @@ tr:hover td { background: var(--accent-soft); }
     $conflicting     = $ComparisonModel.Counters.Conflicting
     $sourceOnly      = $ComparisonModel.Counters.SourceOnly
     $destOnly        = $ComparisonModel.Counters.DestOnly
-    $manual          = $ComparisonModel.Counters.Manual
     $products        = $ComparisonModel.Products
-    $manualReview    = $ComparisonModel.ManualReview
     $inclAssignments = $ComparisonModel.IncludingAssignments
 
     # Bar color class
@@ -389,8 +386,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<div id="top"></div>')
 
     # ── Notch bar ──────────────────────────────────────────────────────────
-    $notchDetail = "$totalItems items compared"
-    if ($manual -gt 0) { $notchDetail += " &middot; $manual require manual review" }
+    $notchDetail = "$totalItems settings compared"
     [void]$sb.AppendLine("<div class=`"notch-bar`">Environment Comparison<span class=`"notch-warn`">$notchDetail</span></div>")
 
     # ── Header ─────────────────────────────────────────────────────────────
@@ -416,7 +412,6 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <div class="summary-tile conflicting"><div class="count" id="countConflicting">0</div><div class="label">Conflicting</div></div>')
     [void]$sb.AppendLine('    <div class="summary-tile source-only"><div class="count" id="countSource">0</div><div class="label">Source Only</div></div>')
     [void]$sb.AppendLine('    <div class="summary-tile dest-only"><div class="count" id="countDest">0</div><div class="label">Destination Only</div></div>')
-    [void]$sb.AppendLine('    <div class="summary-tile manual"><div class="count" id="countManual">0</div><div class="label">Manual Review</div></div>')
     [void]$sb.AppendLine('</div>')
 
     # ── Search bar ─────────────────────────────────────────────────────────
@@ -424,18 +419,8 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search policies, settings, values..." oninput="searchAll(this.value)">')
     [void]$sb.AppendLine('</div>')
 
-    # ── Tabs ───────────────────────────────────────────────────────────────
-    [void]$sb.AppendLine('<div class="tabs">')
-    [void]$sb.AppendLine('    <button class="tab active" onclick="switchTab(this,''comparison'')">Comparison</button>')
-    if ($manual -gt 0) {
-        [void]$sb.AppendLine("    <button class=`"tab`" onclick=`"switchTab(this,'manual')`">Manual Review <span class=`"badge`">$manual</span></button>")
-    } else {
-        [void]$sb.AppendLine("    <button class=`"tab`" onclick=`"switchTab(this,'manual')`">Manual Review</button>")
-    }
-    [void]$sb.AppendLine('</div>')
-
-    # ── Comparison tab ─────────────────────────────────────────────────────
-    [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
+    # ── Comparison content ─────────────────────────────────────────────────
+    [void]$sb.AppendLine('<div id="comparison-content">')
 
     $isFirstProduct = $true
     foreach ($productName in $products.Keys) {
@@ -469,39 +454,20 @@ tr:hover td { background: var(--accent-soft); }
             [void]$sb.AppendLine("        <h3>$encCategoryName</h3>")
             [void]$sb.AppendLine('        <div class="table-wrap">')
 
-            # Determine table type from first row
-            $firstRow = $rows[0]
-            $isSetting = ($firstRow.ItemType -eq 'Setting')
-
+            # 6-column Settings Catalog table (+ optional assignment columns)
             [void]$sb.AppendLine('        <table>')
             [void]$sb.AppendLine('            <thead><tr>')
-
-            if ($isSetting) {
-                # 6-column Settings Catalog table (+ optional assignment columns)
-                [void]$sb.Append('                <th style="width:4%">Status</th>')
-                [void]$sb.Append('<th style="width:24%">Setting</th>')
-                [void]$sb.Append('<th style="width:18%">Source Policy</th>')
-                [void]$sb.Append('<th style="width:18%">Source Value</th>')
-                [void]$sb.Append('<th style="width:18%">Dest Policy</th>')
-                [void]$sb.Append('<th style="width:18%">Dest Value</th>')
-                if ($inclAssignments) {
-                    [void]$sb.Append('<th>Source Assignment</th>')
-                    [void]$sb.Append('<th>Dest Assignment</th>')
-                }
-                [void]$sb.AppendLine('')
-            } else {
-                # 4-column Policy-level table (+ optional assignment columns)
-                [void]$sb.Append('                <th style="width:4%">Status</th>')
-                [void]$sb.Append('<th style="width:30%">Policy</th>')
-                [void]$sb.Append('<th style="width:28%">Source</th>')
-                [void]$sb.Append('<th style="width:28%">Destination</th>')
-                if ($inclAssignments) {
-                    [void]$sb.Append('<th>Source Assignment</th>')
-                    [void]$sb.Append('<th>Dest Assignment</th>')
-                }
-                [void]$sb.AppendLine('')
+            [void]$sb.Append('                <th style="width:4%">Status</th>')
+            [void]$sb.Append('<th style="width:24%">Setting</th>')
+            [void]$sb.Append('<th style="width:18%">Source Policy</th>')
+            [void]$sb.Append('<th style="width:18%">Source Value</th>')
+            [void]$sb.Append('<th style="width:18%">Dest Policy</th>')
+            [void]$sb.Append('<th style="width:18%">Dest Value</th>')
+            if ($inclAssignments) {
+                [void]$sb.Append('<th>Source Assignment</th>')
+                [void]$sb.Append('<th>Dest Assignment</th>')
             }
-
+            [void]$sb.AppendLine('')
             [void]$sb.AppendLine('            </tr></thead>')
             [void]$sb.AppendLine('            <tbody>')
 
@@ -523,67 +489,36 @@ tr:hover td { background: var(--accent-soft); }
                 [void]$sb.Append($statusHtml)
                 [void]$sb.Append('</td>')
 
-                if ($isSetting) {
-                    # Setting name
-                    [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
+                # Setting name
+                [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
 
-                    # Source columns
-                    if ($status -eq 'DestOnly') {
-                        [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
-                    } else {
-                        $encSrcPolicy = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
-                        $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
-                        [void]$sb.Append("<td>$encSrcPolicy</td>")
-                        [void]$sb.Append("<td class=`"value-cell`">$encSrcValue</td>")
-                    }
-
-                    # Dest columns
-                    if ($status -eq 'SourceOnly') {
-                        [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
-                    } else {
-                        $encDstPolicy = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
-                        $encDstValue  = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
-                        $valueCls = if ($status -eq 'Conflicting') { 'value-cell value-diff' } else { 'value-cell' }
-                        [void]$sb.Append("<td>$encDstPolicy</td>")
-                        [void]$sb.Append("<td class=`"$valueCls`">$encDstValue</td>")
-                    }
-
-                    # Assignment columns
-                    if ($inclAssignments) {
-                        $encSrcAssign = [System.Net.WebUtility]::HtmlEncode($row.SourceAssignment)
-                        $encDstAssign = [System.Net.WebUtility]::HtmlEncode($row.DestAssignment)
-                        [void]$sb.Append("<td class=`"value-cell`">$encSrcAssign</td>")
-                        [void]$sb.Append("<td class=`"value-cell`">$encDstAssign</td>")
-                    }
-
+                # Source columns
+                if ($status -eq 'DestOnly') {
+                    [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
                 } else {
-                    # Policy name
-                    [void]$sb.Append("<td class=`"policy-name`">$encName</td>")
+                    $encSrcPolicy = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
+                    $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
+                    [void]$sb.Append("<td>$encSrcPolicy</td>")
+                    [void]$sb.Append("<td class=`"value-cell`">$encSrcValue</td>")
+                }
 
-                    # Source column
-                    if ($status -eq 'DestOnly') {
-                        [void]$sb.Append('<td style="color: var(--muted); font-style: italic;">Not configured</td>')
-                    } else {
-                        $encSrcValue = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
-                        [void]$sb.Append("<td class=`"value-cell`">$encSrcValue</td>")
-                    }
+                # Dest columns
+                if ($status -eq 'SourceOnly') {
+                    [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
+                } else {
+                    $encDstPolicy = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
+                    $encDstValue  = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
+                    $valueCls = if ($status -eq 'Conflicting') { 'value-cell value-diff' } else { 'value-cell' }
+                    [void]$sb.Append("<td>$encDstPolicy</td>")
+                    [void]$sb.Append("<td class=`"$valueCls`">$encDstValue</td>")
+                }
 
-                    # Dest column
-                    if ($status -eq 'SourceOnly') {
-                        [void]$sb.Append('<td style="color: var(--muted); font-style: italic;">Not configured</td>')
-                    } else {
-                        $encDstValue = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
-                        $valueCls = if ($status -eq 'Conflicting') { 'value-cell value-diff' } else { 'value-cell' }
-                        [void]$sb.Append("<td class=`"$valueCls`">$encDstValue</td>")
-                    }
-
-                    # Assignment columns
-                    if ($inclAssignments) {
-                        $encSrcAssign = [System.Net.WebUtility]::HtmlEncode($row.SourceAssignment)
-                        $encDstAssign = [System.Net.WebUtility]::HtmlEncode($row.DestAssignment)
-                        [void]$sb.Append("<td class=`"value-cell`">$encSrcAssign</td>")
-                        [void]$sb.Append("<td class=`"value-cell`">$encDstAssign</td>")
-                    }
+                # Assignment columns
+                if ($inclAssignments) {
+                    $encSrcAssign = [System.Net.WebUtility]::HtmlEncode($row.SourceAssignment)
+                    $encDstAssign = [System.Net.WebUtility]::HtmlEncode($row.DestAssignment)
+                    [void]$sb.Append("<td class=`"value-cell`">$encSrcAssign</td>")
+                    [void]$sb.Append("<td class=`"value-cell`">$encDstAssign</td>")
                 }
 
                 [void]$sb.AppendLine('</tr>')
@@ -600,84 +535,6 @@ tr:hover td { background: var(--accent-soft); }
 
     [void]$sb.AppendLine('</div>')
 
-    # ── Manual Review tab ──────────────────────────────────────────────────
-    [void]$sb.AppendLine('<div class="tab-content" id="tab-manual">')
-
-    if ($manual -gt 0) {
-        [void]$sb.AppendLine("<div class=`"card`" style=`"background: var(--manual-bg); border-color: var(--manual);`">")
-        [void]$sb.AppendLine("    <p style=`"font-size: 0.875rem; color: var(--text);`"><strong>$manual items require manual review.</strong> These policies use structures that cannot be automatically compared (e.g., Administrative Templates, non-standard JSON). Each policy is listed individually &#8212; no assumptions are made about which policies relate to each other.</p>")
-        [void]$sb.AppendLine('</div>')
-    }
-
-    $isFirstManual = $true
-    foreach ($productName in $manualReview.Keys) {
-        $mrProduct      = $manualReview[$productName]
-        $encProductName = [System.Net.WebUtility]::HtmlEncode($productName)
-        $policyCount    = $mrProduct.Count
-        $policyLabel    = if ($policyCount -eq 1) { '1 policy' } else { "$policyCount policies" }
-
-        $openAttr = if ($isFirstManual) { ' open' } else { '' }
-        $isFirstManual = $false
-
-        [void]$sb.AppendLine("<details class=`"product-section`"$openAttr>")
-        [void]$sb.AppendLine("    <summary><span class=`"product-title`">$encProductName</span> <span class=`"status-badge status-manual`">&#9888; $policyLabel</span></summary>")
-        [void]$sb.AppendLine('    <div class="product-content">')
-
-        foreach ($categoryName in $mrProduct.Categories.Keys) {
-            $manualEntries   = $mrProduct.Categories[$categoryName]
-            $encCategoryName = [System.Net.WebUtility]::HtmlEncode($categoryName)
-
-            if ($manualEntries.Count -eq 0) { continue }
-
-            [void]$sb.AppendLine("        <h3>$encCategoryName</h3>")
-            [void]$sb.AppendLine('        <div class="table-wrap">')
-            [void]$sb.AppendLine('        <table class="manual-table">')
-            [void]$sb.AppendLine('            <thead><tr>')
-            [void]$sb.AppendLine('                <th style="width:10%">Environment</th>')
-            [void]$sb.AppendLine('                <th style="width:30%">Policy Name</th>')
-            [void]$sb.AppendLine('                <th style="width:18%">Policy Type</th>')
-            [void]$sb.AppendLine('                <th style="width:42%">Reason</th>')
-            [void]$sb.AppendLine('            </tr></thead>')
-            [void]$sb.AppendLine('            <tbody>')
-
-            foreach ($entry in $manualEntries) {
-                $envLabel = $entry.Environment
-                $envClass = if ($envLabel -eq 'Source') { 'env-source' } else { 'env-dest' }
-                $envText  = if ($envLabel -eq 'Source') { 'Source' } else { 'Dest' }
-
-                $encPolicyName = [System.Net.WebUtility]::HtmlEncode($entry.PolicyName)
-                $encPolicyType = [System.Net.WebUtility]::HtmlEncode($entry.PolicyType)
-                $encReason     = [System.Net.WebUtility]::HtmlEncode($entry.Reason)
-
-                # Determine policy type badge class
-                $typeClass = switch -Wildcard ($entry.PolicyType) {
-                    '*Settings Catalog*' { 'type-catalog' }
-                    '*Administrative*'   { 'type-admin' }
-                    default              { 'type-other' }
-                }
-
-                [void]$sb.Append("                <tr><td><span class=`"env-label $envClass`">$envText</span></td>")
-                [void]$sb.Append("<td class=`"policy-name`">$encPolicyName</td>")
-                [void]$sb.Append("<td><span class=`"policy-type-badge $typeClass`">$encPolicyType</span></td>")
-                [void]$sb.AppendLine("<td class=`"manual-reason`">$encReason</td></tr>")
-            }
-
-            [void]$sb.AppendLine('            </tbody>')
-            [void]$sb.AppendLine('        </table>')
-            [void]$sb.AppendLine('        </div>')
-        }
-
-        [void]$sb.AppendLine('    </div>')
-        [void]$sb.AppendLine('</details>')
-    }
-
-    if ($manual -eq 0) {
-        [void]$sb.AppendLine('<div class="card" style="text-align: center;">')
-        [void]$sb.AppendLine('    <p style="color: var(--muted); font-style: italic;">No items require manual review.</p>')
-        [void]$sb.AppendLine('</div>')
-    }
-
-    [void]$sb.AppendLine('</div>')
 
     # ── Footer ─────────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="footer">')
@@ -698,7 +555,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<script>')
     [void]$sb.AppendLine('(function() {')
     [void]$sb.AppendLine("    var TARGET = $alignmentScore;")
-    [void]$sb.AppendLine("    var MATCHED = $matched, CONFLICTING = $conflicting, SOURCE = $sourceOnly, DEST = $destOnly, MANUAL = $manual;")
+    [void]$sb.AppendLine("    var MATCHED = $matched, CONFLICTING = $conflicting, SOURCE = $sourceOnly, DEST = $destOnly;")
     [void]$sb.AppendLine("    var TOTAL = $totalItems;")
     [void]$sb.AppendLine('    var DURATION = 1500, INTERVAL = 16;')
     [void]$sb.AppendLine('    var steps = Math.ceil(DURATION / INTERVAL), step = 0;')
@@ -709,7 +566,6 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    var elConflicting = document.getElementById(''countConflicting'');')
     [void]$sb.AppendLine('    var elSource = document.getElementById(''countSource'');')
     [void]$sb.AppendLine('    var elDest = document.getElementById(''countDest'');')
-    [void]$sb.AppendLine('    var elManual = document.getElementById(''countManual'');')
     [void]$sb.AppendLine('    function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }')
     [void]$sb.AppendLine('    setTimeout(function() {')
     [void]$sb.AppendLine('        var timer = setInterval(function() {')
@@ -723,7 +579,6 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('            elConflicting.textContent = Math.round(CONFLICTING * progress);')
     [void]$sb.AppendLine('            elSource.textContent = Math.round(SOURCE * progress);')
     [void]$sb.AppendLine('            elDest.textContent = Math.round(DEST * progress);')
-    [void]$sb.AppendLine('            elManual.textContent = Math.round(MANUAL * progress);')
     [void]$sb.AppendLine('            if (step >= steps) {')
     [void]$sb.AppendLine('                clearInterval(timer);')
     [void]$sb.AppendLine('                elScore.textContent = TARGET + ''%'';')
@@ -733,17 +588,10 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('                elConflicting.textContent = CONFLICTING;')
     [void]$sb.AppendLine('                elSource.textContent = SOURCE;')
     [void]$sb.AppendLine('                elDest.textContent = DEST;')
-    [void]$sb.AppendLine('                elManual.textContent = MANUAL;')
     [void]$sb.AppendLine('            }')
     [void]$sb.AppendLine('        }, INTERVAL);')
     [void]$sb.AppendLine('    }, 300);')
     [void]$sb.AppendLine('})();')
-    [void]$sb.AppendLine('function switchTab(btn, id) {')
-    [void]$sb.AppendLine('    document.querySelectorAll(''.tab'').forEach(function(t) { t.classList.remove(''active''); });')
-    [void]$sb.AppendLine('    document.querySelectorAll(''.tab-content'').forEach(function(c) { c.classList.remove(''active''); });')
-    [void]$sb.AppendLine('    btn.classList.add(''active'');')
-    [void]$sb.AppendLine('    document.getElementById(''tab-'' + id).classList.add(''active'');')
-    [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function scrollToTop() { document.getElementById(''top'').scrollIntoView({ behavior: ''smooth'' }); }')
     [void]$sb.AppendLine('window.addEventListener(''scroll'', function() {')
     [void]$sb.AppendLine('    var btn = document.getElementById(''btn-top'');')

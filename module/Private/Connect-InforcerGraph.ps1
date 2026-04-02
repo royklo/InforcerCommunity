@@ -25,7 +25,7 @@ function Connect-InforcerGraph {
     $graphModule = Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication'
     if (-not $graphModule) {
         Write-Host '  Installing Microsoft.Graph.Authentication module...' -ForegroundColor Yellow
-        Install-Module -Name 'Microsoft.Graph.Authentication' -Scope CurrentUser -Force -AllowClobber -SkipPublisherCheck
+        Install-Module -Name 'Microsoft.Graph.Authentication' -Scope CurrentUser -Force -AllowClobber
     }
 
     if (-not (Get-Module -Name 'Microsoft.Graph.Authentication')) {

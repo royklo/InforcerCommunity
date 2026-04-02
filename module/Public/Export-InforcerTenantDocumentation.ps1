@@ -8,8 +8,10 @@
     ConvertTo-InforcerDocModel, and renders the DocModel to one or more output formats.
 
     Intune Settings Catalog settingDefinitionIDs are resolved to friendly names and descriptions
-    using a settings.json lookup file (from IntuneSettingsCatalogViewer). If the lookup file is
-    not found, Settings Catalog policies show raw settingDefinitionId values instead.
+    using a settings.json catalog sourced from the IntuneSettingsCatalogData GitHub repository.
+    By default, the catalog is downloaded and cached at runtime (unless SettingsCatalogPath is
+    provided). If the catalog cannot be loaded, Settings Catalog policies show raw
+    settingDefinitionId values instead.
 
     Before calling this cmdlet, you must be connected via Connect-Inforcer. If no active session
     exists, the cmdlet emits a non-terminating error and returns immediately.
@@ -55,7 +57,7 @@
 .EXAMPLE
     Export-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Excel -OutputPath C:\Reports
 
-    Writes four documentation files to C:\Reports.
+    Writes three documentation files to C:\Reports.
 .EXAMPLE
     Export-InforcerTenantDocumentation -TenantId "Contoso" -Format Html -SettingsCatalogPath .\settings.json
 

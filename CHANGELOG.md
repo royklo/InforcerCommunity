@@ -27,7 +27,7 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 
 ### Features
 
-- **New cmdlet: `Export-InforcerTenantDocumentation`** — generates comprehensive, human-readable documentation of an entire M365 tenant's configuration. Supports HTML, Markdown, and CSV output formats. Parameters: `-Format`, `-TenantId`, `-OutputPath`, `-SettingsCatalogPath`, `-FetchGraphData`, `-Baseline`, `-Tag`.
+- **New cmdlet: `Export-InforcerTenantDocumentation`** — generates comprehensive, human-readable documentation of an entire M365 tenant's configuration. Supports HTML, Markdown, and Excel output formats. Parameters: `-Format`, `-TenantId`, `-OutputPath`, `-SettingsCatalogPath`, `-FetchGraphData`, `-Baseline`, `-Tag`.
 - **HTML output:** Modern 2025 admin dashboard design with glassmorphism sidebar, collapsible Product > Category > Policy navigation, tag filter pills (AND/OR), real-time search with text highlighting, dark/light mode toggle (localStorage persistence), hide empty fields toggle, show metadata toggle, back-to-top button, notch-style status bar, collapsible long values. Self-contained with embedded CSS and JavaScript (no CDN dependencies).
 - **Graph integration (`-FetchGraphData`):** Resolves group ObjectIDs to display names, assignment filter IDs to names, and scope tag IDs to names via Microsoft Graph. Validates Graph tenant matches Inforcer tenant.
 - **Baseline and tag filtering:** `-Baseline` filters to policies in a specific baseline via alignment details API. `-Tag` filters by Inforcer tag name (case-insensitive).

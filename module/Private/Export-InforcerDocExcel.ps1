@@ -30,18 +30,11 @@ function Export-InforcerDocExcel {
         [string]$FilePath
     )
 
-    # Check for ImportExcel module — offer to install if missing
+    # Check for ImportExcel module — error with install instructions if missing
     if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
-        $answer = Read-Host 'The ImportExcel module is required for Excel export. Install it now? (Y/n)'
-        if ($answer -match '^[Yy]?$') {
-            Write-Host 'Installing ImportExcel...' -ForegroundColor Cyan
-            Install-Module ImportExcel -Scope CurrentUser -Force -ErrorAction Stop
-            Write-Host '  ImportExcel installed successfully.' -ForegroundColor Green
-        } else {
-            Write-Error -Message 'Excel export requires the ImportExcel module. Install it with: Install-Module ImportExcel -Scope CurrentUser' `
-                -ErrorId 'ImportExcelNotFound' -Category NotInstalled
-            return
-        }
+        Write-Error -Message 'Excel export requires the ImportExcel module. Install it with: Install-Module ImportExcel -Scope CurrentUser' `
+            -ErrorId 'ImportExcelNotFound' -Category NotInstalled
+        return
     }
 
     Import-Module ImportExcel -ErrorAction Stop

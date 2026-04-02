@@ -9,7 +9,8 @@ function Get-InforcerDocData {
     .PARAMETER TenantId
         Tenant to collect data for. Accepts numeric ID, GUID, or tenant name.
     .PARAMETER SettingsCatalogPath
-        Optional path to settings.json. Defaults to module/data/settings.json.
+        Optional path to a settings catalog JSON file. If omitted, the catalog path
+        is resolved automatically at runtime via Get-InforcerSettingsCatalogPath.
     .OUTPUTS
         Hashtable with keys: Tenant, Baselines, Policies, TenantId, CollectedAt
     #>
@@ -57,7 +58,7 @@ function Get-InforcerDocData {
     $policies = $policiesJson | ConvertFrom-Json -Depth 100
 
     # Find the specific tenant from the tenant list
-    $tenant = $tenants | Where-Object { $_.clientTenantId -eq $clientTenantId }
+    $tenant = $tenants | Where-Object { $_.clientTenantId -eq $clientTenantId } | Select-Object -First 1
     if ($null -eq $tenant -and $tenants.Count -gt 0) {
         $tenant = $tenants[0]
     }

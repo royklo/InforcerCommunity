@@ -235,6 +235,13 @@ if ($FetchGraphData) {
     } else {
         Write-Host "  Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
 
+        # Validate Graph is connected to the correct tenant
+        if ($msTenantId -and $graphCtx.TenantId -and $graphCtx.TenantId -ne $msTenantId) {
+            $tenantName = $docData.Tenant.tenantFriendlyName
+            Write-Warning "Graph signed into tenant $($graphCtx.TenantId) but exporting tenant '$tenantName' ($msTenantId). Group names and filters may not resolve correctly."
+            Write-Warning "Sign in with an account that has access to tenant '$tenantName' or skip -FetchGraphData."
+        }
+
         # Collect all unique group ObjectIDs from raw policy data
         $objectIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($policy in @($docData.Policies)) {

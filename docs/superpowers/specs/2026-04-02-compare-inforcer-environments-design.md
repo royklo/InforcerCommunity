@@ -25,10 +25,12 @@ Compare-InforcerEnvironments
     [-DestinationSession] <hashtable>   # Session object from Connect-Inforcer -PassThru
     [-SourceBaselineId] <string>        # GUID or baseline name (use baseline policies as source)
     [-DestinationBaselineId] <string>   # GUID or baseline name (use baseline policies as destination)
-    [-IncludingAssignments]             # Switch — fetch Graph data for assignment comparison
+    [-IncludingAssignments]             # Switch — reserved for future use (v2: fetch Graph assignment data)
     [-SettingsCatalogPath] <string>     # Path to settings.json (auto-discovers sibling repo if omitted)
     [-OutputPath] <string>              # Directory for HTML output file
 ```
+
+**Parameter order note:** This cmdlet intentionally departs from the module's standard `Format → TenantId → Tag → OutputType` convention because it is a `Compare-` verb (not `Get-`/`Export-`) and requires source/destination pairs as its primary inputs. The standard parameters (`Format`, `OutputType`) are not present in v1 (HTML-only). If future formats are added, `-Format` should be inserted as the first parameter to align with convention.
 
 ### Parameter Sets
 
@@ -65,14 +67,34 @@ Compare-InforcerEnvironments (public)
 
 **Input:** Source/destination identifiers + session objects
 
+**Cross-session mechanism:** All existing cmdlets (`Get-InforcerTenantPolicies`, `Resolve-InforcerTenantId`, etc.) read from `$script:InforcerSession` directly. To support cross-account comparison without modifying every existing cmdlet, `Get-InforcerComparisonData` temporarily swaps `$script:InforcerSession` before each call and restores it afterward:
+
+```powershell
+# Save current session
+$originalSession = $script:InforcerSession
+try {
+    # Fetch source data
+    $script:InforcerSession = $SourceSession
+    $sourcePolicies = Get-InforcerTenantPolicies -TenantId $SourceTenantId -OutputType PowerShellObject
+
+    # Fetch destination data
+    $script:InforcerSession = $DestinationSession
+    $destPolicies = Get-InforcerTenantPolicies -TenantId $DestinationTenantId -OutputType PowerShellObject
+} finally {
+    # Always restore
+    $script:InforcerSession = $originalSession
+}
+```
+
+This is a low-risk approach: no changes to existing cmdlets, the swap is scoped within a `try/finally`, and the original session is always restored. The trade-off is that it is not thread-safe, but PowerShell module-scoped variables are inherently single-threaded per runspace.
+
 **Process:**
-1. Resolve tenant IDs and/or baseline IDs using existing helpers (`Resolve-InforcerTenantId`, `Resolve-InforcerBaselineId`)
-2. Fetch policies for source environment using the source session:
-   - If baseline: `Get-InforcerTenantPolicies` for the baseline tenant
-   - If tenant: `Get-InforcerTenantPolicies` for that tenant
-3. Fetch policies for destination environment using the destination session
-4. If `-IncludingAssignments`: fetch Graph assignment data (requires `Connect-Inforcer -FetchGraphData`)
-5. Load Settings Catalog lookup table via `Import-InforcerSettingsCatalog` (once, shared)
+1. Resolve tenant IDs and/or baseline IDs using existing helpers (`Resolve-InforcerTenantId`, `Resolve-InforcerBaselineId`) — with session swapped to the appropriate side
+2. Fetch policies for source environment:
+   - If baseline: call `Get-InforcerBaseline` to get the baseline's `baselineTenantId`, then call `Get-InforcerTenantPolicies` with that tenant ID to get the baseline's policies
+   - If tenant: call `Get-InforcerTenantPolicies` directly with the tenant ID
+3. Fetch policies for destination environment (same logic, swapped to destination session)
+4. Load Settings Catalog lookup table via `Import-InforcerSettingsCatalog` (once, shared — does not depend on session)
 
 **Output:** Hashtable with `SourcePolicies`, `DestinationPolicies`, `SourceName`, `DestinationName`, `SourceType` (Baseline/Tenant), `DestinationType`, `SettingsCatalog`, `CollectedAt`
 
@@ -153,15 +175,15 @@ Any Intune policy that does NOT contain settingDefinitionID properties (Administ
                 'Endpoint Security / Firewall' = @(
                     @{
                         Environment = 'Source'   # Source or Destination
-                        PolicyName  = 'Windows Firewall Rules'
-                        PolicyType  = 'Settings Catalog'
-                        Reason      = 'Contains settingDefinitionIDs but no matching...'
+                        PolicyName  = 'Firewall Configuration v2'
+                        PolicyType  = 'Administrative Template'
+                        Reason      = 'Administrative Template — flat JSON structure, cannot auto-compare with Settings Catalog'
                     }
                     @{
                         Environment = 'Destination'
                         PolicyName  = 'Firewall Configuration'
                         PolicyType  = 'Administrative Template'
-                        Reason      = 'Administrative Template — flat JSON, cannot auto-compare'
+                        Reason      = 'Administrative Template — flat JSON structure, cannot auto-compare with Settings Catalog'
                     }
                 )
             }
@@ -251,11 +273,11 @@ To determine if an Intune policy is a Settings Catalog policy (and therefore aut
 - **Identical environments**: 100% alignment score, all items matched, no conflicts.
 - **No `-SourceSession`/`-DestinationSession`**: Both sides use `$script:InforcerSession`. Works for comparing two tenants under the same API key.
 - **Same tenant compared to itself**: Valid use case (sanity check). Should show 100% alignment.
-- **`-IncludingAssignments` without Graph connection**: Write-Error explaining that `-FetchGraphData` is required on `Connect-Inforcer`, continue without assignment comparison.
+- **`-IncludingAssignments` used in v1**: Write-Warning that assignment comparison is reserved for a future version, continue without it.
 
 ## Out of Scope (v1)
 
 - Non-HTML output formats (Markdown, JSON, CSV) — can be added later following the same renderer pattern
-- Assignment comparison details in the report (the `-IncludingAssignments` parameter is defined but detailed assignment diff rendering is deferred)
+- Assignment comparison: the `-IncludingAssignments` parameter is defined in the parameter block as reserved. In v1 it writes a warning that assignment comparison is not yet implemented and continues without it. The parameter exists so that scripts written against v1 won't break when v2 adds the feature.
 - Interactive policy deployment/remediation from the report
 - Sidebar navigation (keep the simpler tab-based layout for v1)

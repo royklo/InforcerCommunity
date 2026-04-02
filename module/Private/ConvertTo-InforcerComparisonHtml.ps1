@@ -584,12 +584,12 @@ tr:hover td { background: var(--accent-soft); }
                     # Filter to configured, non-metadata settings
                     $srcVisible = @($srcSettingsRaw | Where-Object {
                         $_.IsConfigured -eq $true -and
-                        -not ($_.Name -like '@odata*') -and
+                        -not ($_.Name -like '*@odata*') -and
                         $_.Name -notin $metadataSkipNames
                     })
                     $dstVisible = @($dstSettingsRaw | Where-Object {
                         $_.IsConfigured -eq $true -and
-                        -not ($_.Name -like '@odata*') -and
+                        -not ($_.Name -like '*@odata*') -and
                         $_.Name -notin $metadataSkipNames
                     })
 
@@ -698,7 +698,7 @@ tr:hover td { background: var(--accent-soft); }
                     if ($mrItem.Settings -and $mrItem.Settings.Count -gt 0) {
                         $visibleSettings = @($mrItem.Settings | Where-Object {
                             $_.IsConfigured -eq $true -and
-                            -not ($_.Name -like '@odata*') -and
+                            -not ($_.Name -like '*@odata*') -and
                             $_.Name -notin $metadataSkip
                         })
                     }
@@ -813,15 +813,16 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    else { r.classList.remove(''light''); r.classList.add(''dark''); localStorage.setItem(''theme'',''dark''); }')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('(function() { var s = localStorage.getItem(''theme''); if (s===''dark'') document.documentElement.classList.add(''dark''); else if (s===''light'') document.documentElement.classList.add(''light''); })();')
-    [void]$sb.AppendLine('var activeFilter = "All";')
+    [void]$sb.AppendLine('var activeFilters = new Set();')
     [void]$sb.AppendLine('function applyFilters() {')
     [void]$sb.AppendLine('    var q = (document.getElementById("search-input").value || "").toLowerCase().trim();')
+    [void]$sb.AppendLine('    var showAll = activeFilters.size === 0 || activeFilters.has("All");')
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-comparison");')
     [void]$sb.AppendLine('    if (!tab) return;')
-    [void]$sb.AppendLine('    // Filter individual rows by search + status')
+    [void]$sb.AppendLine('    // Filter individual rows by search + status (multi-select OR logic)')
     [void]$sb.AppendLine('    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {')
     [void]$sb.AppendLine('        var matchesSearch = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;')
-    [void]$sb.AppendLine('        var matchesFilter = activeFilter === "All" || tr.getAttribute("data-status") === activeFilter;')
+    [void]$sb.AppendLine('        var matchesFilter = showAll || activeFilters.has(tr.getAttribute("data-status"));')
     [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter;')
     [void]$sb.AppendLine('        tr.style.display = hidden ? "none" : "";')
     [void]$sb.AppendLine('    });')
@@ -847,9 +848,27 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
     [void]$sb.AppendLine('function filterByStatus(btn, status) {')
-    [void]$sb.AppendLine('    activeFilter = status;')
-    [void]$sb.AppendLine('    document.querySelectorAll(".filter-pill").forEach(function(p) { p.classList.remove("active"); });')
-    [void]$sb.AppendLine('    btn.classList.add("active");')
+    [void]$sb.AppendLine('    var allBtn = document.querySelector(".filter-pill[onclick*=\"All\"]");')
+    [void]$sb.AppendLine('    if (status === "All") {')
+    [void]$sb.AppendLine('        // "All" clears all other selections')
+    [void]$sb.AppendLine('        activeFilters.clear();')
+    [void]$sb.AppendLine('        document.querySelectorAll(".filter-pill").forEach(function(p) { p.classList.remove("active"); });')
+    [void]$sb.AppendLine('        btn.classList.add("active");')
+    [void]$sb.AppendLine('    } else {')
+    [void]$sb.AppendLine('        // Deactivate "All" pill when selecting a specific status')
+    [void]$sb.AppendLine('        activeFilters.delete("All");')
+    [void]$sb.AppendLine('        if (allBtn) allBtn.classList.remove("active");')
+    [void]$sb.AppendLine('        // Toggle this pill on/off')
+    [void]$sb.AppendLine('        if (activeFilters.has(status)) {')
+    [void]$sb.AppendLine('            activeFilters.delete(status);')
+    [void]$sb.AppendLine('            btn.classList.remove("active");')
+    [void]$sb.AppendLine('        } else {')
+    [void]$sb.AppendLine('            activeFilters.add(status);')
+    [void]$sb.AppendLine('            btn.classList.add("active");')
+    [void]$sb.AppendLine('        }')
+    [void]$sb.AppendLine('        // If no pills active, reactivate "All"')
+    [void]$sb.AppendLine('        if (activeFilters.size === 0 && allBtn) { allBtn.classList.add("active"); }')
+    [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('    applyFilters();')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('</script>')

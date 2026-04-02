@@ -318,12 +318,18 @@ function ConvertTo-InforcerComparisonModel {
         if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
         $policyName = Get-InforcerPolicyName -Policy $p
 
+        $flatSettings = @()
+        if ($p.policyData) {
+            $flatSettings = @(ConvertTo-FlatSettingRows -PolicyData $p.policyData)
+        }
+
         & $ensureManualCategory $prod $cat
         [void]$manualReview[$prod].Categories[$cat].Add(@{
             Environment = 'Source'
             PolicyName  = $policyName
             PolicyType  = if ($p.inforcerPolicyTypeName) { $p.inforcerPolicyTypeName } else { "Type $($p.policyTypeId)" }
             Reason      = 'Non-Settings-Catalog policy — cannot auto-compare at setting level'
+            Settings    = $flatSettings
         })
         $manualReview[$prod].Count++
         $manualCount++
@@ -338,12 +344,18 @@ function ConvertTo-InforcerComparisonModel {
         if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
         $policyName = Get-InforcerPolicyName -Policy $p
 
+        $flatSettings = @()
+        if ($p.policyData) {
+            $flatSettings = @(ConvertTo-FlatSettingRows -PolicyData $p.policyData)
+        }
+
         & $ensureManualCategory $prod $cat
         [void]$manualReview[$prod].Categories[$cat].Add(@{
             Environment = 'Destination'
             PolicyName  = $policyName
             PolicyType  = if ($p.inforcerPolicyTypeName) { $p.inforcerPolicyTypeName } else { "Type $($p.policyTypeId)" }
             Reason      = 'Non-Settings-Catalog policy — cannot auto-compare at setting level'
+            Settings    = $flatSettings
         })
         $manualReview[$prod].Count++
         $manualCount++

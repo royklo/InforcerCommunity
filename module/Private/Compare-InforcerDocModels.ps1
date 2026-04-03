@@ -48,9 +48,11 @@ function Compare-InforcerDocModels {
 
     # App protection: settings that enumerate individual app IDs (noise)
     $appIdSettingPatterns = @(
-        'bundleId'
-        'packageId'
+        '^bundleId$'
+        '^packageId$'
         'apps\[\d+\]'
+        '^apps$'
+        '^approvedKeyboards$'
     )
 
     # ── Helper: ensure product/category exists ────────────────────────────
@@ -156,6 +158,8 @@ function Compare-InforcerDocModels {
             # Skip excluded settings
             if (& $isExcludedSetting $p.Name) { continue }
             if (& $isExcludedSetting $key) { continue }
+            # Skip structural array count rows (e.g., "40 items")
+            if ($p.Value -match '^\d+ items$') { continue }
 
             # Handle duplicate paths (shouldn't normally happen with proper path building)
             if ($lookup.Contains($key)) {

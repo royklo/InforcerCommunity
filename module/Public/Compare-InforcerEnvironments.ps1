@@ -107,16 +107,18 @@ if ($null -eq $compData) {
     return
 }
 
-Write-Host "  Source:      $($compData.SourceName) ($($compData.SourceType)), $(@($compData.SourcePolicies).Count) policies" -ForegroundColor Gray
-Write-Host "  Destination: $($compData.DestinationName) ($($compData.DestinationType)), $(@($compData.DestinationPolicies).Count) policies" -ForegroundColor Gray
+Write-Host "  Source:      $($compData.SourceName)" -ForegroundColor Gray
+Write-Host "  Destination: $($compData.DestinationName)" -ForegroundColor Gray
 
 # ── Stage 2: Build comparison model ──────────────────────────────────────────
 Write-Host 'Stage 2: Building comparison model...' -ForegroundColor Cyan
 
-$model = ConvertTo-InforcerComparisonModel -ComparisonData $compData
+$model = Compare-InforcerDocModels -SourceModel $compData.SourceModel `
+    -DestinationModel $compData.DestinationModel `
+    -IncludingAssignments:$compData.IncludingAssignments
 
 if ($null -eq $model) {
-    Write-Error -Message 'ConvertTo-InforcerComparisonModel returned no model.' `
+    Write-Error -Message 'Compare-InforcerDocModels returned no model.' `
         -ErrorId 'ModelBuildFailed' -Category InvalidResult
     return
 }

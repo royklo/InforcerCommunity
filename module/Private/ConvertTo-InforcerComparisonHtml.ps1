@@ -521,7 +521,7 @@ tr:hover td { background: var(--accent-soft); }
     }
     [void]$sb.AppendLine('</select>')
     $deprecatedLabel = if ($deprecatedCount -gt 0) { "Show deprecated ($deprecatedCount)" } else { "Show deprecated" }
-    [void]$sb.AppendLine("    <span style=`"margin-left:auto;display:flex;align-items:center;gap:0.5rem`"><span style=`"font-size:0.75rem;font-weight:500;color:var(--text-secondary)`">$deprecatedLabel</span><span class=`"toggle-switch`"><input type=`"checkbox`" id=`"chk-show-deprecated`" onchange=`"applyFilters()`"><span class=`"toggle-slider`"></span></span></span>")
+    [void]$sb.AppendLine("    <label style=`"margin-left:auto;display:flex;align-items:center;gap:0.5rem;cursor:pointer`"><span style=`"font-size:0.75rem;font-weight:500;color:var(--text-secondary)`">$deprecatedLabel</span><span class=`"toggle-switch`"><input type=`"checkbox`" id=`"chk-show-deprecated`" onchange=`"applyFilters()`"><span class=`"toggle-slider`"></span></span></label>")
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.9rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
 
@@ -637,8 +637,11 @@ tr:hover td { background: var(--accent-soft); }
                     [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
                 }
 
-                # Category column
-                [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCategory</td>")
+                # Category column — strip product prefix since it's in the section header
+                $displayCategory = $row.Category
+                if ($displayCategory -match '^[^/]+\s*/\s*(.+)$') { $displayCategory = $Matches[1] }
+                $encDisplayCat = [System.Net.WebUtility]::HtmlEncode($displayCategory)
+                [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encDisplayCat</td>")
 
                 # Source columns
                 if ($status -eq 'DestOnly') {

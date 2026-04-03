@@ -47,12 +47,14 @@ function Compare-InforcerDocModels {
     )
 
     # App protection: settings that enumerate individual app IDs (noise)
+    # Also filter @odata metadata that leaks through non-SC policies
     $appIdSettingPatterns = @(
         '^bundleId$'
         '^packageId$'
         'apps\[\d+\]'
         '^apps$'
         '^approvedKeyboards$'
+        '@odata\.'
     )
 
     # ── Helper: ensure product/category exists ────────────────────────────

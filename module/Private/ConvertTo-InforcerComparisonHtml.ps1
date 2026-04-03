@@ -397,8 +397,13 @@ tr:hover td { background: var(--accent-soft); }
 .tab-btn { padding: 0.75rem 1.5rem; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all var(--transition); font-family: inherit; }
 .tab-btn:hover { color: var(--text); background: var(--accent-soft); }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-.manual-review-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 0.75rem; }
-.manual-review-card h4 { margin: 0 0 0.5rem; font-size: 0.875rem; }
+.manual-review-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0; margin-bottom: 0.75rem; }
+.manual-review-card summary { padding: 0.75rem 1rem; font-size: 0.875rem; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; }
+.manual-review-card summary::-webkit-details-marker { display: none; }
+.manual-review-card summary::before { content: '\25B6'; font-size: 0.65rem; color: var(--muted); transition: transform var(--transition); }
+.manual-review-card[open] summary::before { transform: rotate(90deg); }
+.manual-review-card[open] summary { border-bottom: 1px solid var(--border-subtle); }
+.manual-review-card .mr-body { padding: 0.75rem 1rem; }
 .manual-review-card .side-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
 .manual-review-card .side-source { background: var(--info-bg); color: var(--info); }
 .manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
@@ -458,7 +463,7 @@ tr:hover td { background: var(--accent-soft); }
     # ── Score card ─────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="score-card">')
     [void]$sb.AppendLine('    <div class="score-value" id="scoreNum">0%</div>')
-    [void]$sb.AppendLine("    <div class=`"score-label`">Overall Alignment &mdash; <span id=`"scoreDetail`">0 of $totalItems items matched</span></div>")
+    [void]$sb.AppendLine("    <div class=`"score-label`">Overall Alignment &mdash; <span id=`"scoreDetail`">0 of $totalItems settings matched</span></div>")
     [void]$sb.AppendLine("    <div class=`"score-bar-track`"><div class=`"score-bar-fill $barColor`" id=`"scoreBar`"></div></div>")
     [void]$sb.AppendLine('</div>')
 
@@ -681,8 +686,9 @@ tr:hover td { background: var(--accent-soft); }
                 $sideCls = if ($policy.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
                 $sideLabel = [System.Net.WebUtility]::HtmlEncode($policy.Side)
 
-                [void]$sb.AppendLine('<div class="manual-review-card">')
-                [void]$sb.AppendLine("    <h4>$encPolicyName <span class=`"side-badge $sideCls`">$sideLabel</span></h4>")
+                [void]$sb.AppendLine('<details class="manual-review-card">')
+                [void]$sb.AppendLine("    <summary><strong>$encPolicyName</strong> <span class=`"side-badge $sideCls`">$sideLabel</span></summary>")
+                [void]$sb.AppendLine('    <div class="mr-body">')
                 if (-not [string]::IsNullOrWhiteSpace($encProfileType)) {
                     [void]$sb.AppendLine("    <div style=`"font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem`">$encProfileType</div>")
                 }
@@ -696,8 +702,9 @@ tr:hover td { background: var(--accent-soft); }
                 } else {
                     [void]$sb.AppendLine('    <div style="color:var(--muted);font-size:0.8rem;font-style:italic">No configured settings</div>')
                 }
+                [void]$sb.AppendLine('    </div>')
 
-                [void]$sb.AppendLine('</div>')
+                [void]$sb.AppendLine('</details>')
             }
         }
 
@@ -742,7 +749,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('            var pct = TARGET * progress;')
     [void]$sb.AppendLine('            elScore.textContent = Math.round(pct * 10) / 10 + ''%'';')
     [void]$sb.AppendLine('            elBar.style.width = pct + ''%'';')
-    [void]$sb.AppendLine('            elDetail.textContent = Math.round(MATCHED * progress) + '' of '' + TOTAL + '' items matched'';')
+    [void]$sb.AppendLine('            elDetail.textContent = Math.round(MATCHED * progress) + '' of '' + TOTAL + '' settings matched'';')
     [void]$sb.AppendLine('            elMatched.textContent = Math.round(MATCHED * progress);')
     [void]$sb.AppendLine('            elConflicting.textContent = Math.round(CONFLICTING * progress);')
     [void]$sb.AppendLine('            elSource.textContent = Math.round(SOURCE * progress);')
@@ -751,7 +758,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('                clearInterval(timer);')
     [void]$sb.AppendLine('                elScore.textContent = TARGET + ''%'';')
     [void]$sb.AppendLine('                elBar.style.width = TARGET + ''%'';')
-    [void]$sb.AppendLine('                elDetail.textContent = MATCHED + '' of '' + TOTAL + '' items matched'';')
+    [void]$sb.AppendLine('                elDetail.textContent = MATCHED + '' of '' + TOTAL + '' settings matched'';')
     [void]$sb.AppendLine('                elMatched.textContent = MATCHED;')
     [void]$sb.AppendLine('                elConflicting.textContent = CONFLICTING;')
     [void]$sb.AppendLine('                elSource.textContent = SOURCE;')
@@ -825,6 +832,8 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    if (tab) tab.classList.add("active");')
     [void]$sb.AppendLine('    event.target.classList.add("active");')
     [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('// Apply filters on page load to hide deprecated rows by default')
+    [void]$sb.AppendLine('applyFilters();')
     [void]$sb.AppendLine('</script>')
 
     # ── Close body/html ────────────────────────────────────────────────────

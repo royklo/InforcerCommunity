@@ -1,12 +1,11 @@
 function Get-InforcerComparisonData {
     <#
     .SYNOPSIS
-        Fetches policies from two tenants for comparison.
+        Fetches and normalizes data from two tenants for comparison.
     .DESCRIPTION
-        Stage 1 of the Compare-InforcerEnvironments pipeline. Collects all policies from
-        a source and destination tenant via Get-InforcerTenantPolicies, swapping
-        $script:InforcerSession as needed for cross-account comparison.
-        Sessions are always restored in a finally block.
+        Stage 1 of the Compare-InforcerEnvironments pipeline. Collects data from both
+        environments via Get-InforcerDocData and normalizes through ConvertTo-InforcerDocModel
+        with -ComparisonMode, producing two DocModels ready for diffing.
     .PARAMETER SourceTenantId
         Source tenant identifier. Accepts numeric ID, GUID, or tenant name.
     .PARAMETER DestinationTenantId
@@ -20,8 +19,8 @@ function Get-InforcerComparisonData {
     .PARAMETER IncludingAssignments
         When specified, policy assignment data is included in the collected policies.
     .OUTPUTS
-        Hashtable with keys: SourcePolicies, DestinationPolicies, SourceName, DestinationName,
-        SettingsCatalog, IncludingAssignments, CollectedAt
+        Hashtable with keys: SourceModel, DestinationModel, SourceName, DestinationName,
+        IncludingAssignments, CollectedAt
     #>
     [CmdletBinding()]
     param(
@@ -44,69 +43,37 @@ function Get-InforcerComparisonData {
         [switch]$IncludingAssignments
     )
 
-    # Default sessions to $script:InforcerSession if not provided
     if ($null -eq $SourceSession) { $SourceSession = $script:InforcerSession }
     if ($null -eq $DestinationSession) { $DestinationSession = $script:InforcerSession }
 
-    # Load Settings Catalog once, session-independently
-    $catalogParams = @{}
-    if (-not [string]::IsNullOrEmpty($SettingsCatalogPath)) {
-        $catalogParams['Path'] = $SettingsCatalogPath
-    }
-    Import-InforcerSettingsCatalog @catalogParams
-
-    # Helper: resolve tenant name with fallback chain
-    function Resolve-TenantName {
-        param([object]$TenantObj, [int]$TenantId)
-        if ($null -eq $TenantObj) { return "$TenantId" }
-        $name = $TenantObj.tenantFriendlyName
-        if ([string]::IsNullOrWhiteSpace($name)) { $name = $TenantObj.tenantDnsName }
-        if ([string]::IsNullOrWhiteSpace($name)) { $name = "$TenantId" }
-        return $name
-    }
-
-    # Save original session for restoration
     $originalSession = $script:InforcerSession
 
+    $docDataParams = @{}
+    if (-not [string]::IsNullOrEmpty($SettingsCatalogPath)) {
+        $docDataParams['SettingsCatalogPath'] = $SettingsCatalogPath
+    }
+
     try {
-        # ── Source tenant ─────────────────────────────────────────────────────
+        # ── Source ──
         Write-Host 'Collecting source tenant data...' -ForegroundColor Gray
         $script:InforcerSession = $SourceSession
+        $sourceDocData = Get-InforcerDocData -TenantId $SourceTenantId @docDataParams
+        $sourceModel = ConvertTo-InforcerDocModel -DocData $sourceDocData -ComparisonMode
 
-        $resolvedSourceId = Resolve-InforcerTenantId -TenantId $SourceTenantId
-        $sourceTenantJson = Get-InforcerTenant -OutputType JsonObject
-        $sourceTenants    = $sourceTenantJson | ConvertFrom-Json -Depth 100
-        $sourceTenant     = $sourceTenants | Where-Object { $_.clientTenantId -eq $resolvedSourceId } | Select-Object -First 1
-        $sourceName       = Resolve-TenantName -TenantObj $sourceTenant -TenantId $resolvedSourceId
-
-        Write-Host "  Source: $sourceName ($resolvedSourceId)" -ForegroundColor Gray
-        $sourcePoliciesJson = Get-InforcerTenantPolicies -TenantId $resolvedSourceId -OutputType JsonObject
-        $sourcePolicies     = $sourcePoliciesJson | ConvertFrom-Json -Depth 100
-
-        # ── Destination tenant ────────────────────────────────────────────────
+        # ── Destination ──
         Write-Host 'Collecting destination tenant data...' -ForegroundColor Gray
         $script:InforcerSession = $DestinationSession
-
-        $resolvedDestId = Resolve-InforcerTenantId -TenantId $DestinationTenantId
-        $destTenantJson = Get-InforcerTenant -OutputType JsonObject
-        $destTenants    = $destTenantJson | ConvertFrom-Json -Depth 100
-        $destTenant     = $destTenants | Where-Object { $_.clientTenantId -eq $resolvedDestId } | Select-Object -First 1
-        $destName       = Resolve-TenantName -TenantObj $destTenant -TenantId $resolvedDestId
-
-        Write-Host "  Destination: $destName ($resolvedDestId)" -ForegroundColor Gray
-        $destPoliciesJson = Get-InforcerTenantPolicies -TenantId $resolvedDestId -OutputType JsonObject
-        $destPolicies     = $destPoliciesJson | ConvertFrom-Json -Depth 100
-
+        $destDocData = Get-InforcerDocData -TenantId $DestinationTenantId @docDataParams
+        $destModel = ConvertTo-InforcerDocModel -DocData $destDocData -ComparisonMode
     } finally {
         $script:InforcerSession = $originalSession
     }
 
     @{
-        SourcePolicies       = @($sourcePolicies)
-        DestinationPolicies  = @($destPolicies)
-        SourceName           = $sourceName
-        DestinationName      = $destName
-        SettingsCatalog      = $script:InforcerSettingsCatalog
+        SourceModel          = $sourceModel
+        DestinationModel     = $destModel
+        SourceName           = $sourceModel.TenantName
+        DestinationName      = $destModel.TenantName
         IncludingAssignments = $IncludingAssignments.IsPresent
         CollectedAt          = [datetime]::UtcNow
     }

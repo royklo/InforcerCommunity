@@ -133,7 +133,7 @@ function ConvertTo-InforcerDocModel {
         # ComparisonMode filtering: only Intune-relevant products, skip non-comparable categories
         if ($ComparisonMode) {
             $prodLower = $prod.ToLowerInvariant()
-            $intuneProducts = @('intune', 'windows', 'macos', 'ios', 'android', 'microsoft defender for endpoint')
+            $intuneProducts = @('intune', 'windows', 'macos', 'ios', 'android', 'defender')
             $isIntuneRelevant = $false
             foreach ($ip in $intuneProducts) {
                 if ($prodLower -match [regex]::Escape($ip)) { $isIntuneRelevant = $true; break }

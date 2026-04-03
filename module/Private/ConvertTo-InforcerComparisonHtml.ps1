@@ -256,6 +256,8 @@ body {
 }
 .toggle-switch input:checked + .toggle-slider { background: var(--accent); }
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
+tr[data-deprecated="true"] td { opacity: 0.6; }
+tr[data-deprecated="true"] td .setting-name::after { content: ' \26A0'; color: var(--warning); }
 .manual-item {
     background: var(--bg);
     border: 1px solid var(--border-subtle);
@@ -490,7 +492,7 @@ tr:hover td { background: var(--accent-soft); }
         [void]$sb.Append("<option value=`"$encCat`">$encCat</option>")
     }
     [void]$sb.AppendLine('</select>')
-    [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Hide matching</span><span class="toggle-switch"><input type="checkbox" id="chk-hide-matching" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
+    [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Show deprecated</span><span class="toggle-switch"><input type="checkbox" id="chk-show-deprecated" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
     [void]$sb.AppendLine('</div>')
 
     # ── Comparison tab ───────────────────────────────────────────────────
@@ -575,8 +577,10 @@ tr:hover td { background: var(--accent-soft); }
                 $bothEmpty = (([string]::IsNullOrEmpty($srcValRaw) -or $srcValRaw -eq [char]0x2014) -and
                               ([string]::IsNullOrEmpty($dstValRaw) -or $dstValRaw -eq [char]0x2014))
                 $emptyAttr = if ($bothEmpty) { ' data-empty="true"' } else { '' }
+                $isDeprecated = $row.Name -match '\(deprecated\)'
+                $deprecatedAttr = if ($isDeprecated) { ' data-deprecated="true"' } else { '' }
 
-                [void]$sb.Append("                <tr data-status=`"$status`" data-category=`"$encCategory`"$emptyAttr><td>")
+                [void]$sb.Append("                <tr data-status=`"$status`" data-category=`"$encCategory`"$emptyAttr$deprecatedAttr><td>")
                 [void]$sb.Append($statusHtml)
                 [void]$sb.Append('</td>')
 
@@ -706,18 +710,18 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('function applyFilters() {')
     [void]$sb.AppendLine('    var q = (document.getElementById("search-input").value || "").toLowerCase().trim();')
     [void]$sb.AppendLine('    var showAll = activeFilters.size === 0 || activeFilters.has("All");')
-    [void]$sb.AppendLine('    var hideMatching = document.getElementById("chk-hide-matching") && document.getElementById("chk-hide-matching").checked;')
+    [void]$sb.AppendLine('    var showDeprecated = document.getElementById("chk-show-deprecated") && document.getElementById("chk-show-deprecated").checked;')
     [void]$sb.AppendLine('    var catFilter = document.getElementById("category-filter");')
     [void]$sb.AppendLine('    var selectedCat = catFilter ? catFilter.value : "All";')
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-comparison");')
     [void]$sb.AppendLine('    if (!tab) return;')
-    [void]$sb.AppendLine('    // Filter individual rows by search + status + category + hide matching')
+    [void]$sb.AppendLine('    // Filter individual rows by search + status + category + deprecated')
     [void]$sb.AppendLine('    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {')
     [void]$sb.AppendLine('        var matchesSearch = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;')
     [void]$sb.AppendLine('        var matchesFilter = showAll || activeFilters.has(tr.getAttribute("data-status"));')
     [void]$sb.AppendLine('        var matchesCategory = selectedCat === "All" || tr.getAttribute("data-category") === selectedCat;')
-    [void]$sb.AppendLine('        var isMatched = hideMatching && tr.getAttribute("data-status") === "Matched";')
-    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || !matchesCategory || isMatched;')
+    [void]$sb.AppendLine('        var isDeprecated = tr.getAttribute("data-deprecated") === "true";')
+    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || !matchesCategory || (isDeprecated && !showDeprecated);')
     [void]$sb.AppendLine('        tr.style.display = hidden ? "none" : "";')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    // Hide product sections where all rows are hidden')

@@ -54,7 +54,20 @@ function Get-InforcerDocData {
     $baselines = $baselineJson | ConvertFrom-Json -Depth 100
 
     Write-Verbose 'Collecting tenant policies...'
-    $policiesJson = Get-InforcerTenantPolicies -TenantId $clientTenantId -OutputType JsonObject
+    $policiesApiErr = @()
+    $policiesJson = Get-InforcerTenantPolicies -TenantId $clientTenantId -OutputType JsonObject `
+        -ErrorVariable policiesApiErr -ErrorAction SilentlyContinue
+    if ($policiesApiErr.Count -gt 0) {
+        $errMsg = $policiesApiErr[0].Exception.Message
+        if ($errMsg -match '403|permission|forbidden') {
+            Write-Error -Message "Export canceled: You do not have the required permissions to access policies for tenant '$clientTenantId'. Please check your Inforcer tenant permissions." `
+                -ErrorId 'AccessDenied' -Category PermissionDenied
+        } else {
+            Write-Error -Message "Export canceled: Failed to retrieve policies for tenant '$clientTenantId'. $errMsg" `
+                -ErrorId 'PolicyRetrievalFailed' -Category InvalidOperation
+        }
+        return
+    }
     $policies = $policiesJson | ConvertFrom-Json -Depth 100
 
     # Find the specific tenant from the tenant list

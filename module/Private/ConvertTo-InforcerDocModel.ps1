@@ -219,9 +219,10 @@ function ConvertTo-InforcerDocModel {
 
         # Assemble normalized policy (per NORM-03)
         $normalizedPolicy = @{
-            Basics      = $basics
-            Settings    = $settings.ToArray()
-            Assignments = $assignments
+            Basics       = $basics
+            Settings     = $settings.ToArray()
+            Assignments  = $assignments
+            PolicyTypeId = $policyTypeId
         }
 
         [void]$products[$prod].Categories[$catKey].Add($normalizedPolicy)

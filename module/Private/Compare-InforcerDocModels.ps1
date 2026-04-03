@@ -457,6 +457,50 @@ function Compare-InforcerDocModels {
         }
     }
 
+    # ── Collect non-SC policies for Manual Review ─────────────────────────
+    # Administrative Templates and other non-Settings-Catalog policies can't be
+    # reliably auto-compared with SC equivalents (different property structures).
+    # List them separately so the user can verify manually.
+    $manualReview = [ordered]@{}
+
+    $collectManualReview = {
+        param([hashtable]$Model, [string]$Side)
+        if ($null -eq $Model -or $null -eq $Model.Products) { return }
+        foreach ($prodName in $Model.Products.Keys) {
+            $prodData = $Model.Products[$prodName]
+            if ($null -eq $prodData -or $null -eq $prodData.Categories) { continue }
+            foreach ($catName in $prodData.Categories.Keys) {
+                foreach ($policy in @($prodData.Categories[$catName])) {
+                    if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
+                    # Only non-SC policies (PolicyTypeId != 10)
+                    if ($policy.PolicyTypeId -eq 10) { continue }
+                    $catLabel = "$prodName / $catName"
+                    if (-not $manualReview.Contains($catLabel)) {
+                        $manualReview[$catLabel] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    # Build settings summary
+                    $settingsSummary = [System.Collections.Generic.List[object]]::new()
+                    foreach ($s in @($policy.Settings)) {
+                        if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
+                            [void]$settingsSummary.Add(@{
+                                Name  = "$($s.Name)"
+                                Value = "$($s.Value)"
+                            })
+                        }
+                    }
+                    [void]$manualReview[$catLabel].Add(@{
+                        PolicyName  = $policy.Basics.Name
+                        Side        = $Side
+                        ProfileType = $policy.Basics.ProfileType
+                        Settings    = $settingsSummary
+                    })
+                }
+            }
+        }
+    }
+    & $collectManualReview $SourceModel 'Source'
+    & $collectManualReview $DestinationModel 'Destination'
+
     # ── Alignment score ───────────────────────────────────────────────────
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly
     $alignmentScore = if ($totalItems -eq 0) { 100 }
@@ -471,6 +515,7 @@ function Compare-InforcerDocModels {
         TotalItems           = $totalItems
         Counters             = $counters
         Products             = $products
+        ManualReview         = $manualReview
         IncludingAssignments = [bool]$IncludingAssignments
     }
 }

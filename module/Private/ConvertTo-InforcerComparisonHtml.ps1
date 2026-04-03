@@ -541,64 +541,36 @@ tr:hover td { background: var(--accent-soft); }
     # ── Comparison tab ───────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
 
-    $isFirstProduct = $true
+    # Collect ALL rows from ALL products into a single flat list, sorted by name
+    $allRows = [System.Collections.Generic.List[object]]::new()
     foreach ($productName in $products.Keys) {
-        $productData    = $products[$productName]
-
-        # Skip products with no rows
-        $totalProductRows = 0
-        foreach ($cd in $productData.Categories.Values) { $totalProductRows += $cd.ComparisonRows.Count }
-        if ($totalProductRows -eq 0) { continue }
-
-        $encProductName = [System.Net.WebUtility]::HtmlEncode($productName)
-        $pMatched       = $productData.Counters.Matched
-        $pConflicting   = $productData.Counters.Conflicting
-        $pSourceOnly    = $productData.Counters.SourceOnly
-        $pDestOnly      = $productData.Counters.DestOnly
-
-        # First product open by default
-        $openAttr = if ($isFirstProduct) { ' open' } else { '' }
-        $isFirstProduct = $false
-
-        [void]$sb.AppendLine("<details class=`"product-section`"$openAttr>")
-        [void]$sb.Append("    <summary><span class=`"product-title`">$encProductName</span>")
-        if ($pMatched -gt 0)     { [void]$sb.Append(" <span class=`"status-badge status-matched`">&#10003; $pMatched</span>") }
-        if ($pConflicting -gt 0) { [void]$sb.Append(" <span class=`"status-badge status-conflicting`">&#10007; $pConflicting</span>") }
-        if ($pSourceOnly -gt 0)  { [void]$sb.Append(" <span class=`"status-badge status-source-only`">Source $pSourceOnly</span>") }
-        if ($pDestOnly -gt 0)    { [void]$sb.Append(" <span class=`"status-badge status-dest-only`">Dest $pDestOnly</span>") }
-        [void]$sb.AppendLine('</summary>')
-        [void]$sb.AppendLine('    <div class="product-content">')
-
-        # Collect ALL rows from ALL categories into a single flat list, sorted by name
-        $allRows = [System.Collections.Generic.List[object]]::new()
+        $productData = $products[$productName]
         foreach ($categoryName in $productData.Categories.Keys) {
-            $categoryData = $productData.Categories[$categoryName]
-            foreach ($r in $categoryData.ComparisonRows) {
+            foreach ($r in $productData.Categories[$categoryName].ComparisonRows) {
                 [void]$allRows.Add($r)
             }
         }
-        $allRows = @($allRows | Sort-Object { $_.Name })
+    }
+    $allRows = @($allRows | Sort-Object { $_.Name })
 
-        if ($allRows.Count -gt 0) {
-            [void]$sb.AppendLine('        <div class="table-wrap">')
-
-            # 6-column Settings Catalog table (+ optional assignment columns)
-            [void]$sb.AppendLine('        <table>')
-            [void]$sb.AppendLine('            <thead><tr>')
-            [void]$sb.Append('                <th style="width:4%;cursor:pointer" onclick="sortTable(this,0)">Status &#x25B4;&#x25BE;</th>')
-            [void]$sb.Append('<th style="width:20%;cursor:pointer" onclick="sortTable(this,1)">Setting &#x25B4;&#x25BE;</th>')
-            [void]$sb.Append('<th style="width:14%;cursor:pointer" onclick="sortTable(this,2)">Category &#x25B4;&#x25BE;</th>')
-            [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,3)">Source Policy &#x25B4;&#x25BE;</th>')
-            [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,4)">Source Value &#x25B4;&#x25BE;</th>')
-            [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,5)">Dest Policy &#x25B4;&#x25BE;</th>')
-            [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,6)">Dest Value &#x25B4;&#x25BE;</th>')
-            if ($inclAssignments) {
-                [void]$sb.Append('<th>Source Assignment</th>')
-                [void]$sb.Append('<th>Dest Assignment</th>')
-            }
-            [void]$sb.AppendLine('')
-            [void]$sb.AppendLine('            </tr></thead>')
-            [void]$sb.AppendLine('            <tbody>')
+    if ($allRows.Count -gt 0) {
+        [void]$sb.AppendLine('    <div class="table-wrap">')
+        [void]$sb.AppendLine('    <table id="comparison-table">')
+        [void]$sb.AppendLine('        <thead><tr>')
+        [void]$sb.Append('            <th style="width:4%;cursor:pointer" onclick="sortTable(this,0)">Status &#x25B4;&#x25BE;</th>')
+        [void]$sb.Append('<th style="width:20%;cursor:pointer" onclick="sortTable(this,1)">Setting &#x25B4;&#x25BE;</th>')
+        [void]$sb.Append('<th style="width:14%;cursor:pointer" onclick="sortTable(this,2)">Category &#x25B4;&#x25BE;</th>')
+        [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,3)">Source Policy &#x25B4;&#x25BE;</th>')
+        [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,4)">Source Value &#x25B4;&#x25BE;</th>')
+        [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,5)">Dest Policy &#x25B4;&#x25BE;</th>')
+        [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,6)">Dest Value &#x25B4;&#x25BE;</th>')
+        if ($inclAssignments) {
+            [void]$sb.Append('<th>Source Assignment</th>')
+            [void]$sb.Append('<th>Dest Assignment</th>')
+        }
+        [void]$sb.AppendLine('')
+        [void]$sb.AppendLine('        </tr></thead>')
+        [void]$sb.AppendLine('        <tbody>')
 
             foreach ($row in $allRows) {
                 $status = $row.Status
@@ -676,13 +648,9 @@ tr:hover td { background: var(--accent-soft); }
                 [void]$sb.AppendLine('</tr>')
             }
 
-            [void]$sb.AppendLine('            </tbody>')
-            [void]$sb.AppendLine('        </table>')
-            [void]$sb.AppendLine('        </div>')
-        }
-
+        [void]$sb.AppendLine('        </tbody>')
+        [void]$sb.AppendLine('    </table>')
         [void]$sb.AppendLine('    </div>')
-        [void]$sb.AppendLine('</details>')
     }
 
     [void]$sb.AppendLine('</div>')  # end tab-comparison
@@ -827,14 +795,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('            if (dp) policySet.add(dp);')
     [void]$sb.AppendLine('        }')
     [void]$sb.AppendLine('    });')
-    [void]$sb.AppendLine('    tab.querySelectorAll(".product-section").forEach(function(ps) {')
-    [void]$sb.AppendLine('        var rows = ps.querySelectorAll("tbody tr[data-status]");')
-    [void]$sb.AppendLine('        var anyVisible = false;')
-    [void]$sb.AppendLine('        rows.forEach(function(r) { if (r.style.display !== "none") anyVisible = true; });')
-    [void]$sb.AppendLine('        ps.style.display = anyVisible ? "" : "none";')
-    [void]$sb.AppendLine('        // Auto-expand product sections that have visible results when searching or filtering')
-    [void]$sb.AppendLine('        if (anyVisible && (q || !showAll || showDeprecated)) { ps.setAttribute("open", ""); }')
-    [void]$sb.AppendLine('    });')
+    [void]$sb.AppendLine('    // No product sections to toggle — flat table')
     [void]$sb.AppendLine('    // Update filter summary')
     [void]$sb.AppendLine('    var summary = document.getElementById("filter-summary");')
     [void]$sb.AppendLine("    if (summary) { summary.textContent = 'Showing ' + visibleCount + ' settings across ' + policySet.size + ' policies'; }")

@@ -493,6 +493,17 @@ tr:hover td { background: var(--accent-soft); }
         }
     }
 
+    # Count deprecated settings for toggle label
+    $deprecatedCount = 0
+    foreach ($productName in $ComparisonModel.Products.Keys) {
+        $productData = $ComparisonModel.Products[$productName]
+        foreach ($categoryName in $productData.Categories.Keys) {
+            foreach ($r in $productData.Categories[$categoryName].ComparisonRows) {
+                if ($r.Name -match 'deprecated' -or ($r.SettingPath -and $r.SettingPath -match 'deprecated')) { $deprecatedCount++ }
+            }
+        }
+    }
+
     # ── Filter pills ──────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="filter-bar">')
     [void]$sb.AppendLine('    <span class="filter-label">Filter:</span>')
@@ -509,9 +520,10 @@ tr:hover td { background: var(--accent-soft); }
         [void]$sb.Append("<option value=`"$encCat`">$encCat</option>")
     }
     [void]$sb.AppendLine('</select>')
-    [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Show deprecated</span><span class="toggle-switch"><input type="checkbox" id="chk-show-deprecated" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
+    $deprecatedLabel = if ($deprecatedCount -gt 0) { "Show deprecated ($deprecatedCount)" } else { "Show deprecated" }
+    [void]$sb.AppendLine("    <span style=`"margin-left:auto;display:flex;align-items:center;gap:0.5rem`"><span style=`"font-size:0.75rem;font-weight:500;color:var(--text-secondary)`">$deprecatedLabel</span><span class=`"toggle-switch`"><input type=`"checkbox`" id=`"chk-show-deprecated`" onchange=`"applyFilters()`"><span class=`"toggle-slider`"></span></span></span>")
     [void]$sb.AppendLine('</div>')
-    [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.8rem;color:var(--text-secondary);padding:0.25rem 0 0.75rem;"></div>')
+    [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.9rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
 
     # ── Tab navigation ──────────────────────────────────────────────────
     $manualReview = $ComparisonModel.ManualReview
@@ -820,6 +832,14 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    // Update filter summary')
     [void]$sb.AppendLine('    var summary = document.getElementById("filter-summary");')
     [void]$sb.AppendLine("    if (summary) { summary.textContent = 'Showing ' + visibleCount + ' settings across ' + policySet.size + ' policies'; }")
+    [void]$sb.AppendLine('    // Also filter Manual Review tab by search')
+    [void]$sb.AppendLine('    var mrTab = document.getElementById("tab-manual-review");')
+    [void]$sb.AppendLine('    if (mrTab) {')
+    [void]$sb.AppendLine('        mrTab.querySelectorAll(".manual-review-card").forEach(function(card) {')
+    [void]$sb.AppendLine('            if (!q) { card.style.display = ""; return; }')
+    [void]$sb.AppendLine('            card.style.display = card.textContent.toLowerCase().indexOf(q) >= 0 ? "" : "none";')
+    [void]$sb.AppendLine('        });')
+    [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
     [void]$sb.AppendLine('function filterByStatus(btn, status) {')

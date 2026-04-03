@@ -92,6 +92,9 @@ function Compare-InforcerDocModels {
         foreach ($pattern in $appIdSettingPatterns) {
             if ($Name -match $pattern) { return $true }
         }
+        # Filter unresolved settingDefinitionIds (raw catalog misses)
+        # These contain vendor_msft or ~policy~ patterns — not real setting names
+        if ($Name -match 'vendor_msft|~policy~|_l_empty') { return $true }
         return $false
     }
 

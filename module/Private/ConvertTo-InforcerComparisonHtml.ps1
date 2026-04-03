@@ -509,7 +509,8 @@ tr:hover td { background: var(--accent-soft); }
         $productData = $ComparisonModel.Products[$productName]
         foreach ($categoryName in $productData.Categories.Keys) {
             foreach ($r in $productData.Categories[$categoryName].ComparisonRows) {
-                if ($r.Name -match 'deprecated' -or ($r.SettingPath -and $r.SettingPath -match 'deprecated')) { $deprecatedCount++ }
+                if ($r.Name -match 'deprecated' -or ($r.SettingPath -and $r.SettingPath -match 'deprecated') -or
+                    ($r.SourceValue -and $r.SourceValue -match 'deprecated') -or ($r.DestValue -and $r.DestValue -match 'deprecated')) { $deprecatedCount++ }
             }
         }
     }
@@ -604,7 +605,10 @@ tr:hover td { background: var(--accent-soft); }
                 $bothEmpty = (([string]::IsNullOrEmpty($srcValRaw) -or $srcValRaw -eq [char]0x2014) -and
                               ([string]::IsNullOrEmpty($dstValRaw) -or $dstValRaw -eq [char]0x2014))
                 $emptyAttr = if ($bothEmpty) { ' data-empty="true"' } else { '' }
-                $isDeprecated = $row.Name -match 'deprecated' -or ($row.SettingPath -and $row.SettingPath -match 'deprecated')
+                $isDeprecated = $row.Name -match 'deprecated' -or
+                    ($row.SettingPath -and $row.SettingPath -match 'deprecated') -or
+                    ($row.SourceValue -and $row.SourceValue -match 'deprecated') -or
+                    ($row.DestValue -and $row.DestValue -match 'deprecated')
                 $deprecatedAttr = if ($isDeprecated) { ' data-deprecated="true"' } else { '' }
 
                 $encSrcPol = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)

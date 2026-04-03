@@ -58,12 +58,22 @@ function Get-InforcerComparisonData {
         Write-Host 'Collecting source tenant data...' -ForegroundColor Gray
         $script:InforcerSession = $SourceSession
         $sourceDocData = Get-InforcerDocData -TenantId $SourceTenantId @docDataParams
+        if ($null -eq $sourceDocData -or $null -eq $sourceDocData.Policies) {
+            Write-Error -Message "Failed to collect data for source tenant '$SourceTenantId'. The API may be unavailable — try again later." `
+                -ErrorId 'SourceDataCollectionFailed' -Category ConnectionError
+            return $null
+        }
         $sourceModel = ConvertTo-InforcerDocModel -DocData $sourceDocData -ComparisonMode
 
         # ── Destination ──
         Write-Host 'Collecting destination tenant data...' -ForegroundColor Gray
         $script:InforcerSession = $DestinationSession
         $destDocData = Get-InforcerDocData -TenantId $DestinationTenantId @docDataParams
+        if ($null -eq $destDocData -or $null -eq $destDocData.Policies) {
+            Write-Error -Message "Failed to collect data for destination tenant '$DestinationTenantId'. The API may be unavailable — try again later." `
+                -ErrorId 'DestDataCollectionFailed' -Category ConnectionError
+            return $null
+        }
         $destModel = ConvertTo-InforcerDocModel -DocData $destDocData -ComparisonMode
     } finally {
         $script:InforcerSession = $originalSession

@@ -159,7 +159,7 @@ Describe 'ConvertTo-InforcerComparisonModel - Model structure' {
         $model.Products.GetType().Name | Should -Be 'OrderedDictionary'
     }
 
-    It 'ManualReview is an empty OrderedDictionary' {
+    It 'ManualReview is always an empty OrderedDictionary' {
         $data = New-ComparisonData
         $model = InModuleScope InforcerCommunity -Parameters @{ D = $data } {
             ConvertTo-InforcerComparisonModel -ComparisonData $D

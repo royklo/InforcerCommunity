@@ -18,7 +18,7 @@ function ConvertTo-InforcerComparisonHtml {
     .PARAMETER ComparisonModel
         Hashtable from ConvertTo-InforcerComparisonModel containing: SourceName,
         DestinationName, GeneratedAt, AlignmentScore,
-        TotalItems, Counters, Products, ManualReview, IncludingAssignments.
+        TotalItems, Counters, Products, IncludingAssignments.
     .OUTPUTS
         System.String -- complete HTML document as a single string.
     .EXAMPLE
@@ -209,7 +209,7 @@ body {
 .score-bar-fill.green { background: linear-gradient(90deg, #059669, #34d399); }
 .score-bar-fill.yellow { background: linear-gradient(90deg, #d97706, #fbbf24); }
 .score-bar-fill.red { background: linear-gradient(90deg, #dc2626, #f87171); }
-.summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
 .summary-tile {
     background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 1.25rem; text-align: center; box-shadow: var(--shadow-sm); transition: box-shadow var(--transition);
@@ -397,8 +397,6 @@ tr:hover td { background: var(--accent-soft); }
     $conflicting     = $ComparisonModel.Counters.Conflicting
     $sourceOnly      = $ComparisonModel.Counters.SourceOnly
     $destOnly        = $ComparisonModel.Counters.DestOnly
-    $manualCount     = if ($ComparisonModel.Counters.Manual) { $ComparisonModel.Counters.Manual } else { 0 }
-    $manualReview    = $ComparisonModel.ManualReview
     $products        = $ComparisonModel.Products
     $inclAssignments = $ComparisonModel.IncludingAssignments
 
@@ -416,7 +414,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<head>')
     [void]$sb.AppendLine('<meta charset="UTF-8">')
     [void]$sb.AppendLine('<meta name="viewport" content="width=device-width, initial-scale=1.0">')
-    [void]$sb.AppendLine("<title>Environment Comparison &#8212; $sourceName vs $destName</title>")
+    [void]$sb.AppendLine("<title>Intune Configuration Comparison &#8212; $sourceName vs $destName</title>")
     [void]$sb.AppendLine('<style>')
     [void]$sb.AppendLine($cssBlock)
     [void]$sb.AppendLine('</style>')
@@ -426,12 +424,11 @@ tr:hover td { background: var(--accent-soft); }
 
     # ── Notch bar ──────────────────────────────────────────────────────────
     $notchDetail = "$totalItems settings compared"
-    if ($manualCount -gt 0) { $notchDetail += " &middot; $manualCount require manual review" }
-    [void]$sb.AppendLine("<div class=`"notch-bar`">Environment Comparison<span class=`"notch-warn`">$notchDetail</span></div>")
+    [void]$sb.AppendLine("<div class=`"notch-bar`">Intune Comparison<span class=`"notch-warn`">$notchDetail</span></div>")
 
     # ── Header ─────────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="header">')
-    [void]$sb.AppendLine('    <h1>Environment Comparison Report</h1>')
+    [void]$sb.AppendLine('    <h1>Intune Configuration Comparison Report</h1>')
     [void]$sb.AppendLine('    <div class="header-meta">')
     [void]$sb.AppendLine("        <div class=`"env-row`"><strong>$sourceName</strong><span class=`"env-arrow`">&#10132;</span><strong>$destName</strong></div>")
     [void]$sb.AppendLine("        <div class=`"generated`">Generated $generatedAt</div>")
@@ -451,13 +448,25 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    <div class="summary-tile conflicting"><div class="count" id="countConflicting">0</div><div class="label">Conflicting</div></div>')
     [void]$sb.AppendLine('    <div class="summary-tile source-only"><div class="count" id="countSource">0</div><div class="label">Source Only</div></div>')
     [void]$sb.AppendLine('    <div class="summary-tile dest-only"><div class="count" id="countDest">0</div><div class="label">Destination Only</div></div>')
-    [void]$sb.AppendLine('    <div class="summary-tile manual"><div class="count" id="countManual">0</div><div class="label">Manual Review</div></div>')
     [void]$sb.AppendLine('</div>')
 
     # ── Search bar ─────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="search-bar">')
     [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search policies, settings, values..." oninput="searchAll(this.value)">')
     [void]$sb.AppendLine('</div>')
+
+    # ── Collect all unique categories for the filter dropdown (Fix 5: before rendering) ──
+    $allCategories = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($productName in $products.Keys) {
+        $productData = $products[$productName]
+        foreach ($categoryName in $productData.Categories.Keys) {
+            $categoryData = $productData.Categories[$categoryName]
+            foreach ($r in $categoryData.ComparisonRows) {
+                $cat = if ($r.Category) { $r.Category } else { $categoryName }
+                if (-not [string]::IsNullOrWhiteSpace($cat)) { [void]$allCategories.Add($cat) }
+            }
+        }
+    }
 
     # ── Filter pills ──────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="filter-bar">')
@@ -475,27 +484,8 @@ tr:hover td { background: var(--accent-soft); }
         [void]$sb.Append("<option value=`"$encCat`">$encCat</option>")
     }
     [void]$sb.AppendLine('</select>')
-    [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Hide empty</span><span class="toggle-switch"><input type="checkbox" id="chk-hide-empty" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
+    [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Hide matching</span><span class="toggle-switch"><input type="checkbox" id="chk-hide-matching" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
     [void]$sb.AppendLine('</div>')
-
-    # ── Tabs ─────────────────────────────────────────────────────────────
-    [void]$sb.AppendLine('<div class="tabs">')
-    [void]$sb.AppendLine('    <button class="tab active" onclick="switchTab(this,''comparison'')">Comparison</button>')
-    [void]$sb.AppendLine("    <button class=`"tab`" onclick=`"switchTab(this,'manual')`">Manual Review <span class=`"badge`">$manualCount</span></button>")
-    [void]$sb.AppendLine('</div>')
-
-    # ── Collect all unique categories for the filter dropdown ────────────
-    $allCategories = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($productName in $products.Keys) {
-        $productData = $products[$productName]
-        foreach ($categoryName in $productData.Categories.Keys) {
-            $categoryData = $productData.Categories[$categoryName]
-            foreach ($r in $categoryData.ComparisonRows) {
-                $cat = if ($r.Category) { $r.Category } else { $categoryName }
-                if (-not [string]::IsNullOrWhiteSpace($cat)) { [void]$allCategories.Add($cat) }
-            }
-        }
-    }
 
     # ── Comparison tab ───────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
@@ -573,8 +563,6 @@ tr:hover td { background: var(--accent-soft); }
 
                 $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
                 $encCategory = [System.Net.WebUtility]::HtmlEncode($row.Category)
-                $itemType = if ($row.ItemType) { $row.ItemType } else { 'Setting' }
-
                 # Determine if both source and dest values are empty
                 $srcValRaw = "$($row.SourceValue)".Trim()
                 $dstValRaw = "$($row.DestValue)".Trim()
@@ -622,80 +610,6 @@ tr:hover td { background: var(--accent-soft); }
                 }
 
                 [void]$sb.AppendLine('</tr>')
-
-                # For non-SC policy rows (Conflicting, SourceOnly, DestOnly), add collapsible settings detail row
-                if ($itemType -eq 'Policy' -and $status -ne 'Matched') {
-                    $metadataSkipNames = @('@odata.type', '@odata.context', 'id', 'createdDateTime', 'lastModifiedDateTime',
-                        'roleScopeTagIds', 'version', 'templateId', 'displayName', 'description',
-                        'assignments', 'settings', 'name', 'deletedDateTime', 'policyGuid')
-
-                    $srcSettingsRaw = if ($row.SourceSettings) { $row.SourceSettings } else { @() }
-                    $dstSettingsRaw = if ($row.DestSettings) { $row.DestSettings } else { @() }
-
-                    # Filter to configured, non-metadata settings
-                    $srcVisible = @($srcSettingsRaw | Where-Object {
-                        $_.IsConfigured -eq $true -and
-                        -not ($_.Name -like '*@odata*') -and
-                        $_.Name -notin $metadataSkipNames
-                    })
-                    $dstVisible = @($dstSettingsRaw | Where-Object {
-                        $_.IsConfigured -eq $true -and
-                        -not ($_.Name -like '*@odata*') -and
-                        $_.Name -notin $metadataSkipNames
-                    })
-
-                    # Build lookup from name to value for both sides
-                    $srcLookup = @{}
-                    foreach ($s in $srcVisible) { $srcLookup[$s.Name] = [string]$s.Value }
-                    $dstLookup = @{}
-                    foreach ($s in $dstVisible) { $dstLookup[$s.Name] = [string]$s.Value }
-
-                    $allSettingNames = @(@($srcVisible | ForEach-Object { $_.Name }) + @($dstVisible | ForEach-Object { $_.Name })) | Sort-Object -Unique
-
-                    # Show all settings but mark which ones differ
-                    $diffSettingNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-                    foreach ($sn in $allSettingNames) {
-                        $sVal = if ($srcLookup.ContainsKey($sn)) { $srcLookup[$sn] } else { $null }
-                        $dVal = if ($dstLookup.ContainsKey($sn)) { $dstLookup[$sn] } else { $null }
-                        if ($sVal -ne $dVal) { [void]$diffSettingNames.Add($sn) }
-                    }
-                    $settingCount = $allSettingNames.Count
-                    $diffCount = $diffSettingNames.Count
-
-                    if ($settingCount -gt 0) {
-                        $colSpan = if ($inclAssignments) { 9 } else { 7 }
-                        [void]$sb.AppendLine("                <tr class=`"policy-detail-row`" data-status=`"$status`" data-category=`"$encCategory`"><td colspan=`"$colSpan`">")
-                        [void]$sb.AppendLine("                    <details>")
-                        $summaryText = if ($diffCount -gt 0) { "Show settings ($settingCount total, $diffCount different)" } else { "Show settings ($settingCount)" }
-                        [void]$sb.AppendLine("                        <summary>$summaryText</summary>")
-                        [void]$sb.AppendLine('                        <table class="settings-table">')
-                        [void]$sb.AppendLine('                            <thead><tr><th>Setting</th><th>Source Value</th><th>Dest Value</th></tr></thead>')
-                        [void]$sb.AppendLine('                            <tbody>')
-
-                        foreach ($settingName in $allSettingNames) {
-                            $encSName = [System.Net.WebUtility]::HtmlEncode($settingName)
-                            $srcVal = if ($srcLookup.ContainsKey($settingName)) { $srcLookup[$settingName] } else { '' }
-                            $dstVal = if ($dstLookup.ContainsKey($settingName)) { $dstLookup[$settingName] } else { '' }
-                            $encSrcVal = [System.Net.WebUtility]::HtmlEncode($srcVal)
-                            $encDstVal = [System.Net.WebUtility]::HtmlEncode($dstVal)
-
-                            $isDiff = $diffSettingNames.Contains($settingName)
-                            $srcCls = if ($isDiff) { 'value-cell value-diff' } else { 'value-cell' }
-                            $dstCls = if ($isDiff) { 'value-cell value-diff' } else { 'value-cell' }
-
-                            # Show em-dash for missing side
-                            $srcDisplay = if ([string]::IsNullOrEmpty($srcVal) -and -not $srcLookup.ContainsKey($settingName)) { '<span style="color:var(--muted)">&#8212;</span>' } else { $encSrcVal }
-                            $dstDisplay = if ([string]::IsNullOrEmpty($dstVal) -and -not $dstLookup.ContainsKey($settingName)) { '<span style="color:var(--muted)">&#8212;</span>' } else { $encDstVal }
-
-                            [void]$sb.AppendLine("                                <tr><td>$encSName</td><td class=`"$srcCls`">$srcDisplay</td><td class=`"$dstCls`">$dstDisplay</td></tr>")
-                        }
-
-                        [void]$sb.AppendLine('                            </tbody>')
-                        [void]$sb.AppendLine('                        </table>')
-                        [void]$sb.AppendLine('                    </details>')
-                        [void]$sb.AppendLine('                </td></tr>')
-                    }
-                }
             }
 
             [void]$sb.AppendLine('            </tbody>')
@@ -708,93 +622,6 @@ tr:hover td { background: var(--accent-soft); }
     }
 
     [void]$sb.AppendLine('</div>')  # end tab-comparison
-
-    # ── Manual Review tab ────────────────────────────────────────────────
-    [void]$sb.AppendLine('<div class="tab-content" id="tab-manual">')
-
-    if ($manualCount -gt 0) {
-        [void]$sb.AppendLine("<div class=`"card`" style=`"background:var(--manual-bg);border-color:var(--manual)`"><p style=`"font-size:0.875rem;color:var(--text)`"><strong>$manualCount policies require manual review.</strong> These are non-Settings-Catalog policies that cannot be automatically compared at the setting level. Expand each policy to see its configured settings.</p></div>")
-
-        foreach ($mrProductName in $manualReview.Keys) {
-            $mrProduct = $manualReview[$mrProductName]
-            if ($mrProduct.Count -eq 0) { continue }  # skip empty products
-            $encMrProdName = [System.Net.WebUtility]::HtmlEncode($mrProductName)
-
-            [void]$sb.AppendLine('<details class="product-section" open>')
-            [void]$sb.AppendLine("<summary><span class=`"product-title`">$encMrProdName</span><span class=`"status-badge status-manual`">&#9888; $($mrProduct.Count) policies</span></summary>")
-            [void]$sb.AppendLine('<div class="product-content">')
-
-            # Flatten all manual review items from all categories into one list
-            $allMrItems = [System.Collections.Generic.List[object]]::new()
-            foreach ($mrCatName in $mrProduct.Categories.Keys) {
-                foreach ($item in $mrProduct.Categories[$mrCatName]) {
-                    [void]$allMrItems.Add($item)
-                }
-            }
-
-            foreach ($mrItem in $allMrItems) {
-                    $envClass = if ($mrItem.Environment -eq 'Source') { 'env-source' } else { 'env-dest' }
-                    $envLabel = [System.Net.WebUtility]::HtmlEncode($mrItem.Environment)
-                    $mrPolicyName = [System.Net.WebUtility]::HtmlEncode($mrItem.PolicyName)
-                    $mrPolicyType = [System.Net.WebUtility]::HtmlEncode($mrItem.PolicyType)
-                    $mrCategory   = [System.Net.WebUtility]::HtmlEncode($mrItem.Category)
-
-                    [void]$sb.AppendLine('<div class="manual-item">')
-                    [void]$sb.AppendLine("    <div style=`"display:flex;align-items:center;gap:0.625rem;margin-bottom:0.5rem;flex-wrap:wrap`">")
-                    [void]$sb.AppendLine("        <span class=`"env-label $envClass`">$envLabel</span>")
-                    [void]$sb.AppendLine("        <span style=`"font-weight:600`">$mrPolicyName</span>")
-                    [void]$sb.AppendLine("        <span class=`"policy-type-badge type-admin`">$mrPolicyType</span>")
-                    if (-not [string]::IsNullOrWhiteSpace($mrCategory)) {
-                        [void]$sb.AppendLine("        <span class=`"badge`">$mrCategory</span>")
-                    }
-                    [void]$sb.AppendLine('    </div>')
-
-                    # Filter settings: only IsConfigured, skip @odata and metadata
-                    $metadataSkip = @('@odata.type', '@odata.context', 'id', 'createdDateTime', 'lastModifiedDateTime',
-                        'roleScopeTagIds', 'version', 'templateId', 'displayName', 'description',
-                        'assignments', 'settings', 'name', 'deletedDateTime', 'policyGuid')
-                    $visibleSettings = @()
-                    if ($mrItem.Settings -and $mrItem.Settings.Count -gt 0) {
-                        $visibleSettings = @($mrItem.Settings | Where-Object {
-                            $_.IsConfigured -eq $true -and
-                            -not ($_.Name -like '*@odata*') -and
-                            $_.Name -notin $metadataSkip
-                        })
-                    }
-
-                    if ($visibleSettings.Count -gt 0) {
-                        [void]$sb.AppendLine("    <details>")
-                        [void]$sb.AppendLine("        <summary>Show settings ($($visibleSettings.Count))</summary>")
-                        [void]$sb.AppendLine('        <div class="table-wrap">')
-                        [void]$sb.AppendLine('            <table>')
-                        [void]$sb.AppendLine('                <thead><tr><th>Setting</th><th>Value</th></tr></thead>')
-                        [void]$sb.AppendLine('                <tbody>')
-
-                        foreach ($setting in $visibleSettings) {
-                            $encSettingName  = [System.Net.WebUtility]::HtmlEncode($setting.Name)
-                            $encSettingValue = [System.Net.WebUtility]::HtmlEncode([string]$setting.Value)
-                            $indentPx = if ($setting.Indent -gt 0) { " style=`"padding-left:$($setting.Indent * 1.25)rem`"" } else { '' }
-                            [void]$sb.AppendLine("                    <tr><td$indentPx>$encSettingName</td><td class=`"value-cell`">$encSettingValue</td></tr>")
-                        }
-
-                        [void]$sb.AppendLine('                </tbody>')
-                        [void]$sb.AppendLine('            </table>')
-                        [void]$sb.AppendLine('        </div>')
-                        [void]$sb.AppendLine('    </details>')
-                    } else {
-                        [void]$sb.AppendLine('    <p style="color:var(--muted);font-size:0.8125rem;font-style:italic;margin-top:0.25rem">No settings data available</p>')
-                    }
-
-                    [void]$sb.AppendLine('</div>')
-                }
-
-            [void]$sb.AppendLine('</div></details>')
-        }
-    } else {
-        [void]$sb.AppendLine('<p style="color:var(--muted);font-style:italic;text-align:center;padding:2rem 0">No policies require manual review.</p>')
-    }
-
-    [void]$sb.AppendLine('</div>')  # end tab-manual
 
     # ── Footer ─────────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="footer">')
@@ -815,7 +642,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<script>')
     [void]$sb.AppendLine('(function() {')
     [void]$sb.AppendLine("    var TARGET = $alignmentScore;")
-    [void]$sb.AppendLine("    var MATCHED = $matched, CONFLICTING = $conflicting, SOURCE = $sourceOnly, DEST = $destOnly, MANUAL = $manualCount;")
+    [void]$sb.AppendLine("    var MATCHED = $matched, CONFLICTING = $conflicting, SOURCE = $sourceOnly, DEST = $destOnly;")
     [void]$sb.AppendLine("    var TOTAL = $totalItems;")
     [void]$sb.AppendLine('    var DURATION = 1500, INTERVAL = 16;')
     [void]$sb.AppendLine('    var steps = Math.ceil(DURATION / INTERVAL), step = 0;')
@@ -826,7 +653,6 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    var elConflicting = document.getElementById(''countConflicting'');')
     [void]$sb.AppendLine('    var elSource = document.getElementById(''countSource'');')
     [void]$sb.AppendLine('    var elDest = document.getElementById(''countDest'');')
-    [void]$sb.AppendLine('    var elManual = document.getElementById(''countManual'');')
     [void]$sb.AppendLine('    function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }')
     [void]$sb.AppendLine('    setTimeout(function() {')
     [void]$sb.AppendLine('        var timer = setInterval(function() {')
@@ -840,7 +666,6 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('            elConflicting.textContent = Math.round(CONFLICTING * progress);')
     [void]$sb.AppendLine('            elSource.textContent = Math.round(SOURCE * progress);')
     [void]$sb.AppendLine('            elDest.textContent = Math.round(DEST * progress);')
-    [void]$sb.AppendLine('            if (elManual) elManual.textContent = Math.round(MANUAL * progress);')
     [void]$sb.AppendLine('            if (step >= steps) {')
     [void]$sb.AppendLine('                clearInterval(timer);')
     [void]$sb.AppendLine('                elScore.textContent = TARGET + ''%'';')
@@ -850,17 +675,10 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('                elConflicting.textContent = CONFLICTING;')
     [void]$sb.AppendLine('                elSource.textContent = SOURCE;')
     [void]$sb.AppendLine('                elDest.textContent = DEST;')
-    [void]$sb.AppendLine('                if (elManual) elManual.textContent = MANUAL;')
     [void]$sb.AppendLine('            }')
     [void]$sb.AppendLine('        }, INTERVAL);')
     [void]$sb.AppendLine('    }, 300);')
     [void]$sb.AppendLine('})();')
-    [void]$sb.AppendLine('function switchTab(btn, id) {')
-    [void]$sb.AppendLine('    document.querySelectorAll(''.tab'').forEach(function(t) { t.classList.remove(''active''); });')
-    [void]$sb.AppendLine('    document.querySelectorAll(''.tab-content'').forEach(function(c) { c.classList.remove(''active''); });')
-    [void]$sb.AppendLine('    btn.classList.add(''active'');')
-    [void]$sb.AppendLine('    document.getElementById(''tab-'' + id).classList.add(''active'');')
-    [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function scrollToTop() { document.getElementById(''top'').scrollIntoView({ behavior: ''smooth'' }); }')
     [void]$sb.AppendLine('window.addEventListener(''scroll'', function() {')
     [void]$sb.AppendLine('    var btn = document.getElementById(''btn-top'');')
@@ -876,22 +694,19 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('function applyFilters() {')
     [void]$sb.AppendLine('    var q = (document.getElementById("search-input").value || "").toLowerCase().trim();')
     [void]$sb.AppendLine('    var showAll = activeFilters.size === 0 || activeFilters.has("All");')
-    [void]$sb.AppendLine('    var hideEmpty = document.getElementById("chk-hide-empty") && document.getElementById("chk-hide-empty").checked;')
+    [void]$sb.AppendLine('    var hideMatching = document.getElementById("chk-hide-matching") && document.getElementById("chk-hide-matching").checked;')
     [void]$sb.AppendLine('    var catFilter = document.getElementById("category-filter");')
     [void]$sb.AppendLine('    var selectedCat = catFilter ? catFilter.value : "All";')
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-comparison");')
     [void]$sb.AppendLine('    if (!tab) return;')
-    [void]$sb.AppendLine('    // Filter individual rows by search + status + category + empty')
+    [void]$sb.AppendLine('    // Filter individual rows by search + status + category + hide matching')
     [void]$sb.AppendLine('    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {')
     [void]$sb.AppendLine('        var matchesSearch = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;')
     [void]$sb.AppendLine('        var matchesFilter = showAll || activeFilters.has(tr.getAttribute("data-status"));')
     [void]$sb.AppendLine('        var matchesCategory = selectedCat === "All" || tr.getAttribute("data-category") === selectedCat;')
-    [void]$sb.AppendLine('        var isEmpty = hideEmpty && tr.getAttribute("data-empty") === "true";')
-    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || !matchesCategory || isEmpty;')
+    [void]$sb.AppendLine('        var isMatched = hideMatching && tr.getAttribute("data-status") === "Matched";')
+    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || !matchesCategory || isMatched;')
     [void]$sb.AppendLine('        tr.style.display = hidden ? "none" : "";')
-    [void]$sb.AppendLine('        // Also hide/show associated detail row')
-    [void]$sb.AppendLine('        var next = tr.nextElementSibling;')
-    [void]$sb.AppendLine('        if (next && next.classList.contains("policy-detail-row")) next.style.display = hidden ? "none" : "";')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    // Hide product sections where all rows are hidden')
     [void]$sb.AppendLine('    tab.querySelectorAll(".product-section").forEach(function(ps) {')
@@ -900,32 +715,17 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('        rows.forEach(function(r) { if (r.style.display !== "none") anyVisible = true; });')
     [void]$sb.AppendLine('        ps.style.display = anyVisible ? "" : "none";')
     [void]$sb.AppendLine('    });')
-    [void]$sb.AppendLine('    // Also search manual review tab')
-    [void]$sb.AppendLine('    document.querySelectorAll("#tab-manual .manual-item").forEach(function(item) {')
-    [void]$sb.AppendLine('        var matches = !q || item.textContent.toLowerCase().indexOf(q) >= 0;')
-    [void]$sb.AppendLine('        item.style.display = matches ? "" : "none";')
-    [void]$sb.AppendLine('    });')
-    [void]$sb.AppendLine('    // Hide empty product sections in manual review')
-    [void]$sb.AppendLine('    document.querySelectorAll("#tab-manual .product-section").forEach(function(ps) {')
-    [void]$sb.AppendLine('        var items = ps.querySelectorAll(".manual-item");')
-    [void]$sb.AppendLine('        var anyVisible = false;')
-    [void]$sb.AppendLine('        items.forEach(function(i) { if (i.style.display !== "none") anyVisible = true; });')
-    [void]$sb.AppendLine('        ps.style.display = anyVisible ? "" : "none";')
-    [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
     [void]$sb.AppendLine('function filterByStatus(btn, status) {')
     [void]$sb.AppendLine('    var allBtn = document.querySelector(".filter-pill[onclick*=\"All\"]");')
     [void]$sb.AppendLine('    if (status === "All") {')
-    [void]$sb.AppendLine('        // "All" clears all other selections')
     [void]$sb.AppendLine('        activeFilters.clear();')
     [void]$sb.AppendLine('        document.querySelectorAll(".filter-pill").forEach(function(p) { p.classList.remove("active"); });')
     [void]$sb.AppendLine('        btn.classList.add("active");')
     [void]$sb.AppendLine('    } else {')
-    [void]$sb.AppendLine('        // Deactivate "All" pill when selecting a specific status')
     [void]$sb.AppendLine('        activeFilters.delete("All");')
     [void]$sb.AppendLine('        if (allBtn) allBtn.classList.remove("active");')
-    [void]$sb.AppendLine('        // Toggle this pill on/off')
     [void]$sb.AppendLine('        if (activeFilters.has(status)) {')
     [void]$sb.AppendLine('            activeFilters.delete(status);')
     [void]$sb.AppendLine('            btn.classList.remove("active");')
@@ -933,7 +733,6 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('            activeFilters.add(status);')
     [void]$sb.AppendLine('            btn.classList.add("active");')
     [void]$sb.AppendLine('        }')
-    [void]$sb.AppendLine('        // If no pills active, reactivate "All"')
     [void]$sb.AppendLine('        if (activeFilters.size === 0 && allBtn) { allBtn.classList.add("active"); }')
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('    applyFilters();')

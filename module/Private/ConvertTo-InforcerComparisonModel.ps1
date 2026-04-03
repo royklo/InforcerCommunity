@@ -52,10 +52,10 @@ function ConvertTo-InforcerComparisonModel {
         from Stage 1 (Get-InforcerComparisonData) and produces a hierarchical comparison
         model consumed by Stage 3 (HTML/Markdown renderer).
 
-        Compares exclusively at the Intune Settings Catalog setting level:
-        - Filters to policyTypeId -eq 10 only
-        - Extracts settings using ConvertTo-InforcerSettingRows (reused from Export-InforcerTenantDocumentation)
-        - Matches by settingDefinitionId across source and destination
+        Compares all policy types at the individual setting level:
+        - Settings Catalog (policyTypeId 10): extracts via ConvertTo-InforcerSettingRows
+        - Non-SC policies: extracts via ConvertTo-FlatSettingRows
+        - Matches by setting name/definition across source and destination
         - Classifies as Matched, Conflicting, SourceOnly, or DestOnly
     .PARAMETER ComparisonData
         Hashtable from Get-InforcerComparisonData containing: SourcePolicies,
@@ -152,6 +152,22 @@ function ConvertTo-InforcerComparisonModel {
         return $false
     }
 
+    # ── Filter SC policies by excluded categories (Fix 1) ─────────────────
+    $filteredSrcSC = [System.Collections.Generic.List[object]]::new()
+    $filteredDstSC = [System.Collections.Generic.List[object]]::new()
+    foreach ($p in $srcSC) {
+        $catKey = & $getCategoryKey $p
+        if (& $isExcludedCategory $catKey) { continue }
+        [void]$filteredSrcSC.Add($p)
+    }
+    foreach ($p in $dstSC) {
+        $catKey = & $getCategoryKey $p
+        if (& $isExcludedCategory $catKey) { continue }
+        [void]$filteredDstSC.Add($p)
+    }
+    $srcSC = $filteredSrcSC
+    $dstSC = $filteredDstSC
+
     $srcNonSC = [System.Collections.Generic.List[object]]::new()
     $dstNonSC = [System.Collections.Generic.List[object]]::new()
     foreach ($p in $sourcePolicies) {
@@ -171,8 +187,8 @@ function ConvertTo-InforcerComparisonModel {
         [void]$dstNonSC.Add($p)
     }
 
-    # ── Extract settings from SC policies ─────────────────────────────────
-    # Build: settingDefinitionId -> { FriendlyName, Value, PolicyName, Product, Category, Assignment }
+    # ── Extract settings from SC policies (Fix 3: capture ALL rows) ───────
+    # Build: uniqueKey -> { FriendlyName, Value, PolicyName, Product, Category, Assignment }
     $srcSettings = @{}
     $dstSettings = @{}
 
@@ -189,24 +205,55 @@ function ConvertTo-InforcerComparisonModel {
                 $defId = $settingGroup.settingInstance.settingDefinitionId
                 if ([string]::IsNullOrEmpty($defId)) { continue }
 
-                # Use ConvertTo-InforcerSettingRows for friendly name and value
+                # Get ALL rows from ConvertTo-InforcerSettingRows (handles group settings like ASR rules)
                 $rows = @(ConvertTo-InforcerSettingRows -SettingInstance $settingGroup.settingInstance)
-                $friendlyName = if ($rows.Count -gt 0) { $rows[0].Name } else { $defId }
-                # Use first configured value; for group settings the header row has empty value
-                $configuredRows = @($rows | Where-Object { $_.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($_.Value)") })
-                $value = if ($configuredRows.Count -gt 0) { "$($configuredRows[0].Value)" }
-                         elseif ($rows.Count -gt 0) { "$($rows[0].Value)" }
-                         else { '' }
+                $configuredRows = @($rows | Where-Object { $_.IsConfigured -eq $true })
 
-                # First occurrence wins for each settingDefinitionId
-                if (-not $srcSettings.ContainsKey($defId)) {
-                    $srcSettings[$defId] = @{
-                        FriendlyName = $friendlyName
-                        Value        = $value
-                        PolicyName   = $policyName
-                        Product      = $prod
-                        Category     = $cat
-                        Assignment   = $assignment
+                if ($configuredRows.Count -eq 0) {
+                    # No configured rows — use defId as fallback
+                    $friendlyName = if ($rows.Count -gt 0) { $rows[0].Name } else { $defId }
+                    $uniqueKey = $defId
+                    if (-not $srcSettings.ContainsKey($uniqueKey)) {
+                        $srcSettings[$uniqueKey] = @{
+                            FriendlyName = $friendlyName
+                            Value        = ''
+                            PolicyName   = $policyName
+                            Product      = $prod
+                            Category     = $cat
+                            Assignment   = $assignment
+                        }
+                    }
+                } elseif ($configuredRows.Count -eq 1) {
+                    # Single configured row — use defId as key
+                    $cr = $configuredRows[0]
+                    $uniqueKey = $defId
+                    if (-not $srcSettings.ContainsKey($uniqueKey)) {
+                        $srcSettings[$uniqueKey] = @{
+                            FriendlyName = $cr.Name
+                            Value        = "$($cr.Value)"
+                            PolicyName   = $policyName
+                            Product      = $prod
+                            Category     = $cat
+                            Assignment   = $assignment
+                        }
+                    }
+                } else {
+                    # Multiple configured rows (group settings like ASR rules)
+                    # Add each as a separate entry with composite key
+                    $rowIdx = 0
+                    foreach ($cr in $configuredRows) {
+                        $uniqueKey = "${defId}_${rowIdx}_$($cr.Name)"
+                        if (-not $srcSettings.ContainsKey($uniqueKey)) {
+                            $srcSettings[$uniqueKey] = @{
+                                FriendlyName = $cr.Name
+                                Value        = "$($cr.Value)"
+                                PolicyName   = $policyName
+                                Product      = $prod
+                                Category     = $cat
+                                Assignment   = $assignment
+                            }
+                        }
+                        $rowIdx++
                     }
                 }
             }
@@ -227,21 +274,49 @@ function ConvertTo-InforcerComparisonModel {
                 if ([string]::IsNullOrEmpty($defId)) { continue }
 
                 $rows = @(ConvertTo-InforcerSettingRows -SettingInstance $settingGroup.settingInstance)
-                $friendlyName = if ($rows.Count -gt 0) { $rows[0].Name } else { $defId }
-                # Use first configured value; for group settings the header row has empty value
-                $configuredRows = @($rows | Where-Object { $_.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($_.Value)") })
-                $value = if ($configuredRows.Count -gt 0) { "$($configuredRows[0].Value)" }
-                         elseif ($rows.Count -gt 0) { "$($rows[0].Value)" }
-                         else { '' }
+                $configuredRows = @($rows | Where-Object { $_.IsConfigured -eq $true })
 
-                if (-not $dstSettings.ContainsKey($defId)) {
-                    $dstSettings[$defId] = @{
-                        FriendlyName = $friendlyName
-                        Value        = $value
-                        PolicyName   = $policyName
-                        Product      = $prod
-                        Category     = $cat
-                        Assignment   = $assignment
+                if ($configuredRows.Count -eq 0) {
+                    $friendlyName = if ($rows.Count -gt 0) { $rows[0].Name } else { $defId }
+                    $uniqueKey = $defId
+                    if (-not $dstSettings.ContainsKey($uniqueKey)) {
+                        $dstSettings[$uniqueKey] = @{
+                            FriendlyName = $friendlyName
+                            Value        = ''
+                            PolicyName   = $policyName
+                            Product      = $prod
+                            Category     = $cat
+                            Assignment   = $assignment
+                        }
+                    }
+                } elseif ($configuredRows.Count -eq 1) {
+                    $cr = $configuredRows[0]
+                    $uniqueKey = $defId
+                    if (-not $dstSettings.ContainsKey($uniqueKey)) {
+                        $dstSettings[$uniqueKey] = @{
+                            FriendlyName = $cr.Name
+                            Value        = "$($cr.Value)"
+                            PolicyName   = $policyName
+                            Product      = $prod
+                            Category     = $cat
+                            Assignment   = $assignment
+                        }
+                    }
+                } else {
+                    $rowIdx = 0
+                    foreach ($cr in $configuredRows) {
+                        $uniqueKey = "${defId}_${rowIdx}_$($cr.Name)"
+                        if (-not $dstSettings.ContainsKey($uniqueKey)) {
+                            $dstSettings[$uniqueKey] = @{
+                                FriendlyName = $cr.Name
+                                Value        = "$($cr.Value)"
+                                PolicyName   = $policyName
+                                Product      = $prod
+                                Category     = $cat
+                                Assignment   = $assignment
+                            }
+                        }
+                        $rowIdx++
                     }
                 }
             }
@@ -399,10 +474,16 @@ function ConvertTo-InforcerComparisonModel {
         }
     }
 
-    # ── Policy-level comparison for non-SC policies ──────────────────────
-    # All non-Settings-Catalog policies are compared at the policy level
-    # by matching on product|primaryGroup|displayName.
-    # Matched/Conflicting → comparison tab; SourceOnly/DestOnly → manual review tab.
+    # ── Setting-level comparison for non-SC policies (Fix 2) ─────────────
+    # Non-Settings-Catalog policies are now compared at the individual setting
+    # level using ConvertTo-FlatSettingRows, just like SC policies.
+
+    # Metadata properties to skip when comparing non-SC settings
+    $metadataSkipNames = @(
+        '@odata.type', '@odata.context', 'id', 'createdDateTime', 'lastModifiedDateTime',
+        'roleScopeTagIds', 'version', 'templateId', 'displayName', 'description',
+        'assignments', 'settings', 'name', 'deletedDateTime', 'policyGuid'
+    )
 
     # Build match key: product|primaryGroup|displayName (lowercased)
     $buildMatchKey = {
@@ -411,6 +492,94 @@ function ConvertTo-InforcerComparisonModel {
         $pg = if ($Policy.primaryGroup) { $Policy.primaryGroup.ToLowerInvariant() } else { '' }
         $dn = (Get-InforcerPolicyName -Policy $Policy).ToLowerInvariant()
         return "$prod|$pg|$dn"
+    }
+
+    # Helper: extract flat settings from a non-SC policy, filtered and as a name->value lookup
+    $getNonSCSettingLookup = {
+        param($PolicyData)
+        $lookup = @{}
+        if ($null -eq $PolicyData) { return $lookup }
+        $flatRows = @(ConvertTo-FlatSettingRows -PolicyData $PolicyData)
+        foreach ($r in $flatRows) {
+            if ($r.IsConfigured -ne $true) { continue }
+            if ($r.Name -like '*@odata*') { continue }
+            if ($r.Name -in $metadataSkipNames) { continue }
+            # Use name as key; handle duplicates by appending index
+            $key = $r.Name
+            if ($lookup.ContainsKey($key)) {
+                $idx = 2
+                while ($lookup.ContainsKey("${key} ($idx)")) { $idx++ }
+                $key = "${key} ($idx)"
+            }
+            $lookup[$key] = [string]$r.Value
+        }
+        return $lookup
+    }
+
+    # Helper: add setting-level rows for a non-SC policy pair or single policy
+    $addNonSCSettingRows = {
+        param(
+            [string]$Product,
+            [string]$Category,
+            [string]$SrcPolicyName,
+            [string]$DstPolicyName,
+            [string]$SrcAssignment,
+            [string]$DstAssignment,
+            [hashtable]$SrcLookup,
+            [hashtable]$DstLookup
+        )
+        $allNames = @(@($SrcLookup.Keys) + @($DstLookup.Keys)) | Sort-Object -Unique
+        foreach ($settingName in $allNames) {
+            $inS = $SrcLookup.ContainsKey($settingName)
+            $inD = $DstLookup.ContainsKey($settingName)
+            $sVal = if ($inS) { $SrcLookup[$settingName] } else { '' }
+            $dVal = if ($inD) { $DstLookup[$settingName] } else { '' }
+
+            $settingRow = @{
+                ItemType     = 'Setting'
+                Name         = $settingName
+                Category     = $Category
+                SourcePolicy = $SrcPolicyName
+                DestPolicy   = $DstPolicyName
+            }
+
+            if ($includingAssignments) {
+                $settingRow.SourceAssignment = $SrcAssignment
+                $settingRow.DestAssignment   = $DstAssignment
+            }
+
+            if ($inS -and $inD) {
+                $settingRow.SourceValue = $sVal
+                $settingRow.DestValue   = $dVal
+                if ($sVal -eq $dVal) {
+                    $settingRow.Status = 'Matched'
+                    $counters.Matched++
+                    & $ensureProductCategory $Product $Category
+                    $products[$Product].Counters.Matched++
+                } else {
+                    $settingRow.Status = 'Conflicting'
+                    $counters.Conflicting++
+                    & $ensureProductCategory $Product $Category
+                    $products[$Product].Counters.Conflicting++
+                }
+            } elseif ($inS) {
+                $settingRow.SourceValue = $sVal
+                $settingRow.DestValue   = ''
+                $settingRow.Status      = 'SourceOnly'
+                $counters.SourceOnly++
+                & $ensureProductCategory $Product $Category
+                $products[$Product].Counters.SourceOnly++
+            } else {
+                $settingRow.SourceValue = ''
+                $settingRow.DestValue   = $dVal
+                $settingRow.Status      = 'DestOnly'
+                $counters.DestOnly++
+                & $ensureProductCategory $Product $Category
+                $products[$Product].Counters.DestOnly++
+            }
+
+            & $addRow $Product $Category $settingRow
+        }
     }
 
     # Index source non-SC by match key
@@ -428,134 +597,59 @@ function ConvertTo-InforcerComparisonModel {
 
     $allNonSCKeys = @($srcNonSCIndex.Keys) + @($dstNonSCIndex.Keys) | Sort-Object -Unique
 
-    # Manual review containers (populated with unmatched non-SC policies below)
-    $manualReview = [ordered]@{}
-    $manualCount = 0
-
-    $ensureManualCategory = {
-        param([string]$Product, [string]$Category)
-        if (-not $manualReview.Contains($Product)) {
-            $manualReview[$Product] = @{
-                Count      = 0
-                Categories = [ordered]@{}
-            }
-        }
-        if (-not $manualReview[$Product].Categories.Contains($Category)) {
-            $manualReview[$Product].Categories[$Category] = [System.Collections.Generic.List[object]]::new()
-        }
-    }
-
-    $getPolicyTypeFriendly = {
-        param($Policy)
-        if ($Policy.inforcerPolicyTypeName) { return $Policy.inforcerPolicyTypeName }
-        if ($Policy.primaryGroup) { return $Policy.primaryGroup }
-        if ($Policy.product) { return $Policy.product }
-        return "Type $($Policy.policyTypeId)"
-    }
-
     foreach ($key in $allNonSCKeys) {
         $inSrc = $srcNonSCIndex.ContainsKey($key)
         $inDst = $dstNonSCIndex.ContainsKey($key)
 
         if ($inSrc -and $inDst) {
-            # ── Matched pair → comparison tab ──
+            # ── Matched pair → setting-level comparison ──
             $srcP = $srcNonSCIndex[$key]
             $dstP = $dstNonSCIndex[$key]
 
             $prod = & $getProduct $srcP
             $cat  = & $getCategoryKey $srcP
             if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
-            $policyName = Get-InforcerPolicyName -Policy $srcP
+            $srcPolicyName = Get-InforcerPolicyName -Policy $srcP
+            $dstPolicyName = Get-InforcerPolicyName -Policy $dstP
+            $srcAssign = if ($includingAssignments) { Get-InforcerAssignmentString -Policy $srcP } else { '' }
+            $dstAssign = if ($includingAssignments) { Get-InforcerAssignmentString -Policy $dstP } else { '' }
 
-            # Compare policyData as JSON
-            $srcJson = if ($srcP.policyData) { $srcP.policyData | ConvertTo-Json -Depth 50 -Compress } else { '' }
-            $dstJson = if ($dstP.policyData) { $dstP.policyData | ConvertTo-Json -Depth 50 -Compress } else { '' }
+            $srcLookup = & $getNonSCSettingLookup $srcP.policyData
+            $dstLookup = & $getNonSCSettingLookup $dstP.policyData
 
-            $status = if ($srcJson -eq $dstJson) { 'Matched' } else { 'Conflicting' }
-
-            # Extract flat settings for non-SC policies so users can see actual values
-            $srcFlatSettings = @()
-            $dstFlatSettings = @()
-            if ($status -ne 'Matched') {
-                if ($srcP.policyData) { $srcFlatSettings = @(ConvertTo-FlatSettingRows -PolicyData $srcP.policyData) }
-                if ($dstP.policyData) { $dstFlatSettings = @(ConvertTo-FlatSettingRows -PolicyData $dstP.policyData) }
-            }
-
-            $row = @{
-                ItemType       = 'Policy'
-                Name           = $policyName
-                Category       = $cat
-                Status         = $status
-                SourcePolicy   = $policyName
-                SourceValue    = if ($status -eq 'Matched') { 'Identical' } else { 'Differs' }
-                DestPolicy     = Get-InforcerPolicyName -Policy $dstP
-                DestValue      = if ($status -eq 'Matched') { 'Identical' } else { 'Differs' }
-                SourceSettings = $srcFlatSettings
-                DestSettings   = $dstFlatSettings
-            }
-
-            if ($includingAssignments) {
-                $row.SourceAssignment = Get-InforcerAssignmentString -Policy $srcP
-                $row.DestAssignment   = Get-InforcerAssignmentString -Policy $dstP
-            }
-
-            $counters[$status]++
-            & $ensureProductCategory $prod $cat
-            $products[$prod].Counters[$status]++
-            & $addRow $prod $cat $row
+            & $addNonSCSettingRows $prod $cat $srcPolicyName $dstPolicyName $srcAssign $dstAssign $srcLookup $dstLookup
 
         } elseif ($inSrc) {
-            # ── Source-only non-SC policy → manual review tab ──
+            # ── Source-only non-SC policy → all settings as SourceOnly ──
             $srcP = $srcNonSCIndex[$key]
             $prod = & $getProduct $srcP
             $cat  = & $getCategoryKey $srcP
             if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
-            $policyName = Get-InforcerPolicyName -Policy $srcP
+            $srcPolicyName = Get-InforcerPolicyName -Policy $srcP
+            $srcAssign = if ($includingAssignments) { Get-InforcerAssignmentString -Policy $srcP } else { '' }
 
-            $flatSettings = @()
-            if ($srcP.policyData) { $flatSettings = @(ConvertTo-FlatSettingRows -PolicyData $srcP.policyData) }
+            $srcLookup = & $getNonSCSettingLookup $srcP.policyData
+            $emptyLookup = @{}
 
-            & $ensureManualCategory $prod $cat
-            [void]$manualReview[$prod].Categories[$cat].Add(@{
-                Environment = 'Source'
-                PolicyName  = $policyName
-                PolicyType  = & $getPolicyTypeFriendly $srcP
-                Category    = $cat
-                Reason      = 'Exists only in source tenant'
-                Settings    = $flatSettings
-            })
-            $manualReview[$prod].Count++
-            $manualCount++
+            & $addNonSCSettingRows $prod $cat $srcPolicyName '' $srcAssign '' $srcLookup $emptyLookup
 
         } else {
-            # ── Dest-only non-SC policy → manual review tab ──
+            # ── Dest-only non-SC policy → all settings as DestOnly ──
             $dstP = $dstNonSCIndex[$key]
             $prod = & $getProduct $dstP
             $cat  = & $getCategoryKey $dstP
             if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'General' }
-            $policyName = Get-InforcerPolicyName -Policy $dstP
+            $dstPolicyName = Get-InforcerPolicyName -Policy $dstP
+            $dstAssign = if ($includingAssignments) { Get-InforcerAssignmentString -Policy $dstP } else { '' }
 
-            $flatSettings = @()
-            if ($dstP.policyData) { $flatSettings = @(ConvertTo-FlatSettingRows -PolicyData $dstP.policyData) }
+            $emptyLookup = @{}
+            $dstLookup = & $getNonSCSettingLookup $dstP.policyData
 
-            & $ensureManualCategory $prod $cat
-            [void]$manualReview[$prod].Categories[$cat].Add(@{
-                Environment = 'Destination'
-                PolicyName  = $policyName
-                PolicyType  = & $getPolicyTypeFriendly $dstP
-                Category    = $cat
-                Reason      = 'Exists only in destination tenant'
-                Settings    = $flatSettings
-            })
-            $manualReview[$prod].Count++
-            $manualCount++
+            & $addNonSCSettingRows $prod $cat '' $dstPolicyName '' $dstAssign $emptyLookup $dstLookup
         }
     }
 
-    $counters.Manual = $manualCount
-
     # ── Alignment score ───────────────────────────────────────────────────
-    # Manual review items are excluded from the score
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly
     $alignmentScore = if ($totalItems -eq 0) { 100 }
                       else { [math]::Round(($counters.Matched / $totalItems) * 100, 1) }
@@ -569,7 +663,7 @@ function ConvertTo-InforcerComparisonModel {
         TotalItems           = $totalItems
         Counters             = $counters
         Products             = $products
-        ManualReview         = $manualReview
+        ManualReview         = [ordered]@{}
         IncludingAssignments = $includingAssignments
     }
 }

@@ -44,6 +44,8 @@ function Compare-InforcerDocModels {
     $excludedSettingNames = @(
         'Onboarding blob from Connector'
         'Onboarding Blob'
+        'Tenant Id'
+        'Tenant Id (Device)'
     )
 
     # App protection: settings that enumerate individual app IDs (noise)
@@ -55,6 +57,7 @@ function Compare-InforcerDocModels {
         '^apps$'
         '^approvedKeyboards$'
         '@odata\.'
+        '^tenant\s*id'
     )
 
     # ── Helper: ensure product/category exists ────────────────────────────
@@ -173,12 +176,18 @@ function Compare-InforcerDocModels {
                     $parentStack.RemoveAt($parentStack.Count - 1)
                 }
 
-                # Build the full path
+                # Build the full path from parent stack + catalog category
                 if ($parentStack.Count -gt 0) {
                     $pathParts = @($parentStack) + @($name)
                     $settingPath = $pathParts -join ' > '
                 } else {
-                    $settingPath = $name
+                    # No parent stack — try to add catalog category for context
+                    $catContext = & $getCategoryName $defId
+                    if (-not [string]::IsNullOrWhiteSpace($catContext)) {
+                        $settingPath = "$catContext > $name"
+                    } else {
+                        $settingPath = $name
+                    }
                 }
 
                 [void]$result.Add(@{

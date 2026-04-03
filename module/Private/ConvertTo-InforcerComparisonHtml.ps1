@@ -489,6 +489,8 @@ tr:hover td { background: var(--accent-soft); }
             $categoryData = $productData.Categories[$categoryName]
             foreach ($r in $categoryData.ComparisonRows) {
                 $cat = if ($r.Category) { $r.Category } else { $categoryName }
+                # Strip product prefix for display (e.g., "Intune / Windows / Settings Catalog" → "Windows / Settings Catalog")
+                if ($cat -match '^[^/]+\s*/\s*(.+)$') { $cat = $Matches[1] }
                 if (-not [string]::IsNullOrWhiteSpace($cat)) { [void]$allCategories.Add($cat) }
             }
         }
@@ -522,7 +524,7 @@ tr:hover td { background: var(--accent-soft); }
     }
     [void]$sb.AppendLine('</select>')
     $deprecatedLabel = if ($deprecatedCount -gt 0) { "Show deprecated ($deprecatedCount)" } else { "Show deprecated" }
-    [void]$sb.AppendLine("    <label style=`"margin-left:auto;display:flex;align-items:center;gap:0.5rem;cursor:pointer`"><span style=`"font-size:0.75rem;font-weight:500;color:var(--text-secondary)`">$deprecatedLabel</span><span class=`"toggle-switch`"><input type=`"checkbox`" id=`"chk-show-deprecated`" onchange=`"applyFilters()`"><span class=`"toggle-slider`"></span></span></label>")
+    [void]$sb.AppendLine("    <span style=`"margin-left:auto;display:flex;align-items:center;gap:0.5rem;cursor:pointer`" onclick=`"var cb=document.getElementById('chk-show-deprecated');cb.checked=!cb.checked;applyFilters()`"><span style=`"font-size:0.75rem;font-weight:500;color:var(--text-secondary)`">$deprecatedLabel</span><span class=`"toggle-switch`"><input type=`"checkbox`" id=`"chk-show-deprecated`"><span class=`"toggle-slider`"></span></span></span>")
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.9rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
 
@@ -585,7 +587,10 @@ tr:hover td { background: var(--accent-soft); }
                 }
 
                 $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
-                $encCategory = [System.Net.WebUtility]::HtmlEncode($row.Category)
+                # Strip product prefix from category for display and filtering
+                $strippedCategory = $row.Category
+                if ($strippedCategory -match '^[^/]+\s*/\s*(.+)$') { $strippedCategory = $Matches[1] }
+                $encCategory = [System.Net.WebUtility]::HtmlEncode($strippedCategory)
                 # Determine if both source and dest values are empty
                 $srcValRaw = "$($row.SourceValue)".Trim()
                 $dstValRaw = "$($row.DestValue)".Trim()
@@ -610,11 +615,8 @@ tr:hover td { background: var(--accent-soft); }
                     [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
                 }
 
-                # Category column — strip product prefix since it's in the section header
-                $displayCategory = $row.Category
-                if ($displayCategory -match '^[^/]+\s*/\s*(.+)$') { $displayCategory = $Matches[1] }
-                $encDisplayCat = [System.Net.WebUtility]::HtmlEncode($displayCategory)
-                [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encDisplayCat</td>")
+                # Category column (already stripped of product prefix)
+                [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCategory</td>")
 
                 # Source columns
                 if ($status -eq 'DestOnly') {

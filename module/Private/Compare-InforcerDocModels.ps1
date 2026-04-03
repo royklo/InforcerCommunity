@@ -330,7 +330,7 @@ function Compare-InforcerDocModels {
 
             # Route non-comparable categories to manual review
             $catLower = $categoryName.ToLowerInvariant()
-            if ($catLower -match 'script|remediation|custom indicators|custom compliance') {
+            if ($catLower -match 'script|remediation|custom compliance') {
                 # Add to manual review instead of comparison
                 # Helper: collect settings with base64 decoding for script content
                 $collectMRSettings = {
@@ -344,8 +344,10 @@ function Compare-InforcerDocModels {
                         if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
                             $settingName = "$($s.Name)"
                             $settingValue = "$($s.Value)"
-                            # Decode base64 script content
-                            if ($settingName -match 'scriptContent|detectionScriptContent|remediationScriptContent') {
+                            # Skip binary hash fields (not displayable)
+                            if ($settingName -match '^hashed|Hash$') { continue }
+                            # Decode base64 script content (but not hashes)
+                            if ($settingName -match '^(scriptContent|detectionScriptContent|remediationScriptContent)$') {
                                 try {
                                     $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($settingValue))
                                     $settingValue = $decoded

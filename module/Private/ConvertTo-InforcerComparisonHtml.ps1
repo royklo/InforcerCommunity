@@ -257,7 +257,7 @@ body {
 .toggle-switch input:checked + .toggle-slider { background: var(--accent); }
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
 tr[data-deprecated="true"] td { opacity: 0.6; }
-tr[data-deprecated="true"] td .setting-name::after { content: ' \26A0'; color: var(--warning); }
+tr[data-deprecated="true"] td.setting-name::after { content: ' \26A0'; color: var(--warning); }
 .manual-item {
     background: var(--bg);
     border: 1px solid var(--border-subtle);
@@ -511,6 +511,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('</select>')
     [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Show deprecated</span><span class="toggle-switch"><input type="checkbox" id="chk-show-deprecated" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
     [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.8rem;color:var(--text-secondary);padding:0.25rem 0 0.75rem;"></div>')
 
     # ── Tab navigation ──────────────────────────────────────────────────
     $manualReview = $ComparisonModel.ManualReview
@@ -606,10 +607,12 @@ tr:hover td { background: var(--accent-soft); }
                 $bothEmpty = (([string]::IsNullOrEmpty($srcValRaw) -or $srcValRaw -eq [char]0x2014) -and
                               ([string]::IsNullOrEmpty($dstValRaw) -or $dstValRaw -eq [char]0x2014))
                 $emptyAttr = if ($bothEmpty) { ' data-empty="true"' } else { '' }
-                $isDeprecated = $row.Name -match '\(deprecated\)'
+                $isDeprecated = $row.Name -match 'deprecated' -or ($row.SettingPath -and $row.SettingPath -match 'deprecated')
                 $deprecatedAttr = if ($isDeprecated) { ' data-deprecated="true"' } else { '' }
 
-                [void]$sb.Append("                <tr data-status=`"$status`" data-category=`"$encCategory`"$emptyAttr$deprecatedAttr><td>")
+                $encSrcPol = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
+                $encDstPol = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
+                [void]$sb.Append("                <tr data-status=`"$status`" data-category=`"$encCategory`" data-src-policy=`"$encSrcPol`" data-dst-policy=`"$encDstPol`"$emptyAttr$deprecatedAttr><td>")
                 [void]$sb.Append($statusHtml)
                 [void]$sb.Append('</td>')
 
@@ -796,13 +799,27 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || !matchesCategory || (isDeprecated && !showDeprecated);')
     [void]$sb.AppendLine('        tr.style.display = hidden ? "none" : "";')
     [void]$sb.AppendLine('    });')
-    [void]$sb.AppendLine('    // Hide product sections where all rows are hidden')
+    [void]$sb.AppendLine('    // Hide product sections where all rows are hidden + count visible settings/policies')
+    [void]$sb.AppendLine('    var visibleCount = 0;')
+    [void]$sb.AppendLine('    var policySet = new Set();')
+    [void]$sb.AppendLine('    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {')
+    [void]$sb.AppendLine('        if (tr.style.display !== "none") {')
+    [void]$sb.AppendLine('            visibleCount++;')
+    [void]$sb.AppendLine('            var sp = tr.getAttribute("data-src-policy");')
+    [void]$sb.AppendLine('            var dp = tr.getAttribute("data-dst-policy");')
+    [void]$sb.AppendLine('            if (sp) policySet.add(sp);')
+    [void]$sb.AppendLine('            if (dp) policySet.add(dp);')
+    [void]$sb.AppendLine('        }')
+    [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    tab.querySelectorAll(".product-section").forEach(function(ps) {')
     [void]$sb.AppendLine('        var rows = ps.querySelectorAll("tbody tr[data-status]");')
     [void]$sb.AppendLine('        var anyVisible = false;')
     [void]$sb.AppendLine('        rows.forEach(function(r) { if (r.style.display !== "none") anyVisible = true; });')
     [void]$sb.AppendLine('        ps.style.display = anyVisible ? "" : "none";')
     [void]$sb.AppendLine('    });')
+    [void]$sb.AppendLine('    // Update filter summary')
+    [void]$sb.AppendLine('    var summary = document.getElementById("filter-summary");')
+    [void]$sb.AppendLine("    if (summary) { summary.textContent = 'Showing ' + visibleCount + ' settings across ' + policySet.size + ' policies'; }")
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
     [void]$sb.AppendLine('function filterByStatus(btn, status) {')

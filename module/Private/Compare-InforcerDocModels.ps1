@@ -93,9 +93,30 @@ function Compare-InforcerDocModels {
         return $false
     }
 
+    # ── Helper: resolve category name from catalog for a definitionId ─────
+    $getCategoryName = {
+        param([string]$DefId)
+        if ([string]::IsNullOrEmpty($DefId)) { return '' }
+        if ($null -ne $script:InforcerSettingsCatalog -and $script:InforcerSettingsCatalog.ContainsKey($DefId)) {
+            $catName = $script:InforcerSettingsCatalog[$DefId].CategoryName
+            if (-not [string]::IsNullOrWhiteSpace($catName)) { return $catName }
+        }
+        # Fallback: extract profile/zone context from defId pattern
+        if ($DefId -match '_(?:domainprofile|privateprofile|publicprofile)_') {
+            $profile = $Matches[0].Trim('_')
+            $display = switch ($profile) {
+                'domainprofile'  { 'Domain Profile' }
+                'privateprofile' { 'Private Profile' }
+                'publicprofile'  { 'Public Profile' }
+            }
+            return $display
+        }
+        return ''
+    }
+
     # ── Helper: build setting paths from the Indent hierarchy ─────────────
     # Walks the Settings array and returns a list of hashtables:
-    #   @{ Name = 'display name'; SettingPath = 'Parent > Child'; Value = '...' }
+    #   @{ Name; SettingPath; Value; DefinitionId }
     # Only configured settings (IsConfigured=$true) are returned.
     # Parent headers (IsConfigured=$false) are tracked for path building only.
     $buildSettingPaths = {
@@ -105,25 +126,23 @@ function Compare-InforcerDocModels {
         if ($null -eq $Settings -or $Settings.Count -eq 0) { return $result }
 
         # Parent stack: list of parent names indexed by indent level
-        # parentStack[0] = name of indent-0 parent, parentStack[1] = indent-1 parent, etc.
         $parentStack = [System.Collections.Generic.List[string]]::new()
 
         foreach ($setting in $Settings) {
             $indent = if ($null -ne $setting.Indent) { [int]$setting.Indent } else { 0 }
             $name   = "$($setting.Name)"
             $value  = "$($setting.Value)"
+            $defId  = "$($setting.DefinitionId)"
             $isConfigured = $setting.IsConfigured -eq $true
 
             if (-not $isConfigured) {
                 # Group header — update parent stack at this indent level
-                # Trim stack to current indent level, then set this as the parent
                 while ($parentStack.Count -gt $indent) {
                     $parentStack.RemoveAt($parentStack.Count - 1)
                 }
                 [void]$parentStack.Add($name)
             } else {
                 # Configured setting — build path from parent stack + this name
-                # Trim stack to current indent level (in case indent jumped)
                 while ($parentStack.Count -gt $indent) {
                     $parentStack.RemoveAt($parentStack.Count - 1)
                 }
@@ -137,9 +156,10 @@ function Compare-InforcerDocModels {
                 }
 
                 [void]$result.Add(@{
-                    Name        = $name
-                    SettingPath = $settingPath
-                    Value       = $value
+                    Name         = $name
+                    SettingPath  = $settingPath
+                    Value        = $value
+                    DefinitionId = $defId
                 })
             }
         }
@@ -148,7 +168,8 @@ function Compare-InforcerDocModels {
     }
 
     # ── Helper: build a lookup from setting paths ─────────────────────────
-    # Returns hashtable keyed by SettingPath -> @{ Name; Value; SettingPath }
+    # Returns hashtable keyed by SettingPath -> @{ Name; Value; SettingPath; DefinitionId }
+    # When duplicate paths occur, uses catalog CategoryName for disambiguation
     $buildSettingLookup = {
         param([array]$Settings)
         $paths = & $buildSettingPaths $Settings
@@ -161,13 +182,52 @@ function Compare-InforcerDocModels {
             # Skip structural array count rows (e.g., "40 items")
             if ($p.Value -match '^\d+ items$') { continue }
 
-            # Handle duplicate paths (shouldn't normally happen with proper path building)
+            # Handle duplicate paths — use category name for disambiguation
             if ($lookup.Contains($key)) {
-                $idx = 2
-                while ($lookup.Contains("${key} ($idx)")) { $idx++ }
-                $key = "${key} ($idx)"
+                $catName = & $getCategoryName $p.DefinitionId
+                if (-not [string]::IsNullOrWhiteSpace($catName)) {
+                    $key = "$catName > $($p.Name)"
+                    $p.SettingPath = $key
+                }
+                # If still duplicate after category, add numeric suffix
+                if ($lookup.Contains($key)) {
+                    $idx = 2
+                    while ($lookup.Contains("${key} ($idx)")) { $idx++ }
+                    $key = "${key} ($idx)"
+                    $p.SettingPath = $key
+                }
             }
             $lookup[$key] = $p
+        }
+        # Also retroactively disambiguate the FIRST entry when it was initially
+        # stored without category context but a duplicate was found
+        # (re-key the first entry with its category if the original key was bare)
+        $keysToReplace = [System.Collections.Generic.List[string]]::new()
+        foreach ($key in $lookup.Keys) {
+            $entry = $lookup[$key]
+            $catName = & $getCategoryName $entry.DefinitionId
+            if (-not [string]::IsNullOrWhiteSpace($catName) -and $key -eq $entry.Name) {
+                # Check if there are other entries with category-prefixed versions of this name
+                $hasDuplicates = $false
+                foreach ($otherKey in $lookup.Keys) {
+                    if ($otherKey -ne $key -and $otherKey -match [regex]::Escape($entry.Name) -and $otherKey -ne $entry.SettingPath) {
+                        $hasDuplicates = $true; break
+                    }
+                }
+                if ($hasDuplicates) {
+                    [void]$keysToReplace.Add($key)
+                }
+            }
+        }
+        foreach ($oldKey in $keysToReplace) {
+            $entry = $lookup[$oldKey]
+            $catName = & $getCategoryName $entry.DefinitionId
+            $newKey = "$catName > $($entry.Name)"
+            if (-not $lookup.Contains($newKey)) {
+                $entry.SettingPath = $newKey
+                $lookup.Remove($oldKey)
+                $lookup[$newKey] = $entry
+            }
         }
         return $lookup
     }

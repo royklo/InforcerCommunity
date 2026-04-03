@@ -4,7 +4,7 @@ function ConvertTo-InforcerComparisonHtml {
         Renders a ComparisonModel as a self-contained HTML document.
     .DESCRIPTION
         Stage 3 of the Compare-InforcerEnvironments pipeline. Receives the structured
-        ComparisonModel hashtable from ConvertTo-InforcerComparisonModel and produces
+        ComparisonModel hashtable from Compare-InforcerDocModels and produces
         a complete, self-contained HTML string with embedded CSS and JavaScript.
 
         Features:
@@ -340,6 +340,12 @@ tr:nth-child(even) td { background: var(--row-alt); }
 tr:hover td { background: var(--accent-soft); }
 .policy-name { font-weight: 600; }
 .setting-name { color: var(--text-secondary); }
+.setting-path {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 2px;
+}
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }
@@ -575,7 +581,13 @@ tr:hover td { background: var(--accent-soft); }
                 [void]$sb.Append('</td>')
 
                 # Setting/Policy name
-                [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
+                $settingPath = "$($row.SettingPath)"
+                $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
+                if ($settingPath -ne $row.Name -and $settingPath -match ' > ') {
+                    [void]$sb.Append("<td class=`"setting-name`">$encName<span class=`"setting-path`">$encPath</span></td>")
+                } else {
+                    [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
+                }
 
                 # Category column
                 [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCategory</td>")

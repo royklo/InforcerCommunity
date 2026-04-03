@@ -416,7 +416,8 @@ tr:hover td { background: var(--accent-soft); }
 .ps-cmdlet { color: #dcdcaa; }
 .ps-operator { color: #d4d4d4; }
 .ps-type { color: #4ec9b0; }
-.copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.7rem; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-xs); cursor: pointer; opacity: 0.7; transition: opacity var(--transition); }
+.ps-code-wrap { position: relative; }
+.copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.7rem; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-xs); cursor: pointer; opacity: 0.7; transition: opacity var(--transition); z-index: 1; }
 .copy-btn:hover { opacity: 1; }
 .manual-review-setting .setting-name { color: var(--text); }
 .manual-review-setting .setting-value { color: var(--text-secondary); max-width: 50%; text-align: right; word-break: break-word; }
@@ -702,7 +703,7 @@ tr:hover td { background: var(--accent-soft); }
                         # Script content gets a code block, regular settings get inline display
                         if ($s.Name -match 'scriptContent|detectionScriptContent|remediationScriptContent' -and $s.Value.Length -gt 100) {
                             [void]$sb.AppendLine("    <div style=`"margin:0.5rem 0`"><strong style=`"font-size:0.8rem`">$encSName</strong></div>")
-                            [void]$sb.AppendLine("    <pre class=`"ps-code`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto`"><code>$encSValue</code></pre>")
+                            [void]$sb.AppendLine("    <div class=`"ps-code-wrap`"><pre class=`"ps-code`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;margin:0`"><code>$encSValue</code></pre></div>")
                         } else {
                             [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                         }
@@ -910,19 +911,18 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('// Syntax highlighting and copy buttons (wrapped in try/catch to never block filters)')
     [void]$sb.AppendLine('try {')
     [void]$sb.AppendLine('    document.querySelectorAll(".ps-code code").forEach(highlightPS);')
-    [void]$sb.AppendLine('    document.querySelectorAll(".ps-code").forEach(function(pre) {')
+    [void]$sb.AppendLine('    document.querySelectorAll(".ps-code-wrap").forEach(function(wrap) {')
     [void]$sb.AppendLine('        var btn = document.createElement("button");')
     [void]$sb.AppendLine('        btn.textContent = "Copy";')
     [void]$sb.AppendLine('        btn.className = "copy-btn";')
     [void]$sb.AppendLine('        btn.onclick = function() {')
-    [void]$sb.AppendLine('            var code = pre.querySelector("code");')
+    [void]$sb.AppendLine('            var code = wrap.querySelector("code");')
     [void]$sb.AppendLine('            navigator.clipboard.writeText(code.textContent).then(function() {')
     [void]$sb.AppendLine('                btn.textContent = "Copied!";')
     [void]$sb.AppendLine('                setTimeout(function() { btn.textContent = "Copy"; }, 2000);')
     [void]$sb.AppendLine('            });')
     [void]$sb.AppendLine('        };')
-    [void]$sb.AppendLine('        pre.style.position = "relative";')
-    [void]$sb.AppendLine('        pre.appendChild(btn);')
+    [void]$sb.AppendLine('        wrap.appendChild(btn);')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('} catch(e) { console.warn("Syntax highlighting error:", e); }')
     [void]$sb.AppendLine('</script>')

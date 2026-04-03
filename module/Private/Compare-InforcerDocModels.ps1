@@ -330,38 +330,38 @@ function Compare-InforcerDocModels {
 
             # Route non-comparable categories to manual review
             $catLower = $categoryName.ToLowerInvariant()
-            if ($catLower -match 'script|remediation|custom indicators') {
+            if ($catLower -match 'script|remediation|custom indicators|custom compliance') {
                 # Add to manual review instead of comparison
-                foreach ($p in $srcPolicies) {
-                    if ($null -eq $p -or $null -eq $p.Basics) { continue }
+                # Helper: collect settings with base64 decoding for script content
+                $collectMRSettings = {
+                    param($Policy, [string]$Side)
+                    if ($null -eq $Policy -or $null -eq $Policy.Basics) { return }
                     if (-not $manualReviewCategories.Contains($categoryLabel)) {
                         $manualReviewCategories[$categoryLabel] = [System.Collections.Generic.List[object]]::new()
                     }
                     $settingsSummary = [System.Collections.Generic.List[object]]::new()
-                    foreach ($s in @($p.Settings)) {
+                    foreach ($s in @($Policy.Settings)) {
                         if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
-                            [void]$settingsSummary.Add(@{ Name = "$($s.Name)"; Value = "$($s.Value)" })
+                            $settingName = "$($s.Name)"
+                            $settingValue = "$($s.Value)"
+                            # Decode base64 script content
+                            if ($settingName -match 'scriptContent|detectionScriptContent|remediationScriptContent') {
+                                try {
+                                    $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($settingValue))
+                                    $settingValue = $decoded
+                                } catch {
+                                    # Not valid base64 — keep original
+                                }
+                            }
+                            [void]$settingsSummary.Add(@{ Name = $settingName; Value = $settingValue })
                         }
                     }
                     [void]$manualReviewCategories[$categoryLabel].Add(@{
-                        PolicyName = $p.Basics.Name; Side = 'Source'; ProfileType = $p.Basics.ProfileType; Settings = $settingsSummary
+                        PolicyName = $Policy.Basics.Name; Side = $Side; ProfileType = $Policy.Basics.ProfileType; Settings = $settingsSummary
                     })
                 }
-                foreach ($p in $dstPolicies) {
-                    if ($null -eq $p -or $null -eq $p.Basics) { continue }
-                    if (-not $manualReviewCategories.Contains($categoryLabel)) {
-                        $manualReviewCategories[$categoryLabel] = [System.Collections.Generic.List[object]]::new()
-                    }
-                    $settingsSummary = [System.Collections.Generic.List[object]]::new()
-                    foreach ($s in @($p.Settings)) {
-                        if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
-                            [void]$settingsSummary.Add(@{ Name = "$($s.Name)"; Value = "$($s.Value)" })
-                        }
-                    }
-                    [void]$manualReviewCategories[$categoryLabel].Add(@{
-                        PolicyName = $p.Basics.Name; Side = 'Destination'; ProfileType = $p.Basics.ProfileType; Settings = $settingsSummary
-                    })
-                }
+                foreach ($p in $srcPolicies) { & $collectMRSettings $p 'Source' }
+                foreach ($p in $dstPolicies) { & $collectMRSettings $p 'Destination' }
                 continue  # Skip auto-comparison for this category
             }
 
@@ -532,59 +532,10 @@ function Compare-InforcerDocModels {
         }
     }
 
-    # ── Collect non-SC policies for Manual Review ─────────────────────────
-    # Administrative Templates and other non-Settings-Catalog policies can't be
-    # reliably auto-compared with SC equivalents (different property structures).
-    # List them separately so the user can verify manually.
-    $manualReview = [ordered]@{}
-
-    $collectManualReview = {
-        param([hashtable]$Model, [string]$Side)
-        if ($null -eq $Model -or $null -eq $Model.Products) { return }
-        foreach ($prodName in $Model.Products.Keys) {
-            $prodData = $Model.Products[$prodName]
-            if ($null -eq $prodData -or $null -eq $prodData.Categories) { continue }
-            foreach ($catName in $prodData.Categories.Keys) {
-                foreach ($policy in @($prodData.Categories[$catName])) {
-                    if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
-                    # Only non-SC policies (PolicyTypeId != 10)
-                    if ($policy.PolicyTypeId -eq 10) { continue }
-                    $catLabel = "$prodName / $catName"
-                    if (-not $manualReview.Contains($catLabel)) {
-                        $manualReview[$catLabel] = [System.Collections.Generic.List[object]]::new()
-                    }
-                    # Build settings summary
-                    $settingsSummary = [System.Collections.Generic.List[object]]::new()
-                    foreach ($s in @($policy.Settings)) {
-                        if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
-                            [void]$settingsSummary.Add(@{
-                                Name  = "$($s.Name)"
-                                Value = "$($s.Value)"
-                            })
-                        }
-                    }
-                    [void]$manualReview[$catLabel].Add(@{
-                        PolicyName  = $policy.Basics.Name
-                        Side        = $Side
-                        ProfileType = $policy.Basics.ProfileType
-                        Settings    = $settingsSummary
-                    })
-                }
-            }
-        }
-    }
-    & $collectManualReview $SourceModel 'Source'
-    & $collectManualReview $DestinationModel 'Destination'
-
-    # Merge script/remediation categories into manual review
-    foreach ($catLabel in $manualReviewCategories.Keys) {
-        if (-not $manualReview.Contains($catLabel)) {
-            $manualReview[$catLabel] = [System.Collections.Generic.List[object]]::new()
-        }
-        foreach ($item in $manualReviewCategories[$catLabel]) {
-            [void]$manualReview[$catLabel].Add($item)
-        }
-    }
+    # ── Manual Review = only script/remediation/custom compliance categories ──
+    # These are routed here via $manualReviewCategories during the main comparison loop.
+    # No generic non-SC policy collection — only explicitly routed categories.
+    $manualReview = $manualReviewCategories
 
     # ── Alignment score ───────────────────────────────────────────────────
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly

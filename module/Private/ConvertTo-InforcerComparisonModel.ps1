@@ -141,6 +141,17 @@ function ConvertTo-InforcerComparisonModel {
     }
 
     # Non-SC policies: only those whose category prefix matches an SC category
+    # AND whose category is not an enrollment/provisioning area (not configuration)
+    $isExcludedCategory = {
+        param([string]$CatKey)
+        $lower = $CatKey.ToLowerInvariant()
+        # Enrollment and provisioning categories are not configuration policies
+        if ($lower -match 'enrollment|autopilot') { return $true }
+        # Exchange categories under Defender product are Defender for Office 365, not Intune
+        if ($lower -match '^exchange') { return $true }
+        return $false
+    }
+
     $srcNonSC = [System.Collections.Generic.List[object]]::new()
     $dstNonSC = [System.Collections.Generic.List[object]]::new()
     foreach ($p in $sourcePolicies) {
@@ -148,6 +159,7 @@ function ConvertTo-InforcerComparisonModel {
         $catKey = & $getCategoryKey $p
         $prefix = if ($catKey -match '^([^/]+)') { $Matches[1].Trim() } else { $catKey }
         if (-not $scCategoryPrefixes.Contains($prefix)) { continue }
+        if (& $isExcludedCategory $catKey) { continue }
         [void]$srcNonSC.Add($p)
     }
     foreach ($p in $destPolicies) {
@@ -155,6 +167,7 @@ function ConvertTo-InforcerComparisonModel {
         $catKey = & $getCategoryKey $p
         $prefix = if ($catKey -match '^([^/]+)') { $Matches[1].Trim() } else { $catKey }
         if (-not $scCategoryPrefixes.Contains($prefix)) { continue }
+        if (& $isExcludedCategory $catKey) { continue }
         [void]$dstNonSC.Add($p)
     }
 

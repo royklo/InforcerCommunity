@@ -652,36 +652,36 @@ tr:hover td { background: var(--accent-soft); }
 
                     $allSettingNames = @(@($srcVisible | ForEach-Object { $_.Name }) + @($dstVisible | ForEach-Object { $_.Name })) | Sort-Object -Unique
 
-                    # Fix 4: Only show settings that actually differ between source and dest
-                    $diffSettingNames = @($allSettingNames | Where-Object {
-                        $sVal = if ($srcLookup.ContainsKey($_)) { $srcLookup[$_] } else { $null }
-                        $dVal = if ($dstLookup.ContainsKey($_)) { $dstLookup[$_] } else { $null }
-                        $sVal -ne $dVal
-                    })
-                    $settingCount = $diffSettingNames.Count
+                    # Show all settings but mark which ones differ
+                    $diffSettingNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                    foreach ($sn in $allSettingNames) {
+                        $sVal = if ($srcLookup.ContainsKey($sn)) { $srcLookup[$sn] } else { $null }
+                        $dVal = if ($dstLookup.ContainsKey($sn)) { $dstLookup[$sn] } else { $null }
+                        if ($sVal -ne $dVal) { [void]$diffSettingNames.Add($sn) }
+                    }
+                    $settingCount = $allSettingNames.Count
+                    $diffCount = $diffSettingNames.Count
 
                     if ($settingCount -gt 0) {
                         $colSpan = if ($inclAssignments) { 9 } else { 7 }
                         [void]$sb.AppendLine("                <tr class=`"policy-detail-row`" data-status=`"$status`" data-category=`"$encCategory`"><td colspan=`"$colSpan`">")
                         [void]$sb.AppendLine("                    <details>")
-                        [void]$sb.AppendLine("                        <summary>Show settings ($settingCount)</summary>")
+                        $summaryText = if ($diffCount -gt 0) { "Show settings ($settingCount total, $diffCount different)" } else { "Show settings ($settingCount)" }
+                        [void]$sb.AppendLine("                        <summary>$summaryText</summary>")
                         [void]$sb.AppendLine('                        <table class="settings-table">')
                         [void]$sb.AppendLine('                            <thead><tr><th>Setting</th><th>Source Value</th><th>Dest Value</th></tr></thead>')
                         [void]$sb.AppendLine('                            <tbody>')
 
-                        foreach ($settingName in $diffSettingNames) {
+                        foreach ($settingName in $allSettingNames) {
                             $encSName = [System.Net.WebUtility]::HtmlEncode($settingName)
                             $srcVal = if ($srcLookup.ContainsKey($settingName)) { $srcLookup[$settingName] } else { '' }
                             $dstVal = if ($dstLookup.ContainsKey($settingName)) { $dstLookup[$settingName] } else { '' }
                             $encSrcVal = [System.Net.WebUtility]::HtmlEncode($srcVal)
                             $encDstVal = [System.Net.WebUtility]::HtmlEncode($dstVal)
 
-                            $srcCls = 'value-cell'
-                            $dstCls = 'value-cell'
-                            if ($srcVal -ne $dstVal) {
-                                $srcCls = 'value-cell value-diff'
-                                $dstCls = 'value-cell value-diff'
-                            }
+                            $isDiff = $diffSettingNames.Contains($settingName)
+                            $srcCls = if ($isDiff) { 'value-cell value-diff' } else { 'value-cell' }
+                            $dstCls = if ($isDiff) { 'value-cell value-diff' } else { 'value-cell' }
 
                             # Show em-dash for missing side
                             $srcDisplay = if ([string]::IsNullOrEmpty($srcVal) -and -not $srcLookup.ContainsKey($settingName)) { '<span style="color:var(--muted)">&#8212;</span>' } else { $encSrcVal }

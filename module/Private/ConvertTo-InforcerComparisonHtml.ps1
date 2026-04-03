@@ -240,24 +240,7 @@ body {
 .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
 .filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .status-hidden { display: none !important; }
-.toggle-switch {
-    position: relative; width: 36px; height: 20px; flex-shrink: 0; display: inline-block;
-}
-.toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-.toggle-slider {
-    position: absolute; inset: 0; background: var(--border);
-    border-radius: 10px; cursor: pointer; transition: background var(--transition);
-}
-.toggle-slider::before {
-    content: ''; position: absolute; left: 2px; top: 2px;
-    width: 16px; height: 16px; background: #fff;
-    border-radius: 50%; transition: transform var(--transition);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-.toggle-switch input:checked + .toggle-slider { background: var(--accent); }
-.toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
-tr[data-deprecated="true"] td { opacity: 0.6; }
-tr[data-deprecated="true"] td.setting-name::after { content: ' \26A0'; color: var(--warning); }
+/* Toggle CSS removed — deprecated settings now in their own tab */
 .manual-item {
     background: var(--bg);
     border: 1px solid var(--border-subtle);
@@ -506,18 +489,6 @@ tr:hover td { background: var(--accent-soft); }
         }
     }
 
-    # Count deprecated settings for toggle label
-    $deprecatedCount = 0
-    foreach ($productName in $ComparisonModel.Products.Keys) {
-        $productData = $ComparisonModel.Products[$productName]
-        foreach ($categoryName in $productData.Categories.Keys) {
-            foreach ($r in $productData.Categories[$categoryName].ComparisonRows) {
-                if ($r.Name -match 'deprecated' -or ($r.SettingPath -and $r.SettingPath -match 'deprecated') -or
-                    ($r.SourceValue -and $r.SourceValue -match 'deprecated') -or ($r.DestValue -and $r.DestValue -match 'deprecated')) { $deprecatedCount++ }
-            }
-        }
-    }
-
     # ── Filter pills ──────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="filter-bar">')
     [void]$sb.AppendLine('    <span class="filter-label">Filter:</span>')
@@ -534,8 +505,6 @@ tr:hover td { background: var(--accent-soft); }
         [void]$sb.Append("<option value=`"$encCat`">$encCat</option>")
     }
     [void]$sb.AppendLine('</select>')
-    $deprecatedLabel = if ($deprecatedCount -gt 0) { "Show deprecated ($deprecatedCount)" } else { "Show deprecated" }
-    [void]$sb.AppendLine("    <span style=`"margin-left:auto;display:flex;align-items:center;gap:0.5rem;cursor:pointer`" onclick=`"toggleDeprecated(event)`"><span style=`"font-size:0.75rem;font-weight:500;color:var(--text-secondary)`">$deprecatedLabel</span><span class=`"toggle-switch`"><input type=`"checkbox`" id=`"chk-show-deprecated`" onclick=`"event.stopPropagation();applyFilters()`"><span class=`"toggle-slider`"></span></span></span>")
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.9rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
 
@@ -544,8 +513,13 @@ tr:hover td { background: var(--accent-soft); }
     $hasManualReview = $null -ne $manualReview -and $manualReview.Count -gt 0
     $mrCount = if ($hasManualReview) { ($manualReview.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum } else { 0 }
 
+    $hasDeprecated = $deprecatedRows.Count -gt 0
+
     [void]$sb.AppendLine('<div class="tab-nav">')
     [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'')">Comparison</button>')
+    if ($hasDeprecated) {
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('deprecated')`">Deprecated Settings <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem;background:var(--warning-bg);color:var(--warning)`">$($deprecatedRows.Count)</span></button>")
+    }
     if ($hasManualReview) {
         [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review')`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
     }
@@ -554,17 +528,26 @@ tr:hover td { background: var(--accent-soft); }
     # ── Comparison tab ───────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
 
-    # Collect ALL rows from ALL products into a single flat list, sorted by name
-    $allRows = [System.Collections.Generic.List[object]]::new()
+    # Collect ALL rows, split into normal and deprecated
+    $normalRows = [System.Collections.Generic.List[object]]::new()
+    $deprecatedRows = [System.Collections.Generic.List[object]]::new()
+    $isDeprecatedRow = {
+        param($r)
+        ($r.Name -match 'deprecated') -or ($r.SettingPath -and $r.SettingPath -match 'deprecated') -or
+        ($r.SourceValue -and $r.SourceValue -match 'deprecated') -or ($r.DestValue -and $r.DestValue -match 'deprecated')
+    }
     foreach ($productName in $products.Keys) {
         $productData = $products[$productName]
         foreach ($categoryName in $productData.Categories.Keys) {
             foreach ($r in $productData.Categories[$categoryName].ComparisonRows) {
-                [void]$allRows.Add($r)
+                if (& $isDeprecatedRow $r) { [void]$deprecatedRows.Add($r) }
+                else { [void]$normalRows.Add($r) }
             }
         }
     }
-    $allRows = @($allRows | Sort-Object { $_.Name })
+    $normalRows = @($normalRows | Sort-Object { $_.Name })
+    $deprecatedRows = @($deprecatedRows | Sort-Object { $_.Name })
+    $allRows = $normalRows
 
     if ($allRows.Count -gt 0) {
         [void]$sb.AppendLine('    <div class="table-wrap">')
@@ -608,15 +591,9 @@ tr:hover td { background: var(--accent-soft); }
                 $bothEmpty = (([string]::IsNullOrEmpty($srcValRaw) -or $srcValRaw -eq [char]0x2014) -and
                               ([string]::IsNullOrEmpty($dstValRaw) -or $dstValRaw -eq [char]0x2014))
                 $emptyAttr = if ($bothEmpty) { ' data-empty="true"' } else { '' }
-                $isDeprecated = $row.Name -match 'deprecated' -or
-                    ($row.SettingPath -and $row.SettingPath -match 'deprecated') -or
-                    ($row.SourceValue -and $row.SourceValue -match 'deprecated') -or
-                    ($row.DestValue -and $row.DestValue -match 'deprecated')
-                $deprecatedAttr = if ($isDeprecated) { ' data-deprecated="true"' } else { '' }
-
                 $encSrcPol = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
                 $encDstPol = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
-                [void]$sb.Append("                <tr data-status=`"$status`" data-category=`"$encCategory`" data-src-policy=`"$encSrcPol`" data-dst-policy=`"$encDstPol`"$emptyAttr$deprecatedAttr><td>")
+                [void]$sb.Append("                <tr data-status=`"$status`" data-category=`"$encCategory`" data-src-policy=`"$encSrcPol`" data-dst-policy=`"$encDstPol`"$emptyAttr><td>")
                 [void]$sb.Append($statusHtml)
                 [void]$sb.Append('</td>')
 
@@ -670,6 +647,72 @@ tr:hover td { background: var(--accent-soft); }
     }
 
     [void]$sb.AppendLine('</div>')  # end tab-comparison
+
+    # ── Deprecated Settings tab ──────────────────────────────────────────
+    if ($hasDeprecated) {
+        [void]$sb.AppendLine('<div class="tab-content" id="tab-deprecated">')
+        [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
+        [void]$sb.AppendLine("    These $($deprecatedRows.Count) settings reference deprecated configurations. They may still be configured but Microsoft has marked them as deprecated and may remove support in a future update.")
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('    <div class="table-wrap">')
+        [void]$sb.AppendLine('    <table>')
+        [void]$sb.AppendLine('        <thead><tr>')
+        [void]$sb.Append('            <th style="width:4%">Status</th>')
+        [void]$sb.Append('<th style="width:22%">Setting</th>')
+        [void]$sb.Append('<th style="width:14%">Category</th>')
+        [void]$sb.Append('<th style="width:15%">Source Policy</th>')
+        [void]$sb.Append('<th style="width:15%">Source Value</th>')
+        [void]$sb.Append('<th style="width:15%">Dest Policy</th>')
+        [void]$sb.Append('<th style="width:15%">Dest Value</th>')
+        [void]$sb.AppendLine('')
+        [void]$sb.AppendLine('        </tr></thead>')
+        [void]$sb.AppendLine('        <tbody>')
+
+        foreach ($row in $deprecatedRows) {
+            $status = $row.Status
+            switch ($status) {
+                'Matched'     { $statusHtml = '<span class="status-badge status-matched">&#10003;</span>' }
+                'Conflicting' { $statusHtml = '<span class="status-badge status-conflicting">&#10007;</span>' }
+                'SourceOnly'  { $statusHtml = '<span class="status-badge status-source-only">Source Only</span>' }
+                'DestOnly'    { $statusHtml = '<span class="status-badge status-dest-only">Dest Only</span>' }
+                default       { $statusHtml = [System.Net.WebUtility]::HtmlEncode($status) }
+            }
+            $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
+            $strippedCat = $row.Category
+            if ($strippedCat -match '^[^/]+\s*/\s*(.+)$') { $strippedCat = $Matches[1] }
+            $encCat = [System.Net.WebUtility]::HtmlEncode($strippedCat)
+            $settingPath = "$($row.SettingPath)"
+            $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
+
+            [void]$sb.Append("            <tr><td>$statusHtml</td>")
+            if ($settingPath -match ' > ') {
+                [void]$sb.Append("<td class=`"setting-name`">$encName<span class=`"setting-path`">$encPath</span></td>")
+            } else {
+                [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
+            }
+            [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCat</td>")
+
+            if ($status -eq 'DestOnly') {
+                [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
+            } else {
+                [void]$sb.Append("<td>$([System.Net.WebUtility]::HtmlEncode($row.SourcePolicy))</td>")
+                [void]$sb.Append("<td class=`"value-cell`">$([System.Net.WebUtility]::HtmlEncode($row.SourceValue))</td>")
+            }
+            if ($status -eq 'SourceOnly') {
+                [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
+            } else {
+                $valueCls = if ($status -eq 'Conflicting') { 'value-cell value-diff' } else { 'value-cell' }
+                [void]$sb.Append("<td>$([System.Net.WebUtility]::HtmlEncode($row.DestPolicy))</td>")
+                [void]$sb.Append("<td class=`"$valueCls`">$([System.Net.WebUtility]::HtmlEncode($row.DestValue))</td>")
+            }
+            [void]$sb.AppendLine('</tr>')
+        }
+
+        [void]$sb.AppendLine('        </tbody>')
+        [void]$sb.AppendLine('    </table>')
+        [void]$sb.AppendLine('    </div>')
+        [void]$sb.AppendLine('</div>')  # end tab-deprecated
+    }
 
     # ── Manual Review tab ─────────────────────────────────────────────────
     if ($hasManualReview) {
@@ -791,7 +834,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('function applyFilters() {')
     [void]$sb.AppendLine('    var q = (document.getElementById("search-input").value || "").toLowerCase().trim();')
     [void]$sb.AppendLine('    var showAll = activeFilters.size === 0 || activeFilters.has("All");')
-    [void]$sb.AppendLine('    var showDeprecated = document.getElementById("chk-show-deprecated") && document.getElementById("chk-show-deprecated").checked;')
+    [void]$sb.AppendLine('    // Deprecated settings are in their own tab — no toggle logic needed')
     [void]$sb.AppendLine('    var catFilter = document.getElementById("category-filter");')
     [void]$sb.AppendLine('    var selectedCat = catFilter ? catFilter.value : "All";')
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-comparison");')
@@ -801,8 +844,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('        var matchesSearch = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;')
     [void]$sb.AppendLine('        var matchesFilter = showAll || activeFilters.has(tr.getAttribute("data-status"));')
     [void]$sb.AppendLine('        var matchesCategory = selectedCat === "All" || tr.getAttribute("data-category") === selectedCat;')
-    [void]$sb.AppendLine('        var isDeprecated = tr.getAttribute("data-deprecated") === "true";')
-    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || !matchesCategory || (isDeprecated && !showDeprecated);')
+    [void]$sb.AppendLine('        var hidden = !matchesSearch || !matchesFilter || !matchesCategory;')
     [void]$sb.AppendLine('        tr.style.display = hidden ? "none" : "";')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    // Hide product sections where all rows are hidden + count visible settings/policies')
@@ -831,12 +873,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
-    [void]$sb.AppendLine('function toggleDeprecated(e) {')
-    [void]$sb.AppendLine('    if (e.target.tagName === "INPUT") return;')
-    [void]$sb.AppendLine('    var cb = document.getElementById("chk-show-deprecated");')
-    [void]$sb.AppendLine('    cb.checked = !cb.checked;')
-    [void]$sb.AppendLine('    applyFilters();')
-    [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('// toggleDeprecated removed — deprecated settings now in their own tab')
     [void]$sb.AppendLine('var sortState = {};')
     [void]$sb.AppendLine('function sortTable(th, colIdx) {')
     [void]$sb.AppendLine('    var table = th.closest("table");')

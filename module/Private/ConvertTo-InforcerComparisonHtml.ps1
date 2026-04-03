@@ -393,6 +393,18 @@ tr:hover td { background: var(--accent-soft); }
     .fab-group { bottom: 1rem; right: 1rem; }
 }
 @media (max-width: 480px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+.tab-nav { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+.tab-btn { padding: 0.75rem 1.5rem; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all var(--transition); font-family: inherit; }
+.tab-btn:hover { color: var(--text); background: var(--accent-soft); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.manual-review-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 0.75rem; }
+.manual-review-card h4 { margin: 0 0 0.5rem; font-size: 0.875rem; }
+.manual-review-card .side-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+.manual-review-card .side-source { background: var(--info-bg); color: var(--info); }
+.manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
+.manual-review-setting { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.8rem; }
+.manual-review-setting .setting-name { color: var(--text); }
+.manual-review-setting .setting-value { color: var(--text-secondary); max-width: 50%; text-align: right; word-break: break-word; }
 '@
 
     # ── Extract model values ───────────────────────────────────────────────
@@ -493,6 +505,18 @@ tr:hover td { background: var(--accent-soft); }
     }
     [void]$sb.AppendLine('</select>')
     [void]$sb.AppendLine('    <span style="margin-left:auto;display:flex;align-items:center;gap:0.5rem"><span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary)">Show deprecated</span><span class="toggle-switch"><input type="checkbox" id="chk-show-deprecated" onchange="applyFilters()"><span class="toggle-slider"></span></span></span>')
+    [void]$sb.AppendLine('</div>')
+
+    # ── Tab navigation ──────────────────────────────────────────────────
+    $manualReview = $ComparisonModel.ManualReview
+    $hasManualReview = $null -ne $manualReview -and $manualReview.Count -gt 0
+    $mrCount = if ($hasManualReview) { ($manualReview.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum } else { 0 }
+
+    [void]$sb.AppendLine('<div class="tab-nav">')
+    [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'')">Comparison</button>')
+    if ($hasManualReview) {
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review')`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
+    }
     [void]$sb.AppendLine('</div>')
 
     # ── Comparison tab ───────────────────────────────────────────────────
@@ -639,6 +663,47 @@ tr:hover td { background: var(--accent-soft); }
 
     [void]$sb.AppendLine('</div>')  # end tab-comparison
 
+    # ── Manual Review tab ─────────────────────────────────────────────────
+    if ($hasManualReview) {
+        [void]$sb.AppendLine('<div class="tab-content" id="tab-manual-review">')
+        [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
+        [void]$sb.AppendLine('    These are non-Settings Catalog policies (Administrative Templates, legacy profiles) that cannot be reliably auto-compared with Settings Catalog equivalents. Review them manually to check if both environments configure the same areas differently.')
+        [void]$sb.AppendLine('</div>')
+
+        foreach ($catLabel in $manualReview.Keys) {
+            $policies = $manualReview[$catLabel]
+            $encCatLabel = [System.Net.WebUtility]::HtmlEncode($catLabel)
+            [void]$sb.AppendLine("<h3 style=`"font-size:0.95rem;margin:1.5rem 0 0.75rem;color:var(--text)`">$encCatLabel</h3>")
+
+            foreach ($policy in $policies) {
+                $encPolicyName = [System.Net.WebUtility]::HtmlEncode($policy.PolicyName)
+                $encProfileType = [System.Net.WebUtility]::HtmlEncode($policy.ProfileType)
+                $sideCls = if ($policy.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
+                $sideLabel = [System.Net.WebUtility]::HtmlEncode($policy.Side)
+
+                [void]$sb.AppendLine('<div class="manual-review-card">')
+                [void]$sb.AppendLine("    <h4>$encPolicyName <span class=`"side-badge $sideCls`">$sideLabel</span></h4>")
+                if (-not [string]::IsNullOrWhiteSpace($encProfileType)) {
+                    [void]$sb.AppendLine("    <div style=`"font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem`">$encProfileType</div>")
+                }
+
+                if ($policy.Settings.Count -gt 0) {
+                    foreach ($s in $policy.Settings) {
+                        $encSName = [System.Net.WebUtility]::HtmlEncode($s.Name)
+                        $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                        [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
+                    }
+                } else {
+                    [void]$sb.AppendLine('    <div style="color:var(--muted);font-size:0.8rem;font-style:italic">No configured settings</div>')
+                }
+
+                [void]$sb.AppendLine('</div>')
+            }
+        }
+
+        [void]$sb.AppendLine('</div>')  # end tab-manual-review
+    }
+
     # ── Footer ─────────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="footer">')
     [void]$sb.AppendLine('    Generated by Compare-InforcerEnvironments &middot; InforcerCommunity Module')
@@ -752,6 +817,13 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('        if (activeFilters.size === 0 && allBtn) { allBtn.classList.add("active"); }')
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('    applyFilters();')
+    [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('function switchTab(tabId) {')
+    [void]$sb.AppendLine('    document.querySelectorAll(".tab-content").forEach(function(t) { t.classList.remove("active"); });')
+    [void]$sb.AppendLine('    document.querySelectorAll(".tab-btn").forEach(function(b) { b.classList.remove("active"); });')
+    [void]$sb.AppendLine('    var tab = document.getElementById("tab-" + tabId);')
+    [void]$sb.AppendLine('    if (tab) tab.classList.add("active");')
+    [void]$sb.AppendLine('    event.target.classList.add("active");')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('</script>')
 

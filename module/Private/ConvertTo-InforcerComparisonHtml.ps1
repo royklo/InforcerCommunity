@@ -334,8 +334,9 @@ table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; min-width:
 th {
     background: var(--header-bg); text-align: left; padding: 0.5rem 0.75rem; font-weight: 600;
     font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border); user-select: none;
 }
+th[onclick]:hover { background: var(--accent-soft); color: var(--accent); }
 td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); vertical-align: top; color: var(--text); word-break: break-word; }
 tr:last-child td { border-bottom: none; }
 tr:nth-child(even) td { background: var(--row-alt); }
@@ -584,13 +585,13 @@ tr:hover td { background: var(--accent-soft); }
             # 6-column Settings Catalog table (+ optional assignment columns)
             [void]$sb.AppendLine('        <table>')
             [void]$sb.AppendLine('            <thead><tr>')
-            [void]$sb.Append('                <th style="width:4%">Status</th>')
-            [void]$sb.Append('<th style="width:20%">Setting</th>')
-            [void]$sb.Append('<th style="width:14%">Category</th>')
-            [void]$sb.Append('<th style="width:15%">Source Policy</th>')
-            [void]$sb.Append('<th style="width:15%">Source Value</th>')
-            [void]$sb.Append('<th style="width:15%">Dest Policy</th>')
-            [void]$sb.Append('<th style="width:15%">Dest Value</th>')
+            [void]$sb.Append('                <th style="width:4%;cursor:pointer" onclick="sortTable(this,0)">Status &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:20%;cursor:pointer" onclick="sortTable(this,1)">Setting &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:14%;cursor:pointer" onclick="sortTable(this,2)">Category &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,3)">Source Policy &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,4)">Source Value &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,5)">Dest Policy &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,6)">Dest Value &#x25B4;&#x25BE;</th>')
             if ($inclAssignments) {
                 [void]$sb.Append('<th>Source Assignment</th>')
                 [void]$sb.Append('<th>Dest Assignment</th>')
@@ -631,7 +632,7 @@ tr:hover td { background: var(--accent-soft); }
                 # Setting/Policy name
                 $settingPath = "$($row.SettingPath)"
                 $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
-                if ($settingPath -ne $row.Name -and $settingPath -match ' > ') {
+                if ($settingPath -match ' > ') {
                     [void]$sb.Append("<td class=`"setting-name`">$encName<span class=`"setting-path`">$encPath</span></td>")
                 } else {
                     [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
@@ -832,7 +833,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('        rows.forEach(function(r) { if (r.style.display !== "none") anyVisible = true; });')
     [void]$sb.AppendLine('        ps.style.display = anyVisible ? "" : "none";')
     [void]$sb.AppendLine('        // Auto-expand product sections that have visible results when searching or filtering')
-    [void]$sb.AppendLine('        if (anyVisible && (q || !showAll)) { ps.setAttribute("open", ""); }')
+    [void]$sb.AppendLine('        if (anyVisible && (q || !showAll || showDeprecated)) { ps.setAttribute("open", ""); }')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    // Update filter summary')
     [void]$sb.AppendLine('    var summary = document.getElementById("filter-summary");')
@@ -847,6 +848,25 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
+    [void]$sb.AppendLine('var sortState = {};')
+    [void]$sb.AppendLine('function sortTable(th, colIdx) {')
+    [void]$sb.AppendLine('    var table = th.closest("table");')
+    [void]$sb.AppendLine('    if (!table) return;')
+    [void]$sb.AppendLine('    var tbody = table.querySelector("tbody");')
+    [void]$sb.AppendLine('    if (!tbody) return;')
+    [void]$sb.AppendLine('    var rows = Array.from(tbody.querySelectorAll("tr"));')
+    [void]$sb.AppendLine('    var key = table.id || "t" + colIdx;')
+    [void]$sb.AppendLine('    var asc = sortState[key + colIdx] !== "asc";')
+    [void]$sb.AppendLine('    sortState[key + colIdx] = asc ? "asc" : "desc";')
+    [void]$sb.AppendLine('    rows.sort(function(a, b) {')
+    [void]$sb.AppendLine('        var aText = (a.cells[colIdx] ? a.cells[colIdx].textContent : "").trim().toLowerCase();')
+    [void]$sb.AppendLine('        var bText = (b.cells[colIdx] ? b.cells[colIdx].textContent : "").trim().toLowerCase();')
+    [void]$sb.AppendLine('        if (aText < bText) return asc ? -1 : 1;')
+    [void]$sb.AppendLine('        if (aText > bText) return asc ? 1 : -1;')
+    [void]$sb.AppendLine('        return 0;')
+    [void]$sb.AppendLine('    });')
+    [void]$sb.AppendLine('    rows.forEach(function(r) { tbody.appendChild(r); });')
+    [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function filterByStatus(btn, status) {')
     [void]$sb.AppendLine('    var allBtn = document.querySelector(".filter-pill[onclick*=\"All\"]");')
     [void]$sb.AppendLine('    if (status === "All") {')

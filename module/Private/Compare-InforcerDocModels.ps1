@@ -319,9 +319,9 @@ function Compare-InforcerDocModels {
 
             $categoryLabel = "$productName / $categoryName"
 
-            # Route script/remediation categories to manual review (not auto-comparable)
+            # Route non-comparable categories to manual review
             $catLower = $categoryName.ToLowerInvariant()
-            if ($catLower -match 'script|remediation') {
+            if ($catLower -match 'script|remediation|custom indicators') {
                 # Add to manual review instead of comparison
                 foreach ($p in $srcPolicies) {
                     if ($null -eq $p -or $null -eq $p.Basics) { continue }

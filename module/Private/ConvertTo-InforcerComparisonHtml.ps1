@@ -831,6 +831,8 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('        var anyVisible = false;')
     [void]$sb.AppendLine('        rows.forEach(function(r) { if (r.style.display !== "none") anyVisible = true; });')
     [void]$sb.AppendLine('        ps.style.display = anyVisible ? "" : "none";')
+    [void]$sb.AppendLine('        // Auto-expand product sections that have visible results when searching or filtering')
+    [void]$sb.AppendLine('        if (anyVisible && (q || !showAll)) { ps.setAttribute("open", ""); }')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    // Update filter summary')
     [void]$sb.AppendLine('    var summary = document.getElementById("filter-summary");')

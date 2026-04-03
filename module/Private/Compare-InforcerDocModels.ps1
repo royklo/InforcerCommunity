@@ -97,14 +97,36 @@ function Compare-InforcerDocModels {
         return $false
     }
 
-    # ── Helper: resolve category name from catalog for a definitionId ─────
+    # ── Known ADMX app codes for disambiguation ──────────────────────────
+    $admxAppCodes = @{
+        'excel16v2' = 'Excel'; 'excel16v8' = 'Excel'; 'word16v2' = 'Word'
+        'ppt16v2' = 'PowerPoint'; 'access16v2' = 'Access'; 'outlk16v2' = 'Outlook'
+        'visio16v2' = 'Visio'; 'proj16v2' = 'Project'; 'pub16v2' = 'Publisher'
+        'onent16v2' = 'OneNote'; 'office16v2' = 'Office'; 'office16v8' = 'Office'
+    }
+
+    # ── Helper: resolve context name from catalog + defId for disambiguation ─
     $getCategoryName = {
         param([string]$DefId)
         if ([string]::IsNullOrEmpty($DefId)) { return '' }
+
+        $catName = ''
         if ($null -ne $script:InforcerSettingsCatalog -and $script:InforcerSettingsCatalog.ContainsKey($DefId)) {
             $catName = $script:InforcerSettingsCatalog[$DefId].CategoryName
-            if (-not [string]::IsNullOrWhiteSpace($catName)) { return $catName }
         }
+
+        # Extract app name from ADMX defId (excel16v2, word16v2, etc.)
+        $appName = ''
+        $stripped = $DefId -replace '^(user|device)_vendor_msft_policy_config_', ''
+        foreach ($code in $admxAppCodes.Keys) {
+            if ($stripped -match "^${code}[~_]") { $appName = $admxAppCodes[$code]; break }
+        }
+
+        # Combine: "App > Category" or just "App" or just "Category"
+        if ($appName -and $catName) { return "$appName > $catName" }
+        if ($appName) { return $appName }
+        if ($catName) { return $catName }
+
         # Fallback: extract profile/zone context from defId pattern
         if ($DefId -match '_(?:domainprofile|privateprofile|publicprofile)_') {
             $profile = $Matches[0].Trim('_')
@@ -248,6 +270,9 @@ function Compare-InforcerDocModels {
         return ([string]::IsNullOrWhiteSpace($Val) -or $Val -eq 'Not configured' -or $Val -eq 'Not Configured')
     }
 
+    # ── Categories that should go to manual review instead of comparison ──
+    $manualReviewCategories = [ordered]@{}
+
     # ── Collect all products from both models ─────────────────────────────
     $allProducts = [System.Collections.Generic.List[string]]::new()
     if ($SourceModel.Products) {
@@ -293,6 +318,43 @@ function Compare-InforcerDocModels {
             }
 
             $categoryLabel = "$productName / $categoryName"
+
+            # Route script/remediation categories to manual review (not auto-comparable)
+            $catLower = $categoryName.ToLowerInvariant()
+            if ($catLower -match 'script|remediation') {
+                # Add to manual review instead of comparison
+                foreach ($p in $srcPolicies) {
+                    if ($null -eq $p -or $null -eq $p.Basics) { continue }
+                    if (-not $manualReviewCategories.Contains($categoryLabel)) {
+                        $manualReviewCategories[$categoryLabel] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    $settingsSummary = [System.Collections.Generic.List[object]]::new()
+                    foreach ($s in @($p.Settings)) {
+                        if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
+                            [void]$settingsSummary.Add(@{ Name = "$($s.Name)"; Value = "$($s.Value)" })
+                        }
+                    }
+                    [void]$manualReviewCategories[$categoryLabel].Add(@{
+                        PolicyName = $p.Basics.Name; Side = 'Source'; ProfileType = $p.Basics.ProfileType; Settings = $settingsSummary
+                    })
+                }
+                foreach ($p in $dstPolicies) {
+                    if ($null -eq $p -or $null -eq $p.Basics) { continue }
+                    if (-not $manualReviewCategories.Contains($categoryLabel)) {
+                        $manualReviewCategories[$categoryLabel] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    $settingsSummary = [System.Collections.Generic.List[object]]::new()
+                    foreach ($s in @($p.Settings)) {
+                        if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
+                            [void]$settingsSummary.Add(@{ Name = "$($s.Name)"; Value = "$($s.Value)" })
+                        }
+                    }
+                    [void]$manualReviewCategories[$categoryLabel].Add(@{
+                        PolicyName = $p.Basics.Name; Side = 'Destination'; ProfileType = $p.Basics.ProfileType; Settings = $settingsSummary
+                    })
+                }
+                continue  # Skip auto-comparison for this category
+            }
 
             # ── Match policies by Basics.Name (case-insensitive) ──────────
             # Build lookup: lowered name -> list of policies (handle duplicates)
@@ -504,6 +566,16 @@ function Compare-InforcerDocModels {
     }
     & $collectManualReview $SourceModel 'Source'
     & $collectManualReview $DestinationModel 'Destination'
+
+    # Merge script/remediation categories into manual review
+    foreach ($catLabel in $manualReviewCategories.Keys) {
+        if (-not $manualReview.Contains($catLabel)) {
+            $manualReview[$catLabel] = [System.Collections.Generic.List[object]]::new()
+        }
+        foreach ($item in $manualReviewCategories[$catLabel]) {
+            [void]$manualReview[$catLabel].Add($item)
+        }
+    }
 
     # ── Alignment score ───────────────────────────────────────────────────
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly

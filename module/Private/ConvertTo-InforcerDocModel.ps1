@@ -77,7 +77,10 @@ function ConvertTo-InforcerDocModel {
         [hashtable]$FilterMap,
 
         [Parameter()]
-        [hashtable]$ScopeTagMap
+        [hashtable]$ScopeTagMap,
+
+        [Parameter()]
+        [switch]$ComparisonMode
     )
 
     $tenant   = $DocData.Tenant
@@ -126,6 +129,24 @@ function ConvertTo-InforcerDocModel {
             Get-InforcerCategoryKey -PrimaryGroup $policy.primaryGroup -SecondaryGroup $policy.secondaryGroup
         }
         if ([string]::IsNullOrWhiteSpace($catKey)) { $catKey = 'General' }
+
+        # ComparisonMode filtering: only Intune-relevant products, skip non-comparable categories
+        if ($ComparisonMode) {
+            $prodLower = $prod.ToLowerInvariant()
+            $intuneProducts = @('intune', 'windows', 'macos', 'ios', 'android', 'microsoft defender for endpoint')
+            $isIntuneRelevant = $false
+            foreach ($ip in $intuneProducts) {
+                if ($prodLower -match [regex]::Escape($ip)) { $isIntuneRelevant = $true; break }
+            }
+            if (-not $isIntuneRelevant) { continue }
+            # Skip compliance policies
+            $catLower = $catKey.ToLowerInvariant()
+            if ($catLower -match 'compliance') { continue }
+            # Skip enrollment/autopilot categories
+            if ($catLower -match 'enrollment|autopilot') { continue }
+            # Skip exchange categories (Defender for Office 365, not Intune)
+            if ($catLower -match '^exchange') { continue }
+        }
 
         # Ensure product and category exist (per NORM-02)
         if (-not $products.Contains($prod)) {

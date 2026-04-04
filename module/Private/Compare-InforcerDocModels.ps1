@@ -535,11 +535,10 @@ function Compare-InforcerDocModels {
     }
 
     # ── Deprecated Settings scan (both tenants) ──────────────────────────
-    # Scan ALL configured settings in both DocModels for deprecated markers.
-    # This is a warning system — independent of comparison status.
-    $deprecatedSettings = [System.Collections.Generic.List[object]]::new()
+    # Scan ALL settings in both DocModels. If a policy contains ANY deprecated
+    # setting, add it to manual review with a "contains deprecated" flag.
     $scanForDeprecated = {
-        param([hashtable]$Model, [string]$TenantName)
+        param([hashtable]$Model, [string]$Side)
         if ($null -eq $Model -or $null -eq $Model.Products) { return }
         foreach ($prodName in $Model.Products.Keys) {
             $prodData = $Model.Products[$prodName]
@@ -547,37 +546,52 @@ function Compare-InforcerDocModels {
             foreach ($catName in $prodData.Categories.Keys) {
                 foreach ($policy in @($prodData.Categories[$catName])) {
                     if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
+                    # Check if ANY setting in this policy is deprecated
+                    $hasDeprecated = $false
+                    $settingsSummary = [System.Collections.Generic.List[object]]::new()
                     foreach ($s in @($policy.Settings)) {
                         if ($s.IsConfigured -ne $true) { continue }
                         $settingName = "$($s.Name)"
                         $settingValue = "$($s.Value)"
                         $defId = "$($s.DefinitionId)"
-                        # Check catalog for deprecated marker (name or value)
-                        $isDepr = $settingName -match 'deprecated'
+                        if ([string]::IsNullOrWhiteSpace($settingValue)) { continue }
+                        # Check deprecated via name, catalog, or value
+                        $isDepr = $settingName -match 'deprecated' -or $settingValue -match 'deprecated'
                         if (-not $isDepr -and -not [string]::IsNullOrEmpty($defId) -and
                             $null -ne $script:InforcerSettingsCatalog -and
                             $script:InforcerSettingsCatalog.ContainsKey($defId)) {
                             $catEntry = $script:InforcerSettingsCatalog[$defId]
-                            if ($catEntry.DisplayName -match 'deprecated') { $isDepr = $true; $settingName = $catEntry.DisplayName }
+                            if ($catEntry.DisplayName -match 'deprecated') {
+                                $isDepr = $true
+                                $settingName = $catEntry.DisplayName
+                            }
                         }
-                        if (-not $isDepr -and $settingValue -match 'deprecated') { $isDepr = $true }
-                        if ($isDepr) {
-                            $catLabel = "$prodName / $catName"
-                            [void]$deprecatedSettings.Add(@{
-                                Tenant     = $TenantName
-                                Policy     = $policy.Basics.Name
-                                Setting    = $settingName
-                                Value      = $settingValue
-                                Category   = $catLabel
-                            })
+                        if ($isDepr) { $hasDeprecated = $true }
+                        [void]$settingsSummary.Add(@{
+                            Name         = $settingName
+                            Value        = $settingValue
+                            IsDeprecated = $isDepr
+                        })
+                    }
+                    if ($hasDeprecated) {
+                        $catLabel = "$prodName / $catName"
+                        if (-not $manualReview.Contains($catLabel)) {
+                            $manualReview[$catLabel] = [System.Collections.Generic.List[object]]::new()
                         }
+                        [void]$manualReview[$catLabel].Add(@{
+                            PolicyName     = $policy.Basics.Name
+                            Side           = $Side
+                            ProfileType    = $policy.Basics.ProfileType
+                            Settings       = $settingsSummary
+                            HasDeprecated  = $true
+                        })
                     }
                 }
             }
         }
     }
-    & $scanForDeprecated $SourceModel $SourceModel.TenantName
-    & $scanForDeprecated $DestinationModel $DestinationModel.TenantName
+    & $scanForDeprecated $SourceModel 'Source'
+    & $scanForDeprecated $DestinationModel 'Destination'
 
     # ── Manual Review = only script/remediation/custom compliance categories ──
     # These are routed here via $manualReviewCategories during the main comparison loop.
@@ -597,7 +611,7 @@ function Compare-InforcerDocModels {
         AlignmentScore       = $alignmentScore
         TotalItems           = $totalItems
         Counters             = $counters
-        DeprecatedSettings   = $deprecatedSettings
+        DeprecatedSettings   = @()  # deprecated policies are now in ManualReview with HasDeprecated flag
         Products             = $products
         ManualReview         = $manualReview
         IncludingAssignments = [bool]$IncludingAssignments

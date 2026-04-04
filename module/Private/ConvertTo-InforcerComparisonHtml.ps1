@@ -396,6 +396,9 @@ tr:hover td { background: var(--accent-soft); }
 .manual-review-card .side-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
 .manual-review-card .side-source { background: var(--info-bg); color: var(--info); }
 .manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
+.badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
+@keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.setting-deprecated { background: var(--danger-bg); border-radius: 4px; padding: 0.15rem 0.25rem; }
 .manual-review-setting { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.8rem; }
 .ps-keyword { color: #569cd6; font-weight: 600; }
 .ps-string { color: #ce9178; }
@@ -518,13 +521,8 @@ tr:hover td { background: var(--accent-soft); }
     $hasManualReview = $null -ne $manualReview -and $manualReview.Count -gt 0
     $mrCount = if ($hasManualReview) { ($manualReview.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum } else { 0 }
 
-    $hasDeprecated = $null -ne $deprecatedSettings -and $deprecatedSettings.Count -gt 0
-
     [void]$sb.AppendLine('<div class="tab-nav">')
     [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'')">Comparison</button>')
-    if ($hasDeprecated) {
-        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('deprecated')`">Deprecated Settings <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem;background:var(--warning-bg);color:var(--warning)`">$($deprecatedSettings.Count)</span></button>")
-    }
     if ($hasManualReview) {
         [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review')`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
     }
@@ -545,8 +543,7 @@ tr:hover td { background: var(--accent-soft); }
     }
     $allRows = @($allRows | Sort-Object { $_.Name })
 
-    # Deprecated settings come from the model (scanned from both tenants)
-    $deprecatedSettings = $ComparisonModel.DeprecatedSettings
+    # Deprecated policies are in ManualReview with HasDeprecated flag
 
     if ($allRows.Count -gt 0) {
         [void]$sb.AppendLine('    <div class="table-wrap">')
@@ -649,47 +646,7 @@ tr:hover td { background: var(--accent-soft); }
 
     [void]$sb.AppendLine('</div>')  # end tab-comparison
 
-    # ── Deprecated Settings tab ──────────────────────────────────────────
-    if ($hasDeprecated) {
-        [void]$sb.AppendLine('<div class="tab-content" id="tab-deprecated">')
-        [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
-        [void]$sb.AppendLine("    <strong style=`"color:var(--warning)`">&#x26A0; $($deprecatedSettings.Count) deprecated settings found.</strong> These settings are still configured but Microsoft has marked them as deprecated. Consider replacing them with their modern equivalents.")
-        [void]$sb.AppendLine('</div>')
-        [void]$sb.AppendLine('    <div class="table-wrap">')
-        [void]$sb.AppendLine('    <table>')
-        [void]$sb.AppendLine('        <thead><tr>')
-        [void]$sb.Append('            <th style="width:15%">Tenant</th>')
-        [void]$sb.Append('<th style="width:20%">Policy</th>')
-        [void]$sb.Append('<th style="width:25%">Setting</th>')
-        [void]$sb.Append('<th style="width:20%">Value</th>')
-        [void]$sb.Append('<th style="width:20%">Category</th>')
-        [void]$sb.AppendLine('')
-        [void]$sb.AppendLine('        </tr></thead>')
-        [void]$sb.AppendLine('        <tbody>')
-
-        foreach ($ds in $deprecatedSettings) {
-            $encTenant  = [System.Net.WebUtility]::HtmlEncode($ds.Tenant)
-            $encPolicy  = [System.Net.WebUtility]::HtmlEncode($ds.Policy)
-            $encSetting = [System.Net.WebUtility]::HtmlEncode($ds.Setting)
-            $encValue   = [System.Net.WebUtility]::HtmlEncode($ds.Value)
-            $strippedCat = $ds.Category
-            if ($strippedCat -match '^[^/]+\s*/\s*(.+)$') { $strippedCat = $Matches[1] }
-            $encCat = [System.Net.WebUtility]::HtmlEncode($strippedCat)
-
-            [void]$sb.Append("            <tr>")
-            [void]$sb.Append("<td>$encTenant</td>")
-            [void]$sb.Append("<td>$encPolicy</td>")
-            [void]$sb.Append("<td class=`"setting-name`" style=`"color:var(--warning)`">&#x26A0; $encSetting</td>")
-            [void]$sb.Append("<td class=`"value-cell`">$encValue</td>")
-            [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCat</td>")
-            [void]$sb.AppendLine('</tr>')
-        }
-
-        [void]$sb.AppendLine('        </tbody>')
-        [void]$sb.AppendLine('    </table>')
-        [void]$sb.AppendLine('    </div>')
-        [void]$sb.AppendLine('</div>')  # end tab-deprecated
-    }
+    # Deprecated policies are now in ManualReview with HasDeprecated flag — no separate tab
 
     # ── Manual Review tab ─────────────────────────────────────────────────
     if ($hasManualReview) {
@@ -709,8 +666,10 @@ tr:hover td { background: var(--accent-soft); }
                 $sideCls = if ($policy.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
                 $sideLabel = [System.Net.WebUtility]::HtmlEncode($policy.Side)
 
+                $hasDepr = $policy.HasDeprecated -eq $true
+                $deprBadge = if ($hasDepr) { ' <span class="badge-deprecated">&#x26A0; contains deprecated settings</span>' } else { '' }
                 [void]$sb.AppendLine('<details class="manual-review-card">')
-                [void]$sb.AppendLine("    <summary><strong>$encPolicyName</strong> <span class=`"side-badge $sideCls`">$sideLabel</span></summary>")
+                [void]$sb.AppendLine("    <summary><strong>$encPolicyName</strong> <span class=`"side-badge $sideCls`">$sideLabel</span>$deprBadge</summary>")
                 [void]$sb.AppendLine('    <div class="mr-body">')
                 if (-not [string]::IsNullOrWhiteSpace($encProfileType)) {
                     [void]$sb.AppendLine("    <div style=`"font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem`">$encProfileType</div>")
@@ -720,10 +679,13 @@ tr:hover td { background: var(--accent-soft); }
                     foreach ($s in $policy.Settings) {
                         $encSName = [System.Net.WebUtility]::HtmlEncode($s.Name)
                         $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                        $isSettingDepr = $s.IsDeprecated -eq $true
                         # Script content gets a code block, regular settings get inline display
                         if ($s.Name -match 'scriptContent|detectionScriptContent|remediationScriptContent' -and $s.Value.Length -gt 100) {
                             [void]$sb.AppendLine("    <div style=`"margin:0.5rem 0`"><strong style=`"font-size:0.8rem`">$encSName</strong></div>")
                             [void]$sb.AppendLine("    <div class=`"ps-code-wrap`"><pre class=`"ps-code`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;margin:0`"><code>$encSValue</code></pre></div>")
+                        } elseif ($isSettingDepr) {
+                            [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`">&#x26A0; $encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                         } else {
                             [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                         }

@@ -534,6 +534,9 @@ function Compare-InforcerDocModels {
         }
     }
 
+    # ── Manual Review = script/remediation/custom compliance + deprecated ──
+    $manualReview = $manualReviewCategories
+
     # ── Deprecated Settings scan (both tenants) ──────────────────────────
     # Scan ALL settings in both DocModels. If a policy contains ANY deprecated
     # setting, add it to manual review with a "contains deprecated" flag.
@@ -593,10 +596,7 @@ function Compare-InforcerDocModels {
     & $scanForDeprecated $SourceModel 'Source'
     & $scanForDeprecated $DestinationModel 'Destination'
 
-    # ── Manual Review = only script/remediation/custom compliance categories ──
-    # These are routed here via $manualReviewCategories during the main comparison loop.
-    # No generic non-SC policy collection — only explicitly routed categories.
-    $manualReview = $manualReviewCategories
+    # manualReview now contains: script/remediation/custom compliance + deprecated policies
 
     # ── Alignment score ───────────────────────────────────────────────────
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly

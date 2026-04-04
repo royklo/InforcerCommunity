@@ -333,7 +333,7 @@ tr:hover td { background: var(--accent-soft); }
     margin-top: 2px;
 }
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
-.value-truncate { max-height: 2.4em; overflow: hidden; cursor: pointer; position: relative; }
+.value-truncate { max-height: 7.5em; overflow: hidden; cursor: pointer; position: relative; }
 .value-truncate::after { content: '... expand'; position: absolute; bottom: 0; right: 0; padding-left: 1rem; background: linear-gradient(90deg, transparent, var(--bg-card) 40%); font-size: 0.65rem; color: var(--accent); font-style: italic; }
 .value-truncate.expanded { max-height: none; }
 .value-truncate.expanded::after { display: none; }

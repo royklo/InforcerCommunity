@@ -569,12 +569,14 @@ function Compare-InforcerDocModels {
                                 $settingName = $catEntry.DisplayName
                             }
                         }
-                        if ($isDepr) { $hasDeprecated = $true }
-                        [void]$settingsSummary.Add(@{
-                            Name         = $settingName
-                            Value        = $settingValue
-                            IsDeprecated = $isDepr
-                        })
+                        if ($isDepr) {
+                            $hasDeprecated = $true
+                            [void]$settingsSummary.Add(@{
+                                Name         = $settingName
+                                Value        = $settingValue
+                                IsDeprecated = $true
+                            })
+                        }
                     }
                     if ($hasDeprecated) {
                         $catLabel = "$prodName / $catName"

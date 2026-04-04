@@ -336,7 +336,7 @@ tr:hover td { background: var(--accent-soft); }
 .value-truncate { max-height: 7.5em; overflow: hidden; cursor: pointer; position: relative; }
 .value-truncate::after { content: '... expand'; position: absolute; bottom: 0; right: 0; padding-left: 1rem; background: linear-gradient(90deg, transparent, var(--bg-card) 40%); font-size: 0.65rem; color: var(--accent); font-style: italic; }
 .value-truncate.expanded { max-height: none; }
-.value-truncate.expanded::after { display: none; }
+.value-truncate.expanded::after { content: 'collapse ▴'; position: static; display: block; text-align: right; background: none; padding: 0.25rem 0 0; }
 .ps-code { background: #1e1e1e !important; color: #d4d4d4; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }

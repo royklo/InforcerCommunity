@@ -312,7 +312,7 @@ h3 {
     border-bottom: 1px solid var(--border-subtle);
 }
 h3:first-child { margin-top: 0.375rem; }
-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; min-width: 400px; table-layout: fixed; }
+table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; min-width: 400px; }
 .table-wrap { overflow-x: auto; margin-bottom: 0.75rem; border-radius: var(--radius-xs); }
 th {
     background: var(--header-bg); text-align: left; padding: 0.5rem 0.75rem; font-weight: 600;
@@ -333,8 +333,10 @@ tr:hover td { background: var(--accent-soft); }
     margin-top: 2px;
 }
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
-.value-long { max-height: 1.6em; overflow: hidden; cursor: pointer; }
-.value-long.expanded { max-height: none; }
+.value-long { max-height: 1.4em; overflow: hidden; position: relative; cursor: pointer; white-space: nowrap; text-overflow: ellipsis; }
+.value-long::after { content: ' ▸ expand'; position: absolute; bottom: 0; right: 0; padding: 0 0.25rem; background: var(--bg-card); font-size: 0.65rem; color: var(--accent); font-style: italic; }
+.value-long.expanded { max-height: none; white-space: normal; text-overflow: unset; }
+.value-long.expanded::after { content: ' ▾ collapse'; }
 .ps-code { background: #1e1e1e !important; color: #d4d4d4; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }

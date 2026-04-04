@@ -398,7 +398,7 @@ tr:hover td { background: var(--accent-soft); }
 .manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-.setting-deprecated { background: var(--danger-bg); border-radius: 4px; padding: 0.15rem 0.25rem; }
+/* .setting-deprecated defined below with manual-review-setting styles */
 .manual-review-setting { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.8rem; }
 .ps-keyword { color: #569cd6; font-weight: 600; }
 .ps-string { color: #ce9178; }
@@ -410,8 +410,11 @@ tr:hover td { background: var(--accent-soft); }
 .ps-code-wrap { position: relative; }
 .copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.7rem; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-xs); cursor: pointer; opacity: 0.7; transition: opacity var(--transition); z-index: 1; }
 .copy-btn:hover { opacity: 1; }
-.manual-review-setting .setting-name { color: var(--text); }
-.manual-review-setting .setting-value { color: var(--text-secondary); max-width: 50%; text-align: right; word-break: break-word; }
+.manual-review-setting .setting-name { color: var(--text); flex: 1; }
+.manual-review-setting .setting-value { color: var(--text-secondary); max-width: 40%; text-align: right; word-break: break-word; font-family: "SF Mono","Cascadia Code","Consolas",monospace; font-size: 0.75rem; }
+.manual-review-setting:nth-child(even) { background: var(--row-alt); }
+.setting-deprecated { background: var(--danger-bg) !important; border-radius: 4px; padding: 0.25rem 0.5rem; margin: 0.1rem 0; }
+.setting-deprecated .setting-name { color: var(--danger); font-weight: 600; }
 '@
 
     # ── Extract model values ───────────────────────────────────────────────

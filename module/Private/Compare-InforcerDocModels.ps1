@@ -534,6 +534,51 @@ function Compare-InforcerDocModels {
         }
     }
 
+    # ── Deprecated Settings scan (both tenants) ──────────────────────────
+    # Scan ALL configured settings in both DocModels for deprecated markers.
+    # This is a warning system — independent of comparison status.
+    $deprecatedSettings = [System.Collections.Generic.List[object]]::new()
+    $scanForDeprecated = {
+        param([hashtable]$Model, [string]$TenantName)
+        if ($null -eq $Model -or $null -eq $Model.Products) { return }
+        foreach ($prodName in $Model.Products.Keys) {
+            $prodData = $Model.Products[$prodName]
+            if ($null -eq $prodData -or $null -eq $prodData.Categories) { continue }
+            foreach ($catName in $prodData.Categories.Keys) {
+                foreach ($policy in @($prodData.Categories[$catName])) {
+                    if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
+                    foreach ($s in @($policy.Settings)) {
+                        if ($s.IsConfigured -ne $true) { continue }
+                        $settingName = "$($s.Name)"
+                        $settingValue = "$($s.Value)"
+                        $defId = "$($s.DefinitionId)"
+                        # Check catalog for deprecated marker (name or value)
+                        $isDepr = $settingName -match 'deprecated'
+                        if (-not $isDepr -and -not [string]::IsNullOrEmpty($defId) -and
+                            $null -ne $script:InforcerSettingsCatalog -and
+                            $script:InforcerSettingsCatalog.ContainsKey($defId)) {
+                            $catEntry = $script:InforcerSettingsCatalog[$defId]
+                            if ($catEntry.DisplayName -match 'deprecated') { $isDepr = $true; $settingName = $catEntry.DisplayName }
+                        }
+                        if (-not $isDepr -and $settingValue -match 'deprecated') { $isDepr = $true }
+                        if ($isDepr) {
+                            $catLabel = "$prodName / $catName"
+                            [void]$deprecatedSettings.Add(@{
+                                Tenant     = $TenantName
+                                Policy     = $policy.Basics.Name
+                                Setting    = $settingName
+                                Value      = $settingValue
+                                Category   = $catLabel
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    }
+    & $scanForDeprecated $SourceModel $SourceModel.TenantName
+    & $scanForDeprecated $DestinationModel $DestinationModel.TenantName
+
     # ── Manual Review = only script/remediation/custom compliance categories ──
     # These are routed here via $manualReviewCategories during the main comparison loop.
     # No generic non-SC policy collection — only explicitly routed categories.
@@ -552,6 +597,7 @@ function Compare-InforcerDocModels {
         AlignmentScore       = $alignmentScore
         TotalItems           = $totalItems
         Counters             = $counters
+        DeprecatedSettings   = $deprecatedSettings
         Products             = $products
         ManualReview         = $manualReview
         IncludingAssignments = [bool]$IncludingAssignments

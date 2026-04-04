@@ -518,12 +518,12 @@ tr:hover td { background: var(--accent-soft); }
     $hasManualReview = $null -ne $manualReview -and $manualReview.Count -gt 0
     $mrCount = if ($hasManualReview) { ($manualReview.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum } else { 0 }
 
-    $hasDeprecated = $deprecatedRows.Count -gt 0
+    $hasDeprecated = $null -ne $deprecatedSettings -and $deprecatedSettings.Count -gt 0
 
     [void]$sb.AppendLine('<div class="tab-nav">')
     [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'')">Comparison</button>')
     if ($hasDeprecated) {
-        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('deprecated')`">Deprecated Settings <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem;background:var(--warning-bg);color:var(--warning)`">$($deprecatedRows.Count)</span></button>")
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('deprecated')`">Deprecated Settings <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem;background:var(--warning-bg);color:var(--warning)`">$($deprecatedSettings.Count)</span></button>")
     }
     if ($hasManualReview) {
         [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review')`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
@@ -533,26 +533,20 @@ tr:hover td { background: var(--accent-soft); }
     # ── Comparison tab ───────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
 
-    # Collect ALL rows, split into normal and deprecated
-    $normalRows = [System.Collections.Generic.List[object]]::new()
-    $deprecatedRows = [System.Collections.Generic.List[object]]::new()
-    $isDeprecatedRow = {
-        param($r)
-        ($r.Name -match 'deprecated') -or ($r.SettingPath -and $r.SettingPath -match 'deprecated') -or
-        ($r.SourceValue -and $r.SourceValue -match 'deprecated') -or ($r.DestValue -and $r.DestValue -match 'deprecated')
-    }
+    # Collect ALL comparison rows into a single flat list
+    $allRows = [System.Collections.Generic.List[object]]::new()
     foreach ($productName in $products.Keys) {
         $productData = $products[$productName]
         foreach ($categoryName in $productData.Categories.Keys) {
             foreach ($r in $productData.Categories[$categoryName].ComparisonRows) {
-                if (& $isDeprecatedRow $r) { [void]$deprecatedRows.Add($r) }
-                else { [void]$normalRows.Add($r) }
+                [void]$allRows.Add($r)
             }
         }
     }
-    $normalRows = @($normalRows | Sort-Object { $_.Name })
-    $deprecatedRows = @($deprecatedRows | Sort-Object { $_.Name })
-    $allRows = $normalRows
+    $allRows = @($allRows | Sort-Object { $_.Name })
+
+    # Deprecated settings come from the model (scanned from both tenants)
+    $deprecatedSettings = $ComparisonModel.DeprecatedSettings
 
     if ($allRows.Count -gt 0) {
         [void]$sb.AppendLine('    <div class="table-wrap">')
@@ -659,59 +653,35 @@ tr:hover td { background: var(--accent-soft); }
     if ($hasDeprecated) {
         [void]$sb.AppendLine('<div class="tab-content" id="tab-deprecated">')
         [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
-        [void]$sb.AppendLine("    These $($deprecatedRows.Count) settings reference deprecated configurations. They may still be configured but Microsoft has marked them as deprecated and may remove support in a future update.")
+        [void]$sb.AppendLine("    <strong style=`"color:var(--warning)`">&#x26A0; $($deprecatedSettings.Count) deprecated settings found.</strong> These settings are still configured but Microsoft has marked them as deprecated. Consider replacing them with their modern equivalents.")
         [void]$sb.AppendLine('</div>')
         [void]$sb.AppendLine('    <div class="table-wrap">')
         [void]$sb.AppendLine('    <table>')
         [void]$sb.AppendLine('        <thead><tr>')
-        [void]$sb.Append('            <th style="width:4%">Status</th>')
-        [void]$sb.Append('<th style="width:22%">Setting</th>')
-        [void]$sb.Append('<th style="width:14%">Category</th>')
-        [void]$sb.Append('<th style="width:15%">Source Policy</th>')
-        [void]$sb.Append('<th style="width:15%">Source Value</th>')
-        [void]$sb.Append('<th style="width:15%">Dest Policy</th>')
-        [void]$sb.Append('<th style="width:15%">Dest Value</th>')
+        [void]$sb.Append('            <th style="width:15%">Tenant</th>')
+        [void]$sb.Append('<th style="width:20%">Policy</th>')
+        [void]$sb.Append('<th style="width:25%">Setting</th>')
+        [void]$sb.Append('<th style="width:20%">Value</th>')
+        [void]$sb.Append('<th style="width:20%">Category</th>')
         [void]$sb.AppendLine('')
         [void]$sb.AppendLine('        </tr></thead>')
         [void]$sb.AppendLine('        <tbody>')
 
-        foreach ($row in $deprecatedRows) {
-            $status = $row.Status
-            switch ($status) {
-                'Matched'     { $statusHtml = '<span class="status-badge status-matched">&#10003;</span>' }
-                'Conflicting' { $statusHtml = '<span class="status-badge status-conflicting">&#10007;</span>' }
-                'SourceOnly'  { $statusHtml = '<span class="status-badge status-source-only">Source Only</span>' }
-                'DestOnly'    { $statusHtml = '<span class="status-badge status-dest-only">Dest Only</span>' }
-                default       { $statusHtml = [System.Net.WebUtility]::HtmlEncode($status) }
-            }
-            $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
-            $strippedCat = $row.Category
+        foreach ($ds in $deprecatedSettings) {
+            $encTenant  = [System.Net.WebUtility]::HtmlEncode($ds.Tenant)
+            $encPolicy  = [System.Net.WebUtility]::HtmlEncode($ds.Policy)
+            $encSetting = [System.Net.WebUtility]::HtmlEncode($ds.Setting)
+            $encValue   = [System.Net.WebUtility]::HtmlEncode($ds.Value)
+            $strippedCat = $ds.Category
             if ($strippedCat -match '^[^/]+\s*/\s*(.+)$') { $strippedCat = $Matches[1] }
             $encCat = [System.Net.WebUtility]::HtmlEncode($strippedCat)
-            $settingPath = "$($row.SettingPath)"
-            $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
 
-            [void]$sb.Append("            <tr><td>$statusHtml</td>")
-            if ($settingPath -match ' > ') {
-                [void]$sb.Append("<td class=`"setting-name`">$encName<span class=`"setting-path`">$encPath</span></td>")
-            } else {
-                [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
-            }
+            [void]$sb.Append("            <tr>")
+            [void]$sb.Append("<td>$encTenant</td>")
+            [void]$sb.Append("<td>$encPolicy</td>")
+            [void]$sb.Append("<td class=`"setting-name`" style=`"color:var(--warning)`">&#x26A0; $encSetting</td>")
+            [void]$sb.Append("<td class=`"value-cell`">$encValue</td>")
             [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCat</td>")
-
-            if ($status -eq 'DestOnly') {
-                [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
-            } else {
-                [void]$sb.Append("<td>$([System.Net.WebUtility]::HtmlEncode($row.SourcePolicy))</td>")
-                [void]$sb.Append("<td class=`"value-cell`">$([System.Net.WebUtility]::HtmlEncode($row.SourceValue))</td>")
-            }
-            if ($status -eq 'SourceOnly') {
-                [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
-            } else {
-                $valueCls = if ($status -eq 'Conflicting') { 'value-cell value-diff' } else { 'value-cell' }
-                [void]$sb.Append("<td>$([System.Net.WebUtility]::HtmlEncode($row.DestPolicy))</td>")
-                [void]$sb.Append("<td class=`"$valueCls`">$([System.Net.WebUtility]::HtmlEncode($row.DestValue))</td>")
-            }
             [void]$sb.AppendLine('</tr>')
         }
 

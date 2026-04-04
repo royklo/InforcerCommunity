@@ -205,10 +205,7 @@ body {
 .score-value { font-size: 3.5rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 0.5rem; font-variant-numeric: tabular-nums; }
 .score-label { font-size: 0.875rem; color: var(--muted); margin-bottom: 1.25rem; font-weight: 500; }
 .score-bar-track { width: 100%; max-width: 500px; height: 12px; background: var(--border); border-radius: 999px; margin: 0 auto; overflow: hidden; }
-.score-bar-fill { height: 100%; border-radius: 999px; width: 0%; }
-.score-bar-fill.green { background: linear-gradient(90deg, #059669, #34d399); }
-.score-bar-fill.yellow { background: linear-gradient(90deg, #d97706, #fbbf24); }
-.score-bar-fill.red { background: linear-gradient(90deg, #dc2626, #f87171); }
+.score-bar-fill { height: 100%; border-radius: 999px; width: 0%; background: linear-gradient(90deg, #dc2626, #f87171 25%, #d97706 40%, #fbbf24 55%, #059669 80%, #34d399); background-size: 200% 100%; transition: width 1.5s ease, background-position 1.5s ease; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
 .summary-tile {
     background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -430,10 +427,8 @@ tr:hover td { background: var(--accent-soft); }
     $products        = $ComparisonModel.Products
     $inclAssignments = $ComparisonModel.IncludingAssignments
 
-    # Bar color class
-    $barColor = if ($alignmentScore -ge 70) { 'green' }
-                elseif ($alignmentScore -ge 40) { 'yellow' }
-                else { 'red' }
+    # Bar gradient position: 100% = red (left), 0% = green (right)
+    $barGradientPos = [math]::Round(100 - $alignmentScore)
 
     # ── StringBuilder ──────────────────────────────────────────────────────
     $sb = [System.Text.StringBuilder]::new(65536)
@@ -469,7 +464,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('<div class="score-card">')
     [void]$sb.AppendLine('    <div class="score-value" id="scoreNum">0%</div>')
     [void]$sb.AppendLine("    <div class=`"score-label`">Overall Alignment &mdash; <span id=`"scoreDetail`">0 of $totalItems settings matched</span></div>")
-    [void]$sb.AppendLine("    <div class=`"score-bar-track`"><div class=`"score-bar-fill $barColor`" id=`"scoreBar`"></div></div>")
+    [void]$sb.AppendLine("    <div class=`"score-bar-track`"><div class=`"score-bar-fill`" id=`"scoreBar`" data-target-pos=`"$barGradientPos`"></div></div>")
     [void]$sb.AppendLine('</div>')
 
     # ── Summary tiles ──────────────────────────────────────────────────────
@@ -741,14 +736,18 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    var elConflicting = document.getElementById(''countConflicting'');')
     [void]$sb.AppendLine('    var elSource = document.getElementById(''countSource'');')
     [void]$sb.AppendLine('    var elDest = document.getElementById(''countDest'');')
+    [void]$sb.AppendLine('    var targetPos = parseInt(elBar.getAttribute("data-target-pos") || "50");')
     [void]$sb.AppendLine('    function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }')
+    [void]$sb.AppendLine('    elBar.style.backgroundPosition = "100% 0";')
     [void]$sb.AppendLine('    setTimeout(function() {')
     [void]$sb.AppendLine('        var timer = setInterval(function() {')
     [void]$sb.AppendLine('            step++;')
     [void]$sb.AppendLine('            var progress = ease(Math.min(step / steps, 1));')
     [void]$sb.AppendLine('            var pct = TARGET * progress;')
+    [void]$sb.AppendLine('            var gradPos = 100 - ((100 - targetPos) * progress);')
     [void]$sb.AppendLine('            elScore.textContent = Math.round(pct * 10) / 10 + ''%'';')
     [void]$sb.AppendLine('            elBar.style.width = pct + ''%'';')
+    [void]$sb.AppendLine('            elBar.style.backgroundPosition = gradPos + "% 0";')
     [void]$sb.AppendLine('            elDetail.textContent = Math.round(MATCHED * progress) + '' of '' + TOTAL + '' settings matched'';')
     [void]$sb.AppendLine('            elMatched.textContent = Math.round(MATCHED * progress);')
     [void]$sb.AppendLine('            elConflicting.textContent = Math.round(CONFLICTING * progress);')
@@ -758,6 +757,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('                clearInterval(timer);')
     [void]$sb.AppendLine('                elScore.textContent = TARGET + ''%'';')
     [void]$sb.AppendLine('                elBar.style.width = TARGET + ''%'';')
+    [void]$sb.AppendLine('                elBar.style.backgroundPosition = targetPos + "% 0";')
     [void]$sb.AppendLine('                elDetail.textContent = MATCHED + '' of '' + TOTAL + '' settings matched'';')
     [void]$sb.AppendLine('                elMatched.textContent = MATCHED;')
     [void]$sb.AppendLine('                elConflicting.textContent = CONFLICTING;')

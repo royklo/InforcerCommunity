@@ -34,16 +34,16 @@ function ConvertTo-InforcerComparisonHtml {
     # ── CSS block (single-quoted here-string, no variable expansion) ───────
     $cssBlock = @'
 :root {
-    --bg: #f8fafc;
-    --bg-card: #ffffff;
-    --bg-glass: rgba(255,255,255,0.7);
+    --bg: #f1f5f9;
+    --bg-card: #f8fafc;
+    --bg-glass: rgba(248,250,252,0.9);
     --text: #0f172a;
-    --text-secondary: #475569;
-    --border: #e2e8f0;
-    --border-subtle: #f1f5f9;
-    --row-alt: rgba(248,250,252,0.6);
-    --header-bg: rgba(241,245,249,0.8);
-    --muted: #94a3b8;
+    --text-secondary: #334155;
+    --border: #cbd5e1;
+    --border-subtle: #e2e8f0;
+    --row-alt: rgba(241,245,249,0.6);
+    --header-bg: rgba(226,232,240,0.8);
+    --muted: #64748b;
     --accent: #2563eb;
     --accent-hover: #1d4ed8;
     --accent-soft: rgba(37,99,235,0.08);
@@ -333,6 +333,11 @@ tr:hover td { background: var(--accent-soft); }
     margin-top: 2px;
 }
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
+.value-long { max-height: 3.2em; overflow: hidden; position: relative; cursor: pointer; }
+.value-long::after { content: '... click to expand'; display: block; position: absolute; bottom: 0; right: 0; padding: 0 0.5rem; background: linear-gradient(90deg, transparent, var(--bg-card) 30%); font-size: 0.65rem; color: var(--accent); font-style: italic; }
+.value-long.expanded { max-height: none; }
+.value-long.expanded::after { display: none; }
+.ps-code { background: #1e1e1e !important; color: #d4d4d4; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }
 .policy-detail-row td { padding: 0.25rem 0.75rem; border-bottom: 1px solid var(--border-subtle); }
@@ -615,8 +620,9 @@ tr:hover td { background: var(--accent-soft); }
                 } else {
                     $encSrcPolicy = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
                     $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
+                    $srcLong = if ($row.SourceValue.Length -gt 100) { ' value-long' } else { '' }
                     [void]$sb.Append("<td>$encSrcPolicy</td>")
-                    [void]$sb.Append("<td class=`"value-cell`">$encSrcValue</td>")
+                    [void]$sb.Append("<td class=`"value-cell$srcLong`">$encSrcValue</td>")
                 }
 
                 # Dest columns
@@ -626,8 +632,9 @@ tr:hover td { background: var(--accent-soft); }
                     $encDstPolicy = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
                     $encDstValue  = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
                     $valueCls = if ($status -eq 'Conflicting') { 'value-cell value-diff' } else { 'value-cell' }
+                    $dstLong = if ($row.DestValue.Length -gt 100) { ' value-long' } else { '' }
                     [void]$sb.Append("<td>$encDstPolicy</td>")
-                    [void]$sb.Append("<td class=`"$valueCls`">$encDstValue</td>")
+                    [void]$sb.Append("<td class=`"$valueCls$dstLong`">$encDstValue</td>")
                 }
 
                 # Assignment columns
@@ -873,7 +880,11 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
-    [void]$sb.AppendLine('// toggleDeprecated removed — deprecated settings now in their own tab')
+    [void]$sb.AppendLine('// Click to expand long values')
+    [void]$sb.AppendLine('document.addEventListener("click", function(e) {')
+    [void]$sb.AppendLine('    var el = e.target.closest(".value-long");')
+    [void]$sb.AppendLine('    if (el) el.classList.toggle("expanded");')
+    [void]$sb.AppendLine('});')
     [void]$sb.AppendLine('var sortState = {};')
     [void]$sb.AppendLine('function sortTable(th, colIdx) {')
     [void]$sb.AppendLine('    var table = th.closest("table");')

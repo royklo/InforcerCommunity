@@ -64,6 +64,9 @@ param(
     [string]$SettingsCatalogPath,
 
     [Parameter(Mandatory = $false)]
+    [switch]$IgnoreUnassignedPolicies,
+
+    [Parameter(Mandatory = $false)]
     [string]$OutputPath = '.'
 )
 
@@ -115,7 +118,8 @@ Write-Host 'Stage 2: Building comparison model...' -ForegroundColor Cyan
 
 $model = Compare-InforcerDocModels -SourceModel $compData.SourceModel `
     -DestinationModel $compData.DestinationModel `
-    -IncludingAssignments:$compData.IncludingAssignments
+    -IncludingAssignments:$compData.IncludingAssignments `
+    -IgnoreUnassignedPolicies:$IgnoreUnassignedPolicies
 
 if ($null -eq $model) {
     Write-Error -Message 'Compare-InforcerDocModels returned no model.' `

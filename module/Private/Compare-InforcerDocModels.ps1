@@ -33,7 +33,10 @@ function Compare-InforcerDocModels {
         [hashtable]$DestinationModel,
 
         [Parameter()]
-        [switch]$IncludingAssignments
+        [switch]$IncludingAssignments,
+
+        [Parameter()]
+        [switch]$IgnoreUnassignedPolicies
     )
 
     # ── Result containers ─────────────────────────────────────────────────
@@ -324,6 +327,12 @@ function Compare-InforcerDocModels {
             }
             if ($dstProduct -and $dstProduct.Categories -and $dstProduct.Categories.Contains($categoryName)) {
                 $dstPolicies = @($dstProduct.Categories[$categoryName])
+            }
+
+            # Filter out unassigned policies when -IgnoreUnassignedPolicies is set
+            if ($IgnoreUnassignedPolicies) {
+                $srcPolicies = @($srcPolicies | Where-Object { $null -ne $_ -and $null -ne $_.Assignments -and @($_.Assignments).Count -gt 0 })
+                $dstPolicies = @($dstPolicies | Where-Object { $null -ne $_ -and $null -ne $_.Assignments -and @($_.Assignments).Count -gt 0 })
             }
 
             $categoryLabel = "$productName / $categoryName"

@@ -333,10 +333,10 @@ tr:hover td { background: var(--accent-soft); }
     margin-top: 2px;
 }
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
-.value-long { max-height: 3.2em; overflow: hidden; position: relative; cursor: pointer; }
-.value-long::after { content: '... click to expand'; display: block; position: absolute; bottom: 0; right: 0; padding: 0 0.5rem; background: linear-gradient(90deg, transparent, var(--bg-card) 30%); font-size: 0.65rem; color: var(--accent); font-style: italic; }
-.value-long.expanded { max-height: none; }
-.value-long.expanded::after { display: none; }
+.value-long { max-height: 1.4em; overflow: hidden; position: relative; cursor: pointer; white-space: nowrap; text-overflow: ellipsis; }
+.value-long::after { content: ' ▸ expand'; position: absolute; bottom: 0; right: 0; padding: 0 0.25rem; background: var(--bg-card); font-size: 0.65rem; color: var(--accent); font-style: italic; }
+.value-long.expanded { max-height: none; white-space: normal; text-overflow: unset; }
+.value-long.expanded::after { content: ' ▾ collapse'; }
 .ps-code { background: #1e1e1e !important; color: #d4d4d4; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }

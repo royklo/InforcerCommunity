@@ -413,7 +413,7 @@ tr:hover td { background: var(--accent-soft); }
 .manual-review-setting .setting-name { color: var(--text); flex: 1; }
 .manual-review-setting .setting-value { color: var(--text-secondary); max-width: 40%; text-align: right; word-break: break-word; font-family: "SF Mono","Cascadia Code","Consolas",monospace; font-size: 0.75rem; }
 .manual-review-setting:nth-child(even) { background: var(--row-alt); }
-.setting-deprecated { background: var(--danger-bg) !important; border-radius: 4px; padding: 0.25rem 0.5rem; margin: 0.1rem 0; }
+.setting-deprecated { background: transparent !important; padding: 0.25rem 0.5rem; margin: 0.1rem 0; }
 .setting-deprecated .setting-name { color: var(--danger); font-weight: 600; }
 '@
 

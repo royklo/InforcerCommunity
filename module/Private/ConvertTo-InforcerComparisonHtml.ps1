@@ -655,13 +655,7 @@ tr:hover td { background: var(--accent-soft); }
     if ($hasManualReview) {
         [void]$sb.AppendLine('<div class="tab-content" id="tab-manual-review">')
         [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
-        [void]$sb.AppendLine('    <strong>Why are these here?</strong> Policies in this section cannot be reliably auto-compared at the setting level. This includes:')
-    [void]$sb.AppendLine('    <ul style="margin:0.5rem 0;padding-left:1.5rem">')
-    [void]$sb.AppendLine('    <li><strong>Scripts &amp; remediation</strong> &mdash; Script content needs human review to verify logic and intent.</li>')
-    [void]$sb.AppendLine('    <li><strong>App Protection Policies</strong> &mdash; The same settings may be configured across multiple policies (e.g., separate Android and iOS MAM policies). Review which policies apply to which platforms and whether the settings are intentionally different.</li>')
-    [void]$sb.AppendLine('    <li><strong>Custom compliance</strong> &mdash; Custom detection scripts and rules require manual verification.</li>')
-    [void]$sb.AppendLine('    <li><strong>Deprecated settings</strong> &mdash; Policies marked with <span class="badge-deprecated" style="animation:none;opacity:1">&#x26A0; contains deprecated settings</span> use configurations that Microsoft has marked for removal. Consider replacing them with modern equivalents.</li>')
-    [void]$sb.AppendLine('    </ul>')
+        [void]$sb.AppendLine('    Policies in this section require manual review: scripts and remediation content, custom compliance rules, and policies containing deprecated settings. These cannot be reliably auto-compared and need human verification.')
         [void]$sb.AppendLine('</div>')
 
         foreach ($catLabel in $manualReview.Keys) {

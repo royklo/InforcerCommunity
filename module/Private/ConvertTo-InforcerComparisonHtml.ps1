@@ -655,7 +655,7 @@ tr:hover td { background: var(--accent-soft); }
     if ($hasManualReview) {
         [void]$sb.AppendLine('<div class="tab-content" id="tab-manual-review">')
         [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
-        [void]$sb.AppendLine('    These are non-Settings Catalog policies (Administrative Templates, legacy profiles) that cannot be reliably auto-compared with Settings Catalog equivalents. Review them manually to check if both environments configure the same areas differently.')
+        [void]$sb.AppendLine('    Policies in this section require manual review. This includes scripts and remediation content, custom compliance rules, App Protection Policies with platform-specific configurations, and policies containing deprecated settings. These cannot be reliably auto-compared at the setting level.')
         [void]$sb.AppendLine('</div>')
 
         foreach ($catLabel in $manualReview.Keys) {

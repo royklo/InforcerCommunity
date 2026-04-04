@@ -333,10 +333,10 @@ tr:hover td { background: var(--accent-soft); }
     margin-top: 2px;
 }
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
-.value-long { max-height: 3.2em; overflow: hidden; position: relative; cursor: pointer; }
-.value-long::after { content: '... click to expand'; display: block; position: absolute; bottom: 0; right: 0; padding: 0 0.5rem; background: linear-gradient(90deg, transparent, var(--bg-card) 30%); font-size: 0.65rem; color: var(--accent); font-style: italic; }
-.value-long.expanded { max-height: none; }
-.value-long.expanded::after { display: none; }
+.value-truncate { max-height: 2.4em; overflow: hidden; cursor: pointer; position: relative; }
+.value-truncate::after { content: '... expand'; position: absolute; bottom: 0; right: 0; padding-left: 1rem; background: linear-gradient(90deg, transparent, var(--bg-card) 40%); font-size: 0.65rem; color: var(--accent); font-style: italic; }
+.value-truncate.expanded { max-height: none; }
+.value-truncate.expanded::after { display: none; }
 .ps-code { background: #1e1e1e !important; color: #d4d4d4; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }
@@ -614,9 +614,12 @@ tr:hover td { background: var(--accent-soft); }
                 } else {
                     $encSrcPolicy = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
                     $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
-                    $srcLong = if ($row.SourceValue.Length -gt 100) { ' value-long' } else { '' }
                     [void]$sb.Append("<td>$encSrcPolicy</td>")
-                    [void]$sb.Append("<td class=`"value-cell$srcLong`">$encSrcValue</td>")
+                    if ($row.SourceValue.Length -gt 100) {
+                        [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-truncate`">$encSrcValue</div></td>")
+                    } else {
+                        [void]$sb.Append("<td class=`"value-cell`">$encSrcValue</td>")
+                    }
                 }
 
                 # Dest columns
@@ -626,9 +629,12 @@ tr:hover td { background: var(--accent-soft); }
                     $encDstPolicy = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
                     $encDstValue  = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
                     $valueCls = if ($status -eq 'Conflicting') { 'value-cell value-diff' } else { 'value-cell' }
-                    $dstLong = if ($row.DestValue.Length -gt 100) { ' value-long' } else { '' }
                     [void]$sb.Append("<td>$encDstPolicy</td>")
-                    [void]$sb.Append("<td class=`"$valueCls$dstLong`">$encDstValue</td>")
+                    if ($row.DestValue.Length -gt 100) {
+                        [void]$sb.Append("<td class=`"$valueCls`"><div class=`"value-truncate`">$encDstValue</div></td>")
+                    } else {
+                        [void]$sb.Append("<td class=`"$valueCls`">$encDstValue</td>")
+                    }
                 }
 
                 # Assignment columns
@@ -817,7 +823,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
     [void]$sb.AppendLine('// Click to expand long values')
     [void]$sb.AppendLine('document.addEventListener("click", function(e) {')
-    [void]$sb.AppendLine('    var el = e.target.closest(".value-long");')
+    [void]$sb.AppendLine('    var el = e.target.closest(".value-truncate");')
     [void]$sb.AppendLine('    if (el) el.classList.toggle("expanded");')
     [void]$sb.AppendLine('});')
     [void]$sb.AppendLine('var sortState = {};')

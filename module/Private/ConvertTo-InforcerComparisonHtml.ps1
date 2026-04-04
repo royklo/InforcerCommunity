@@ -655,7 +655,10 @@ tr:hover td { background: var(--accent-soft); }
     if ($hasManualReview) {
         [void]$sb.AppendLine('<div class="tab-content" id="tab-manual-review">')
         [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
-        [void]$sb.AppendLine('    Policies in this section require manual review. This includes scripts and remediation content, custom compliance rules, App Protection Policies with platform-specific configurations, and policies containing deprecated settings. These cannot be reliably auto-compared at the setting level.')
+        [void]$sb.AppendLine('    <strong>These policies require manual review.</strong><br>')
+    [void]$sb.AppendLine('    <strong>Scripts &amp; remediation:</strong> Script logic cannot be compared automatically &mdash; review the code to verify both environments run the same detection and remediation actions.<br>')
+    [void]$sb.AppendLine('    <strong>Deprecated settings:</strong> Policies flagged with <em>contains deprecated settings</em> use configurations that Microsoft may remove in future updates. Plan to migrate these to their modern replacements before they stop working.<br>')
+    [void]$sb.AppendLine('    <strong>Custom compliance:</strong> Custom discovery scripts define their own compliance rules and need human verification to confirm they match across environments.')
         [void]$sb.AppendLine('</div>')
 
         foreach ($catLabel in $manualReview.Keys) {

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intune Configuration Comparison &#8212; Contoso Production vs Contoso Staging</title>
+<style>
+:root {
+    --bg: #f1f5f9;
+    --bg-card: #f8fafc;
+    --bg-glass: rgba(248,250,252,0.9);
+    --text: #0f172a;
+    --text-secondary: #334155;
+    --border: #cbd5e1;
+    --border-subtle: #e2e8f0;
+    --row-alt: rgba(241,245,249,0.6);
+    --header-bg: rgba(226,232,240,0.8);
+    --muted: #64748b;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-soft: rgba(37,99,235,0.08);
+    --badge-bg: #dbeafe;
+    --badge-text: #1e40af;
+    --summary-hover: rgba(241,245,249,0.8);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-xs: 6px;
+    --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    --success: #059669;
+    --success-bg: #d1fae5;
+    --warning: #d97706;
+    --warning-bg: #fef3c7;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+    --info: #2563eb;
+    --info-bg: #dbeafe;
+    --manual: #7c3aed;
+    --manual-bg: #ede9fe;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+        --bg: #0c0f1a;
+        --bg-card: #141825;
+        --bg-glass: rgba(20,24,37,0.8);
+        --text: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --border: #1e293b;
+        --border-subtle: #1e293b;
+        --row-alt: rgba(30,41,59,0.4);
+        --header-bg: rgba(30,41,59,0.6);
+        --muted: #64748b;
+        --accent: #3b82f6;
+        --accent-hover: #60a5fa;
+        --accent-soft: rgba(59,130,246,0.1);
+        --badge-bg: rgba(59,130,246,0.15);
+        --badge-text: #93c5fd;
+        --summary-hover: rgba(30,41,59,0.6);
+        --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+        --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+        --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+        --success: #34d399;
+        --success-bg: rgba(52,211,153,0.1);
+        --warning: #fbbf24;
+        --warning-bg: rgba(251,191,36,0.1);
+        --danger: #f87171;
+        --danger-bg: rgba(248,113,113,0.1);
+        --info: #60a5fa;
+        --info-bg: rgba(96,165,250,0.1);
+        --manual: #a78bfa;
+        --manual-bg: rgba(167,139,250,0.1);
+    }
+}
+:root.dark {
+    --bg: #0c0f1a;
+    --bg-card: #141825;
+    --bg-glass: rgba(20,24,37,0.8);
+    --text: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --border: #1e293b;
+    --border-subtle: #1e293b;
+    --row-alt: rgba(30,41,59,0.4);
+    --header-bg: rgba(30,41,59,0.6);
+    --muted: #64748b;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-soft: rgba(59,130,246,0.1);
+    --badge-bg: rgba(59,130,246,0.15);
+    --badge-text: #93c5fd;
+    --summary-hover: rgba(30,41,59,0.6);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+    --success: #34d399;
+    --success-bg: rgba(52,211,153,0.1);
+    --warning: #fbbf24;
+    --warning-bg: rgba(251,191,36,0.1);
+    --danger: #f87171;
+    --danger-bg: rgba(248,113,113,0.1);
+    --info: #60a5fa;
+    --info-bg: rgba(96,165,250,0.1);
+    --manual: #a78bfa;
+    --manual-bg: rgba(167,139,250,0.1);
+}
+:root.light {
+    --bg: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-glass: rgba(255,255,255,0.7);
+    --text: #0f172a;
+    --text-secondary: #475569;
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --row-alt: rgba(248,250,252,0.6);
+    --header-bg: rgba(241,245,249,0.8);
+    --muted: #94a3b8;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-soft: rgba(37,99,235,0.08);
+    --badge-bg: #dbeafe;
+    --badge-text: #1e40af;
+    --summary-hover: rgba(241,245,249,0.8);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+    --success: #059669;
+    --success-bg: #d1fae5;
+    --warning: #d97706;
+    --warning-bg: #fef3c7;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+    --info: #2563eb;
+    --info-bg: #dbeafe;
+    --manual: #7c3aed;
+    --manual-bg: #ede9fe;
+}
+@media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+    line-height: 1.65;
+    font-size: 0.9375rem;
+    -webkit-font-smoothing: antialiased;
+}
+.notch-bar {
+    position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 1000;
+    background: var(--accent); color: #fff; font-size: 0.75rem; font-weight: 600;
+    padding: 0.25rem 1.5rem 0.3rem;
+    border-radius: 0 0 var(--radius) var(--radius);
+    box-shadow: var(--shadow-md);
+    white-space: nowrap; letter-spacing: 0.02em;
+    pointer-events: none;
+}
+.notch-bar .notch-warn { font-weight: 400; opacity: 0.85; margin-left: 0.75rem; font-size: 0.6875rem; }
+.header {
+    padding: 2.5rem 0 1.5rem;
+    text-align: center;
+}
+.header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 0.75rem; }
+.header-meta { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; font-size: 0.8125rem; color: var(--muted); }
+.header-meta .env-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary); }
+.header-meta .env-row strong { color: var(--text); font-weight: 600; }
+.header-meta .env-arrow { color: var(--muted); font-size: 1rem; }
+.header-meta .generated { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }
+.score-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-md); padding: 2rem; margin-bottom: 1.5rem; text-align: center;
+}
+.score-value { font-size: 3.5rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 0.5rem; font-variant-numeric: tabular-nums; }
+.score-label { font-size: 0.875rem; color: var(--muted); margin-bottom: 1.25rem; font-weight: 500; }
+.score-bar-track { width: 100%; max-width: 500px; height: 12px; background: var(--border); border-radius: 999px; margin: 0 auto; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 999px; width: 0%; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
+.summary-tile {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1.25rem; text-align: center; box-shadow: var(--shadow-sm); transition: box-shadow var(--transition);
+}
+.summary-tile:hover { box-shadow: var(--shadow-md); }
+.summary-tile .count { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.summary-tile .label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-top: 0.25rem; }
+.summary-tile.matched .count { color: var(--success); }
+.summary-tile.conflicting .count { color: var(--danger); }
+.summary-tile.source-only .count { color: var(--warning); }
+.summary-tile.dest-only .count { color: var(--info); }
+.summary-tile.manual .count { color: var(--manual); }
+.search-bar { margin-bottom: 1rem; }
+.search-bar input {
+    width: 100%; padding: 0.625rem 0.875rem; border: 1px solid var(--border); border-radius: var(--radius-xs);
+    background: var(--bg-card); color: var(--text); font-size: 0.875rem; font-family: inherit; outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+.search-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search-hidden { display: none !important; }
+.filter-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.filter-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.filter-pill {
+    background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+    padding: 0.3rem 0.75rem; border-radius: 999px; font-size: 0.75rem; cursor: pointer;
+    transition: all var(--transition); font-family: inherit; font-weight: 500;
+}
+.filter-pill:hover { border-color: var(--accent); color: var(--accent); }
+.filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.status-hidden { display: none !important; }
+/* Toggle CSS removed — deprecated settings now in their own tab */
+.manual-item {
+    background: var(--bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+.tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; }
+.tab {
+    padding: 0.75rem 1.5rem; font-size: 0.875rem; font-weight: 600; color: var(--muted);
+    cursor: pointer; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+    transition: all var(--transition); background: none; font-family: inherit;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab .badge { margin-left: 0.375rem; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.status-badge {
+    display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-xs); font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+}
+.status-matched { background: var(--success-bg); color: var(--success); }
+.status-conflicting { background: var(--danger-bg); color: var(--danger); }
+.status-source-only { background: var(--warning-bg); color: var(--warning); }
+.status-dest-only { background: var(--info-bg); color: var(--info); }
+.status-manual { background: var(--manual-bg); color: var(--manual); }
+.card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-sm); padding: 1.25rem 1.5rem; margin-bottom: 1rem; transition: box-shadow var(--transition);
+}
+.card:hover { box-shadow: var(--shadow-md); }
+.badge {
+    display: inline-flex; align-items: center; background: var(--badge-bg); color: var(--badge-text);
+    padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600;
+    letter-spacing: 0.01em; white-space: nowrap;
+}
+details { border-radius: var(--radius-xs); }
+summary {
+    cursor: pointer; padding: 0.5rem 0.625rem; border-radius: var(--radius-xs);
+    user-select: none; list-style: none; transition: background var(--transition);
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+    content: ''; display: inline-block; width: 0.375rem; height: 0.375rem;
+    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+    transform: rotate(-45deg); margin-right: 0.625rem; transition: transform var(--transition); flex-shrink: 0;
+}
+details[open] > summary::before { transform: rotate(45deg); }
+summary:hover { background: var(--summary-hover); }
+.product-section { margin-bottom: 1rem; }
+.product-section > summary {
+    font-size: 1rem; font-weight: 700; padding: 0.875rem 1rem;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-sm); display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.5rem; flex-wrap: wrap;
+}
+.product-section > summary:hover { box-shadow: var(--shadow-md); }
+.product-section[open] > summary { border-radius: var(--radius) var(--radius) 0 0; margin-bottom: 0; border-bottom-color: transparent; }
+.product-content {
+    background: var(--bg-card); border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius); padding: 0.75rem 1.25rem 1rem;
+    box-shadow: var(--shadow-sm); margin-bottom: 0.5rem;
+}
+.product-title { flex: 1; }
+h3 {
+    font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin: 1.25rem 0 0.625rem; padding-bottom: 0.375rem;
+    border-bottom: 1px solid var(--border-subtle);
+}
+h3:first-child { margin-top: 0.375rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; min-width: 400px; }
+.table-wrap { overflow-x: auto; margin-bottom: 0.75rem; border-radius: var(--radius-xs); }
+th {
+    background: var(--header-bg); text-align: left; padding: 0.5rem 0.75rem; font-weight: 600;
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
+    border-bottom: 1px solid var(--border); user-select: none;
+}
+th[onclick]:hover { background: var(--accent-soft); color: var(--accent); }
+td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); vertical-align: top; color: var(--text); word-break: break-word; }
+tr:last-child td { border-bottom: none; }
+tr:nth-child(even) td { background: var(--row-alt); }
+tr:hover td { background: var(--accent-soft); }
+.policy-name { font-weight: 600; }
+.setting-name { color: var(--text-secondary); }
+.setting-path {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 2px;
+}
+.value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
+.value-truncate { max-height: 7.5em; overflow: hidden; cursor: pointer; position: relative; }
+.value-truncate::after { content: '... expand'; position: absolute; bottom: 0; right: 0; padding-left: 1rem; background: linear-gradient(90deg, transparent, var(--bg-card) 40%); font-size: 0.65rem; color: var(--accent); font-style: italic; }
+.value-truncate.expanded { max-height: none; }
+.value-truncate.expanded::after { content: 'collapse ▴'; position: static; display: block; text-align: right; background: none; padding: 0.25rem 0 0; }
+.ps-code { background: #1e1e1e !important; color: #d4d4d4; }
+.value-diff { color: var(--danger); font-weight: 600; }
+.manual-table td { vertical-align: middle; }
+.policy-detail-row td { padding: 0.25rem 0.75rem; border-bottom: 1px solid var(--border-subtle); }
+.policy-detail-row:hover td { background: transparent; }
+.policy-detail-row .settings-table { font-size: 0.8rem; margin: 0.5rem 0; }
+.policy-detail-row .settings-table th { font-size: 0.7rem; }
+.policy-detail-row .settings-table td { font-size: 0.8rem; }
+.policy-detail-row .settings-table .value-diff { color: var(--danger); font-weight: 600; }
+.env-label {
+    font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 0.125rem 0.5rem; border-radius: 4px; display: inline-block; text-align: center; min-width: 3.25rem;
+}
+.env-source { background: var(--warning-bg); color: var(--warning); }
+.env-dest { background: var(--info-bg); color: var(--info); }
+.policy-type-badge {
+    font-size: 0.6875rem; font-weight: 600; padding: 0.125rem 0.5rem;
+    border-radius: 999px; white-space: nowrap; display: inline-block;
+}
+.type-catalog { background: var(--success-bg); color: var(--success); }
+.type-admin { background: var(--warning-bg); color: var(--warning); }
+.type-other { background: var(--badge-bg); color: var(--badge-text); }
+.manual-reason { font-size: 0.8125rem; color: var(--text-secondary); }
+.footer { margin-top: 2rem; padding: 1rem 0; text-align: center; color: var(--muted); font-size: 0.75rem; }
+.fab-group { position: fixed; bottom: 1.5rem; right: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 200; }
+.fab {
+    width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-md); transition: all var(--transition); font-size: 1.125rem;
+}
+.fab:hover { background: var(--accent-hover); box-shadow: var(--shadow-lg); transform: scale(1.05); }
+.fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.fab-top { opacity: 0; pointer-events: none; transform: translateY(8px); }
+.fab-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.fab-theme { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+.fab-theme:hover { background: var(--bg-card); border-color: var(--accent); color: var(--accent); box-shadow: var(--shadow-lg); }
+@media (max-width: 768px) {
+    body { padding: 0 1rem 2rem; font-size: 0.875rem; }
+    .header h1 { font-size: 1.375rem; }
+    .summary-grid { grid-template-columns: repeat(3, 1fr); }
+    .product-section > summary { padding: 0.75rem; font-size: 0.9375rem; }
+    td, th { padding: 0.375rem 0.5rem; }
+    .fab-group { bottom: 1rem; right: 1rem; }
+}
+@media (max-width: 480px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+.tab-nav { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+.tab-btn { padding: 0.75rem 1.5rem; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all var(--transition); font-family: inherit; }
+.tab-btn:hover { color: var(--text); background: var(--accent-soft); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.manual-review-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0; margin-bottom: 0.75rem; }
+.manual-review-card summary { padding: 0.75rem 1rem; font-size: 0.875rem; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; }
+.manual-review-card summary::-webkit-details-marker { display: none; }
+.manual-review-card summary::before { content: '\25B6'; font-size: 0.65rem; color: var(--muted); transition: transform var(--transition); }
+.manual-review-card[open] summary::before { transform: rotate(90deg); }
+.manual-review-card[open] summary { border-bottom: 1px solid var(--border-subtle); }
+.manual-review-card .mr-body { padding: 0.75rem 1rem; }
+.manual-review-card .side-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+.manual-review-card .side-source { background: var(--info-bg); color: var(--info); }
+.manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
+.badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
+@keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+/* .setting-deprecated defined below with manual-review-setting styles */
+.manual-review-setting { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.8rem; }
+.ps-keyword { color: #569cd6; font-weight: 600; }
+.ps-string { color: #ce9178; }
+.ps-variable { color: #9cdcfe; }
+.ps-comment { color: #6a9955; font-style: italic; }
+.ps-cmdlet { color: #dcdcaa; }
+.ps-operator { color: #d4d4d4; }
+.ps-type { color: #4ec9b0; }
+.ps-code-wrap { position: relative; }
+.copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.7rem; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-xs); cursor: pointer; opacity: 0.7; transition: opacity var(--transition); z-index: 1; }
+.copy-btn:hover { opacity: 1; }
+.manual-review-setting .setting-name { color: var(--text); flex: 1; }
+.manual-review-setting .setting-value { color: var(--text-secondary); max-width: 40%; text-align: right; word-break: break-word; font-family: "SF Mono","Cascadia Code","Consolas",monospace; font-size: 0.75rem; }
+.manual-review-setting:nth-child(even) { background: var(--row-alt); }
+.setting-deprecated { background: transparent !important; padding: 0.25rem 0.5rem; margin: 0.1rem 0; }
+.setting-deprecated .setting-name { color: var(--danger); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="top"></div>
+<div class="notch-bar">Intune Comparison<span class="notch-warn">5 settings compared</span></div>
+<div class="header">
+    <h1>Intune Configuration Comparison Report</h1>
+    <div class="header-meta">
+        <div class="env-row"><strong>Contoso Production</strong><span class="env-arrow">&#10132;</span><strong>Contoso Staging</strong></div>
+        <div class="generated">Generated 04/04/2026 01:23:45</div>
+    </div>
+</div>
+<div class="score-card">
+    <div class="score-value" id="scoreNum">0%</div>
+    <div class="score-label">Overall Alignment &mdash; <span id="scoreDetail">0 of 5 settings matched</span></div>
+    <div class="score-bar-track"><div class="score-bar-fill" id="scoreBar"></div></div>
+</div>
+<div class="summary-grid">
+    <div class="summary-tile matched"><div class="count" id="countMatched">0</div><div class="label">Matched</div></div>
+    <div class="summary-tile conflicting"><div class="count" id="countConflicting">0</div><div class="label">Conflicting</div></div>
+    <div class="summary-tile source-only"><div class="count" id="countSource">0</div><div class="label">Source Only</div></div>
+    <div class="summary-tile dest-only"><div class="count" id="countDest">0</div><div class="label">Destination Only</div></div>
+</div>
+<div class="search-bar">
+    <input type="text" id="search-input" placeholder="Search policies, settings, values..." oninput="searchAll(this.value)">
+</div>
+<div class="filter-bar">
+    <span class="filter-label">Filter:</span>
+    <button class="filter-pill active" onclick="filterByStatus(this,'All')">All</button>
+    <button class="filter-pill" onclick="filterByStatus(this,'Matched')">Matched</button>
+    <button class="filter-pill" onclick="filterByStatus(this,'Conflicting')">Conflicting</button>
+    <button class="filter-pill" onclick="filterByStatus(this,'SourceOnly')">Source Only</button>
+    <button class="filter-pill" onclick="filterByStatus(this,'DestOnly')">Dest Only</button>
+    <select id="category-filter" onchange="applyFilters()" style="margin-left:0.75rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text);font-size:0.75rem;font-family:inherit;cursor:pointer"><option value="All">All categories</option><option value="Windows / Settings Catalog">Windows / Settings Catalog</option></select>
+</div>
+<div id="filter-summary" style="font-size:0.9rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>
+<div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('comparison')">Comparison</button>
+</div>
+<div class="tab-content active" id="tab-comparison">
+    <div class="table-wrap">
+    <table id="comparison-table">
+        <thead><tr>
+            <th style="width:4%;cursor:pointer" onclick="sortTable(this,0)">Status &#x25B4;&#x25BE;</th><th style="width:20%;cursor:pointer" onclick="sortTable(this,1)">Setting &#x25B4;&#x25BE;</th><th style="width:14%;cursor:pointer" onclick="sortTable(this,2)">Category &#x25B4;&#x25BE;</th><th style="width:15%;cursor:pointer" onclick="sortTable(this,3)">Source Policy &#x25B4;&#x25BE;</th><th style="width:15%;cursor:pointer" onclick="sortTable(this,4)">Source Value &#x25B4;&#x25BE;</th><th style="width:15%;cursor:pointer" onclick="sortTable(this,5)">Dest Policy &#x25B4;&#x25BE;</th><th style="width:15%;cursor:pointer" onclick="sortTable(this,6)">Dest Value &#x25B4;&#x25BE;</th>
+        </tr></thead>
+        <tbody>
+                <tr data-status="Matched" data-category="Windows / Settings Catalog" data-src-policy="Win - Security - D - Bitlocker" data-dst-policy="Win - Security - D - Bitlocker"><td><span class="status-badge status-matched">&#10003;</span></td><td class="setting-name">Allow BitLocker Without TPM<span class="setting-path">Disk Encryption &gt; Allow BitLocker Without TPM</span></td><td style="font-size:0.75rem;color:var(--text-secondary)">Windows / Settings Catalog</td><td>Win - Security - D - Bitlocker</td><td class="value-cell">False</td><td>Win - Security - D - Bitlocker</td><td class="value-cell">False</td></tr>
+                <tr data-status="Matched" data-category="Windows / Settings Catalog" data-src-policy="Win - Network - D - Firewall" data-dst-policy="Win - Network - D - Firewall"><td><span class="status-badge status-matched">&#10003;</span></td><td class="setting-name">Default Inbound Action<span class="setting-path">Domain Profile &gt; Default Inbound Action</span></td><td style="font-size:0.75rem;color:var(--text-secondary)">Windows / Settings Catalog</td><td>Win - Network - D - Firewall</td><td class="value-cell">Block</td><td>Win - Network - D - Firewall</td><td class="value-cell">Block</td></tr>
+                <tr data-status="Matched" data-category="Windows / Settings Catalog" data-src-policy="Win - Network - D - Firewall" data-dst-policy="Win - Network - D - Firewall"><td><span class="status-badge status-matched">&#10003;</span></td><td class="setting-name">Enable Firewall<span class="setting-path">Domain Profile &gt; Enable Firewall</span></td><td style="font-size:0.75rem;color:var(--text-secondary)">Windows / Settings Catalog</td><td>Win - Network - D - Firewall</td><td class="value-cell">True</td><td>Win - Network - D - Firewall</td><td class="value-cell">True</td></tr>
+                <tr data-status="Matched" data-category="Windows / Settings Catalog" data-src-policy="Win - Security - D - Defender" data-dst-policy="Win - Security - D - Defender"><td><span class="status-badge status-matched">&#10003;</span></td><td class="setting-name">Enable Real Time Protection<span class="setting-path">Antivirus &gt; Enable Real Time Protection</span></td><td style="font-size:0.75rem;color:var(--text-secondary)">Windows / Settings Catalog</td><td>Win - Security - D - Defender</td><td class="value-cell">Enabled</td><td>Win - Security - D - Defender</td><td class="value-cell">Enabled</td></tr>
+                <tr data-status="Matched" data-category="Windows / Settings Catalog" data-src-policy="Win - Security - D - Bitlocker" data-dst-policy="Win - Security - D - Bitlocker"><td><span class="status-badge status-matched">&#10003;</span></td><td class="setting-name">Require Device Encryption<span class="setting-path">Disk Encryption &gt; Require Device Encryption</span></td><td style="font-size:0.75rem;color:var(--text-secondary)">Windows / Settings Catalog</td><td>Win - Security - D - Bitlocker</td><td class="value-cell">True</td><td>Win - Security - D - Bitlocker</td><td class="value-cell">True</td></tr>
+        </tbody>
+    </table>
+    </div>
+</div>
+<div class="footer">
+    InforcerCommunity Module &middot; Created by Roy Klooster
+</div>
+<div class="fab-group">
+    <button class="fab fab-top" id="btn-top" onclick="scrollToTop()" aria-label="Back to top">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+    </button>
+    <button class="fab fab-theme" id="btn-theme" onclick="toggleTheme()" aria-label="Toggle dark/light mode">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+</div>
+<script>
+(function() {
+    var TARGET = 100;
+    var MATCHED = 5, CONFLICTING = 0, SOURCE = 0, DEST = 0;
+    var TOTAL = 5;
+    var DURATION = 1500, INTERVAL = 16;
+    var steps = Math.ceil(DURATION / INTERVAL), step = 0;
+    var elScore = document.getElementById('scoreNum');
+    var elBar = document.getElementById('scoreBar');
+    var elDetail = document.getElementById('scoreDetail');
+    var elMatched = document.getElementById('countMatched');
+    var elConflicting = document.getElementById('countConflicting');
+    var elSource = document.getElementById('countSource');
+    var elDest = document.getElementById('countDest');
+    function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+    function barColor(pct) {
+        if (pct < 10) return "#7f1d1d";
+        if (pct < 20) return "#dc2626";
+        if (pct < 30) return "#ef4444";
+        if (pct < 40) return "#f97316";
+        if (pct < 50) return "#d97706";
+        if (pct < 60) return "#eab308";
+        if (pct < 70) return "#ca8a04";
+        if (pct < 80) return "#65a30d";
+        if (pct < 90) return "#16a34a";
+        return "#059669";
+    }
+    elBar.style.backgroundColor = "#dc2626";
+    setTimeout(function() {
+        var timer = setInterval(function() {
+            step++;
+            var progress = ease(Math.min(step / steps, 1));
+            var pct = TARGET * progress;
+            elScore.textContent = Math.round(pct * 10) / 10 + '%';
+            elBar.style.width = pct + '%';
+            elBar.style.backgroundColor = barColor(pct);
+            elDetail.textContent = Math.round(MATCHED * progress) + ' of ' + TOTAL + ' settings matched';
+            elMatched.textContent = Math.round(MATCHED * progress);
+            elConflicting.textContent = Math.round(CONFLICTING * progress);
+            elSource.textContent = Math.round(SOURCE * progress);
+            elDest.textContent = Math.round(DEST * progress);
+            if (step >= steps) {
+                clearInterval(timer);
+                elScore.textContent = TARGET + '%';
+                elBar.style.width = TARGET + '%';
+                elBar.style.backgroundColor = barColor(TARGET);
+                elDetail.textContent = MATCHED + ' of ' + TOTAL + ' settings matched';
+                elMatched.textContent = MATCHED;
+                elConflicting.textContent = CONFLICTING;
+                elSource.textContent = SOURCE;
+                elDest.textContent = DEST;
+                if (TARGET === 100) { fireConfetti(); }
+            }
+        }, INTERVAL);
+    }, 300);
+})();
+function fireConfetti() {
+    var colors = ["#059669","#34d399","#fbbf24","#3b82f6","#8b5cf6","#ec4899","#f97316","#06b6d4","#10b981","#a855f7"];
+    var canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999";
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    document.body.appendChild(canvas);
+    var ctx = canvas.getContext("2d");
+    var pieces = [];
+    for (var i = 0; i < 300; i++) {
+        var side = i < 150 ? 0 : 1;
+        pieces.push({
+            x: side === 0 ? -10 : canvas.width + 10,
+            y: canvas.height * (0.3 + Math.random() * 0.4),
+            vx: (side === 0 ? 1 : -1) * (Math.random() * 18 + 4),
+            vy: -(Math.random() * 22 + 5),
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: Math.random() * 10 + 4,
+            rotation: Math.random() * 360,
+            rotSpeed: (Math.random() - 0.5) * 20,
+            gravity: 0.35,
+            opacity: 1,
+            shape: ["rect","circle","star"][Math.floor(Math.random()*3)]
+        });
+    }
+    // APPROVED stamp
+    var stamp = document.createElement("div");
+    stamp.textContent = "APPROVED!";
+    stamp.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-12deg) scale(0);font-size:6rem;font-weight:900;color:#059669;text-shadow:0 0 40px rgba(5,150,105,0.4);letter-spacing:0.1em;z-index:10000;pointer-events:none;opacity:0;transition:transform 0.5s cubic-bezier(0.175,0.885,0.32,1.275),opacity 0.5s ease;font-family:Impact,sans-serif;border:8px solid #059669;border-radius:16px;padding:0.2em 0.6em;";
+    document.body.appendChild(stamp);
+    setTimeout(function() { stamp.style.transform = "translate(-50%,-50%) rotate(-12deg) scale(1)"; stamp.style.opacity = "0.9"; }, 100);
+    setTimeout(function() { stamp.style.opacity = "0"; setTimeout(function() { stamp.remove(); }, 600); }, 3000);
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        var alive = false;
+        pieces.forEach(function(p) {
+            p.vy += p.gravity;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rotation += p.rotSpeed;
+            p.vx *= 0.985;
+            if (p.y > canvas.height * 0.75) p.opacity -= 0.015;
+            if (p.opacity <= 0) return;
+            alive = true;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, p.opacity);
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation * Math.PI / 180);
+            ctx.fillStyle = p.color;
+            if (p.shape === "rect") { ctx.fillRect(-p.size/2, -p.size/3, p.size, p.size*0.6); }
+            else if (p.shape === "circle") { ctx.beginPath(); ctx.arc(0, 0, p.size/2, 0, Math.PI*2); ctx.fill(); }
+            else { ctx.beginPath(); for(var s=0;s<5;s++){ctx.lineTo(Math.cos((s*4*Math.PI/5)-Math.PI/2)*p.size/2,Math.sin((s*4*Math.PI/5)-Math.PI/2)*p.size/2);} ctx.closePath(); ctx.fill(); }
+            ctx.restore();
+        });
+        if (alive) requestAnimationFrame(draw);
+        else { canvas.remove(); }
+    }
+    requestAnimationFrame(draw);
+}
+function scrollToTop() { document.getElementById('top').scrollIntoView({ behavior: 'smooth' }); }
+window.addEventListener('scroll', function() {
+    var btn = document.getElementById('btn-top');
+    if (window.scrollY > 300) { btn.classList.add('visible'); } else { btn.classList.remove('visible'); }
+});
+function toggleTheme() {
+    var r = document.documentElement;
+    if (r.classList.contains('dark')) { r.classList.remove('dark'); r.classList.add('light'); localStorage.setItem('theme','light'); }
+    else { r.classList.remove('light'); r.classList.add('dark'); localStorage.setItem('theme','dark'); }
+}
+(function() { var s = localStorage.getItem('theme'); if (s==='dark') document.documentElement.classList.add('dark'); else if (s==='light') document.documentElement.classList.add('light'); })();
+var activeFilters = new Set();
+function applyFilters() {
+    var q = (document.getElementById("search-input").value || "").toLowerCase().trim();
+    var showAll = activeFilters.size === 0 || activeFilters.has("All");
+    // Deprecated settings are in their own tab — no toggle logic needed
+    var catFilter = document.getElementById("category-filter");
+    var selectedCat = catFilter ? catFilter.value : "All";
+    var tab = document.getElementById("tab-comparison");
+    if (!tab) return;
+    // Filter individual rows by search + status + category + deprecated
+    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {
+        var matchesSearch = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;
+        var matchesFilter = showAll || activeFilters.has(tr.getAttribute("data-status"));
+        var matchesCategory = selectedCat === "All" || tr.getAttribute("data-category") === selectedCat;
+        var hidden = !matchesSearch || !matchesFilter || !matchesCategory;
+        tr.style.display = hidden ? "none" : "";
+    });
+    // Hide product sections where all rows are hidden + count visible settings/policies
+    var visibleCount = 0;
+    var policySet = new Set();
+    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {
+        if (tr.style.display !== "none") {
+            visibleCount++;
+            var sp = tr.getAttribute("data-src-policy");
+            var dp = tr.getAttribute("data-dst-policy");
+            if (sp) policySet.add(sp);
+            if (dp) policySet.add(dp);
+        }
+    });
+    // No product sections to toggle — flat table
+    // Update filter summary
+    var summary = document.getElementById("filter-summary");
+    if (summary) { summary.textContent = 'Showing ' + visibleCount + ' settings across ' + policySet.size + ' policies'; }
+    // Also filter Manual Review tab by search
+    var mrTab = document.getElementById("tab-manual-review");
+    if (mrTab) {
+        mrTab.querySelectorAll(".manual-review-card").forEach(function(card) {
+            if (!q) { card.style.display = ""; return; }
+            card.style.display = card.textContent.toLowerCase().indexOf(q) >= 0 ? "" : "none";
+        });
+    }
+}
+function searchAll() { applyFilters(); }
+// Click to expand long values
+document.addEventListener("click", function(e) {
+    var el = e.target.closest(".value-truncate");
+    if (el) el.classList.toggle("expanded");
+});
+var sortState = {};
+function sortTable(th, colIdx) {
+    var table = th.closest("table");
+    if (!table) return;
+    var tbody = table.querySelector("tbody");
+    if (!tbody) return;
+    var rows = Array.from(tbody.querySelectorAll("tr"));
+    var key = table.id || "t" + colIdx;
+    var asc = sortState[key + colIdx] !== "asc";
+    sortState[key + colIdx] = asc ? "asc" : "desc";
+    rows.sort(function(a, b) {
+        var aText = (a.cells[colIdx] ? a.cells[colIdx].textContent : "").trim().toLowerCase();
+        var bText = (b.cells[colIdx] ? b.cells[colIdx].textContent : "").trim().toLowerCase();
+        if (aText < bText) return asc ? -1 : 1;
+        if (aText > bText) return asc ? 1 : -1;
+        return 0;
+    });
+    rows.forEach(function(r) { tbody.appendChild(r); });
+}
+function filterByStatus(btn, status) {
+    var allBtn = document.querySelector(".filter-pill[onclick*=\"All\"]");
+    if (status === "All") {
+        activeFilters.clear();
+        document.querySelectorAll(".filter-pill").forEach(function(p) { p.classList.remove("active"); });
+        btn.classList.add("active");
+    } else {
+        activeFilters.delete("All");
+        if (allBtn) allBtn.classList.remove("active");
+        if (activeFilters.has(status)) {
+            activeFilters.delete(status);
+            btn.classList.remove("active");
+        } else {
+            activeFilters.add(status);
+            btn.classList.add("active");
+        }
+        if (activeFilters.size === 0 && allBtn) { allBtn.classList.add("active"); }
+    }
+    applyFilters();
+}
+function switchTab(tabId) {
+    document.querySelectorAll(".tab-content").forEach(function(t) { t.classList.remove("active"); });
+    document.querySelectorAll(".tab-btn").forEach(function(b) { b.classList.remove("active"); });
+    var tab = document.getElementById("tab-" + tabId);
+    if (tab) tab.classList.add("active");
+    event.target.classList.add("active");
+}
+// PowerShell syntax highlighting — works on textContent to avoid entity issues
+function escHtml(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function highlightPS(code) {
+    var text = code.textContent;
+    var tokens = [];
+    // Tokenize: comments, strings, then everything else
+    var re = /(#[^\n]*|<#[\s\S]*?#>|"[^"]*"|'[^']*'|\$[\w:]+|\[[\w.]+\]|\b(?:if|else|elseif|foreach|for|while|do|switch|try|catch|finally|throw|return|function|param|begin|process|end|filter|class|enum|using|trap|break|continue|exit)\b|\b[A-Z][a-z]+(?:-[A-Z][a-zA-Z]+)+\b)/gi;
+    var lastIdx = 0, m;
+    while ((m = re.exec(text)) !== null) {
+        if (m.index > lastIdx) tokens.push(escHtml(text.substring(lastIdx, m.index)));
+        var t = m[0], cls = "";
+        if (t[0]==="#"||t.startsWith("<#")) cls="ps-comment";
+        else if (t[0]==='"'||t[0]==="'") cls="ps-string";
+        else if (t[0]==="$") cls="ps-variable";
+        else if (t[0]==="[") cls="ps-type";
+        else if (t.indexOf("-")>0&&t[0]===t[0].toUpperCase()) cls="ps-cmdlet";
+        else cls="ps-keyword";
+        tokens.push('<span class="'+cls+'">'+escHtml(t)+'</span>');
+        lastIdx = m.index + t.length;
+    }
+    if (lastIdx < text.length) tokens.push(escHtml(text.substring(lastIdx)));
+    code.innerHTML = tokens.join("");
+}
+// Apply filters FIRST to hide deprecated rows (must run before any cosmetic JS)
+applyFilters();
+// Syntax highlighting and copy buttons (wrapped in try/catch to never block filters)
+try {
+    document.querySelectorAll(".ps-code code").forEach(highlightPS);
+    document.querySelectorAll(".ps-code-wrap").forEach(function(wrap) {
+        var btn = document.createElement("button");
+        btn.textContent = "Copy";
+        btn.className = "copy-btn";
+        btn.onclick = function() {
+            var code = wrap.querySelector("code");
+            navigator.clipboard.writeText(code.textContent).then(function() {
+                btn.textContent = "Copied!";
+                setTimeout(function() { btn.textContent = "Copy"; }, 2000);
+            });
+        };
+        wrap.appendChild(btn);
+    });
+} catch(e) { console.warn("Syntax highlighting error:", e); }
+</script>
+</body>
+</html>
+

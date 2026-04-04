@@ -394,6 +394,7 @@ tr:hover td { background: var(--accent-soft); }
 .manual-review-card .side-source { background: var(--info-bg); color: var(--info); }
 .manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
+.badge-conflicting { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--warning-bg); color: var(--warning); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 /* .setting-deprecated defined below with manual-review-setting styles */
 .manual-review-setting { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.8rem; }
@@ -655,10 +656,11 @@ tr:hover td { background: var(--accent-soft); }
     if ($hasManualReview) {
         [void]$sb.AppendLine('<div class="tab-content" id="tab-manual-review">')
         [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
-        [void]$sb.AppendLine('    <strong>Why are these here?</strong> Policies in this section cannot be reliably auto-compared at the setting level. This includes:')
+        [void]$sb.AppendLine('    <strong>Why are these here?</strong> Policies in this section cannot be reliably auto-compared and need human verification:')
     [void]$sb.AppendLine('    <ul style="margin:0.5rem 0;padding-left:1.5rem">')
+    [void]$sb.AppendLine('    <li><strong>Conflicting duplicates</strong> &mdash; The same setting is configured in multiple policies with different values (e.g., an ASR rule set to &ldquo;Block&rdquo; in one policy and &ldquo;Audit&rdquo; in another). Auto-comparison can incorrectly cross-match these. Verify which policy takes precedence.</li>')
+    [void]$sb.AppendLine('    <li><strong>App Protection Policies</strong> &mdash; The same settings appear across multiple MAM policies (e.g., separate Android and iOS). Review which policies apply to which platforms and whether differences are intentional.</li>')
     [void]$sb.AppendLine('    <li><strong>Scripts &amp; remediation</strong> &mdash; Script content needs human review to verify logic and intent.</li>')
-    [void]$sb.AppendLine('    <li><strong>App Protection Policies</strong> &mdash; The same settings may be configured across multiple policies (e.g., separate Android and iOS MAM policies). Review which policies apply to which platforms and whether the settings are intentionally different.</li>')
     [void]$sb.AppendLine('    <li><strong>Custom compliance</strong> &mdash; Custom detection scripts and rules require manual verification.</li>')
     [void]$sb.AppendLine('    <li><strong>Deprecated settings</strong> &mdash; Policies marked with <span class="badge-deprecated" style="animation:none;opacity:1">&#x26A0; contains deprecated settings</span> use configurations that Microsoft has marked for removal. Consider replacing them with modern equivalents.</li>')
     [void]$sb.AppendLine('    </ul>')
@@ -677,8 +679,9 @@ tr:hover td { background: var(--accent-soft); }
 
                 $hasDepr = $policy.HasDeprecated -eq $true
                 $deprBadge = if ($hasDepr) { ' <span class="badge-deprecated">&#x26A0; contains deprecated settings</span>' } else { '' }
+                $conflictBadge = if ($policy.HasConflictingDuplicates -eq $true) { ' <span class="badge-conflicting">&#x26A0; conflicting duplicate values</span>' } else { '' }
                 [void]$sb.AppendLine('<details class="manual-review-card">')
-                [void]$sb.AppendLine("    <summary><strong>$encPolicyName</strong> <span class=`"side-badge $sideCls`">$sideLabel</span>$deprBadge</summary>")
+                [void]$sb.AppendLine("    <summary><strong>$encPolicyName</strong> <span class=`"side-badge $sideCls`">$sideLabel</span>$deprBadge$conflictBadge</summary>")
                 [void]$sb.AppendLine('    <div class="mr-body">')
                 if (-not [string]::IsNullOrWhiteSpace($encProfileType)) {
                     [void]$sb.AppendLine("    <div style=`"font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem`">$encProfileType</div>")
@@ -695,6 +698,8 @@ tr:hover td { background: var(--accent-soft); }
                             [void]$sb.AppendLine("    <div class=`"ps-code-wrap`"><pre class=`"ps-code`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;margin:0`"><code>$encSValue</code></pre></div>")
                         } elseif ($isSettingDepr) {
                             [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`">&#x26A0; $encSName</span><span class=`"setting-value`">$encSValue</span></div>")
+                        } elseif ($s.IsConflicting -eq $true) {
+                            [void]$sb.AppendLine("    <div class=`"manual-review-setting`" style=`"color:var(--warning)`"><span class=`"setting-name`">&#x26A0; $encSName</span><span class=`"setting-value`" style=`"font-weight:700`">$encSValue</span></div>")
                         } else {
                             [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                         }

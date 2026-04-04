@@ -543,8 +543,70 @@ function Compare-InforcerDocModels {
         }
     }
 
-    # ── Manual Review = script/remediation/custom compliance + deprecated ──
+    # ── Manual Review = script/remediation/custom compliance + deprecated + conflicting duplicates ──
     $manualReview = $manualReviewCategories
+
+    # ── Conflicting duplicates scan ──────────────────────────────────────
+    # Find settings that exist in multiple policies with DIFFERENT values
+    # within the same tenant. These can cause incorrect cross-matching.
+    $scanForConflictingDuplicates = {
+        param([hashtable]$Model, [string]$Side)
+        if ($null -eq $Model -or $null -eq $Model.Products) { return }
+        # Build a map: settingKey → list of (policyName, value)
+        foreach ($prodName in $Model.Products.Keys) {
+            $prodData = $Model.Products[$prodName]
+            if ($null -eq $prodData -or $null -eq $prodData.Categories) { continue }
+            foreach ($catName in $prodData.Categories.Keys) {
+                $settingMap = @{}  # key → list of @{ Policy; Value }
+                foreach ($policy in @($prodData.Categories[$catName])) {
+                    if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
+                    foreach ($s in @($policy.Settings)) {
+                        if ($s.IsConfigured -ne $true) { continue }
+                        $val = "$($s.Value)".Trim()
+                        if ([string]::IsNullOrWhiteSpace($val)) { continue }
+                        $key = "$($s.Name)"
+                        if (-not $settingMap.ContainsKey($key)) {
+                            $settingMap[$key] = [System.Collections.Generic.List[object]]::new()
+                        }
+                        [void]$settingMap[$key].Add(@{ Policy = $policy.Basics.Name; Value = $val })
+                    }
+                }
+                # Find settings with same name but different values across policies
+                foreach ($key in $settingMap.Keys) {
+                    $entries = $settingMap[$key]
+                    if ($entries.Count -lt 2) { continue }
+                    $uniqueValues = @($entries | ForEach-Object { $_.Value } | Sort-Object -Unique)
+                    if ($uniqueValues.Count -lt 2) { continue }
+                    # This setting has conflicting values across policies
+                    $catLabel = "$prodName / $catName"
+                    if (-not $manualReview.Contains($catLabel)) {
+                        $manualReview[$catLabel] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    # Group by policy and show the conflicting setting
+                    foreach ($entry in $entries) {
+                        # Check if this policy is already in manual review for this category
+                        $existing = $manualReview[$catLabel] | Where-Object { $_.PolicyName -eq $entry.Policy -and $_.Side -eq $Side -and $_.HasConflictingDuplicates -eq $true }
+                        if ($existing) {
+                            [void]$existing.Settings.Add(@{ Name = $key; Value = $entry.Value; IsDeprecated = $false; IsConflicting = $true })
+                        } else {
+                            $settings = [System.Collections.Generic.List[object]]::new()
+                            [void]$settings.Add(@{ Name = $key; Value = $entry.Value; IsDeprecated = $false; IsConflicting = $true })
+                            [void]$manualReview[$catLabel].Add(@{
+                                PolicyName              = $entry.Policy
+                                Side                    = $Side
+                                ProfileType             = ''
+                                Settings                = $settings
+                                HasDeprecated           = $false
+                                HasConflictingDuplicates = $true
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    }
+    & $scanForConflictingDuplicates $SourceModel 'Source'
+    & $scanForConflictingDuplicates $DestinationModel 'Destination'
 
     # ── Deprecated Settings scan (both tenants) ──────────────────────────
     # Scan ALL settings in both DocModels. If a policy contains ANY deprecated

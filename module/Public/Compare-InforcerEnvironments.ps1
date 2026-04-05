@@ -23,6 +23,18 @@
 .PARAMETER SettingsCatalogPath
     Path to the IntuneSettingsCatalogViewer settings.json file.
     Auto-discovers from sibling repo if omitted.
+.PARAMETER FetchGraphData
+    When specified, connects to Microsoft Graph to resolve assignment group ObjectIDs and
+    filter IDs to friendly display names. Requires the Microsoft.Graph.Authentication module
+    and interactive sign-in. If the source and destination tenants are in different Azure AD
+    tenants, you will be prompted to sign in for each.
+.PARAMETER ExcludeOS
+    Array of OS/platform names to exclude from the comparison. Matching is case-insensitive
+    and uses contains logic. Examples: 'macOS', 'iOS', 'Android', 'Windows'.
+    Excluded platforms do not affect the alignment score.
+.PARAMETER PolicyNameFilter
+    Only include policies whose name contains this string (case-insensitive).
+    Non-matching policies are excluded from both the report and the alignment score.
 .PARAMETER OutputPath
     Directory where the HTML report will be written. Defaults to current directory.
 .OUTPUTS
@@ -67,6 +79,15 @@ param(
     [switch]$IgnoreUnassignedPolicies,
 
     [Parameter(Mandatory = $false)]
+    [switch]$FetchGraphData,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$ExcludeOS,
+
+    [Parameter(Mandatory = $false)]
+    [string]$PolicyNameFilter,
+
+    [Parameter(Mandatory = $false)]
     [string]$OutputPath = '.'
 )
 
@@ -94,6 +115,7 @@ if ($null -ne $SourceSession)       { $compDataParams['SourceSession']      = $S
 if ($null -ne $DestinationSession)  { $compDataParams['DestinationSession'] = $DestinationSession }
 if (-not [string]::IsNullOrWhiteSpace($SettingsCatalogPath)) { $compDataParams['SettingsCatalogPath'] = $SettingsCatalogPath }
 if ($IncludingAssignments) { $compDataParams['IncludingAssignments'] = $true }
+if ($FetchGraphData) { $compDataParams['FetchGraphData'] = $true }
 
 $compData = $null
 try {
@@ -116,10 +138,19 @@ Write-Host "  Destination: $($compData.DestinationName)" -ForegroundColor Gray
 # ── Stage 2: Build comparison model ──────────────────────────────────────────
 Write-Host 'Stage 2: Building comparison model...' -ForegroundColor Cyan
 
-$model = Compare-InforcerDocModels -SourceModel $compData.SourceModel `
-    -DestinationModel $compData.DestinationModel `
-    -IncludingAssignments:$compData.IncludingAssignments `
-    -IgnoreUnassignedPolicies:$IgnoreUnassignedPolicies
+$compareParams = @{
+    SourceModel              = $compData.SourceModel
+    DestinationModel         = $compData.DestinationModel
+    IncludingAssignments     = $compData.IncludingAssignments
+    IgnoreUnassignedPolicies = $IgnoreUnassignedPolicies.IsPresent
+}
+if ($ExcludeOS)   { $compareParams['ExcludeOS']   = $ExcludeOS }
+if ($PolicyNameFilter) { $compareParams['PolicyNameFilter'] = $PolicyNameFilter }
+
+if ($ExcludeOS) { Write-Host "  Excluding products: $($ExcludeOS -join ', ')" -ForegroundColor Gray }
+if ($PolicyNameFilter) { Write-Host "  Policy name filter: '$PolicyNameFilter'" -ForegroundColor Gray }
+
+$model = Compare-InforcerDocModels @compareParams
 
 if ($null -eq $model) {
     Write-Error -Message 'Compare-InforcerDocModels returned no model.' `

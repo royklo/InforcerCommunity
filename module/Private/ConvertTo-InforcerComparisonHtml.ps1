@@ -384,7 +384,8 @@ tr:hover td { background: var(--accent-soft); }
 .tab-btn:hover { color: var(--text); background: var(--accent-soft); }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 .manual-review-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0; margin-bottom: 0.75rem; }
-.manual-review-card summary { padding: 0.75rem 1rem; font-size: 0.875rem; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; }
+.manual-review-card summary { padding: 0.75rem 1rem; font-size: 0.875rem; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; user-select: text; }
+.manual-review-card summary strong { cursor: text; }
 .manual-review-card summary::-webkit-details-marker { display: none; }
 .manual-review-card summary::before { content: '\25B6'; font-size: 0.65rem; color: var(--muted); transition: transform var(--transition); }
 .manual-review-card[open] summary::before { transform: rotate(90deg); }
@@ -393,6 +394,16 @@ tr:hover td { background: var(--accent-soft); }
 .manual-review-card .side-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
 .manual-review-card .side-source { background: var(--info-bg); color: var(--info); }
 .manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
+.assign-tag { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; margin: 0.1rem 0.15rem; white-space: nowrap; }
+.assign-include { background: #dbeafe; color: #1e40af; }
+.assign-exclude { background: #fde2e2; color: #991b1b; }
+.assign-all { background: #e0e7ff; color: #3730a3; }
+.assign-name { font-size: 0.78rem; margin-left: 0.15rem; }
+@media (prefers-color-scheme: dark) {
+    .assign-include { background: #1e3a5f; color: #93c5fd; }
+    .assign-exclude { background: #5c1a1a; color: #fca5a5; }
+    .assign-all { background: #312e81; color: #c7d2fe; }
+}
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 /* .setting-deprecated defined below with manual-review-setting styles */
@@ -561,6 +572,31 @@ tr:hover td { background: var(--accent-soft); }
         [void]$sb.AppendLine('        </tr></thead>')
         [void]$sb.AppendLine('        <tbody>')
 
+            # Helper: convert assignment string to tagged HTML
+            $formatAssignHtml = {
+                param([string]$AssignStr)
+                if ([string]::IsNullOrWhiteSpace($AssignStr)) { return '' }
+                $html = [System.Text.StringBuilder]::new()
+                foreach ($part in ($AssignStr -split ';\s*')) {
+                    $part = $part.Trim()
+                    if ([string]::IsNullOrWhiteSpace($part)) { continue }
+                    if ($part -match '^Include:\s*(.+)$') {
+                        $name = [System.Net.WebUtility]::HtmlEncode($Matches[1])
+                        [void]$html.Append("<span class=`"assign-tag assign-include`">Include</span><span class=`"assign-name`">$name</span><br>")
+                    } elseif ($part -match '^Exclude:\s*(.+)$') {
+                        $name = [System.Net.WebUtility]::HtmlEncode($Matches[1])
+                        [void]$html.Append("<span class=`"assign-tag assign-exclude`">Exclude</span><span class=`"assign-name`">$name</span><br>")
+                    } elseif ($part -eq 'All Devices' -or $part -eq 'All Users') {
+                        $enc = [System.Net.WebUtility]::HtmlEncode($part)
+                        [void]$html.Append("<span class=`"assign-tag assign-all`">$enc</span><br>")
+                    } else {
+                        $enc = [System.Net.WebUtility]::HtmlEncode($part)
+                        [void]$html.Append("<span class=`"assign-name`">$enc</span><br>")
+                    }
+                }
+                return $html.ToString()
+            }
+
             foreach ($row in $allRows) {
                 $status = $row.Status
 
@@ -633,10 +669,10 @@ tr:hover td { background: var(--accent-soft); }
 
                 # Assignment columns
                 if ($inclAssignments) {
-                    $encSrcAssign = [System.Net.WebUtility]::HtmlEncode($row.SourceAssignment)
-                    $encDstAssign = [System.Net.WebUtility]::HtmlEncode($row.DestAssignment)
-                    [void]$sb.Append("<td class=`"value-cell`">$encSrcAssign</td>")
-                    [void]$sb.Append("<td class=`"value-cell`">$encDstAssign</td>")
+                    $srcAssignHtml = & $formatAssignHtml $row.SourceAssignment
+                    $dstAssignHtml = & $formatAssignHtml $row.DestAssignment
+                    [void]$sb.Append("<td class=`"value-cell`">$srcAssignHtml</td>")
+                    [void]$sb.Append("<td class=`"value-cell`">$dstAssignHtml</td>")
                 }
 
                 [void]$sb.AppendLine('</tr>')

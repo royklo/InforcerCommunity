@@ -36,7 +36,13 @@ function Compare-InforcerDocModels {
         [switch]$IncludingAssignments,
 
         [Parameter()]
-        [switch]$IgnoreUnassignedPolicies
+        [switch]$IgnoreUnassignedPolicies,
+
+        [Parameter()]
+        [string[]]$ExcludeOS,
+
+        [Parameter()]
+        [string]$PolicyNameFilter
     )
 
     # ── Result containers ─────────────────────────────────────────────────
@@ -299,6 +305,16 @@ function Compare-InforcerDocModels {
     }
 
     foreach ($productName in $allProducts) {
+        # ExcludeOS filter (case-insensitive contains)
+        if ($ExcludeOS) {
+            $skipProduct = $false
+            $prodLower = $productName.ToLowerInvariant()
+            foreach ($ep in $ExcludeOS) {
+                if ($prodLower -match [regex]::Escape($ep.ToLowerInvariant())) { $skipProduct = $true; break }
+            }
+            if ($skipProduct) { continue }
+        }
+
         $srcProduct = if ($SourceModel.Products -and $SourceModel.Products.Contains($productName)) {
             $SourceModel.Products[$productName]
         } else { $null }
@@ -333,6 +349,12 @@ function Compare-InforcerDocModels {
             if ($IgnoreUnassignedPolicies) {
                 $srcPolicies = @($srcPolicies | Where-Object { $null -ne $_ -and $null -ne $_.Assignments -and @($_.Assignments).Count -gt 0 })
                 $dstPolicies = @($dstPolicies | Where-Object { $null -ne $_ -and $null -ne $_.Assignments -and @($_.Assignments).Count -gt 0 })
+            }
+
+            # Filter by policy name (case-insensitive contains)
+            if (-not [string]::IsNullOrWhiteSpace($PolicyNameFilter)) {
+                $srcPolicies = @($srcPolicies | Where-Object { $null -ne $_ -and $_.Basics.Name -and $_.Basics.Name.IndexOf($PolicyNameFilter, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 })
+                $dstPolicies = @($dstPolicies | Where-Object { $null -ne $_ -and $_.Basics.Name -and $_.Basics.Name.IndexOf($PolicyNameFilter, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 })
             }
 
             $categoryLabel = "$productName / $categoryName"

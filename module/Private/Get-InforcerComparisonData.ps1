@@ -18,6 +18,10 @@ function Get-InforcerComparisonData {
         Optional explicit path to settings.json. Auto-discovers if omitted.
     .PARAMETER IncludingAssignments
         When specified, policy assignment data is included in the collected policies.
+    .PARAMETER FetchGraphData
+        When specified, connects to Microsoft Graph to resolve group ObjectIDs and assignment
+        filter IDs to friendly display names. Requires Microsoft.Graph.Authentication module
+        and interactive sign-in for each tenant.
     .OUTPUTS
         Hashtable with keys: SourceModel, DestinationModel, SourceName, DestinationName,
         IncludingAssignments, CollectedAt
@@ -40,7 +44,10 @@ function Get-InforcerComparisonData {
         [string]$SettingsCatalogPath,
 
         [Parameter()]
-        [switch]$IncludingAssignments
+        [switch]$IncludingAssignments,
+
+        [Parameter()]
+        [switch]$FetchGraphData
     )
 
     if ($null -eq $SourceSession) { $SourceSession = $script:InforcerSession }
@@ -63,7 +70,6 @@ function Get-InforcerComparisonData {
                 -ErrorId 'SourceDataCollectionFailed' -Category ConnectionError
             return $null
         }
-        $sourceModel = ConvertTo-InforcerDocModel -DocData $sourceDocData -ComparisonMode
 
         # ── Destination ──
         Write-Host 'Collecting destination tenant data...' -ForegroundColor Gray
@@ -74,10 +80,40 @@ function Get-InforcerComparisonData {
                 -ErrorId 'DestDataCollectionFailed' -Category ConnectionError
             return $null
         }
-        $destModel = ConvertTo-InforcerDocModel -DocData $destDocData -ComparisonMode
     } finally {
         $script:InforcerSession = $originalSession
     }
+
+    # ── Graph enrichment (resolve group names and assignment filters) ──
+    $srcGraphMaps = @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null }
+    $dstGraphMaps = @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null }
+
+    if ($FetchGraphData) {
+        Write-Host 'Connecting to Microsoft Graph for assignment resolution...' -ForegroundColor Cyan
+
+        # Always sign in separately for each tenant to ensure correct Azure AD context
+        $srcTenantName = if ($sourceDocData.Tenant.tenantFriendlyName) { $sourceDocData.Tenant.tenantFriendlyName } else { $SourceTenantId }
+        $dstTenantName = if ($destDocData.Tenant.tenantFriendlyName) { $destDocData.Tenant.tenantFriendlyName } else { $DestinationTenantId }
+
+        Write-Host "  Sign in for SOURCE tenant: $srcTenantName" -ForegroundColor Yellow
+        $srcGraphMaps = Resolve-InforcerGraphEnrichment -DocData $sourceDocData -Label "Source ($srcTenantName)"
+
+        Write-Host "  Sign in for DESTINATION tenant: $dstTenantName" -ForegroundColor Yellow
+        $dstGraphMaps = Resolve-InforcerGraphEnrichment -DocData $destDocData -Label "Destination ($dstTenantName)"
+    }
+
+    # ── Build DocModels ──
+    $srcModelParams = @{ DocData = $sourceDocData; ComparisonMode = $true }
+    if ($srcGraphMaps.GroupNameMap) { $srcModelParams['GroupNameMap'] = $srcGraphMaps.GroupNameMap }
+    if ($srcGraphMaps.FilterMap)    { $srcModelParams['FilterMap']    = $srcGraphMaps.FilterMap }
+    if ($srcGraphMaps.ScopeTagMap)  { $srcModelParams['ScopeTagMap']  = $srcGraphMaps.ScopeTagMap }
+    $sourceModel = ConvertTo-InforcerDocModel @srcModelParams
+
+    $dstModelParams = @{ DocData = $destDocData; ComparisonMode = $true }
+    if ($dstGraphMaps.GroupNameMap) { $dstModelParams['GroupNameMap'] = $dstGraphMaps.GroupNameMap }
+    if ($dstGraphMaps.FilterMap)    { $dstModelParams['FilterMap']    = $dstGraphMaps.FilterMap }
+    if ($dstGraphMaps.ScopeTagMap)  { $dstModelParams['ScopeTagMap']  = $dstGraphMaps.ScopeTagMap }
+    $destModel = ConvertTo-InforcerDocModel @dstModelParams
 
     @{
         SourceModel          = $sourceModel

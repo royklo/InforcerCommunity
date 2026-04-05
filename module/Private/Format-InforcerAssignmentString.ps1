@@ -22,8 +22,8 @@ function Format-InforcerAssignmentString {
         switch ($type) {
             'All Devices'    { [void]$parts.Add('All Devices') }
             'All Users'      { [void]$parts.Add('All Users') }
-            'Group (Include)' { [void]$parts.Add("Include:$target") }
-            'Group (Exclude)' { [void]$parts.Add("Exclude:$target") }
+            'Group (Include)' { [void]$parts.Add("Include: $target") }
+            'Group (Exclude)' { [void]$parts.Add("Exclude: $target") }
             default {
                 if ($target) { [void]$parts.Add($target) }
                 elseif ($type) { [void]$parts.Add($type) }

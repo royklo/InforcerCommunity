@@ -203,86 +203,18 @@ if (-not [string]::IsNullOrWhiteSpace($Tag)) {
 }
 
 # Build Graph enrichment maps before DocModel (so assignments resolve during normalization)
-$groupNameMap = $null
-$filterMap = $null
+$graphMaps = @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null }
 if ($FetchGraphData) {
     Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
-    # Extract Azure AD tenant GUID from the Inforcer tenant data so Graph targets the correct tenant
-    $msTenantId = $null
-    if ($docData.Tenant -and $docData.Tenant.PSObject.Properties['msTenantId']) {
-        $msTenantId = $docData.Tenant.msTenantId
-    }
-    $graphConnectParams = @{ RequiredScopes = @('Directory.Read.All') }
-    if ($msTenantId) { $graphConnectParams['TenantId'] = $msTenantId }
-    $graphCtx = Connect-InforcerGraph @graphConnectParams
-
-    if (-not $graphCtx) {
-        Write-Warning 'Microsoft Graph connection failed. Falling back to raw ObjectIDs.'
-    } else {
-        Write-Host "  Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
-
-        # Validate Graph is connected to the correct tenant
-        if ($msTenantId -and $graphCtx.TenantId -and $graphCtx.TenantId -ne $msTenantId) {
-            $tenantName = $docData.Tenant.tenantFriendlyName
-            Write-Warning "Graph signed into tenant $($graphCtx.TenantId) but exporting tenant '$tenantName' ($msTenantId). Group names and filters may not resolve correctly."
-            Write-Warning "Sign in with an account that has access to tenant '$tenantName' or skip -FetchGraphData."
-        }
-
-        # Collect all unique group ObjectIDs from raw policy data
-        $objectIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($policy in @($docData.Policies)) {
-            $rawAssign = $policy.policyData.assignments
-            if ($null -eq $rawAssign) { $rawAssign = $policy.assignments }
-            if ($null -eq $rawAssign) { continue }
-            foreach ($a in @($rawAssign)) {
-                $t = $a.target; if ($null -eq $t) { $t = $a }
-                if ($t.groupId -and $t.groupId -match '^[0-9a-f]{8}-') {
-                    [void]$objectIds.Add($t.groupId)
-                }
-            }
-        }
-
-        if ($objectIds.Count -gt 0) {
-            Write-Host "  Resolving $($objectIds.Count) unique group/object IDs..." -ForegroundColor Gray
-            $groupNameMap = @{}
-            $resolved = 0
-            foreach ($oid in $objectIds) {
-                $obj = Invoke-InforcerGraphRequest -Uri "https://graph.microsoft.com/v1.0/directoryObjects/$oid" -SingleObject
-                if ($obj -and $obj.displayName) {
-                    $groupNameMap[$oid] = $obj.displayName
-                    $resolved++
-                } else {
-                    $groupNameMap[$oid] = $oid
-                }
-            }
-            Write-Host "  Resolved $resolved of $($objectIds.Count) group names" -ForegroundColor Gray
-        }
-
-        # Fetch assignment filters from Intune
-        Write-Host '  Fetching assignment filters...' -ForegroundColor Gray
-        $rawFilters = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/beta/deviceManagement/assignmentFilters'
-        $filterMap = @{}
-        if ($rawFilters) {
-            foreach ($f in $rawFilters) { $filterMap[$f.id] = $f }
-            Write-Host "  Loaded $($filterMap.Count) assignment filters" -ForegroundColor Gray
-        }
-
-        # Fetch scope tags from Intune and build ID -> displayName map
-        Write-Host '  Fetching scope tags...' -ForegroundColor Gray
-        $rawScopeTags = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/beta/deviceManagement/roleScopeTags'
-        $script:InforcerScopeTagMap = @{}
-        if ($rawScopeTags) {
-            foreach ($st in $rawScopeTags) { $script:InforcerScopeTagMap[$st.id.ToString()] = $st.displayName }
-            Write-Host "  Loaded $($script:InforcerScopeTagMap.Count) scope tags" -ForegroundColor Gray
-        }
-    }
+    $graphMaps = Resolve-InforcerGraphEnrichment -DocData $docData
+    if ($graphMaps.ScopeTagMap) { $script:InforcerScopeTagMap = $graphMaps.ScopeTagMap }
 }
 
 Write-Host 'Building documentation model...' -ForegroundColor Cyan
 $docModelParams = @{ DocData = $docData }
-if ($groupNameMap)                   { $docModelParams['GroupNameMap'] = $groupNameMap }
-if ($filterMap)                      { $docModelParams['FilterMap'] = $filterMap }
-if ($script:InforcerScopeTagMap)     { $docModelParams['ScopeTagMap'] = $script:InforcerScopeTagMap }
+if ($graphMaps.GroupNameMap)  { $docModelParams['GroupNameMap'] = $graphMaps.GroupNameMap }
+if ($graphMaps.FilterMap)    { $docModelParams['FilterMap']    = $graphMaps.FilterMap }
+if ($graphMaps.ScopeTagMap)  { $docModelParams['ScopeTagMap']  = $graphMaps.ScopeTagMap }
 $docModel = ConvertTo-InforcerDocModel @docModelParams
 if ($null -eq $docModel) { return }
 

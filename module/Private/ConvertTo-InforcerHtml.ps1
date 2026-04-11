@@ -374,7 +374,7 @@ td {
     word-break: break-word;
     max-width: 500px;
 }
-.long-val { display: block; max-height: 2.6em; overflow: hidden; position: relative; word-break: break-all; }
+.long-val { display: block; max-height: 12em; overflow: hidden; position: relative; word-break: break-all; }
 .long-val.expanded { max-height: none; }
 .long-val-btn {
     display: inline-block; margin-top: 0.25rem; padding: 0.125rem 0.5rem;
@@ -389,6 +389,19 @@ tr:hover td { background: var(--accent-soft); }
 /* --- Metadata rows (hidden by default, shown via toggle) --- */
 .metadata-row { display: none; }
 .show-metadata .metadata-row { display: table-row; }
+/* --- Multi-value list display --- */
+.mv-list { list-style: none; margin: 0; padding: 0; }
+.mv-list li { padding: 0.125rem 0; }
+.mv-list li + li { border-top: 1px solid var(--border-subtle); }
+.mv-hidden { display: none; }
+.mv-btn {
+    display: inline-block; font-size: 0.6875rem; font-weight: 600;
+    padding: 0.125rem 0.5rem; border-radius: var(--radius-xs);
+    background: var(--badge-bg); color: var(--badge-text);
+    cursor: pointer; margin-top: 0.25rem; user-select: none;
+    border: none; transition: background var(--transition);
+}
+.mv-btn:hover { background: var(--accent); color: #fff; }
 /* --- Tooltip icon --- */
 .tooltip-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -558,7 +571,33 @@ tr:hover td { background: var(--accent-soft); }
         if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrEmpty($Value))) {
             return '<span class="muted empty-val">&mdash;</span>'
         }
-        $str = [System.Net.WebUtility]::HtmlEncode($Value.ToString())
+        $str = $Value.ToString()
+        # Multi-value comma-separated list — render as vertical list
+        if ($str -match ',') {
+            $items = $str -split ',\s*' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+            if ($items.Count -ge 2) {
+                $mvId = "mv$(Get-Random)"
+                $sb2 = [System.Text.StringBuilder]::new()
+                [void]$sb2.Append('<ul class="mv-list">')
+                $i = 0
+                foreach ($item in $items) {
+                    $encItem = [System.Net.WebUtility]::HtmlEncode($item)
+                    if ($items.Count -gt 10 -and $i -ge 10) {
+                        [void]$sb2.Append("<li class=`"mv-hidden $mvId`">$encItem</li>")
+                    } else {
+                        [void]$sb2.Append("<li>$encItem</li>")
+                    }
+                    $i++
+                }
+                [void]$sb2.Append('</ul>')
+                if ($items.Count -gt 10) {
+                    $remaining = $items.Count - 10
+                    [void]$sb2.Append("<span class=`"mv-btn`" onclick=`"var h=this.closest('td').querySelectorAll('.$mvId');var show=h[0].style.display!=='list-item';h.forEach(function(e){e.style.display=show?'list-item':'none'});this.textContent=show?'Collapse':'+ $remaining more'`">+ $remaining more</span>")
+                }
+                return $sb2.ToString()
+            }
+        }
+        $str = [System.Net.WebUtility]::HtmlEncode($str)
         # Wrap long values (>200 chars) in a collapsible block with ellipsis button
         if ($str.Length -gt 200) {
             return "<span class=`"long-val`" id=`"lv$(Get-Random)`">$str</span><span class=`"long-val-btn`" onclick=`"var v=this.previousElementSibling;v.classList.toggle('expanded');this.textContent=v.classList.contains('expanded')?'Collapse':'Expand'`">Expand</span>"
@@ -604,7 +643,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine($cssBlock)
     [void]$sb.AppendLine('</style>')
     [void]$sb.AppendLine('</head>')
-    [void]$sb.AppendLine('<body>')
+    [void]$sb.AppendLine('<body class="hide-empty">')
 
     # --- Header ---
     [void]$sb.AppendLine('<div id="top"></div>')
@@ -652,7 +691,7 @@ tr:hover td { background: var(--accent-soft); }
 
     # Sidebar controls
     [void]$sb.AppendLine('<div class="sidebar-controls">')
-    [void]$sb.AppendLine('<label class="toggle-row"><span>Hide empty fields</span><span class="toggle-switch"><input type="checkbox" id="chk-empty" onchange="toggleEmpty()"><span class="toggle-slider"></span></span></label>')
+    [void]$sb.AppendLine('<label class="toggle-row"><span>Hide empty fields</span><span class="toggle-switch"><input type="checkbox" id="chk-empty" checked onchange="toggleEmpty()"><span class="toggle-slider"></span></span></label>')
     [void]$sb.AppendLine('<label class="toggle-row"><span>Expand all sections</span><span class="toggle-switch"><input type="checkbox" id="chk-expand" onchange="toggleExpand()"><span class="toggle-slider"></span></span></label>')
     [void]$sb.AppendLine('<label class="toggle-row"><span>Dark mode</span><span class="toggle-switch"><input type="checkbox" id="chk-theme" onchange="toggleTheme()"><span class="toggle-slider"></span></span></label>')
     [void]$sb.AppendLine('<label class="toggle-row"><span>Show metadata<span class="tooltip-icon" data-tip="Show @odata.type and other metadata properties in settings tables">i</span></span><span class="toggle-switch"><input type="checkbox" id="chk-meta" onchange="toggleMeta()"><span class="toggle-slider"></span></span></label>')
@@ -917,7 +956,7 @@ function closeSidebar(){document.getElementById('sidebar').classList.remove('ope
 function scrollToTop(){window.scrollTo({top:0,behavior:'smooth'})}
 function toggleMeta(){document.body.classList.toggle('show-metadata')}
 var _activeTags=[];
-function searchPolicies(q){var prods=document.querySelectorAll('.product-section');q=q.toLowerCase().trim();prods.forEach(function(pr){pr.querySelectorAll('mark.search-highlight').forEach(function(h){var p=h.parentNode;p.replaceChild(document.createTextNode(h.textContent),h);p.normalize()});var vis=0;pr.querySelectorAll('.policy-section').forEach(function(p){if(p.classList.contains('tag-hidden')){return}var txt=p.textContent.toLowerCase();if(!q||txt.indexOf(q)>=0){p.classList.remove('search-hidden');vis++}else{p.classList.add('search-hidden')}});if(q){if(vis>0){pr.open=true;pr.style.display=''}else{pr.open=false;pr.style.display='none'}}else{pr.style.display='';pr.open=false}});document.querySelectorAll('h3').forEach(function(h){if(!q){h.style.display='';return}var next=h.nextElementSibling;var hasVis=false;while(next&&!next.matches('h3')){if(next.classList.contains('policy-section')&&!next.classList.contains('search-hidden')&&!next.classList.contains('tag-hidden')){hasVis=true;break}next=next.nextElementSibling}h.style.display=hasVis?'':'none'});if(!q)return;var re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');prods.forEach(function(pr){pr.querySelectorAll('.policy-section:not(.search-hidden):not(.tag-hidden) td, .policy-section:not(.search-hidden):not(.tag-hidden) h4').forEach(function(el){el.childNodes.forEach(function(n){if(n.nodeType===3&&re.test(n.textContent)){var s=document.createElement('span');s.innerHTML=n.textContent.replace(re,'<mark class="search-highlight">$1</mark>');n.parentNode.replaceChild(s,n)}})})})}
+function searchPolicies(q){var prods=document.querySelectorAll('.product-section');q=q.toLowerCase().trim();prods.forEach(function(pr){pr.querySelectorAll('mark.search-highlight').forEach(function(h){var p=h.parentNode;p.replaceChild(document.createTextNode(h.textContent),h);p.normalize()});var vis=0;pr.querySelectorAll('.policy-section').forEach(function(p){if(p.classList.contains('tag-hidden')){return}var txt=p.textContent.toLowerCase();if(!q||txt.indexOf(q)>=0){p.classList.remove('search-hidden');vis++}else{p.classList.add('search-hidden')}});if(q){if(vis>0){pr.open=true;pr.style.display=''}else{pr.open=false;pr.style.display='none'}}else{pr.style.display='';pr.open=false}});document.querySelectorAll('h3').forEach(function(h){if(!q){h.style.display='';return}var next=h.nextElementSibling;var hasVis=false;while(next&&next.tagName!=='H3'){if(next.classList&&next.classList.contains('policy-section')&&!next.classList.contains('search-hidden')&&!next.classList.contains('tag-hidden')){hasVis=true;break}next=next.nextElementSibling}h.style.display=hasVis?'':'none'});prods.forEach(function(pr){if(!q){pr.style.display='';return}var anyH3=false;pr.querySelectorAll('h3').forEach(function(h){if(h.style.display!=='none')anyH3=true});if(!anyH3){var anyPol=pr.querySelectorAll('.policy-section:not(.search-hidden):not(.tag-hidden)').length>0;if(!anyPol){pr.style.display='none';pr.open=false}}});if(!q)return;var re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');prods.forEach(function(pr){pr.querySelectorAll('.policy-section:not(.search-hidden):not(.tag-hidden) td, .policy-section:not(.search-hidden):not(.tag-hidden) h4').forEach(function(el){el.childNodes.forEach(function(n){if(n.nodeType===3&&re.test(n.textContent)){var s=document.createElement('span');s.innerHTML=n.textContent.replace(re,'<mark class="search-highlight">$1</mark>');n.parentNode.replaceChild(s,n)}})})})}
 function toggleTagFilter(el,tag){var isActive=!el.classList.contains('active');var i=_activeTags.indexOf(tag);if(isActive&&i<0)_activeTags.push(tag);else if(!isActive&&i>=0)_activeTags.splice(i,1);document.querySelectorAll('.tag-pill[data-tag="'+tag+'"]').forEach(function(p){if(isActive)p.classList.add('active');else p.classList.remove('active')});applyTagFilter()}
 function applyTagFilter(){document.querySelectorAll('.policy-section').forEach(function(p){if(_activeTags.length===0){p.classList.remove('tag-hidden');return}var t=p.getAttribute('data-tags')||'';var found=_activeTags.some(function(tag){return t.toLowerCase().indexOf(tag.toLowerCase())>=0});if(found)p.classList.remove('tag-hidden');else p.classList.add('tag-hidden')});document.querySelectorAll('.product-section').forEach(function(pr){var vis=pr.querySelectorAll('.policy-section:not(.tag-hidden)').length;if(_activeTags.length>0&&vis>0)pr.open=true});var si=document.getElementById('search-input');if(si.value)searchPolicies(si.value)}
 function navClick(e,targetId){if(e)e.preventDefault();document.getElementById('search-input').value='';searchPolicies('');closeSidebar();var el=document.getElementById(targetId);if(el){var prod=el.closest('details.product-section');if(prod)prod.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})}}

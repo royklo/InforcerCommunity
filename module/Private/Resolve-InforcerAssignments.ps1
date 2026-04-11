@@ -40,8 +40,15 @@ function Resolve-InforcerAssignments {
 
         $odataType  = $target.'@odata.type'
         $groupId    = $target.groupId
+        # Filter properties may live on target (Graph standard) or assignment level (some API wrappers)
         $filterId   = $target.deviceAndAppManagementAssignmentFilterId
+        if ([string]::IsNullOrWhiteSpace($filterId)) {
+            $filterId = $assignment.deviceAndAppManagementAssignmentFilterId
+        }
         $filterMode = $target.deviceAndAppManagementAssignmentFilterType
+        if ([string]::IsNullOrWhiteSpace($filterMode)) {
+            $filterMode = $assignment.deviceAndAppManagementAssignmentFilterType
+        }
 
         # Resolve assignment type to friendly name
         $typeName = if ($typeMap.ContainsKey($odataType)) { $typeMap[$odataType] }

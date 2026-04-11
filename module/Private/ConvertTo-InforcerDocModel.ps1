@@ -77,8 +77,95 @@ function ConvertTo-InforcerDocModel {
         [hashtable]$FilterMap,
 
         [Parameter()]
+        [hashtable]$RoleNameMap,
+
+        [Parameter()]
+        [hashtable]$LocationNameMap,
+
+        [Parameter()]
+        [hashtable]$AppNameMap,
+
+        [Parameter()]
         [hashtable]$ScopeTagMap
     )
+
+    # Friendly labels for Conditional Access camelCase property names
+    $caFriendlyNames = @{
+        'includeUsers'                    = 'Include Users'
+        'excludeUsers'                    = 'Exclude Users'
+        'includeGroups'                   = 'Include Groups'
+        'excludeGroups'                   = 'Exclude Groups'
+        'includeRoles'                    = 'Include Roles'
+        'excludeRoles'                    = 'Exclude Roles'
+        'includeGuestsOrExternalUsers'    = 'Include Guests or External Users'
+        'excludeGuestsOrExternalUsers'    = 'Exclude Guests or External Users'
+        'includeApplications'             = 'Include Applications'
+        'excludeApplications'             = 'Exclude Applications'
+        'includeUserActions'              = 'Include User Actions'
+        'includeAuthenticationContextClassReferences' = 'Include Authentication Context'
+        'includeLocations'                = 'Include Locations'
+        'excludeLocations'                = 'Exclude Locations'
+        'includePlatforms'                = 'Include Platforms'
+        'excludePlatforms'                = 'Exclude Platforms'
+        'includeServicePrincipals'        = 'Include Service Principals'
+        'excludeServicePrincipals'        = 'Exclude Service Principals'
+        'clientAppTypes'                  = 'Client App Types'
+        'userRiskLevels'                  = 'User Risk Levels'
+        'signInRiskLevels'                = 'Sign-in Risk Levels'
+        'servicePrincipalRiskLevels'      = 'Service Principal Risk Levels'
+        'grantControls'                   = 'Grant Controls'
+        'builtInControls'                 = 'Built-in Controls'
+        'customAuthenticationFactors'     = 'Custom Authentication Factors'
+        'termsOfUse'                      = 'Terms of Use'
+        'authenticationStrength'          = 'Authentication Strength'
+        'operator'                        = 'Operator'
+        'allowedCombinations'             = 'Allowed Combinations'
+        'requirementsSatisfied'           = 'Requirements Satisfied'
+        'policyType'                      = 'Policy Type'
+        'combinationConfigurations'       = 'Combination Configurations'
+        'sessionControls'                 = 'Session Controls'
+        'applicationEnforcedRestrictions' = 'Application Enforced Restrictions'
+        'cloudAppSecurity'                = 'Cloud App Security'
+        'persistentBrowser'               = 'Persistent Browser'
+        'signInFrequency'                 = 'Sign-in Frequency'
+        'disableResilienceDefaults'       = 'Disable Resilience Defaults'
+        'continuousAccessEvaluation'      = 'Continuous Access Evaluation'
+        'secureSignInSession'             = 'Secure Sign-in Session'
+        'transferMethods'                 = 'Transfer Methods'
+        'modifiedDateTime'                = 'Modified'
+        'conditions'                      = 'Conditions'
+        'users'                           = 'Users'
+        'applications'                    = 'Applications'
+        'locations'                       = 'Locations'
+        'platforms'                       = 'Platforms'
+        'devices'                         = 'Devices'
+        'clientApplications'              = 'Client Applications'
+    }
+
+    # Friendly labels for camelCase auth combination values
+    $caFriendlyValues = @{
+        'windowsHelloForBusiness'       = 'Windows Hello for Business'
+        'fido2'                         = 'FIDO2 Security Key'
+        'deviceBasedPush'               = 'Device-based Push'
+        'temporaryAccessPassOneTime'    = 'Temporary Access Pass (One-time)'
+        'temporaryAccessPassMultiUse'   = 'Temporary Access Pass (Multi-use)'
+        'password,microsoftAuthenticatorPush' = 'Password + Microsoft Authenticator'
+        'password,softwareOath'         = 'Password + Software OATH Token'
+        'password,hardwareOath'         = 'Password + Hardware OATH Token'
+        'password,sms'                  = 'Password + SMS'
+        'password,voice'                = 'Password + Voice'
+        'federatedMultiFactor'          = 'Federated Multi-factor'
+        'federatedSingleFactor'         = 'Federated Single-factor'
+        'microsoftAuthenticatorPush'    = 'Microsoft Authenticator Push'
+        'softwareOath'                  = 'Software OATH Token'
+        'hardwareOath'                  = 'Hardware OATH Token'
+        'sms'                           = 'SMS'
+        'voice'                         = 'Voice'
+        'x509CertificateMultiFactor'    = 'X.509 Certificate (Multi-factor)'
+        'x509CertificateSingleFactor'   = 'X.509 Certificate (Single-factor)'
+        'authenticationTransfer'        = 'Authentication Transfer'
+        'deviceCodeFlow'                = 'Device Code Flow'
+    }
 
     $tenant   = $DocData.Tenant
     $policies = $DocData.Policies
@@ -185,6 +272,96 @@ function ConvertTo-InforcerDocModel {
             # Non-catalog -- use ConvertTo-FlatSettingRows (per D-07)
             foreach ($row in (ConvertTo-FlatSettingRows -PolicyData $policy.policyData)) {
                 [void]$settings.Add($row)
+            }
+        }
+
+        # Resolve GUIDs in CA policy settings (groups, roles, named locations)
+        if ($settings.Count -gt 0 -and ($GroupNameMap -or $RoleNameMap -or $LocationNameMap)) {
+            $guidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            foreach ($row in $settings) {
+                $val = $row.Value
+                if ([string]::IsNullOrWhiteSpace($val)) { continue }
+                # Single GUID value
+                if ($val -match $guidPattern) {
+                    if ($GroupNameMap -and $GroupNameMap.ContainsKey($val)) { $row.Value = $GroupNameMap[$val] }
+                    elseif ($RoleNameMap -and $RoleNameMap.ContainsKey($val)) { $row.Value = $RoleNameMap[$val] }
+                    elseif ($LocationNameMap -and $LocationNameMap.ContainsKey($val)) { $row.Value = $LocationNameMap[$val] }
+                }
+                # Comma-separated list of GUIDs (from array joins)
+                elseif ($val -match '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}') {
+                    $parts = $val -split ',\s*'
+                    $resolved = $false
+                    $newParts = foreach ($part in $parts) {
+                        $p = $part.Trim()
+                        if ($p -match $guidPattern) {
+                            if ($GroupNameMap -and $GroupNameMap.ContainsKey($p)) { $resolved = $true; $GroupNameMap[$p] }
+                            elseif ($RoleNameMap -and $RoleNameMap.ContainsKey($p)) { $resolved = $true; $RoleNameMap[$p] }
+                            elseif ($LocationNameMap -and $LocationNameMap.ContainsKey($p)) { $resolved = $true; $LocationNameMap[$p] }
+                            else { $p }
+                        } else { $p }
+                    }
+                    if ($resolved) { $row.Value = $newParts -join ', ' }
+                }
+            }
+        }
+
+        # Friendly CA property names, app ID resolution, and value labels
+        if ($settings.Count -gt 0) {
+            $guidPat = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            foreach ($row in @($settings)) {
+                $name = $row.Name
+                $val  = $row.Value
+                # Resolve application IDs in Value (single or comma-separated)
+                if ($AppNameMap -and -not [string]::IsNullOrWhiteSpace($val)) {
+                    if ($val -match $guidPat -and $AppNameMap.ContainsKey($val)) {
+                        $row.Value = $AppNameMap[$val]
+                    } elseif ($val -match '[0-9a-f]{8}-') {
+                        $parts = $val -split ',\s*'
+                        $changed = $false
+                        $newParts = foreach ($p in $parts) {
+                            $pt = $p.Trim()
+                            if ($pt -match $guidPat -and $AppNameMap.ContainsKey($pt)) { $changed = $true; $AppNameMap[$pt] }
+                            else { $pt }
+                        }
+                        if ($changed) { $row.Value = $newParts -join ', ' }
+                    }
+                }
+                # Resolve comma-separated camelCase values (e.g. allowedCombinations)
+                $val = $row.Value
+                if (-not [string]::IsNullOrWhiteSpace($val) -and $val -match ',') {
+                    $parts = $val -split ',\s*'
+                    $changed = $false
+                    $newParts = foreach ($p in $parts) {
+                        $pt = $p.Trim()
+                        if ($caFriendlyValues.ContainsKey($pt)) { $changed = $true; $caFriendlyValues[$pt] }
+                        else { $pt }
+                    }
+                    if ($changed) { $row.Value = $newParts -join ', ' }
+                } elseif (-not [string]::IsNullOrWhiteSpace($val) -and $caFriendlyValues.ContainsKey($val)) {
+                    $row.Value = $caFriendlyValues[$val]
+                }
+                # Rename camelCase CA property names to friendly labels
+                if ($caFriendlyNames.ContainsKey($name)) {
+                    $row.Name = $caFriendlyNames[$name]
+                }
+            }
+        }
+
+        # Convert ISO 8601 durations (e.g. PT0S, P30D, PT24H) to friendly text
+        foreach ($row in @($settings)) {
+            $v = $row.Value
+            if (-not [string]::IsNullOrWhiteSpace($v) -and $v -match '^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$') {
+                $days = if ($Matches[1]) { [int]$Matches[1] } else { 0 }
+                $hours = if ($Matches[2]) { [int]$Matches[2] } else { 0 }
+                $mins = if ($Matches[3]) { [int]$Matches[3] } else { 0 }
+                $secs = if ($Matches[4]) { [int]$Matches[4] } else { 0 }
+                $parts = @()
+                if ($days -gt 0) { $parts += "$days day$(if ($days -ne 1) { 's' })" }
+                if ($hours -gt 0) { $parts += "$hours hour$(if ($hours -ne 1) { 's' })" }
+                if ($mins -gt 0) { $parts += "$mins minute$(if ($mins -ne 1) { 's' })" }
+                if ($secs -gt 0) { $parts += "$secs second$(if ($secs -ne 1) { 's' })" }
+                if ($parts.Count -eq 0) { $row.Value = '0 (immediate)' }
+                else { $row.Value = $parts -join ', ' }
             }
         }
 

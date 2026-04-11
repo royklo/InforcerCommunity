@@ -112,4 +112,32 @@ Each item describes what the API currently does, what it should do instead, and 
 
 ---
 
+## Feature Request — Self-Discoverable API (OpenAPI / Swagger)
+
+### The API should publish a machine-readable schema that clients can discover automatically
+
+**Severity:** High
+**The problem:** There is no OpenAPI/Swagger endpoint or published schema for the Inforcer API. When new endpoints go live, consumers have no way to discover them programmatically. We have to manually check the portal, wait for release notes, or stumble upon changes during development. This makes it impossible to:
+- Automatically detect new endpoints or breaking changes
+- Generate client code or type definitions
+- Build automated API drift detection (we tried — see `scripts/Test-ApiSchemaChanges.ps1` — but it relies on a manually maintained snapshot)
+- Know when a property was added, removed, or changed type
+
+**What should change:** Publish an OpenAPI 3.x specification at a well-known endpoint (e.g. `GET /swagger/v1/swagger.json` or `GET /openapi.json`). This should:
+1. **Always reflect the live API** — generated from the actual code, not manually written
+2. **Include all endpoints** with parameters, request/response schemas, and error codes
+3. **Be versioned** — so consumers can diff between versions and detect changes
+4. **Be publicly accessible** — no authentication required to read the spec (the schema is not sensitive; the data is)
+
+**Why it matters for the community:**
+- Module authors like us can automatically detect when new endpoints ship and add cmdlets for them
+- We can generate property type definitions instead of guessing from sample responses
+- We can set up CI that alerts when the API schema changes (new fields, removed fields, type changes)
+- We can validate our `api-schema-snapshot.json` against the live spec instead of maintaining it by hand
+- Other tooling (Postman collections, TypeScript clients, Python SDKs) can be auto-generated
+
+**How we handle it today:** We maintain a manual `docs/api-schema-snapshot.json` that we update by hand whenever we discover new endpoints. We have a drift detection script but it can only compare against our own snapshot — not the actual API contract. Every new endpoint is discovered by trial and error or by reading the portal.
+
+---
+
 *Last updated: 2026-04-11*

@@ -10,19 +10,23 @@ assignees: ''
 
 A clear description of what the bug is.
 
+## Which cmdlet is causing the issue?
+
+e.g. Get-InforcerGroup
+
 ## Steps to reproduce
 
 1. Run command / do step '...'
 2. Run command / do step '...'
 3. See error or wrong output
 
-## Expected behavior
-
-What you expected to happen.
-
 ## Actual behavior
 
 What actually happened (error message, wrong output, or no output).
+
+## Expected behavior
+
+What you expected to happen.
 
 ## Environment
 

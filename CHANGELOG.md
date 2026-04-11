@@ -11,8 +11,30 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 - **New cmdlet: `Get-InforcerGroup`** — retrieves Entra ID groups from an Inforcer tenant. Supports list with search/pagination (GroupSummary) and detail by name or GUID via `-Group` (Group with members). Parameters: `-Format`, `-TenantId`, `-Group`, `-Search`, `-MaxResults`, `-OutputType`.
 - **New cmdlet: `Get-InforcerRole`** — retrieves Entra ID directory role definitions from an Inforcer tenant. Shows display name, description, and whether each role is built-in, enabled, or privileged. Parameters: `-Format`, `-TenantId`, `-OutputType`.
 
+### Bug Fixes
+
+- **Baseline filter matching:** Alignment API uses friendly names (e.g., "Default User Role Permissions") while tenant policies store internal names (e.g., "DefUserRolePerms"). Filter now checks all name fields (`displayName`, `friendlyName`, `name`, `policyData.displayName`, `policyData.name`) and GUID fields independently. Fixes issue where only 31 of 48 baseline policies matched. ([#15](https://github.com/royklo/InforcerCommunity/issues/15))
+- **Baseline filter scope:** Excluded `additionalInSubjectUnaccepted` from baseline policy collection — these are tenant-only policies not in the baseline.
+- **Intune assignment filters for All Users/All Devices:** Filter properties (`deviceAndAppManagementAssignmentFilterId`/`Type`) are now checked on both the `target` object and the `assignment` level, fixing resolution when API wrappers place filter data at the assignment level. ([#11](https://github.com/royklo/InforcerCommunity/issues/11))
+- **Conditional Access GUID resolution:** Group, role, named location, and application GUIDs in CA policy conditions are now resolved to display names via Microsoft Graph when `-FetchGraphData` is used. ([#11](https://github.com/royklo/InforcerCommunity/issues/11))
+- **Settings Catalog deferred loading:** Catalog (~65 MB) is only loaded when policyTypeId 10 (Intune/Defender) policies are present. Baselines without Intune policies skip the load entirely.
+- **Error messages:** Improved tenant access error messages with specific guidance for 403 (permission) and 404 (not found) failures.
+
+### Improvements
+
+- **Friendly CA property names:** 50+ camelCase property names mapped to human-readable labels (e.g., `includeGroups` → "Include Groups", `builtInControls` → "Built-in Controls").
+- **Auth combination labels:** camelCase values like `windowsHelloForBusiness` → "Windows Hello for Business", `password,softwareOath` → "Password + Software OATH Token".
+- **ISO 8601 duration conversion:** Values like `PT0S` → "0 (immediate)", `P30D` → "30 days", `PT24H` → "24 hours" across all policy types.
+- **Well-known app ID resolution:** 22 pre-mapped Microsoft application IDs (Intune, Graph, Teams, etc.) with Graph fallback for unknown IDs.
+- **HTML multi-value display:** Comma-separated values render as vertical lists. Lists with 10+ items show first 10 with a "+ N more" expand button.
+- **HTML hide empty fields by default:** Empty fields are hidden on page load (toggle still available in sidebar).
+- **HTML search filtering:** Search now hides empty product sections and category headers with no matching policies.
+- **HTML description visibility:** Long description fields show ~8 lines before requiring expand (previously ~2 lines).
+- **Settings Catalog load performance:** Uses `-AsHashtable` for faster JSON parsing with visible progress message and timing.
+
 ### Tests
 
+- Added `Tests/GraphResolution.Tests.ps1` with 8 tests covering assignment filter fallback, CA GUID resolution (groups, roles, locations), multi-value handling, and non-GUID value preservation.
 - Added consistency tests for `Get-InforcerGroup` and `Get-InforcerRole`: exported cmdlet count, parameter validation, no-silent-failure, parameter binding, and property alias tests for GroupSummary, Group, and Role object types.
 
 ---

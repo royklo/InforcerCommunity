@@ -513,7 +513,7 @@ The HTML output features a modern admin dashboard design with a collapsible side
 | **TenantId** | Object | Yes | Tenant to document (numeric ID, GUID, or tenant name). |
 | **OutputPath** | String | No | Directory to write the output file. Defaults to current directory. |
 | **SettingsCatalogPath** | String | No | Path to a local `settings.json` file for Intune Settings Catalog name resolution. When omitted, automatically downloads and caches the latest data from the [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub repository (~65 MB, cached at `~/.inforcercommunity/data/settings.json` with a 24-hour TTL). |
-| **FetchGraphData** | Switch | No | When set, resolves group ObjectIDs to display names, assignment filter IDs to names, and scope tag IDs to names via Microsoft Graph. Requires a Graph connection (use `Connect-Inforcer -FetchGraphData` or `Connect-InforcerGraph`). |
+| **FetchGraphData** | Switch | No | When set, resolves group/role/location/application GUIDs to display names across assignments and Conditional Access policies via Microsoft Graph. Also resolves assignment filter and scope tag IDs. Requires a Graph connection (use `Connect-Inforcer -FetchGraphData` or `Connect-InforcerGraph`). |
 | **Baseline** | String | No | Filter to policies belonging to a specific baseline (name or ID). |
 | **Tag** | String | No | Filter to policies with a specific Inforcer tag (case-insensitive). |
 
@@ -547,7 +547,7 @@ Returns `FileInfo` objects for the exported file(s). HTML output auto-opens in t
 - Tag filter pills for AND/OR filtering by Inforcer tags
 - Real-time search bar with text highlighting
 - Dark/Light mode toggle (persisted via localStorage)
-- Hide empty fields toggle (scoped to Basics/Settings sections only)
+- Hide empty fields toggle (on by default, scoped to Basics/Settings sections only)
 - Show metadata toggle for @odata properties
 - Back-to-top floating button
 - Notch-style status bar showing tenant/baseline name and policy count
@@ -560,9 +560,21 @@ Returns `FileInfo` objects for the exported file(s). HTML output auto-opens in t
 
 When `-FetchGraphData` is specified and a Graph connection is available:
 - Group ObjectIDs in assignments are resolved to display names via `/directoryObjects`
+- Conditional Access group/role/location/application GUIDs are resolved to friendly names
+- Directory role IDs are resolved via `/directoryRoleTemplates`
+- Named location IDs are resolved via `/identity/conditionalAccess/namedLocations`
+- Application IDs are resolved via `/servicePrincipals` (22 well-known Microsoft app IDs pre-mapped)
 - Assignment filter IDs are resolved to names via `/beta/deviceManagement/assignmentFilters`
 - Scope tag IDs are resolved to names via `/beta/deviceManagement/roleScopeTags`
 - The Graph tenant is validated against the Inforcer tenant's `msTenantId`
+
+### Value enrichment
+
+Applied automatically (no `-FetchGraphData` required):
+- Conditional Access camelCase property names are mapped to friendly labels (e.g., `includeGroups` → "Include Groups")
+- Authentication combination values are mapped to readable names (e.g., `windowsHelloForBusiness` → "Windows Hello for Business")
+- ISO 8601 durations are converted to friendly text (e.g., `PT0S` → "0 (immediate)", `P30D` → "30 days")
+- Settings Catalog is only loaded when Intune/Defender policies (policyTypeId 10) are present
 
 ---
 

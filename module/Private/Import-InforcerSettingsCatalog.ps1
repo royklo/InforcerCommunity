@@ -48,7 +48,7 @@ function Import-InforcerSettingsCatalog {
     Write-Host '  Loading Settings Catalog...' -ForegroundColor Gray
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $raw = Get-Content -Path $Path -Raw -Encoding UTF8
-    $entries = $raw | ConvertFrom-Json -AsHashtable -Depth 10
+    $entries = $raw | ConvertFrom-Json -AsHashtable -Depth 100
 
     $catalog = @{}
     foreach ($entry in $entries) {

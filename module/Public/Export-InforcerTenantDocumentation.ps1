@@ -296,7 +296,7 @@ if ($FetchGraphData) {
             if ($null -ne $rawAssign) {
                 foreach ($a in @($rawAssign)) {
                     $t = $a.target; if ($null -eq $t) { $t = $a }
-                    if ($t.groupId -and $t.groupId -match '^[0-9a-f]{8}-') {
+                    if ($t.groupId -and $t.groupId -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
                         [void]$objectIds.Add($t.groupId)
                     }
                 }
@@ -308,25 +308,25 @@ if ($FetchGraphData) {
                 $caUsers = $conditions.users
                 foreach ($prop in @('includeGroups', 'excludeGroups')) {
                     $ids = $caUsers.$prop
-                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-') { [void]$objectIds.Add($id) } } }
+                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { [void]$objectIds.Add($id) } } }
                 }
                 foreach ($prop in @('includeRoles', 'excludeRoles')) {
                     $ids = $caUsers.$prop
-                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-') { [void]$roleIds.Add($id) } } }
+                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { [void]$roleIds.Add($id) } } }
                 }
             }
             if ($null -ne $conditions.locations) {
                 $caLocations = $conditions.locations
                 foreach ($prop in @('includeLocations', 'excludeLocations')) {
                     $ids = $caLocations.$prop
-                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-') { [void]$locationIds.Add($id) } } }
+                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { [void]$locationIds.Add($id) } } }
                 }
             }
             if ($null -ne $conditions.applications) {
                 $caApps = $conditions.applications
                 foreach ($prop in @('includeApplications', 'excludeApplications')) {
                     $ids = $caApps.$prop
-                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-') { [void]$appIds.Add($id) } } }
+                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { [void]$appIds.Add($id) } } }
                 }
             }
         }

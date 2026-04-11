@@ -153,33 +153,77 @@ if (-not [string]::IsNullOrWhiteSpace($Baseline)) {
     if ($null -eq $alignResponse) {
         Write-Warning "Could not retrieve alignment details for baseline. Exporting all policies."
     } else {
-        # Collect all policy names from all alignment status arrays
+        # Collect policy names AND GUIDs from baseline alignment status arrays
+        # Note: additionalInSubjectUnaccepted = tenant-only policies NOT in baseline, so excluded
         $baselinePolicyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $baselinePolicyGuids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $alignment = $alignResponse.alignment
         if ($null -ne $alignment) {
-            $statusArrays = @('matchedPolicies', 'matchedWithAcceptedDeviations', 'deviatedUnaccepted', 'missingFromSubjectUnaccepted', 'additionalInSubjectUnaccepted')
-            foreach ($arrayName in $statusArrays) {
+            $baselineArrays = @('matchedPolicies', 'matchedWithAcceptedDeviations', 'deviatedUnaccepted', 'missingFromSubjectUnaccepted')
+            foreach ($arrayName in $baselineArrays) {
                 $arr = $alignment.PSObject.Properties[$arrayName]
                 if ($arr -and $null -ne $arr.Value) {
                     foreach ($p in @($arr.Value)) {
-                        if ($p -is [PSObject] -and $p.PSObject.Properties['policyName']) {
-                            [void]$baselinePolicyNames.Add($p.policyName)
+                        if ($p -is [PSObject]) {
+                            if ($p.PSObject.Properties['policyName'] -and $p.policyName) {
+                                [void]$baselinePolicyNames.Add($p.policyName)
+                            }
+                            if ($p.PSObject.Properties['policyGuid'] -and $p.policyGuid) {
+                                [void]$baselinePolicyGuids.Add($p.policyGuid)
+                            }
                         }
                     }
                 }
             }
         }
 
-        if ($baselinePolicyNames.Count -gt 0) {
-            # Filter docData.Policies to only those in the baseline
+        $baselineTotal = $baselinePolicyNames.Count
+        if ($baselinePolicyGuids.Count -gt $baselineTotal) { $baselineTotal = $baselinePolicyGuids.Count }
+
+        if ($baselineTotal -gt 0) {
+            # Filter docData.Policies to only those in the baseline (match by name OR GUID)
             $originalCount = @($docData.Policies).Count
             $docData.Policies = @($docData.Policies | Where-Object {
-                $name = $_.displayName
-                if ([string]::IsNullOrWhiteSpace($name)) { $name = $_.friendlyName }
-                if ([string]::IsNullOrWhiteSpace($name)) { $name = $_.name }
-                $baselinePolicyNames.Contains($name)
+                # Try ALL name fields independently (alignment may use friendly names
+                # while tenant policies use internal names in different fields)
+                foreach ($n in @($_.displayName, $_.friendlyName, $_.name, $_.inforcerPolicyTypeName)) {
+                    if (-not [string]::IsNullOrWhiteSpace($n) -and $baselinePolicyNames.Contains($n)) { return $true }
+                }
+                # Try policyData name fields
+                if ($_.policyData) {
+                    foreach ($n in @($_.policyData.displayName, $_.policyData.name)) {
+                        if (-not [string]::IsNullOrWhiteSpace($n) -and $baselinePolicyNames.Contains($n)) { return $true }
+                    }
+                }
+                # Try GUID matching
+                foreach ($g in @($_.policyGuid, $_.id)) {
+                    if (-not [string]::IsNullOrWhiteSpace($g) -and $baselinePolicyGuids.Contains($g)) { return $true }
+                }
+                if ($_.policyData -and $_.policyData.id) {
+                    if ($baselinePolicyGuids.Contains($_.policyData.id)) { return $true }
+                }
+                return $false
             })
-            Write-Host "  Filtered to $(@($docData.Policies).Count) of $originalCount policies in baseline" -ForegroundColor Gray
+            $matchedCount = @($docData.Policies).Count
+            Write-Host "  Filtered to $matchedCount of $originalCount policies in baseline" -ForegroundColor Gray
+            if ($matchedCount -lt $baselinePolicyNames.Count) {
+                $matchedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                foreach ($pol in @($docData.Policies)) {
+                    foreach ($n in @($pol.displayName, $pol.friendlyName, $pol.name)) {
+                        if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$matchedNames.Add($n) }
+                    }
+                    if ($pol.policyData) {
+                        foreach ($n in @($pol.policyData.displayName, $pol.policyData.name)) {
+                            if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$matchedNames.Add($n) }
+                        }
+                    }
+                }
+                $unmatched = @($baselinePolicyNames | Where-Object { -not $matchedNames.Contains($_) })
+                if ($unmatched.Count -gt 0) {
+                    Write-Warning "$($unmatched.Count) baseline policies not found in tenant:"
+                    foreach ($u in $unmatched | Sort-Object) { Write-Warning "  - $u" }
+                }
+            }
         } else {
             Write-Warning 'No policies found in baseline alignment data. Exporting all policies.'
         }
@@ -200,6 +244,18 @@ if (-not [string]::IsNullOrWhiteSpace($Tag)) {
         return $false
     })
     Write-Host "  Filtered to $(@($docData.Policies).Count) of $originalCount policies with tag '$Tag'" -ForegroundColor Gray
+}
+
+# Load Settings Catalog only if there are Settings Catalog policies (policyTypeId 10)
+$hasCatalogPolicies = @($docData.Policies | Where-Object { $_.policyTypeId -eq 10 }).Count -gt 0
+if ($hasCatalogPolicies) {
+    $catalogParams = @{}
+    if (-not [string]::IsNullOrEmpty($resolvedCatalogPath)) {
+        $catalogParams['Path'] = $resolvedCatalogPath
+    }
+    Import-InforcerSettingsCatalog @catalogParams
+} else {
+    Write-Host '  No Settings Catalog policies found, skipping catalog load' -ForegroundColor Gray
 }
 
 # Build Graph enrichment maps before DocModel (so assignments resolve during normalization)

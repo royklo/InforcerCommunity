@@ -37,13 +37,6 @@ function Get-InforcerDocData {
         return
     }
 
-    # Load Settings Catalog (per SCAT-05 -- loads once, caches in $script: scope)
-    $catalogParams = @{}
-    if (-not [string]::IsNullOrEmpty($SettingsCatalogPath)) {
-        $catalogParams['Path'] = $SettingsCatalogPath
-    }
-    Import-InforcerSettingsCatalog @catalogParams
-
     # Collect data from all 3 cmdlets (per DATA-01, DATA-02, DATA-03)
     Write-Verbose 'Collecting tenant data...'
     $tenantJson = Get-InforcerTenant -OutputType JsonObject
@@ -59,11 +52,15 @@ function Get-InforcerDocData {
         -ErrorVariable policiesApiErr -ErrorAction SilentlyContinue
     if ($policiesApiErr.Count -gt 0) {
         $errMsg = $policiesApiErr[0].Exception.Message
+        if ([string]::IsNullOrWhiteSpace($errMsg)) { $errMsg = $policiesApiErr[0].ToString() }
         if ($errMsg -match '403|permission|forbidden') {
-            Write-Error -Message "Export canceled: You do not have the required permissions to access policies for tenant '$clientTenantId'. Please check your Inforcer tenant permissions." `
+            Write-Error -Message "Failed to retrieve policies for tenant '$clientTenantId': access denied. Please check your Inforcer API key has permission to this tenant." `
                 -ErrorId 'AccessDenied' -Category PermissionDenied
+        } elseif ($errMsg -match '404|not found') {
+            Write-Error -Message "Tenant '$clientTenantId' not found. Please verify the TenantId is correct." `
+                -ErrorId 'TenantNotFound' -Category ObjectNotFound
         } else {
-            Write-Error -Message "Export canceled: Failed to retrieve policies for tenant '$clientTenantId'. $errMsg" `
+            Write-Error -Message "Failed to retrieve policies for tenant '$clientTenantId'. Error: $errMsg" `
                 -ErrorId 'PolicyRetrievalFailed' -Category InvalidOperation
         }
         return

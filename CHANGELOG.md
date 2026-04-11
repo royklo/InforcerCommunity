@@ -8,8 +8,8 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 
 ### Features
 
-- **New cmdlet: `Get-InforcerGroup`** — retrieves Entra ID groups from an Inforcer tenant. Supports list with search/pagination (GroupSummary) and detail by name or GUID via `-Group` (Group with members). Parameters: `-Format`, `-TenantId`, `-Group`, `-Search`, `-MaxResults`, `-OutputType`.
-- **New cmdlet: `Get-InforcerRole`** — retrieves Entra ID directory role definitions from an Inforcer tenant. Shows display name, description, and whether each role is built-in, enabled, or privileged. Parameters: `-Format`, `-TenantId`, `-OutputType`.
+- **New cmdlet: `Get-InforcerGroup`** — retrieves Entra ID groups from an Inforcer tenant. Supports list with search/pagination (GroupSummary) and detail by name or GUID via `-Group` (Group with members). Parameters: `-TenantId`, `-Group`, `-Search`, `-MaxResults`, `-OutputType`.
+- **New cmdlet: `Get-InforcerRole`** — retrieves Entra ID directory role definitions from an Inforcer tenant. Shows display name, description, and whether each role is built-in, enabled, or privileged. Parameters: `-TenantId`, `-OutputType`.
 
 ### Bug Fixes
 

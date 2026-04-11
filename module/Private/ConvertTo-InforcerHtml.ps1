@@ -374,7 +374,7 @@ td {
     word-break: break-word;
     max-width: 500px;
 }
-.long-val { display: block; max-height: 2.6em; overflow: hidden; position: relative; word-break: break-all; }
+.long-val { display: block; max-height: 12em; overflow: hidden; position: relative; word-break: break-all; }
 .long-val.expanded { max-height: none; }
 .long-val-btn {
     display: inline-block; margin-top: 0.25rem; padding: 0.125rem 0.5rem;
@@ -389,6 +389,19 @@ tr:hover td { background: var(--accent-soft); }
 /* --- Metadata rows (hidden by default, shown via toggle) --- */
 .metadata-row { display: none; }
 .show-metadata .metadata-row { display: table-row; }
+/* --- Multi-value list display --- */
+.mv-list { list-style: none; margin: 0; padding: 0; }
+.mv-list li { padding: 0.125rem 0; }
+.mv-list li + li { border-top: 1px solid var(--border-subtle); }
+.mv-hidden { display: none; }
+.mv-btn {
+    display: inline-block; font-size: 0.6875rem; font-weight: 600;
+    padding: 0.125rem 0.5rem; border-radius: var(--radius-xs);
+    background: var(--badge-bg); color: var(--badge-text);
+    cursor: pointer; margin-top: 0.25rem; user-select: none;
+    border: none; transition: background var(--transition);
+}
+.mv-btn:hover { background: var(--accent); color: #fff; }
 /* --- Tooltip icon --- */
 .tooltip-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -558,7 +571,33 @@ tr:hover td { background: var(--accent-soft); }
         if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrEmpty($Value))) {
             return '<span class="muted empty-val">&mdash;</span>'
         }
-        $str = [System.Net.WebUtility]::HtmlEncode($Value.ToString())
+        $str = $Value.ToString()
+        # Multi-value comma-separated list — render as vertical list
+        if ($str -match ',') {
+            $items = $str -split ',\s*' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+            if ($items.Count -ge 2) {
+                $mvId = "mv$(Get-Random)"
+                $sb2 = [System.Text.StringBuilder]::new()
+                [void]$sb2.Append('<ul class="mv-list">')
+                $i = 0
+                foreach ($item in $items) {
+                    $encItem = [System.Net.WebUtility]::HtmlEncode($item)
+                    if ($items.Count -gt 10 -and $i -ge 10) {
+                        [void]$sb2.Append("<li class=`"mv-hidden $mvId`">$encItem</li>")
+                    } else {
+                        [void]$sb2.Append("<li>$encItem</li>")
+                    }
+                    $i++
+                }
+                [void]$sb2.Append('</ul>')
+                if ($items.Count -gt 10) {
+                    $remaining = $items.Count - 10
+                    [void]$sb2.Append("<span class=`"mv-btn`" onclick=`"var h=this.closest('td').querySelectorAll('.$mvId');var show=h[0].style.display!=='list-item';h.forEach(function(e){e.style.display=show?'list-item':'none'});this.textContent=show?'Collapse':'+ $remaining more'`">+ $remaining more</span>")
+                }
+                return $sb2.ToString()
+            }
+        }
+        $str = [System.Net.WebUtility]::HtmlEncode($str)
         # Wrap long values (>200 chars) in a collapsible block with ellipsis button
         if ($str.Length -gt 200) {
             return "<span class=`"long-val`" id=`"lv$(Get-Random)`">$str</span><span class=`"long-val-btn`" onclick=`"var v=this.previousElementSibling;v.classList.toggle('expanded');this.textContent=v.classList.contains('expanded')?'Collapse':'Expand'`">Expand</span>"

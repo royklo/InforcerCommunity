@@ -45,27 +45,32 @@ function Import-InforcerSettingsCatalog {
         return
     }
 
-    Write-Verbose "Loading Settings Catalog from $Path..."
+    Write-Host '  Loading Settings Catalog...' -ForegroundColor Gray
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $raw = Get-Content -Path $Path -Raw -Encoding UTF8
-    $entries = $raw | ConvertFrom-Json -Depth 100
+    $entries = $raw | ConvertFrom-Json -AsHashtable -Depth 10
 
     $catalog = @{}
     foreach ($entry in $entries) {
-        $id = $entry.id
+        $id = $entry['id']
         if ([string]::IsNullOrEmpty($id)) { continue }
 
         $options = @{}
-        foreach ($opt in @($entry.options)) {
-            if ($opt -and $opt.itemId) { $options[$opt.itemId] = $opt.displayName }
+        $entryOptions = $entry['options']
+        if ($null -ne $entryOptions) {
+            foreach ($opt in @($entryOptions)) {
+                if ($opt -and $opt['itemId']) { $options[$opt['itemId']] = $opt['displayName'] }
+            }
         }
 
         $catalog[$id] = @{
-            DisplayName = $entry.displayName
-            Description = $entry.description
+            DisplayName = $entry['displayName']
+            Description = $entry['description']
             Options     = $options
         }
     }
 
+    $sw.Stop()
     $script:InforcerSettingsCatalog = $catalog
-    Write-Verbose "Settings Catalog loaded: $($catalog.Count) entries"
+    Write-Host "  Settings Catalog loaded: $($catalog.Count) entries ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
 }

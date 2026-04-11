@@ -107,6 +107,8 @@ Disconnect-Inforcer
 | **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 | **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId). |
+| **Get-InforcerGroup**          | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
+| **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. |
 
 

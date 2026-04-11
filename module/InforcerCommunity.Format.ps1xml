@@ -243,5 +243,137 @@
       </ListControl>
     </View>
 
+    <!-- GROUP SUMMARY -->
+    <View>
+      <Name>InforcerCommunity.GroupSummary.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.GroupSummary</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem>
+                <Label>DisplayName</Label>
+                <PropertyName>DisplayName</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Id</Label>
+                <PropertyName>Id</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Description</Label>
+                <PropertyName>Description</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Mail</Label>
+                <PropertyName>Mail</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Visibility</Label>
+                <PropertyName>Visibility</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>GroupTypes</Label>
+                <ScriptBlock>if ($_.groupTypes) { ($_.groupTypes) -join ', ' } else { '' }</ScriptBlock>
+              </ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- GROUP DETAIL -->
+    <View>
+      <Name>InforcerCommunity.Group.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.Group</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem>
+                <Label>DisplayName</Label>
+                <PropertyName>DisplayName</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Id</Label>
+                <PropertyName>Id</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Description</Label>
+                <PropertyName>Description</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Mail</Label>
+                <PropertyName>Mail</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Visibility</Label>
+                <PropertyName>Visibility</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>GroupTypes</Label>
+                <ScriptBlock>if ($_.groupTypes) { ($_.groupTypes) -join ', ' } else { '' }</ScriptBlock>
+              </ListItem>
+              <ListItem>
+                <Label>MailEnabled</Label>
+                <PropertyName>MailEnabled</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>CreatedDateTime</Label>
+                <PropertyName>CreatedDateTime</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Members</Label>
+                <ScriptBlock>if ($_.members -and $_.members.Count -gt 0) { ($_.members | ForEach-Object { $_.displayName }) -join ', ' } else { '(none)' }</ScriptBlock>
+              </ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- ROLE -->
+    <View>
+      <Name>InforcerCommunity.Role.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.Role</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem>
+                <Label>DisplayName</Label>
+                <PropertyName>DisplayName</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Id</Label>
+                <PropertyName>Id</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>Description</Label>
+                <PropertyName>Description</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>IsBuiltIn</Label>
+                <PropertyName>IsBuiltIn</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>IsEnabled</Label>
+                <PropertyName>IsEnabled</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>IsPrivileged</Label>
+                <PropertyName>IsPrivileged</PropertyName>
+              </ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

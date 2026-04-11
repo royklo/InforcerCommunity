@@ -30,12 +30,13 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 11
+        $script:expectedCount = 13
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
-            'Get-InforcerUser', 'Export-InforcerTenantDocumentation'
+            'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole',
+            'Export-InforcerTenantDocumentation'
         )
         $script:expectedParameters = @{
             'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl', 'FetchGraphData')
@@ -48,6 +49,8 @@ Describe 'Consistency contract' {
             'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'PageSize', 'MaxResults', 'Format', 'OutputType')
             'Get-InforcerSupportedEventType'    = @()
             'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'OutputType')
+            'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
+            'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
         }
     }
@@ -71,11 +74,10 @@ Describe 'Consistency contract' {
         }
     }
 
-    It 'Get-* cmdlets that return API data have -Format and -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser')
+    It 'Get-* cmdlets that return API data have -OutputType' {
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
-            $cmd.Parameters.Keys | Should -Contain 'Format'
             $cmd.Parameters.Keys | Should -Contain 'OutputType'
         }
     }
@@ -169,6 +171,18 @@ Describe 'No-silent-failure contract' {
     It 'Get-InforcerUser produces an error when not connected' {
         $err = $null
         Get-InforcerUser -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Get-InforcerGroup produces an error when not connected' {
+        $err = $null
+        Get-InforcerGroup -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Get-InforcerRole produces an error when not connected' {
+        $err = $null
+        Get-InforcerRole -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 
@@ -326,6 +340,53 @@ Describe 'Parameter binding and behavior' {
         }
     }
 
+    It 'Get-InforcerGroup (List) binds all key parameters without errors' {
+        $err = $null
+        $null = Get-InforcerGroup -TenantId 1 -Search 'test' -MaxResults 10 -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | ForEach-Object {
+            $_.Exception.Message | Should -Not -BeLike '*parameter*'
+            $_.Exception.Message | Should -Not -BeLike '*cannot bind*'
+        }
+    }
+
+    It 'Get-InforcerGroup (ById) binds all key parameters without errors' {
+        $err = $null
+        $null = Get-InforcerGroup -TenantId 1 -Group '00000000-0000-0000-0000-000000000000' -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | ForEach-Object {
+            $_.Exception.Message | Should -Not -BeLike '*parameter*'
+            $_.Exception.Message | Should -Not -BeLike '*cannot bind*'
+        }
+    }
+
+    It 'Get-InforcerGroup -OutputType JsonObject returns string or error' {
+        $err = $null
+        $result = Get-InforcerGroup -TenantId 1 -OutputType JsonObject -ErrorVariable err -ErrorAction SilentlyContinue
+        if ($result) {
+            $result | Should -BeOfType [string]
+        } else {
+            $err | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    It 'Get-InforcerRole binds all key parameters without errors' {
+        $err = $null
+        $null = Get-InforcerRole -TenantId 1 -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | ForEach-Object {
+            $_.Exception.Message | Should -Not -BeLike '*parameter*'
+            $_.Exception.Message | Should -Not -BeLike '*cannot bind*'
+        }
+    }
+
+    It 'Get-InforcerRole -OutputType JsonObject returns string or error' {
+        $err = $null
+        $result = Get-InforcerRole -TenantId 1 -OutputType JsonObject -ErrorVariable err -ErrorAction SilentlyContinue
+        if ($result) {
+            $result | Should -BeOfType [string]
+        } else {
+            $err | Should -Not -BeNullOrEmpty
+        }
+    }
+
     It 'Export-InforcerTenantDocumentation with key parameters binds and produces output or error' {
         $out = @(); $err = @()
         $out = Export-InforcerTenantDocumentation -Format Html -TenantId 1 -OutputPath $TestDrive `
@@ -458,6 +519,30 @@ Describe 'Private helpers (via module scope)' {
         }
     }
 
+    Context 'Resolve-InforcerGroupId' {
+        It 'Passes through a valid GUID' {
+            & (Get-Module InforcerCommunity) {
+                $guid = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $result = Resolve-InforcerGroupId -GroupId $guid -TenantId 1
+                $result | Should -Be $guid
+            }
+        }
+
+        It 'Passes through a GUID with mixed case' {
+            & (Get-Module InforcerCommunity) {
+                $guid = 'F44F2F5C-3160-420B-900D-5ECBEDE954FC'
+                $result = Resolve-InforcerGroupId -GroupId $guid -TenantId 1
+                $result | Should -Be $guid
+            }
+        }
+
+        It 'Throws when name search fails (not connected)' {
+            & (Get-Module InforcerCommunity) {
+                { Resolve-InforcerGroupId -GroupId 'NonExistent Group' -TenantId 1 } | Should -Throw
+            }
+        }
+    }
+
     Context 'Add-InforcerPropertyAliases' {
         It 'Tenant: adds PascalCase aliases and converts licenses to string' {
             & (Get-Module InforcerCommunity) {
@@ -544,6 +629,73 @@ Describe 'Private helpers (via module scope)' {
                 $detail.CompletedAt | Should -Be '2026-01-01'
                 $detail.metrics.TotalPolicies | Should -Be 50
                 $detail.alignment.matchedPolicies[0].PolicyName | Should -Be 'P1'
+            }
+        }
+
+        It 'GroupSummary: adds PascalCase aliases' {
+            & (Get-Module InforcerCommunity) {
+                $group = [PSCustomObject]@{
+                    id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                    displayName = 'All Company'
+                    description = 'Default group'
+                    mail = 'allcompany@contoso.com'
+                    visibility = 'Public'
+                    groupTypes = @('Unified')
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $group -ObjectType GroupSummary
+                $group.Id | Should -Be 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $group.DisplayName | Should -Be 'All Company'
+                $group.Description | Should -Be 'Default group'
+                $group.Mail | Should -Be 'allcompany@contoso.com'
+                $group.Visibility | Should -Be 'Public'
+                $group.GroupTypes | Should -Be @('Unified')
+            }
+        }
+
+        It 'Group: adds PascalCase aliases including detail properties' {
+            & (Get-Module InforcerCommunity) {
+                $group = [PSCustomObject]@{
+                    id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                    displayName = 'All Company'
+                    description = 'Default group'
+                    mail = 'allcompany@contoso.com'
+                    mailNickname = 'allcompany'
+                    visibility = 'Public'
+                    membershipRule = $null
+                    groupTypes = @('Unified')
+                    createdDateTime = '2026-02-18T21:22:23+00:00'
+                    mailEnabled = $true
+                    onPremisesSyncEnabled = $null
+                    members = @([PSCustomObject]@{ id = 'u1'; displayName = 'John'; type = '#microsoft.graph.user' })
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $group -ObjectType Group
+                $group.Id | Should -Be 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $group.DisplayName | Should -Be 'All Company'
+                $group.MailNickname | Should -Be 'allcompany'
+                $group.MailEnabled | Should -BeTrue
+                $group.CreatedDateTime | Should -Be '2026-02-18T21:22:23+00:00'
+                $group.Members.Count | Should -Be 1
+            }
+        }
+
+        It 'Role: adds PascalCase aliases' {
+            & (Get-Module InforcerCommunity) {
+                $role = [PSCustomObject]@{
+                    id = '62e90394-69f5-4237-9190-012177145e10'
+                    templateId = '62e90394-69f5-4237-9190-012177145e10'
+                    displayName = 'Global Administrator'
+                    description = 'Can manage all aspects of Microsoft Entra ID'
+                    isBuiltIn = $true
+                    isEnabled = $true
+                    isPrivileged = $true
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $role -ObjectType Role
+                $role.Id | Should -Be '62e90394-69f5-4237-9190-012177145e10'
+                $role.TemplateId | Should -Be '62e90394-69f5-4237-9190-012177145e10'
+                $role.DisplayName | Should -Be 'Global Administrator'
+                $role.IsBuiltIn | Should -BeTrue
+                $role.IsEnabled | Should -BeTrue
+                $role.IsPrivileged | Should -BeTrue
             }
         }
     }

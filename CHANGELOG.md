@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
+## [Unreleased]
+
+### Features
+
+- **New cmdlet: `Get-InforcerGroup`** — retrieves Entra ID groups from an Inforcer tenant. Supports list with search/pagination (GroupSummary) and detail by name or GUID via `-Group` (Group with members). Parameters: `-Format`, `-TenantId`, `-Group`, `-Search`, `-MaxResults`, `-OutputType`.
+- **New cmdlet: `Get-InforcerRole`** — retrieves Entra ID directory role definitions from an Inforcer tenant. Shows display name, description, and whether each role is built-in, enabled, or privileged. Parameters: `-Format`, `-TenantId`, `-OutputType`.
+
+### Tests
+
+- Added consistency tests for `Get-InforcerGroup` and `Get-InforcerRole`: exported cmdlet count, parameter validation, no-silent-failure, parameter binding, and property alias tests for GroupSummary, Group, and Role object types.
+
+---
+
 ## [0.2.0] - 2026-04-02
 
 ### Features

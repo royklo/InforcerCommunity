@@ -402,6 +402,105 @@ RiskLevel        :
 
 ---
 
+## Get-InforcerGroup
+
+Retrieves Entra ID groups from an Inforcer tenant. When called without `-Group`, returns all groups (GroupSummary objects) with optional search filtering and auto-pagination. When called with `-Group`, resolves the group by GUID or display name and returns the full group detail (Group object) including members.
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|--------------|
+| **TenantId** | Object | Yes | Inforcer tenant ID (numeric ID, GUID, or tenant name). Alias: `ClientTenantId`. |
+| **Group** | String | Yes* | Group GUID or display name for full detail. Alias: `GroupId`. Resolves name automatically via search. |
+| **Search** | String | No | Server-side search filter (List parameter set only). |
+| **MaxResults** | Int | No | Maximum groups to return. `0` = no limit (List parameter set only). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
+
+### Examples
+
+```powershell
+# List all groups in a tenant
+Get-InforcerGroup -TenantId 139
+
+# Search for groups
+Get-InforcerGroup -TenantId 139 -Search "Finance"
+
+# Get full detail by display name (resolves automatically)
+Get-InforcerGroup -TenantId 139 -Group "Tailspin Toys"
+
+# Get full detail by GUID
+Get-InforcerGroup -TenantId 139 -Group "f44f2f5c-3160-420b-900d-5ecbede954fc"
+
+# Pipeline from Get-InforcerTenant
+Get-InforcerTenant -TenantId 139 | Get-InforcerGroup
+
+# JSON output
+Get-InforcerGroup -TenantId 139 -OutputType JsonObject
+```
+
+### Example output (List)
+
+```
+DisplayName : All Company
+Id          : f44f2f5c-3160-420b-900d-5ecbede954fc
+Description : This is the default group for everyone in the network
+Mail        : allcompany@contoso.onmicrosoft.com
+Visibility  : Public
+GroupTypes  : Unified
+```
+
+### Example output (ById)
+
+```
+DisplayName      : All Company
+Id               : f44f2f5c-3160-420b-900d-5ecbede954fc
+Description      : This is the default group for everyone in the network
+Mail             : allcompany@contoso.onmicrosoft.com
+Visibility       : Public
+GroupTypes       : Unified
+MailEnabled      : True
+CreatedDateTime  : 2026-02-18T21:22:23+00:00
+Members          : Isaiah Langer (user), Adele Vance (user)
+```
+
+---
+
+## Get-InforcerRole
+
+Retrieves Entra ID directory role definitions from an Inforcer tenant. Returns role definitions including display name, description, and whether the role is built-in, enabled, or privileged.
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|--------------|
+| **TenantId** | Object | Yes | Inforcer tenant ID (numeric ID, GUID, or tenant name). Alias: `ClientTenantId`. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
+
+### Examples
+
+```powershell
+# List all roles in a tenant
+Get-InforcerRole -TenantId 139
+
+# Filter to privileged roles only
+Get-InforcerRole -TenantId 139 | Where-Object IsPrivileged -eq $true
+
+# Pipeline from Get-InforcerTenant
+Get-InforcerTenant -TenantId 139 | Get-InforcerRole
+
+# JSON output
+Get-InforcerRole -TenantId 139 -OutputType JsonObject
+```
+
+### Example output
+
+```
+DisplayName  : Global Administrator
+Id           : 62e90394-69f5-4237-9190-012177145e10
+Description  : Can manage all aspects of Microsoft Entra ID and Microsoft services that use Microsoft Entra identities.
+IsBuiltIn    : True
+IsEnabled    : True
+IsPrivileged : True
+```
+
+---
+
 ## Export-InforcerTenantDocumentation
 
 Generates comprehensive, human-readable documentation of an entire M365 tenant's configuration as managed through the Inforcer API. Pulls data from existing cmdlets (`Get-InforcerBaseline`, `Get-InforcerTenant`, `Get-InforcerTenantPolicies`), resolves Intune Settings Catalog settingDefinitionIDs to friendly names, and outputs in multiple formats.

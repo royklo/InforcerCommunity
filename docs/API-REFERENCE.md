@@ -16,6 +16,8 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [Tenant Policies](#tenant-policies)
   - [Audit Events](#audit-events)
   - [Users](#users)
+  - [Groups](#groups)
+  - [Roles](#roles)
 - [Schemas](#schemas)
   - [BaselineGroup](#baselinegroup)
   - [BaselineMember](#baselinemember)
@@ -32,6 +34,9 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [UserSummary](#usersummary)
   - [User](#user)
   - [UserLicense](#userlicense)
+  - [TenantGroupSummary](#tenantgroupsummary)
+  - [TenantGroup](#tenantgroup)
+  - [TenantRole](#tenantrole)
 - [Response Wrapper](#response-wrapper)
 - [Error Responses](#error-responses)
 
@@ -184,6 +189,43 @@ Returns full detail for a single user.
 | `userId` | path | string (GUID) | Yes | The user ID. |
 
 **Response**: Single [User](#user) object.
+
+### Groups
+
+#### `GET /beta/tenants/{tenantId}/groups`
+
+Returns a paginated list of Entra ID group summaries for a tenant.
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `search` | query | string | No | Server-side search filter. |
+| `continuationToken` | query | string | No | Token to continue a previous page. |
+
+**Response**: Paginated array of [TenantGroupSummary](#tenantgroupsummary) with `continuationToken` and `totalCount` at the response root level (siblings of `data`).
+
+#### `GET /beta/tenants/{tenantId}/groups/{groupId}`
+
+Returns full detail for a single group including members.
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `groupId` | path | string (GUID) | Yes | The group ID. |
+
+**Response**: Single [TenantGroup](#tenantgroup) object.
+
+### Roles
+
+#### `GET /beta/tenants/{tenantId}/roles`
+
+Returns the list of Entra ID directory role definitions for a tenant.
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+
+**Response**: Array of [TenantRole](#tenantrole) objects.
 
 ---
 
@@ -482,6 +524,58 @@ License assignment on a user, used in both UserSummary and User schemas.
 | isExpired | boolean | Whether the license is expired. |
 | isCancelled | boolean | Whether the license is cancelled. |
 | state | string | License assignment state. |
+
+### TenantGroupSummary
+
+Summary of an Entra ID group (returned from list endpoint).
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| id | string (GUID) | Yes | The group ID. |
+| displayName | string | Yes | Display name of the group. |
+| description | string | No | Description of the group. |
+| mail | string | No | Email address of the group. |
+| visibility | string | No | Visibility (e.g. Public, Private). |
+| groupTypes | array\<string\> | Yes | Types of the group (e.g. Unified, DynamicMembership). |
+
+**PSTypeName:** `InforcerCommunity.GroupSummary`
+
+### TenantGroup
+
+Full detail of an Entra ID group (returned from by-ID endpoint).
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| id | string (GUID) | Yes | The group ID. |
+| displayName | string | Yes | Display name of the group. |
+| description | string | No | Description of the group. |
+| mail | string | No | Email address of the group. |
+| mailNickname | string | No | Mail alias of the group. |
+| visibility | string | No | Visibility (e.g. Public, Private). |
+| membershipRule | string | No | Dynamic membership rule (null for static groups). |
+| groupTypes | array\<string\> | Yes | Types of the group. |
+| createdDateTime | string (datetime) | No | When the group was created. |
+| mailEnabled | boolean | No | Whether mail is enabled. |
+| onPremisesSyncEnabled | boolean | No | Whether synced from on-premises AD. |
+| members | array\<object\> | No | Group members (id, displayName, type). |
+
+**PSTypeName:** `InforcerCommunity.Group`
+
+### TenantRole
+
+An Entra ID directory role definition.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| id | string (GUID) | Yes | The unique identifier of the role definition. |
+| templateId | string (GUID) | No | The unique identifier of the role definition template. |
+| displayName | string | Yes | Display name of the role definition. |
+| description | string | Yes | Description of the role definition. |
+| isBuiltIn | boolean | No | Whether the role is built-in. |
+| isEnabled | boolean | No | Whether the role is enabled. |
+| isPrivileged | boolean | No | Whether the role is privileged. |
+
+**PSTypeName:** `InforcerCommunity.Role`
 
 ---
 

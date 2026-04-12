@@ -410,16 +410,14 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .manual-review-card .side-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
 .manual-review-card .side-source { background: var(--info-bg); color: var(--info); }
 .manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
-.assign-tag { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; margin: 0.1rem 0.15rem; white-space: nowrap; }
-.assign-include { background: #dbeafe; color: #1e40af; }
-.assign-exclude { background: #fde2e2; color: #991b1b; }
-.assign-all { background: #e0e7ff; color: #3730a3; }
-.assign-name { font-size: 0.78rem; margin-left: 0.15rem; }
-@media (prefers-color-scheme: dark) {
-    .assign-include { background: #1e3a5f; color: #93c5fd; }
-    .assign-exclude { background: #5c1a1a; color: #fca5a5; }
-    .assign-all { background: #312e81; color: #c7d2fe; }
-}
+/* Assignment display — inline text, no badge backgrounds (D-04) */
+.assign-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.assign-cell-wrap { display: flex; flex-direction: column; gap: 4px; }
+.assign-include { font-size: 0.75rem; color: var(--text); }
+.assign-exclude { font-size: 0.75rem; color: var(--danger); }
+.assign-all { font-size: 0.75rem; color: var(--info); }
+.assign-filter { display: block; font-size: 0.625rem; color: var(--muted); white-space: normal; word-break: break-word; }
+.assign-empty { font-size: 0.75rem; color: var(--muted); }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 /* .setting-deprecated defined below with manual-review-setting styles */
@@ -588,28 +586,49 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
         [void]$sb.AppendLine('        </tr></thead>')
         [void]$sb.AppendLine('        <tbody>')
 
-            # Helper: convert assignment string to tagged HTML
+            # Helper: convert assignment string to inline colored HTML (D-01 through D-07)
             $formatAssignHtml = {
                 param([string]$AssignStr)
-                if ([string]::IsNullOrWhiteSpace($AssignStr)) { return '' }
+                if ([string]::IsNullOrWhiteSpace($AssignStr)) {
+                    return '<span class="assign-empty">&mdash;</span>'
+                }
                 $html = [System.Text.StringBuilder]::new()
+                [void]$html.Append('<div class="assign-cell-wrap">')
                 foreach ($part in ($AssignStr -split ';\s*')) {
                     $part = $part.Trim()
                     if ([string]::IsNullOrWhiteSpace($part)) { continue }
-                    if ($part -match '^Include:\s*(.+)$') {
-                        $name = [System.Net.WebUtility]::HtmlEncode($Matches[1])
-                        [void]$html.Append("<span class=`"assign-tag assign-include`">Include</span><span class=`"assign-name`">$name</span><br>")
-                    } elseif ($part -match '^Exclude:\s*(.+)$') {
-                        $name = [System.Net.WebUtility]::HtmlEncode($Matches[1])
-                        [void]$html.Append("<span class=`"assign-tag assign-exclude`">Exclude</span><span class=`"assign-name`">$name</span><br>")
-                    } elseif ($part -eq 'All Devices' -or $part -eq 'All Users') {
-                        $enc = [System.Net.WebUtility]::HtmlEncode($part)
-                        [void]$html.Append("<span class=`"assign-tag assign-all`">$enc</span><br>")
-                    } else {
-                        $enc = [System.Net.WebUtility]::HtmlEncode($part)
-                        [void]$html.Append("<span class=`"assign-name`">$enc</span><br>")
+
+                    # Filter extraction (D-07)
+                    $mainText   = $part
+                    $filterText = ''
+                    if ($part -match '^(.+?)(\s*\((?:include|exclude):.+\))$') {
+                        $mainText   = $Matches[1].Trim()
+                        $filterText = $Matches[2].Trim()
                     }
+
+                    $encMain   = [System.Net.WebUtility]::HtmlEncode($mainText)
+                    $encFilter = [System.Net.WebUtility]::HtmlEncode($filterText)
+
+                    [void]$html.Append('<div class="assign-row">')
+
+                    # Type detection (mirrors AssignmentTags.tsx getType)
+                    $lc = $mainText.ToLower()
+                    if ($lc -match 'all devices') {
+                        [void]$html.Append("<span class=`"assign-all`">$encMain</span>")
+                    } elseif ($lc -match 'all users') {
+                        [void]$html.Append("<span class=`"assign-all`">$encMain</span>")
+                    } elseif ($mainText -match '^Exclude:\s*') {
+                        [void]$html.Append("<span class=`"assign-exclude`">$encMain</span>")
+                    } else {
+                        [void]$html.Append("<span class=`"assign-include`">$encMain</span>")
+                    }
+
+                    if ($filterText) {
+                        [void]$html.Append("<span class=`"assign-filter`">$encFilter</span>")
+                    }
+                    [void]$html.Append('</div>')
                 }
+                [void]$html.Append('</div>')
                 return $html.ToString()
             }
 

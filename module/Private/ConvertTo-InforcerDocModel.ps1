@@ -326,19 +326,27 @@ function ConvertTo-InforcerDocModel {
                         if ($changed) { $row.Value = $newParts -join ', ' }
                     }
                 }
-                # Resolve comma-separated camelCase values (e.g. allowedCombinations)
+                # Resolve camelCase values (e.g. allowedCombinations like "password,softwareOath")
                 $val = $row.Value
-                if (-not [string]::IsNullOrWhiteSpace($val) -and $val -match ',') {
-                    $parts = $val -split ',\s*'
-                    $changed = $false
-                    $newParts = foreach ($p in $parts) {
-                        $pt = $p.Trim()
-                        if ($caFriendlyValues.ContainsKey($pt)) { $changed = $true; $caFriendlyValues[$pt] }
-                        else { $pt }
+                if (-not [string]::IsNullOrWhiteSpace($val) -and $val -is [string]) {
+                    # Try full value first (handles combo keys like "password,microsoftAuthenticatorPush")
+                    $trimmedVal = $val.Trim()
+                    $normalizedVal = (($trimmedVal -split ',') | ForEach-Object { $_.Trim() }) -join ','
+                    if ($caFriendlyValues.ContainsKey($trimmedVal)) {
+                        $row.Value = $caFriendlyValues[$trimmedVal]
+                    } elseif ($caFriendlyValues.ContainsKey($normalizedVal)) {
+                        $row.Value = $caFriendlyValues[$normalizedVal]
+                    } elseif ($trimmedVal -match ',') {
+                        # Fall back to per-part resolution
+                        $parts = $trimmedVal -split ',\s*'
+                        $changed = $false
+                        $newParts = foreach ($p in $parts) {
+                            $pt = $p.Trim()
+                            if ($caFriendlyValues.ContainsKey($pt)) { $changed = $true; $caFriendlyValues[$pt] }
+                            else { $pt }
+                        }
+                        if ($changed) { $row.Value = $newParts -join ', ' }
                     }
-                    if ($changed) { $row.Value = $newParts -join ', ' }
-                } elseif (-not [string]::IsNullOrWhiteSpace($val) -and $caFriendlyValues.ContainsKey($val)) {
-                    $row.Value = $caFriendlyValues[$val]
                 }
                 # Rename camelCase CA property names to friendly labels
                 if ($caFriendlyNames.ContainsKey($name)) {

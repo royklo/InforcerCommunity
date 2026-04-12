@@ -567,13 +567,16 @@ tr:hover td { background: var(--accent-soft); }
     # Helper: encode a value for HTML output (null/empty -> muted em dash)
     # -------------------------------------------------------------------------
     function ConvertTo-SafeHtmlValue {
-        param([Parameter()][object]$Value)
+        param(
+            [Parameter()][object]$Value,
+            [Parameter()][switch]$AllowMultiValue
+        )
         if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrEmpty($Value))) {
             return '<span class="muted empty-val">&mdash;</span>'
         }
         $str = $Value.ToString()
-        # Multi-value comma-separated list — render as vertical list
-        if ($str -match ',') {
+        # Multi-value comma-separated list — render as vertical list (only for setting values, not prose)
+        if ($AllowMultiValue -and $str -match ',') {
             $items = $str -split ',\s*' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
             if ($items.Count -ge 2) {
                 $mvId = "mv$(Get-Random)"
@@ -897,7 +900,7 @@ tr:hover td { background: var(--accent-soft); }
                     [void]$sb.AppendLine('<tr><th>Setting</th><th>Value</th></tr>')
                     foreach ($setting in @($policy.Settings)) {
                         $settingNameEsc = [System.Net.WebUtility]::HtmlEncode($setting.Name)
-                        $settingVal     = ConvertTo-SafeHtmlValue -Value $setting.Value
+                        $settingVal     = ConvertTo-SafeHtmlValue -Value $setting.Value -AllowMultiValue
                         $indentLevel    = if ($null -ne $setting.Indent) { [int]$setting.Indent } else { 0 }
                         $paddingRem     = $indentLevel * 1.5
 

@@ -411,6 +411,7 @@ Retrieves Entra ID groups from an Inforcer tenant. When called without `-Group`,
 | **TenantId** | Object | Yes | Inforcer tenant ID (numeric ID, GUID, or tenant name). Alias: `ClientTenantId`. |
 | **Group** | String | Yes* | Group GUID or display name for full detail. Alias: `GroupId`. Resolves name automatically via search. |
 | **Search** | String | No | Server-side search filter (List parameter set only). |
+| **Filter** | String | No | Client-side wildcard filter applied after retrieving groups. Supports `*` wildcards (e.g., `SG - Entra*`). Requires fetching all groups before filtering (List parameter set only). |
 | **MaxResults** | Int | No | Maximum groups to return. `0` = no limit (List parameter set only). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 

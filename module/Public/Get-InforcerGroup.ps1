@@ -140,7 +140,9 @@ function Get-InforcerGroup {
             if ($null -eq $response) {
                 if ($err -and $err[0].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
                     Write-Error -Message "Group '$Group' not found in tenant '$resolvedTenantId'." -ErrorId 'GroupNotFound' -Category ObjectNotFound
-                } elseif (-not $err) {
+                } elseif ($err) {
+                    Write-Error -ErrorRecord $err[0]
+                } else {
                     Write-Error -Message "Group '$Group' not found in tenant '$resolvedTenantId'." -ErrorId 'GroupNotFound' -Category ObjectNotFound
                 }
                 return

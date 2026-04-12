@@ -255,7 +255,7 @@ if ($hasCatalogPolicies) {
     }
     Import-InforcerSettingsCatalog @catalogParams
 } else {
-    Write-Host '  No Settings Catalog policies found, skipping catalog load' -ForegroundColor Gray
+    Write-Host '  No Intune/Defender policies found, skipping Settings Catalog load' -ForegroundColor Gray
 }
 
 # Build Graph enrichment maps before DocModel (so assignments resolve during normalization)

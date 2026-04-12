@@ -34,10 +34,18 @@ function Resolve-InforcerGroupId {
 
         Write-Verbose "Group name detected: '$groupIdString'. Searching for group..."
         $endpoint = "/beta/tenants/$TenantId/groups?search=$([System.Uri]::EscapeDataString($groupIdString))"
-        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveFullResponse
+        $apiErr = @()
+        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveFullResponse -ErrorVariable apiErr -ErrorAction SilentlyContinue
+
+        if ($null -eq $response) {
+            if ($apiErr.Count -gt 0) {
+                throw [System.InvalidOperationException]::new("Failed to search for group '$groupIdString': $($apiErr[0].Exception.Message)")
+            }
+            throw [System.InvalidOperationException]::new("No group found with name: $groupIdString")
+        }
 
         $items = $null
-        if ($null -ne $response -and $null -ne $response.PSObject.Properties['data']) {
+        if ($null -ne $response.PSObject.Properties['data']) {
             $items = @($response.data)
         }
 
@@ -45,31 +53,37 @@ function Resolve-InforcerGroupId {
             throw [System.InvalidOperationException]::new("No group found with name: $groupIdString")
         }
 
-        $exactMatch = $null
-        $caseInsensitiveMatch = $null
+        $exactMatches = [System.Collections.Generic.List[string]]::new()
+        $caseInsensitiveMatches = [System.Collections.Generic.List[string]]::new()
         foreach ($g in $items) {
             if (-not ($g -is [PSObject])) { continue }
             $nameProp = $g.PSObject.Properties['displayName']
             if (-not $nameProp -or $null -eq $nameProp.Value) { continue }
             $gName = $nameProp.Value.ToString().Trim()
+            $idProp = $g.PSObject.Properties['id']
+            if (-not $idProp -or $null -eq $idProp.Value) { continue }
+            $groupGuid = $idProp.Value.ToString()
+
             if ($gName -ceq $groupIdString) {
-                $idProp = $g.PSObject.Properties['id']
-                if ($idProp -and $null -ne $idProp.Value) {
-                    $exactMatch = $idProp.Value.ToString()
-                    break
-                }
-            } elseif ($null -eq $caseInsensitiveMatch -and $gName.Equals($groupIdString, [StringComparison]::OrdinalIgnoreCase)) {
-                $idProp = $g.PSObject.Properties['id']
-                if ($idProp -and $null -ne $idProp.Value) {
-                    $caseInsensitiveMatch = $idProp.Value.ToString()
-                }
+                if (-not $exactMatches.Contains($groupGuid)) { $exactMatches.Add($groupGuid) }
+            } elseif ($gName.Equals($groupIdString, [StringComparison]::OrdinalIgnoreCase)) {
+                if (-not $caseInsensitiveMatches.Contains($groupGuid)) { $caseInsensitiveMatches.Add($groupGuid) }
             }
         }
 
-        $resolved = if ($exactMatch) { $exactMatch } else { $caseInsensitiveMatch }
-        if ($resolved) {
-            Write-Verbose "Found matching group. GUID: $resolved"
-            return $resolved
+        if ($exactMatches.Count -gt 1) {
+            throw [System.InvalidOperationException]::new("Multiple groups found with name '$groupIdString'. Pass the group GUID instead.")
+        }
+        if ($exactMatches.Count -eq 1) {
+            Write-Verbose "Found matching group. GUID: $($exactMatches[0])"
+            return $exactMatches[0]
+        }
+        if ($caseInsensitiveMatches.Count -gt 1) {
+            throw [System.InvalidOperationException]::new("Multiple groups found with name '$groupIdString'. Pass the group GUID instead.")
+        }
+        if ($caseInsensitiveMatches.Count -eq 1) {
+            Write-Verbose "Found matching group. GUID: $($caseInsensitiveMatches[0])"
+            return $caseInsensitiveMatches[0]
         }
 
         throw [System.InvalidOperationException]::new("No group found with name: $groupIdString")

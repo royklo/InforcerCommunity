@@ -62,7 +62,7 @@ Plans:
   3. Deprecated settings are still included in comparison results (not silently filtered) so the admin can act on them
 **Plans:** 1 plan
 Plans:
-- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
+- [x] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 
 ### Phase 4: Duplicate Detection Engine
 **Goal**: The engine identifies settings that appear in multiple policies with different values, and produces risk-assessed messaging for cross-tenant scenarios
@@ -76,7 +76,7 @@ Plans:
   5. Duplicate data is available to downstream HTML phases (value keyed by settingDefinitionId + all policy/value pairs)
 **Plans:** 1 plan
 Plans:
-- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
+- [ ] 04-01-PLAN.md — TDD duplicate detection engine with $scanForDuplicates scriptblock and ENG-02/ENG-04 tests
 
 ### Phase 5: Value Display
 **Goal**: Long setting values are readable without cluttering the table, conflicting values are visually prominent, and values can be copied with one click
@@ -173,7 +173,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Matching Foundation | 0/1 | Planning complete | - |
 | 2. Noise Exclusion | 0/1 | Planning complete | - |
 | 3. Deprecated Settings | 0/1 | Planning complete | - |
-| 4. Duplicate Detection Engine | 0/TBD | Not started | - |
+| 4. Duplicate Detection Engine | 0/1 | Planning complete | - |
 | 5. Value Display | 0/TBD | Not started | - |
 | 6. Assignments Display | 0/TBD | Not started | - |
 | 7. Manual Review Rendering | 0/TBD | Not started | - |

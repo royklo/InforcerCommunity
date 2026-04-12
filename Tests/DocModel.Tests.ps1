@@ -407,3 +407,267 @@ Describe 'ConvertTo-InforcerDocModel - Settings rows' -Skip:(-not $script:Integr
         $nonCatalog.Settings | Should -Not -BeNullOrEmpty -Because 'non-catalog policy should have flat settings rows from policyData enumeration'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: Compare-InforcerDocModels - ENG-05 definitionId matching
+# ---------------------------------------------------------------------------
+Describe 'Compare-InforcerDocModels - ENG-05 definitionId matching' -Tag 'ENG-05' {
+
+    It 'matches Settings Catalog settings by definitionId across tenants' {
+        $result = InModuleScope InforcerCommunity {
+            $src = @{
+                TenantName = 'Source'
+                TenantId   = 'src-tenant-id'
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Settings Catalog' = @(
+                                @{
+                                    Basics      = @{ Name = 'Policy A' }
+                                    Settings    = @(
+                                        [PSCustomObject]@{
+                                            Name         = 'Screen Timeout'
+                                            Value        = '5'
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                            DefinitionId = 'device_vendor_msft_policy_config_power_displayofftimeoutonbattery'
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            $dst = @{
+                TenantName = 'Destination'
+                TenantId   = 'dst-tenant-id'
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Settings Catalog' = @(
+                                @{
+                                    Basics      = @{ Name = 'Policy A' }
+                                    Settings    = @(
+                                        [PSCustomObject]@{
+                                            Name         = 'Screen Timeout'
+                                            Value        = '10'
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                            DefinitionId = 'device_vendor_msft_policy_config_power_displayofftimeoutonbattery'
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dst
+        }
+        $result.Counters.Conflicting | Should -Be 1
+        $result.Counters.Matched     | Should -Be 0
+    }
+
+    It 'falls back to settingPath for legacy profiles without definitionId' {
+        $result = InModuleScope InforcerCommunity {
+            $src = @{
+                TenantName = 'Source'
+                TenantId   = 'src-tenant-id'
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Device Restrictions' = @(
+                                @{
+                                    Basics      = @{ Name = 'Legacy Policy' }
+                                    Settings    = @(
+                                        [PSCustomObject]@{
+                                            Name         = 'Screen Timeout'
+                                            Value        = '5'
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            $dst = @{
+                TenantName = 'Destination'
+                TenantId   = 'dst-tenant-id'
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Device Restrictions' = @(
+                                @{
+                                    Basics      = @{ Name = 'Legacy Policy' }
+                                    Settings    = @(
+                                        [PSCustomObject]@{
+                                            Name         = 'Screen Timeout'
+                                            Value        = '15'
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dst
+        }
+        $result.Counters.Conflicting | Should -Be 1
+    }
+
+    It 'handles mixed catalog and legacy without error' {
+        $result = InModuleScope InforcerCommunity {
+            $src = @{
+                TenantName = 'Source'
+                TenantId   = 'src-tenant-id'
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Settings Catalog' = @(
+                                @{
+                                    Basics      = @{ Name = 'Policy A' }
+                                    Settings    = @(
+                                        [PSCustomObject]@{
+                                            Name         = 'Screen Timeout'
+                                            Value        = '5'
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                            DefinitionId = 'device_vendor_msft_policy_config_power_displayofftimeoutonbattery'
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            $dst = @{
+                TenantName = 'Destination'
+                TenantId   = 'dst-tenant-id'
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Settings Catalog' = @(
+                                @{
+                                    Basics      = @{ Name = 'Policy A' }
+                                    Settings    = @(
+                                        [PSCustomObject]@{
+                                            Name         = 'Screen Timeout'
+                                            Value        = '10'
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dst
+        }
+        # Should not throw — mixed catalog/legacy keys result in SourceOnly + DestOnly rows
+        $result | Should -Not -BeNullOrEmpty
+        ($result.Counters.SourceOnly + $result.Counters.DestOnly) | Should -BeGreaterThan 0
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: Compare-InforcerDocModels - ENG-06 path building
+# ---------------------------------------------------------------------------
+Describe 'Compare-InforcerDocModels - ENG-06 path building' -Tag 'ENG-06' {
+
+    It 'produces Parent > Child path for nested settings' {
+        $result = InModuleScope InforcerCommunity {
+            $settings = @(
+                [PSCustomObject]@{ Name = 'Display';  Value = '';  Indent = 0; IsConfigured = $false }
+                [PSCustomObject]@{ Name = 'Power';    Value = '';  Indent = 1; IsConfigured = $false }
+                [PSCustomObject]@{ Name = 'Timeout';  Value = '5'; Indent = 2; IsConfigured = $true }
+            )
+            $model = @{
+                TenantName = 'Both'
+                TenantId   = 'same-tenant-id'
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Settings Catalog' = @(
+                                @{
+                                    Basics      = @{ Name = 'Nested Policy' }
+                                    Settings    = $settings
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            # Compare model with itself — produces Matched rows
+            Compare-InforcerDocModels -SourceModel $model -DestinationModel $model
+        }
+        # Find a row where SettingPath contains ' > ' two times (two levels of nesting)
+        $allRows = [System.Collections.Generic.List[object]]::new()
+        foreach ($prod in $result.Products.Values) {
+            foreach ($cat in $prod.Categories.Values) {
+                foreach ($row in $cat.ComparisonRows) {
+                    [void]$allRows.Add($row)
+                }
+            }
+        }
+        $nestedRow = $allRows | Where-Object { $_.SettingPath -like '*>*>*' }
+        $nestedRow | Should -Not -BeNullOrEmpty -Because 'Timeout at indent 2 should have path Display > Power > Timeout'
+    }
+
+    It 'top-level setting path equals setting name' {
+        $result = InModuleScope InforcerCommunity {
+            $model = @{
+                TenantName = 'Both'
+                TenantId   = 'same-tenant-id'
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Device Restrictions' = @(
+                                @{
+                                    Basics      = @{ Name = 'Top Level Policy' }
+                                    Settings    = @(
+                                        [PSCustomObject]@{
+                                            Name         = 'BitLocker'
+                                            Value        = 'Enabled'
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Compare-InforcerDocModels -SourceModel $model -DestinationModel $model
+        }
+        $allRows = [System.Collections.Generic.List[object]]::new()
+        foreach ($prod in $result.Products.Values) {
+            foreach ($cat in $prod.Categories.Values) {
+                foreach ($row in $cat.ComparisonRows) {
+                    [void]$allRows.Add($row)
+                }
+            }
+        }
+        $bitlockerRow = $allRows | Where-Object { $_.Name -eq 'BitLocker' }
+        $bitlockerRow | Should -Not -BeNullOrEmpty
+        $bitlockerRow.SettingPath | Should -Be 'BitLocker'
+    }
+}

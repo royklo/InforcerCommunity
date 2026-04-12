@@ -69,6 +69,12 @@ function Compare-InforcerDocModels {
         '^tenant\s*id'
     )
 
+    # Value-based exclusion patterns (ported from IntuneLens EXCLUDED_VALUE_PATTERNS)
+    $excludedValuePatterns = @(
+        '^Top Level Setting Group Collection$'
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    )
+
     # ── Helper: ensure product/category exists ────────────────────────────
     $ensureProductCategory = {
         param([string]$Product, [string]$Category)
@@ -95,17 +101,22 @@ function Compare-InforcerDocModels {
         $products[$Product].Counters[$status]++
     }
 
-    # ── Helper: check if a setting name should be excluded ────────────────
+    # ── Helper: check if a setting should be excluded by name or value ──
     $isExcludedSetting = {
-        param([string]$Name)
+        param([string]$Name, [string]$Value = '')
         foreach ($excluded in $excludedSettingNames) {
             if ($Name -eq $excluded) { return $true }
         }
         foreach ($pattern in $appIdSettingPatterns) {
             if ($Name -match $pattern) { return $true }
         }
-        # Note: unresolved settingDefinitionIds now get cleaned names in Resolve-InforcerSettingName
-        # so they pass through with readable labels like "Excel > Security > Vba Warnings Policy"
+        # Structural noise — array count rows (ported from IntuneLens STRUCTURAL_NOISE)
+        if ($Value -match '^\d+ items$') { return $true }
+        # Value-based exclusions: standalone GUIDs (values only, not names),
+        # group collection header, etc. (ported from IntuneLens EXCLUDED_VALUE_PATTERNS)
+        foreach ($pattern in $excludedValuePatterns) {
+            if ($Value -match $pattern) { return $true }
+        }
         return $false
     }
 
@@ -224,11 +235,9 @@ function Compare-InforcerDocModels {
             } else {
                 $p.SettingPath.ToLowerInvariant()
             }
-            # Skip excluded settings
-            if (& $isExcludedSetting $p.Name) { continue }
-            if (& $isExcludedSetting $key) { continue }
-            # Skip structural array count rows (e.g., "40 items")
-            if ($p.Value -match '^\d+ items$') { continue }
+            # Skip excluded settings (name-based and value-based)
+            if (& $isExcludedSetting $p.Name $p.Value) { continue }
+            if (& $isExcludedSetting $key '') { continue }
 
             # Handle duplicate paths — use category name for disambiguation
             if ($lookup.Contains($key)) {
@@ -441,6 +450,9 @@ function Compare-InforcerDocModels {
                     # Take first policy from each side (index 0)
                     $srcPolicy = $srcPolicyIndex[$policyKey][0]
                     $dstPolicy = $dstPolicyIndex[$policyKey][0]
+
+                    # Ensure category structure exists even when all settings are filtered
+                    & $ensureProductCategory $productName $categoryName
 
                     $srcPolicyName = $srcPolicy.Basics.Name
                     $dstPolicyName = $dstPolicy.Basics.Name

@@ -721,3 +721,210 @@ Describe 'ConvertTo-InforcerComparisonHtml - Assignments Display' -Tag 'ASG', 'P
         $result | Should -Not -Match 'Include:'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Manual Review Rendering
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Manual Review Rendering' -Tag 'MAN', 'Phase7' {
+
+    BeforeAll {
+        # Build a long PowerShell script (>100 chars, no shebang) for PS code block fixture
+        $psScript = 'function Get-Something { param([string]$Name) Write-Host "Name: $Name" -ForegroundColor Green; return $Name }' + ' ' * 10
+
+        # Build a bash script (>100 chars, starts with shebang) for bash code block fixture
+        $bashScript = "#!/bin/bash`necho 'Starting deployment'`nif [ -z `"`$1`" ]; then echo 'No arg provided'; exit 1; fi`ncurl -s https://example.com/api?name=`$1`necho 'Done'"
+
+        # Compliance rules JSON (valid, with Rules array)
+        $rulesJson = '{"Rules":[{"settingName":"BitLocker","operator":"IsEquals","dataType":"Boolean","operand":"true"},{"settingName":"Firewall","operator":"IsEquals","dataType":"Boolean","operand":"true"}]}'
+
+        # Duplicate table JSON (two policies with different values)
+        $dupJson = '__DUPLICATE_TABLE__[{"Policy":"Policy X","Value":"true","Side":"Source"},{"Policy":"Policy Y","Value":"false","Side":"Destination"}]'
+
+        # Invalid JSON for graceful degradation test
+        $invalidJson = 'not-valid-json'
+
+        $script:CompModelMan = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = '2026-01-01'
+            AlignmentScore  = 85
+            TotalItems      = 10
+            Counters        = @{ Matched = 8; Conflicting = 1; SourceOnly = 1; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 8; Conflicting = 1; SourceOnly = 1; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{
+                'Scripts' = [System.Collections.Generic.List[object]]@(
+                    # Policy 1: PowerShell script (no shebang) — for MAN-01 and MAN-02 PS fallback
+                    @{
+                        PolicyName    = 'PS Script Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'Detection Script'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'scriptContent'; Value = $psScript; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 2: Bash script (shebang) — for MAN-02 bash detection
+                    @{
+                        PolicyName    = 'Bash Script Policy'
+                        Side          = 'Destination'
+                        ProfileType   = 'Detection Script'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'detectionScriptContent'; Value = $bashScript; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 3: Compliance rules (valid JSON) — for MAN-03
+                    @{
+                        PolicyName    = 'Compliance Rules Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'Custom Compliance'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'rulesContent'; Value = $rulesJson; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 4: Duplicate table — for MAN-04
+                    @{
+                        PolicyName    = 'Duplicate Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'someSettingDefId'; Value = $dupJson; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 5: HasDeprecated=$true, Side=Source — for MAN-05 deprecated badge
+                    @{
+                        PolicyName    = 'Deprecated Source Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'Configuration'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'someSetting'; Value = 'someValue'; IsDeprecated = $true }
+                        )
+                        HasDeprecated = $true
+                    },
+                    # Policy 6: HasDeprecated=$false, Side=Destination — for MAN-05 no deprecated badge
+                    @{
+                        PolicyName    = 'Clean Dest Policy'
+                        Side          = 'Destination'
+                        ProfileType   = 'Configuration'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'cleanSetting'; Value = 'cleanValue'; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 7: rulesContent with invalid JSON — for MAN-03 graceful degradation
+                    @{
+                        PolicyName    = 'Invalid Rules Policy'
+                        Side          = 'Destination'
+                        ProfileType   = 'Custom Compliance'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'rulesContent'; Value = $invalidJson; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    }
+                )
+            }
+        }
+
+        $script:ManHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelMan } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-01: PowerShell highlighting — highlightPS() and .ps-keyword CSS class
+    # -------------------------------------------------------------------------
+    It 'HTML output contains highlightPS function in JS block' -Tag 'MAN-01' {
+        $script:ManHtml | Should -Match 'function highlightPS'
+    }
+
+    It 'CSS contains .ps-keyword class definition' -Tag 'MAN-01' {
+        $script:ManHtml | Should -Match '\.ps-keyword'
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-02: Bash highlighting — highlightBash() function and sh- CSS classes
+    # -------------------------------------------------------------------------
+    It 'HTML output contains highlightBash function in JS block' -Tag 'MAN-02' {
+        $script:ManHtml | Should -Match 'function highlightBash'
+    }
+
+    It 'CSS contains .sh-keyword class definition' -Tag 'MAN-02' {
+        $script:ManHtml | Should -Match '\.sh-keyword'
+    }
+
+    It 'bash script (shebang) renders with sh-code class on pre element, not ps-code' -Tag 'MAN-02' {
+        # The bash script policy should produce <pre class="sh-code">, not <pre class="ps-code">
+        $script:ManHtml | Should -Match '<pre class="sh-code"'
+    }
+
+    It 'non-shebang script renders with ps-code class (existing behavior)' -Tag 'MAN-02' {
+        # The PowerShell script policy should produce <pre class="ps-code">
+        $script:ManHtml | Should -Match '<pre class="ps-code"'
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-03: Compliance rules table rendering
+    # -------------------------------------------------------------------------
+    It 'rulesContent with valid JSON Rules array renders as compliance-table' -Tag 'MAN-03' {
+        $script:ManHtml | Should -Match '<table class="compliance-table"'
+    }
+
+    It 'compliance-table has four th column headers: Setting, Operator, Type, Expected Value' -Tag 'MAN-03' {
+        $script:ManHtml | Should -Match '<th>Setting</th>'
+        $script:ManHtml | Should -Match '<th>Operator</th>'
+        $script:ManHtml | Should -Match '<th>Type</th>'
+        $script:ManHtml | Should -Match '<th>Expected Value</th>'
+    }
+
+    It 'rulesContent with invalid JSON falls through to default manual-review-setting display' -Tag 'MAN-03' {
+        # "not-valid-json" should appear as a setting value, not break rendering
+        # The output for Invalid Rules Policy should contain manual-review-setting
+        $script:ManHtml | Should -Match 'manual-review-setting'
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-04: Duplicate table rendering
+    # -------------------------------------------------------------------------
+    It '__DUPLICATE_TABLE__ prefixed setting renders as dup-table, not as raw prefix text' -Tag 'MAN-04' {
+        $script:ManHtml | Should -Match '<table class="dup-table"'
+        $script:ManHtml | Should -Not -Match '__DUPLICATE_TABLE__'
+    }
+
+    It 'dup-table has policy names from JSON as th column headers inside dup-table' -Tag 'MAN-04' {
+        # Policy X and Policy Y should appear as <th> elements inside a dup-table
+        # Match: dup-table ... <th>...Policy X...</th>
+        $script:ManHtml | Should -Match '(?s)dup-table.*<th>.*Policy X.*</th>'
+        $script:ManHtml | Should -Match '(?s)dup-table.*<th>.*Policy Y.*</th>'
+    }
+
+    It 'dup-table conflict cell has dup-conflict class when values differ across policies' -Tag 'MAN-04' {
+        # Policy X has "true", Policy Y has "false" — values differ, so at least one td should have dup-conflict class
+        $script:ManHtml | Should -Match 'class="[^"]*dup-conflict[^"]*"'
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-05: Side badges and deprecated badge — already implemented, should PASS
+    # -------------------------------------------------------------------------
+    It 'policy with Side=Source has side-source class in its summary' -Tag 'MAN-05' {
+        $script:ManHtml | Should -Match 'side-badge side-source'
+    }
+
+    It 'policy with Side=Destination has side-dest class in its summary' -Tag 'MAN-05' {
+        $script:ManHtml | Should -Match 'side-badge side-dest'
+    }
+
+    It 'policy with HasDeprecated=$true has badge-deprecated in its summary' -Tag 'MAN-05' {
+        # "Deprecated Source Policy" has HasDeprecated=$true
+        $script:ManHtml | Should -Match 'Deprecated Source Policy.*badge-deprecated'
+    }
+
+    It 'policy with HasDeprecated=$false does NOT have badge-deprecated near its policy name' -Tag 'MAN-05' {
+        # "Clean Dest Policy" has HasDeprecated=$false — should not have badge-deprecated after its name
+        $cleanPolicyPattern = 'Clean Dest Policy.*?</summary>'
+        $cleanMatch = [regex]::Match($script:ManHtml, $cleanPolicyPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+        $cleanMatch.Value | Should -Not -Match 'badge-deprecated'
+    }
+}

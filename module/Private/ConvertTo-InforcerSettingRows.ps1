@@ -47,10 +47,11 @@ function ConvertTo-InforcerSettingRows {
                 $choiceLabel = (Resolve-InforcerSettingName -SettingDefinitionId $defId -ChoiceValue $csv.value).ValueLabel
             }
             [void]$rows.Add([PSCustomObject]@{
-                Name        = $resolved.DisplayName
-                Value       = $choiceLabel
-                Indent      = $Depth
+                Name         = $resolved.DisplayName
+                Value        = $choiceLabel
+                Indent       = $Depth
                 IsConfigured = $true
+                DefinitionId = $defId
             })
             if ($csv -and $csv.children) {
                 foreach ($child in @($csv.children)) {
@@ -66,29 +67,32 @@ function ConvertTo-InforcerSettingRows {
         '*simpleSettingInstance' {
             $value = $SettingInstance.simpleSettingValue.value
             [void]$rows.Add([PSCustomObject]@{
-                Name        = $resolved.DisplayName
-                Value       = $value
-                Indent      = $Depth
+                Name         = $resolved.DisplayName
+                Value        = $value
+                Indent       = $Depth
                 IsConfigured = $true
+                DefinitionId = $defId
             })
         }
 
         '*simpleSettingCollectionInstance' {
             $values = @($SettingInstance.simpleSettingCollectionValue | ForEach-Object { $_.value }) -join ', '
             [void]$rows.Add([PSCustomObject]@{
-                Name        = $resolved.DisplayName
-                Value       = $values
-                Indent      = $Depth
+                Name         = $resolved.DisplayName
+                Value        = $values
+                Indent       = $Depth
                 IsConfigured = $true
+                DefinitionId = $defId
             })
         }
 
         '*groupSettingCollectionInstance' {
             [void]$rows.Add([PSCustomObject]@{
-                Name        = $resolved.DisplayName
-                Value       = ''
-                Indent      = $Depth
+                Name         = $resolved.DisplayName
+                Value        = ''
+                Indent       = $Depth
                 IsConfigured = $false
+                DefinitionId = $defId
             })
             foreach ($group in @($SettingInstance.groupSettingCollectionValue)) {
                 if ($null -ne $group -and $group.children) {
@@ -108,10 +112,11 @@ function ConvertTo-InforcerSettingRows {
                 if ($null -ne $item) {
                     $label = (Resolve-InforcerSettingName -SettingDefinitionId $defId -ChoiceValue $item.value).ValueLabel
                     [void]$rows.Add([PSCustomObject]@{
-                        Name        = $resolved.DisplayName
-                        Value       = $label
-                        Indent      = $Depth
+                        Name         = $resolved.DisplayName
+                        Value        = $label
+                        Indent       = $Depth
                         IsConfigured = $true
+                        DefinitionId = $defId
                     })
                 }
             }
@@ -120,10 +125,11 @@ function ConvertTo-InforcerSettingRows {
         default {
             Write-Warning "Unhandled settingInstance type: $odataType for '$defId'"
             [void]$rows.Add([PSCustomObject]@{
-                Name        = $defId
-                Value       = "(unhandled type: $odataType)"
-                Indent      = $Depth
+                Name         = $defId
+                Value        = "(unhandled type: $odataType)"
+                Indent       = $Depth
                 IsConfigured = $false
+                DefinitionId = $defId
             })
         }
     }

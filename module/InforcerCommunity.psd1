@@ -22,6 +22,7 @@
         'Get-InforcerGroup'
         'Get-InforcerRole'
         'Export-InforcerTenantDocumentation'
+        'Compare-InforcerEnvironments'
     )
     CmdletsToExport   = @()
     VariablesToExport  = @()

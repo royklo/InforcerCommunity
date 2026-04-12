@@ -86,7 +86,10 @@ function ConvertTo-InforcerDocModel {
         [hashtable]$AppNameMap,
 
         [Parameter()]
-        [hashtable]$ScopeTagMap
+        [hashtable]$ScopeTagMap,
+
+        [Parameter()]
+        [switch]$ComparisonMode
     )
 
     # Friendly labels for Conditional Access camelCase property names
@@ -213,6 +216,24 @@ function ConvertTo-InforcerDocModel {
             Get-InforcerCategoryKey -PrimaryGroup $policy.primaryGroup -SecondaryGroup $policy.secondaryGroup
         }
         if ([string]::IsNullOrWhiteSpace($catKey)) { $catKey = 'General' }
+
+        # ComparisonMode filtering: only Intune-relevant products, skip non-comparable categories
+        if ($ComparisonMode) {
+            $prodLower = $prod.ToLowerInvariant()
+            $intuneProducts = @('intune', 'windows', 'macos', 'ios', 'android', 'defender')
+            $isIntuneRelevant = $false
+            foreach ($ip in $intuneProducts) {
+                if ($prodLower -match [regex]::Escape($ip)) { $isIntuneRelevant = $true; break }
+            }
+            if (-not $isIntuneRelevant) { continue }
+            # Skip compliance policies
+            $catLower = $catKey.ToLowerInvariant()
+            if ($catLower -match 'compliance') { continue }
+            # Skip enrollment/autopilot categories
+            if ($catLower -match 'enrollment|autopilot') { continue }
+            # Skip exchange categories (Defender for Office 365, not Intune)
+            if ($catLower -match '^exchange') { continue }
+        }
 
         # Ensure product and category exist (per NORM-02)
         if (-not $products.Contains($prod)) {
@@ -383,9 +404,10 @@ function ConvertTo-InforcerDocModel {
 
         # Assemble normalized policy (per NORM-03)
         $normalizedPolicy = @{
-            Basics      = $basics
-            Settings    = $settings.ToArray()
-            Assignments = $assignments
+            Basics       = $basics
+            Settings     = $settings.ToArray()
+            Assignments  = $assignments
+            PolicyTypeId = $policyTypeId
         }
 
         [void]$products[$prod].Categories[$catKey].Add($normalizedPolicy)

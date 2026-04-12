@@ -39,6 +39,7 @@ function Connect-InforcerGraph {
             $connectParams['TenantId'] = $TenantId
             Write-Host "  Targeting Azure AD tenant: $TenantId" -ForegroundColor Gray
         }
+        Write-Host '  Complete the sign-in in your browser (Ctrl+C to cancel)...' -ForegroundColor Gray
         Connect-MgGraph @connectParams -ErrorAction Stop
         $newContext = Get-MgContext
         if ($newContext) {

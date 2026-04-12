@@ -50,6 +50,19 @@ function Import-InforcerSettingsCatalog {
     $raw = Get-Content -Path $Path -Raw -Encoding UTF8
     $entries = $raw | ConvertFrom-Json -AsHashtable -Depth 100
 
+    # Load categories.json for setting context disambiguation
+    $categoryLookup = @{}
+    $categoriesPath = Join-Path (Split-Path $Path -Parent) 'categories.json'
+    if (Test-Path -LiteralPath $categoriesPath) {
+        Write-Verbose "Loading categories from $categoriesPath..."
+        $catRaw = Get-Content -Path $categoriesPath -Raw -Encoding UTF8
+        $catEntries = $catRaw | ConvertFrom-Json -Depth 10
+        foreach ($cat in $catEntries) {
+            if ($cat.id) { $categoryLookup[$cat.id] = $cat.displayName }
+        }
+        Write-Verbose "Categories loaded: $($categoryLookup.Count) entries"
+    }
+
     $catalog = @{}
     foreach ($entry in $entries) {
         $id = $entry['id']
@@ -63,10 +76,17 @@ function Import-InforcerSettingsCatalog {
             }
         }
 
+        # Resolve category name for disambiguation (e.g., "Trusted Sites Zone", "Domain Profile")
+        $catName = ''
+        if ($entry.categoryId -and $categoryLookup.ContainsKey($entry.categoryId)) {
+            $catName = $categoryLookup[$entry.categoryId]
+        }
+
         $catalog[$id] = @{
-            DisplayName = $entry['displayName']
-            Description = $entry['description']
-            Options     = $options
+            DisplayName  = $entry['displayName']
+            Description  = $entry['description']
+            Options      = $options
+            CategoryName = $catName
         }
     }
 

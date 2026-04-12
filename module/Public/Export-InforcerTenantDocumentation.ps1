@@ -259,8 +259,7 @@ if ($hasCatalogPolicies) {
 }
 
 # Build Graph enrichment maps before DocModel (so assignments resolve during normalization)
-$groupNameMap = $null
-$filterMap = $null
+$graphMaps = @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null }
 if ($FetchGraphData) {
     Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
     # Extract Azure AD tenant GUID from the Inforcer tenant data so Graph targets the correct tenant

@@ -432,6 +432,22 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .ps-code-wrap { position: relative; }
 .copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.7rem; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-xs); cursor: pointer; opacity: 0.7; transition: opacity var(--transition); z-index: 1; }
 .copy-btn:hover { opacity: 1; }
+.sh-keyword { color: #ff7b72; font-weight: 600; }
+.sh-string { color: #a5d6ff; }
+.sh-variable { color: #ffa657; }
+.sh-command { color: #d2a8ff; }
+.sh-comment { color: #8b949e; font-style: italic; }
+.code-lang-label { display: inline-block; padding: 0.25rem 0.5rem; font-size: 0.625rem; font-weight: 400; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--bg-card); border-bottom: 1px solid var(--border); border-radius: var(--radius-xs) var(--radius-xs) 0 0; user-select: none; }
+.compliance-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin: 0.5rem 0; }
+.compliance-table th { background: var(--header-bg); color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.25rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.compliance-table td { padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); word-break: break-word; font-family: "SF Mono","Cascadia Code","Consolas",monospace; }
+.compliance-table tr:last-child td { border-bottom: none; }
+.dup-table-wrap { overflow-x: auto; margin: 0.5rem 0; }
+.dup-table { border-collapse: collapse; font-size: 0.75rem; min-width: 100%; }
+.dup-table th { background: var(--header-bg); color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.25rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.dup-table td { padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); word-break: break-word; font-family: "SF Mono","Cascadia Code","Consolas",monospace; vertical-align: top; }
+.dup-table td.dup-setting-name { font-family: inherit; font-weight: 600; color: var(--text); white-space: nowrap; }
+.dup-table td.dup-conflict { background: var(--warning-bg); color: var(--warning); font-weight: 600; }
 .manual-review-setting .setting-name { color: var(--text); flex: 1; }
 .manual-review-setting .setting-value { color: var(--text-secondary); max-width: 40%; text-align: right; word-break: break-word; font-family: "SF Mono","Cascadia Code","Consolas",monospace; font-size: 0.75rem; }
 .manual-review-setting:nth-child(even) { background: var(--row-alt); }
@@ -1062,11 +1078,31 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('    if (lastIdx < text.length) tokens.push(escHtml(text.substring(lastIdx)));')
     [void]$sb.AppendLine('    code.innerHTML = tokens.join("");')
     [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('function highlightBash(code) {')
+    [void]$sb.AppendLine('    var text = code.textContent;')
+    [void]$sb.AppendLine('    var tokens = [];')
+    [void]$sb.AppendLine('    var re = /(#[^\n]*|"(?:[^"\\]|\\.)*"|''[^'']*''|\$\{[\w]+\}|\$[\w]+|\b(?:if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|local|export|set|trap|in)\b|\b(?:echo|curl|rm|mkdir|cp|mv|chmod|chown|grep|sed|awk|cat|ls|cd|pwd|source|eval|exec|exit)\b)/g;')
+    [void]$sb.AppendLine('    var lastIdx = 0, m;')
+    [void]$sb.AppendLine('    while ((m = re.exec(text)) !== null) {')
+    [void]$sb.AppendLine('        if (m.index > lastIdx) tokens.push(escHtml(text.substring(lastIdx, m.index)));')
+    [void]$sb.AppendLine('        var t = m[0], cls = "";')
+    [void]$sb.AppendLine('        if (t[0] === "#") cls = "sh-comment";')
+    [void]$sb.AppendLine('        else if (t[0] === "\"" || t[0] === "''") cls = "sh-string";')
+    [void]$sb.AppendLine('        else if (t[0] === "$") cls = "sh-variable";')
+    [void]$sb.AppendLine('        else if (/^(if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|local|export|set|trap|in)$/.test(t)) cls = "sh-keyword";')
+    [void]$sb.AppendLine('        else cls = "sh-command";')
+    [void]$sb.AppendLine('        tokens.push(''<span class="'' + cls + ''">''+escHtml(t)+''</span>'');')
+    [void]$sb.AppendLine('        lastIdx = m.index + t.length;')
+    [void]$sb.AppendLine('    }')
+    [void]$sb.AppendLine('    if (lastIdx < text.length) tokens.push(escHtml(text.substring(lastIdx)));')
+    [void]$sb.AppendLine('    code.innerHTML = tokens.join("");')
+    [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('// Apply filters FIRST to hide deprecated rows (must run before any cosmetic JS)')
     [void]$sb.AppendLine('applyFilters();')
     [void]$sb.AppendLine('// Syntax highlighting and copy buttons (wrapped in try/catch to never block filters)')
     [void]$sb.AppendLine('try {')
     [void]$sb.AppendLine('    document.querySelectorAll(".ps-code code").forEach(highlightPS);')
+    [void]$sb.AppendLine('    document.querySelectorAll(".sh-code code").forEach(highlightBash);')
     [void]$sb.AppendLine('    document.querySelectorAll(".ps-code-wrap").forEach(function(wrap) {')
     [void]$sb.AppendLine('        var btn = document.createElement("button");')
     [void]$sb.AppendLine('        btn.textContent = "Copy";')

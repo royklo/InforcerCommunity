@@ -368,3 +368,69 @@ Describe 'ConvertTo-InforcerMarkdown' -Tag 'Markdown' {
         $sectionLines | Should -Not -Match '\| Setting \| Value \|'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - ENG-03 deprecated badge
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - ENG-03 deprecated badge' -Tag 'ENG-03' {
+
+    BeforeAll {
+        # Minimal comparison model with one deprecated and one non-deprecated row
+        $script:CompModelDepr = @{
+            SourceName      = 'Source Tenant'
+            DestinationName = 'Dest Tenant'
+            Products        = [ordered]@{
+                Windows = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Deprecated WiFi Setting'
+                                    SettingPath  = 'WiFi > Config'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = 'WPA2'
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = 'WPA2'
+                                    IsDeprecated = $true
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Normal Setting'
+                                    SettingPath  = ''
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = 'Enabled'
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = 'Enabled'
+                                    IsDeprecated = $false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview     = [ordered]@{}
+            GeneratedAt      = [datetime]::UtcNow
+        }
+    }
+
+    It 'renders badge-deprecated span for deprecated rows' {
+        $html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelDepr } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+        $html | Should -Match 'Deprecated WiFi Setting.*badge-deprecated'
+    }
+
+    It 'does not render badge-deprecated span for non-deprecated rows' {
+        $html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelDepr } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+        # The normal setting row should NOT have a badge-deprecated span
+        # Extract the table row for Normal Setting and check it does not contain badge-deprecated
+        $html | Should -Match 'Normal Setting</td>'
+    }
+}

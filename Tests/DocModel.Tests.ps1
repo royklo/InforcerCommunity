@@ -789,3 +789,107 @@ Describe 'Compare-InforcerDocModels - ENG-01 noise exclusion' -Tag 'ENG-01' {
         $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 1
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: Compare-InforcerDocModels - ENG-03 deprecated settings
+# ---------------------------------------------------------------------------
+Describe 'Compare-InforcerDocModels - ENG-03 deprecated settings' -Tag 'ENG-03' {
+
+    BeforeAll {
+        # Reuse the same model builder pattern as ENG-01 but accept optional DefinitionId
+        $buildModelWithSetting = {
+            param([string]$SettingName, [string]$SettingValue, [string]$TenantName, [string]$TenantId, [string]$DefId = 'test_definition_id')
+            @{
+                TenantName = $TenantName
+                TenantId   = $TenantId
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Settings Catalog' = @(
+                                @{
+                                    Basics   = @{ Name = 'Test Policy' }
+                                    Settings = @(
+                                        [PSCustomObject]@{
+                                            Name         = $SettingName
+                                            Value        = $SettingValue
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                            DefinitionId = $DefId
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    It 'flags setting with deprecated in name as IsDeprecated = true' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Allow deprecated feature' 'Enabled' 'Source' 'src-id'
+            $dest = & $buildModel 'Allow deprecated feature' 'Enabled' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $rows = $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows
+        $rows | Should -HaveCount 1
+        $rows[0].IsDeprecated | Should -BeTrue
+    }
+
+    It 'flags setting with deprecated in value as IsDeprecated = true' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Feature Toggle' 'deprecated' 'Source' 'src-id'
+            $dest = & $buildModel 'Feature Toggle' 'deprecated' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $rows = $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows
+        $rows | Should -HaveCount 1
+        $rows[0].IsDeprecated | Should -BeTrue
+    }
+
+    It 'flags setting via catalog DisplayName containing deprecated as IsDeprecated = true' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            # Set up a mock catalog entry with deprecated DisplayName
+            $script:InforcerSettingsCatalog = @{
+                'catalog_depr_id' = @{ DisplayName = '(Deprecated) Old WiFi Setting' }
+            }
+            $src  = & $buildModel 'WiFi Config' 'WPA2' 'Source' 'src-id' 'catalog_depr_id'
+            $dest = & $buildModel 'WiFi Config' 'WPA2' 'Dest'   'dest-id' 'catalog_depr_id'
+            $r = Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+            $script:InforcerSettingsCatalog = $null
+            $r
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $rows = $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows
+        $rows | Should -HaveCount 1
+        $rows[0].IsDeprecated | Should -BeTrue
+    }
+
+    It 'sets IsDeprecated = false for non-deprecated settings' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Display Brightness' '75' 'Source' 'src-id'
+            $dest = & $buildModel 'Display Brightness' '75' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $rows = $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows
+        $rows | Should -HaveCount 1
+        $rows[0].IsDeprecated | Should -BeFalse
+    }
+
+    It 'includes deprecated settings in comparison results (not filtered)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Deprecated: Old Setting' 'Value1' 'Source' 'src-id'
+            $dest = & $buildModel 'Deprecated: Old Setting' 'Value2' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $rows = $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows
+        $rows | Should -HaveCount 1
+        $rows[0].Status | Should -Be 'Conflicting'
+    }
+}

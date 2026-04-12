@@ -50,7 +50,7 @@ Plans:
   5. Tenant ID strings are excluded so cross-tenant IDs don't appear as conflicts
 **Plans:** 1 plan
 Plans:
-- [ ] 02-01-PLAN.md — TDD value-based noise exclusion with $excludedValuePatterns and extended $isExcludedSetting
+- [x] 02-01-PLAN.md — TDD value-based noise exclusion with $excludedValuePatterns and extended $isExcludedSetting
 
 ### Phase 3: Deprecated Settings
 **Goal**: Deprecated settings are visibly flagged in both the comparison table and manual review panels
@@ -60,7 +60,9 @@ Plans:
   1. Any setting whose name or value contains "deprecated" shows a visual "Deprecated" badge in the HTML report
   2. Deprecated settings in manual review policies show a deprecated badge alongside the source/destination side badge
   3. Deprecated settings are still included in comparison results (not silently filtered) so the admin can act on them
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 
 ### Phase 4: Duplicate Detection Engine
 **Goal**: The engine identifies settings that appear in multiple policies with different values, and produces risk-assessed messaging for cross-tenant scenarios
@@ -72,7 +74,9 @@ Plans:
   3. Risk assessment messaging correctly identifies majority/minority splits (e.g., "3 of 4 policies agree — 1 outlier")
   4. Cross-tenant outlier scenarios produce a message that describes which tenant is the outlier
   5. Duplicate data is available to downstream HTML phases (value keyed by settingDefinitionId + all policy/value pairs)
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 
 ### Phase 5: Value Display
 **Goal**: Long setting values are readable without cluttering the table, conflicting values are visually prominent, and values can be copied with one click
@@ -84,7 +88,9 @@ Plans:
   3. Expanded values render in monospace font with pre-wrap formatting so line breaks are preserved
   4. A copy button appears when hovering a value cell and briefly shows "Copied!" on click
   5. Destination column values that conflict with source display in bold red text
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 **UI hint**: yes
 
 ### Phase 6: Assignments Display
@@ -96,7 +102,9 @@ Plans:
   2. Exclude-type group assignments render in red with an "Exclude:" prefix
   3. "All Devices" and "All Users" built-in assignments render in blue
   4. When a filter is attached to an assignment, it displays on a separate muted line directly below the assignment
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 **UI hint**: yes
 
 ### Phase 7: Manual Review Rendering
@@ -109,7 +117,9 @@ Plans:
   3. Compliance rules render as a four-column table (Setting | Operator | Type | Expected Value), not as raw text
   4. When a policy appears in the duplicate settings data, its manual review section shows a horizontal table of the setting's values across all policies
   5. Each manual review policy panel displays a Source or Destination side badge, and a Deprecated badge if any setting is deprecated
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 **UI hint**: yes
 
 ### Phase 8: Table Enhancements
@@ -120,7 +130,9 @@ Plans:
   1. The user can drag column borders left or right to resize columns; double-clicking a border resets that column to its default width
   2. Settings identified as duplicates show an amber badge in the setting name cell; hovering the badge reveals a tooltip listing the other policies containing the same setting
   3. The setting name cell displays the bold setting name on the first line and the muted setting path on the second line
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 **UI hint**: yes
 
 ### Phase 9: Filtering and Navigation
@@ -132,7 +144,9 @@ Plans:
   2. A filter summary line reads "Showing X settings across Y policies" and updates whenever any filter changes
   3. Status pills (Conflicting, Source Only, Dest Only, Matched) support multi-select — clicking one toggles it without clearing others
   4. The search field filters rows matching input against setting name, setting path, both value columns, policy names, and category
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 **UI hint**: yes
 
 ### Phase 10: Duplicate Settings Tab
@@ -144,7 +158,9 @@ Plans:
   2. Each duplicate entry shows the setting name followed by a row per policy with Source/Destination badge and the policy's value for that setting
   3. Analysis messaging under each entry describes the scenario accurately (same-tenant conflict, cross-tenant match, majority vs outlier)
   4. A search field within the Duplicates tab filters entries by setting name or policy name in real time
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
 **UI hint**: yes
 
 ## Progress
@@ -156,7 +172,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Matching Foundation | 0/1 | Planning complete | - |
 | 2. Noise Exclusion | 0/1 | Planning complete | - |
-| 3. Deprecated Settings | 0/TBD | Not started | - |
+| 3. Deprecated Settings | 0/1 | Planning complete | - |
 | 4. Duplicate Detection Engine | 0/TBD | Not started | - |
 | 5. Value Display | 0/TBD | Not started | - |
 | 6. Assignments Display | 0/TBD | Not started | - |

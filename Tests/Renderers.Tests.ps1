@@ -928,3 +928,158 @@ Describe 'ConvertTo-InforcerComparisonHtml - Manual Review Rendering' -Tag 'MAN'
         $cleanMatch.Value | Should -Not -Match 'badge-deprecated'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Table Enhancements
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Table Enhancements' -Tag 'TBL', 'Phase8' {
+
+    BeforeAll {
+        # Fixture: three ComparisonRows covering TBL-01/02/03 scenarios
+        # Row 1: deprecated + duplicate + path-with->  (all three features at once)
+        # Row 2: non-deprecated, non-duplicate, path WITHOUT ' > ' separator (TBL-03 always-render path)
+        # Row 3: non-deprecated, non-duplicate, EMPTY path (TBL-03 omit path)
+
+        # ManualReview entry that makes Row 1 appear in the duplicate lookup.
+        # Duplicate lookup key = SettingPath.ToLowerInvariant() = 'security > firewall'
+        $dupValue = '__DUPLICATE_TABLE__[{"Policy":"Policy A","Value":"Block","Side":"Source"},{"Policy":"Policy X","Value":"Allow","Side":"Destination"}]'
+
+        $script:CompModelTbl = @{
+            SourceName      = 'Source Tenant'
+            DestinationName = 'Dest Tenant'
+            Products        = [ordered]@{
+                Windows = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Firewall Mode'
+                                    SettingPath  = 'Security > Firewall'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Conflicting'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = 'Block'
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = 'Allow'
+                                    IsDeprecated = $true
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'WiFi Standard'
+                                    SettingPath  = 'SimpleWiFiPath'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy B'
+                                    SourceValue  = 'WPA3'
+                                    DestPolicy   = 'Policy B'
+                                    DestValue    = 'WPA3'
+                                    IsDeprecated = $false
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Bluetooth Enabled'
+                                    SettingPath  = ''
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy C'
+                                    SourceValue  = 'True'
+                                    DestPolicy   = 'Policy C'
+                                    DestValue    = 'True'
+                                    IsDeprecated = $false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview = [ordered]@{
+                'Duplicate Settings (Different Values)' = [System.Collections.Generic.List[object]]@(
+                    @{
+                        PolicyName    = 'Policy A'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        HasDeprecated = $false
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{
+                                Name         = 'security > firewall'
+                                Value        = $dupValue
+                                IsDeprecated = $false
+                            }
+                        )
+                    }
+                )
+            }
+            GeneratedAt = [datetime]::UtcNow
+        }
+
+        $script:TblHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelTbl } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # TBL-01: Column resize handle CSS and JS
+    # -------------------------------------------------------------------------
+    Context 'TBL-01: Column resize' {
+        It 'renders col-resize-handle CSS class in style block' -Tag 'TBL-01' {
+            $script:TblHtml | Should -Match 'col-resize-handle'
+        }
+
+        It 'adds position:relative to th rule' -Tag 'TBL-01' {
+            $script:TblHtml | Should -Match 'th\s*\{[^}]*position:\s*relative'
+        }
+
+        It 'includes defaultWidths array in JS block' -Tag 'TBL-01' {
+            $script:TblHtml | Should -Match 'defaultWidths'
+        }
+
+        It 'includes dblclick event for column reset' -Tag 'TBL-01' {
+            $script:TblHtml | Should -Match 'dblclick'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # TBL-02: Duplicate badge
+    # -------------------------------------------------------------------------
+    Context 'TBL-02: Duplicate badge' {
+        It 'renders badge-duplicate for rows matching duplicate lookup' -Tag 'TBL-02' {
+            # Row 1 (Firewall Mode, SettingPath='Security > Firewall') should have badge-duplicate
+            $script:TblHtml | Should -Match 'Firewall Mode.*badge-duplicate'
+        }
+
+        It 'badge-duplicate has title with Also configured in' -Tag 'TBL-02' {
+            $script:TblHtml | Should -Match 'badge-duplicate[^>]*title="Also configured in:'
+        }
+
+        It 'does NOT render badge-duplicate for non-duplicate rows' -Tag 'TBL-02' {
+            # Row 2 (WiFi Standard) should NOT have badge-duplicate immediately after its strong name
+            $script:TblHtml | Should -Not -Match 'WiFi Standard</strong>\s*<span class="badge-duplicate'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # TBL-03: Setting name cell layout
+    # -------------------------------------------------------------------------
+    Context 'TBL-03: Setting name cell layout' {
+        It 'wraps setting name in strong tag' -Tag 'TBL-03' {
+            $script:TblHtml | Should -Match '<strong>Firewall Mode</strong>'
+        }
+
+        It 'renders setting-path for non-empty path without > separator' -Tag 'TBL-03' {
+            # WiFi Standard has SettingPath='SimpleWiFiPath' (no > separator)
+            $script:TblHtml | Should -Match 'SimpleWiFiPath</span>'
+        }
+
+        It 'does not render setting-path span for empty SettingPath' -Tag 'TBL-03' {
+            # Bluetooth Enabled has SettingPath='' — td should close right after </strong>
+            $script:TblHtml | Should -Match '<strong>Bluetooth Enabled</strong></td>'
+        }
+
+        It 'renders cell elements in order: strong name, deprecated badge, duplicate badge, setting-path' -Tag 'TBL-03' {
+            # Row 1 (Firewall Mode) is deprecated AND a duplicate AND has a path
+            # Expected order: <strong>Firewall Mode</strong> ... badge-deprecated ... badge-duplicate ... setting-path
+            $script:TblHtml | Should -Match '(?s)<strong>Firewall Mode</strong>\s*<span class="badge-deprecated.*?<span class="badge-duplicate.*?<span class="setting-path'
+        }
+    }
+}

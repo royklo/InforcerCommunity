@@ -434,3 +434,116 @@ Describe 'ConvertTo-InforcerComparisonHtml - ENG-03 deprecated badge' -Tag 'ENG-
         $html | Should -Match 'Normal Setting</td>'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Value Display
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Value Display' -Tag 'VAL', 'Phase5' {
+
+    BeforeAll {
+        # Build a comparison model with: one long value (>= 100 chars), one short value (< 100 chars), one Conflicting row
+        $longValue = 'A' * 120   # 120 chars — triggers truncation
+        $shortValue = 'ShortVal'  # < 100 chars — no truncation
+        $script:CompModelVal = @{
+            SourceName      = 'Source Tenant'
+            DestinationName = 'Dest Tenant'
+            Products        = [ordered]@{
+                Windows = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Long Value Setting'
+                                    SettingPath  = 'Config > Detail'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = $longValue
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = $longValue
+                                    IsDeprecated = $false
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Short Value Setting'
+                                    SettingPath  = ''
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy B'
+                                    SourceValue  = $shortValue
+                                    DestPolicy   = 'Policy B'
+                                    DestValue    = $shortValue
+                                    IsDeprecated = $false
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Conflict Setting'
+                                    SettingPath  = 'Security > Auth'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Conflicting'
+                                    SourcePolicy = 'Policy C'
+                                    SourceValue  = 'ValueA'
+                                    DestPolicy   = 'Policy C'
+                                    DestValue    = 'ValueB'
+                                    IsDeprecated = $false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview     = [ordered]@{}
+            GeneratedAt      = [datetime]::UtcNow
+        }
+
+        $script:ValHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelVal } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    It 'renders value-toggle-btn with More text for long values' -Tag 'VAL-01' {
+        $script:ValHtml | Should -Match 'value-toggle-btn.*More'
+    }
+
+    It 'does not render value-toggle-btn for short values row' -Tag 'VAL-01' {
+        # Short Value Setting row should not contain value-toggle-btn
+        # Extract the row by finding Short Value Setting and checking the surrounding context
+        # The short value "ShortVal" should appear without a value-toggle-btn nearby
+        $shortRowPattern = 'Short Value Setting.*?</tr>'
+        $shortRowMatch = [regex]::Match($script:ValHtml, $shortRowPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+        $shortRowMatch.Value | Should -Not -Match 'value-toggle-btn'
+    }
+
+    It 'CSS expanded state has white-space pre-wrap' -Tag 'VAL-02' {
+        $script:ValHtml | Should -Match '\.value-truncate\.expanded\s*\{[^}]*white-space:\s*pre-wrap'
+    }
+
+    It 'CSS base truncate state does not have pre-wrap' -Tag 'VAL-02' {
+        # Match the base .value-truncate rule (not .expanded) and verify no pre-wrap
+        $baseTruncateMatch = [regex]::Match($script:ValHtml, '\.value-truncate\s*\{[^}]+\}')
+        $baseTruncateMatch.Value | Should -Not -Match 'pre-wrap'
+    }
+
+    It 'renders value-copy-btn with data-value on all value cells' -Tag 'VAL-03' {
+        $script:ValHtml | Should -Match 'value-copy-btn.*data-value'
+    }
+
+    It 'JS contains clipboard writeText handler for value-copy-btn' -Tag 'VAL-03' {
+        $script:ValHtml | Should -Match 'value-copy-btn'
+        $script:ValHtml | Should -Match 'navigator\.clipboard\.writeText'
+    }
+
+    It 'value-diff class is on inner element not td for conflicting dest' -Tag 'VAL-04' {
+        # For the Conflict Setting row, the dest value td should have class="value-cell" only
+        # and the inner div/span should have value-diff
+        # Pattern: <td class="value-cell"><div class="value-wrap"><span class="value-text value-diff">ValueB
+        $script:ValHtml | Should -Match '<td class="value-cell"><div class="value-wrap"><span class="value-text value-diff">'
+    }
+
+    It 'source column does not have value-diff class for conflicting row' -Tag 'VAL-04' {
+        # The source value for Conflict Setting ("ValueA") should not have value-diff anywhere
+        # Find "ValueA" in value-text or value-truncate and confirm no value-diff
+        $script:ValHtml | Should -Match 'class="value-text">ValueA</span>'
+    }
+}

@@ -671,3 +671,121 @@ Describe 'Compare-InforcerDocModels - ENG-06 path building' -Tag 'ENG-06' {
         $bitlockerRow.SettingPath | Should -Be 'BitLocker'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: Compare-InforcerDocModels - ENG-01 noise exclusion
+# ---------------------------------------------------------------------------
+Describe 'Compare-InforcerDocModels - ENG-01 noise exclusion' -Tag 'ENG-01' {
+
+    BeforeAll {
+        # Helper to build a minimal model with one setting having the given Name and Value
+        $buildModelWithSetting = {
+            param([string]$SettingName, [string]$SettingValue, [string]$TenantName, [string]$TenantId)
+            @{
+                TenantName = $TenantName
+                TenantId   = $TenantId
+                Products   = [ordered]@{
+                    Windows = @{
+                        Categories = [ordered]@{
+                            'Settings Catalog' = @(
+                                @{
+                                    Basics   = @{ Name = 'Test Policy' }
+                                    Settings = @(
+                                        [PSCustomObject]@{
+                                            Name         = $SettingName
+                                            Value        = $SettingValue
+                                            Indent       = 0
+                                            IsConfigured = $true
+                                            DefinitionId = 'test_definition_id'
+                                        }
+                                    )
+                                    Assignments = @()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    It 'excludes standalone GUID values from comparison output' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Some Setting' 'a0b1c2d3-e4f5-1234-5678-abcdef012345' 'Source' 'src-id'
+            $dest = & $buildModel 'Some Setting' 'a0b1c2d3-e4f5-1234-5678-abcdef012345' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0
+    }
+
+    It 'excludes uppercase GUID values from comparison output' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Some Setting' 'A0B1C2D3-E4F5-1234-5678-ABCDEF012345' 'Source' 'src-id'
+            $dest = & $buildModel 'Some Setting' 'A0B1C2D3-E4F5-1234-5678-ABCDEF012345' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0
+    }
+
+    It 'excludes Top Level Setting Group Collection values from comparison output' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Group Header' 'Top Level Setting Group Collection' 'Source' 'src-id'
+            $dest = & $buildModel 'Group Header' 'Top Level Setting Group Collection' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0
+    }
+
+    It 'excludes structural noise array count values (multi-digit) from comparison output' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Items Count' '40 items' 'Source' 'src-id'
+            $dest = & $buildModel 'Items Count' '40 items' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0
+    }
+
+    It 'excludes structural noise array count values (single digit) from comparison output' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Items Count' '3 items' 'Source' 'src-id'
+            $dest = & $buildModel 'Items Count' '3 items' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0
+    }
+
+    It 'excludes odata.type setting names (name-based regression check after signature change)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel '@odata.type' 'some.type' 'Source' 'src-id'
+            $dest = & $buildModel '@odata.type' 'some.type' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0
+    }
+
+    It 'does not exclude legitimate setting values from comparison output' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Display Brightness' 'Enabled' 'Source' 'src-id'
+            $dest = & $buildModel 'Display Brightness' 'Enabled' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 1
+    }
+
+    It 'does not exclude non-standalone GUID text from comparison output' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Reference ID' 'some-guid-embedded-in-text abc123' 'Source' 'src-id'
+            $dest = & $buildModel 'Reference ID' 'some-guid-embedded-in-text abc123' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 1
+    }
+}

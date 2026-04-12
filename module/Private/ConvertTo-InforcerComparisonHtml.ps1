@@ -314,7 +314,7 @@ table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; min-width:
 th {
     background: var(--header-bg); text-align: left; padding: 0.5rem 0.75rem; font-weight: 600;
     font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
-    border-bottom: 1px solid var(--border); user-select: none;
+    border-bottom: 1px solid var(--border); user-select: none; position: relative;
 }
 th[onclick]:hover { background: var(--accent-soft); color: var(--accent); }
 td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); vertical-align: top; color: var(--text); word-break: break-word; }
@@ -329,6 +329,7 @@ tr:hover td { background: var(--accent-soft); }
     color: var(--muted);
     margin-top: 2px;
 }
+.setting-name strong { font-weight: 600; color: var(--text); }
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
 .value-truncate { max-height: 4.5em; overflow: hidden; position: relative; }
 .value-truncate.expanded { max-height: none; white-space: pre-wrap; }
@@ -420,6 +421,11 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .assign-empty { font-size: 0.75rem; color: var(--muted); }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center; user-select: none; }
+.col-resize-handle::after { content: ''; display: block; width: 2px; height: 60%; border-radius: 2px; background: transparent; transition: background 0.15s, height 0.15s; }
+.col-resize-handle:hover::after { background: var(--accent); height: 100%; }
+.col-resize-handle.resizing::after { background: var(--warning); height: 100%; width: 3px; }
+.badge-duplicate { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; background: var(--warning-bg); color: var(--warning); cursor: help; }
 /* .setting-deprecated defined below with manual-review-setting styles */
 .manual-review-setting { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.8rem; }
 .ps-keyword { color: #569cd6; font-weight: 600; }

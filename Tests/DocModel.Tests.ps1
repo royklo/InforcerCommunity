@@ -893,3 +893,344 @@ Describe 'Compare-InforcerDocModels - ENG-03 deprecated settings' -Tag 'ENG-03' 
         $rows[0].Status | Should -Be 'Conflicting'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: Compare-InforcerDocModels - ENG-02 duplicate settings
+# ---------------------------------------------------------------------------
+Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
+
+    BeforeAll {
+        # Helper that builds a DocModel with multiple policies under a given product/category.
+        # Each policy entry: @{ Name; Settings = @(@{ Name; Value; DefinitionId; Indent; IsConfigured }) }
+        $buildDuplicateModel = {
+            param(
+                [string]$TenantName,
+                [string]$TenantId,
+                [array]$Policies,
+                [string]$Product  = 'Windows',
+                [string]$Category = 'Settings Catalog'
+            )
+            $policyList = @(
+                $Policies | ForEach-Object {
+                    $p = $_
+                    @{
+                        Basics   = @{ Name = $p.Name; ProfileType = 'Settings Catalog'; Platform = $Product }
+                        Settings = @(
+                            $p.Settings | ForEach-Object {
+                                $s = $_
+                                [PSCustomObject]@{
+                                    Name         = $s.Name
+                                    Value        = $s.Value
+                                    Indent       = if ($null -ne $s.Indent) { $s.Indent } else { 0 }
+                                    IsConfigured = if ($null -ne $s.IsConfigured) { $s.IsConfigured } else { $true }
+                                    DefinitionId = $s.DefinitionId
+                                }
+                            }
+                        )
+                        Assignments = @()
+                    }
+                }
+            )
+            @{
+                TenantName = $TenantName
+                TenantId   = $TenantId
+                Products   = [ordered]@{
+                    $Product = @{
+                        Categories = [ordered]@{
+                            $Category = $policyList
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    It 'detects same definitionId with different values across 2 policies as duplicate' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled';  DefinitionId = 'def_firewall' }) },
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Firewall'; Value = 'Disabled'; DefinitionId = 'def_firewall' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Policy C'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_firewall' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $result.ManualReview.'Duplicate Settings (Different Values)' | Should -Not -BeNullOrEmpty
+    }
+
+    It 'does NOT flag same definitionId with identical values in 2 policies as duplicate' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_firewall' }) },
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_firewall' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Policy C'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_firewall' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
+    }
+
+    It 'excludes setting without definitionId from duplicate detection (D-08)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Setting X'; Value = 'Val1'; DefinitionId = '' }) },
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Setting X'; Value = 'Val2'; DefinitionId = '' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @()
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
+    }
+
+    It 'excludes intra-policy repeated definitionId from detection (D-09)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            # Policy A has def_x appearing twice — should be ignored (intra-policy repeat)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{
+                    Name     = 'Policy A'
+                    Settings = @(
+                        @{ Name = 'Setting X'; Value = 'Val1'; DefinitionId = 'def_x' },
+                        @{ Name = 'Setting X'; Value = 'Val2'; DefinitionId = 'def_x' }
+                    )
+                }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @()
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
+    }
+
+    It 'excludes policies in Compliance category from duplicate detection (D-05)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Compliance A'; Settings = @(@{ Name = 'MinOS'; Value = '10.0'; DefinitionId = 'def_minos' }) },
+                @{ Name = 'Compliance B'; Settings = @(@{ Name = 'MinOS'; Value = '11.0'; DefinitionId = 'def_minos' }) }
+            ) -Category 'Compliance'
+            $dest = & $buildModel 'DestTenant' 'dest-id' @() -Category 'Compliance'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
+    }
+
+    It 'does NOT cross-match same settingPath under different products (D-06)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            # Same definitionId, one Windows, one macOS — should not be a duplicate
+            $srcWin  = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Win Policy'; Settings = @(@{ Name = 'Screen Lock'; Value = '5'; DefinitionId = 'def_screenlock' }) }
+            ) -Product 'Windows'
+            $destMac = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Mac Policy'; Settings = @(@{ Name = 'Screen Lock'; Value = '10'; DefinitionId = 'def_screenlock' }) }
+            ) -Product 'macOS'
+            # Merge products for a combined source model
+            $combined = @{
+                TenantName = 'SourceTenant'
+                TenantId   = 'src-id'
+                Products   = [ordered]@{
+                    Windows = $srcWin.Products.Windows
+                    macOS   = $destMac.Products.macOS
+                }
+            }
+            $emptyDest = @{
+                TenantName = 'DestTenant'
+                TenantId   = 'dest-id'
+                Products   = [ordered]@{}
+            }
+            Compare-InforcerDocModels -SourceModel $combined -DestinationModel $emptyDest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
+    }
+
+    It 'ManualReview duplicate entry has correct shape (PolicyName, Side, ProfileType, Settings, HasDeprecated)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled';  DefinitionId = 'def_fw' }) },
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Firewall'; Value = 'Disabled'; DefinitionId = 'def_fw' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Policy C'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_fw' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $entries = $result.ManualReview.'Duplicate Settings (Different Values)'
+        $entries | Should -Not -BeNullOrEmpty
+        $entry = $entries[0]
+        $entry.Keys | Should -Contain 'PolicyName'
+        $entry.Keys | Should -Contain 'Side'
+        $entry.Keys | Should -Contain 'ProfileType'
+        $entry.Keys | Should -Contain 'Settings'
+        $entry.Keys | Should -Contain 'HasDeprecated'
+        $entry.HasDeprecated | Should -BeFalse
+        $entry.ProfileType | Should -Not -BeNullOrEmpty
+    }
+
+    It 'setting value starts with __DUPLICATE_TABLE__ followed by valid JSON with Policy, Value, Side' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled';  DefinitionId = 'def_fw' }) },
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Firewall'; Value = 'Disabled'; DefinitionId = 'def_fw' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Policy C'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_fw' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $entries = $result.ManualReview.'Duplicate Settings (Different Values)'
+        $entries | Should -Not -BeNullOrEmpty
+        $val = $entries[0].Settings[0].Value
+        $val | Should -Match '^__DUPLICATE_TABLE__'
+        $json = $val -replace '^__DUPLICATE_TABLE__', ''
+        $parsed = $json | ConvertFrom-Json
+        $parsed | Should -HaveCount 2
+        $parsed[0].PSObject.Properties.Name | Should -Contain 'Policy'
+        $parsed[0].PSObject.Properties.Name | Should -Contain 'Value'
+        $parsed[0].PSObject.Properties.Name | Should -Contain 'Side'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: Compare-InforcerDocModels - ENG-04 cross-tenant duplicates
+# ---------------------------------------------------------------------------
+Describe 'Compare-InforcerDocModels - ENG-04 cross-tenant duplicates' -Tag 'ENG-04' {
+
+    BeforeAll {
+        $buildDuplicateModel = {
+            param(
+                [string]$TenantName,
+                [string]$TenantId,
+                [array]$Policies,
+                [string]$Product  = 'Windows',
+                [string]$Category = 'Settings Catalog'
+            )
+            $policyList = @(
+                $Policies | ForEach-Object {
+                    $p = $_
+                    @{
+                        Basics   = @{ Name = $p.Name; ProfileType = 'Settings Catalog'; Platform = $Product }
+                        Settings = @(
+                            $p.Settings | ForEach-Object {
+                                $s = $_
+                                [PSCustomObject]@{
+                                    Name         = $s.Name
+                                    Value        = $s.Value
+                                    Indent       = if ($null -ne $s.Indent) { $s.Indent } else { 0 }
+                                    IsConfigured = if ($null -ne $s.IsConfigured) { $s.IsConfigured } else { $true }
+                                    DefinitionId = $s.DefinitionId
+                                }
+                            }
+                        )
+                        Assignments = @()
+                    }
+                }
+            )
+            @{
+                TenantName = $TenantName
+                TenantId   = $TenantId
+                Products   = [ordered]@{
+                    $Product = @{
+                        Categories = [ordered]@{
+                            $Category = $policyList
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    It 'detects single-tenant duplicate (both policies on same Source side)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'VPN Type'; Value = 'IKEv2';  DefinitionId = 'def_vpn' }) },
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'VPN Type'; Value = 'PPTP';   DefinitionId = 'def_vpn' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Policy C'; Settings = @(@{ Name = 'VPN Type'; Value = 'IKEv2'; DefinitionId = 'def_vpn' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $entries = $result.ManualReview.'Duplicate Settings (Different Values)'
+        $entries | Should -Not -BeNullOrEmpty
+        # At least one entry should have Side = 'Source' (the same-tenant duplicate)
+        $sourceDupes = $entries | Where-Object { $_.Side -eq 'Source' }
+        $sourceDupes | Should -Not -BeNullOrEmpty
+        # ProfileType should contain 'also in:' with Source side reference
+        $sourceDupes[0].ProfileType | Should -Match 'also in:'
+        $sourceDupes[0].ProfileType | Should -Match 'Source'
+    }
+
+    It 'detects cross-tenant duplicate (policies on Source and Destination side)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'BitLocker'; Value = 'Enabled'; DefinitionId = 'def_bl' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Policy X'; Settings = @(@{ Name = 'BitLocker'; Value = 'Disabled'; DefinitionId = 'def_bl' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $entries = $result.ManualReview.'Duplicate Settings (Different Values)'
+        $entries | Should -Not -BeNullOrEmpty
+        # Entries should include both Source and Destination sides
+        $sides = $entries | ForEach-Object { $_.Side } | Select-Object -Unique
+        $sides | Should -Contain 'Source'
+        $sides | Should -Contain 'Destination'
+    }
+
+    It 'policyValues JSON in __DUPLICATE_TABLE__ contains Policy, Value, Side for all entries (3+ scenario)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            # 2 source policies + 1 dest policy — all with different values
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'DNS'; Value = '8.8.8.8';  DefinitionId = 'def_dns' }) },
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'DNS'; Value = '1.1.1.1';  DefinitionId = 'def_dns' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Policy C'; Settings = @(@{ Name = 'DNS'; Value = '9.9.9.9'; DefinitionId = 'def_dns' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $entries = $result.ManualReview.'Duplicate Settings (Different Values)'
+        $entries | Should -Not -BeNullOrEmpty
+        $val = $entries[0].Settings[0].Value
+        $json = $val -replace '^__DUPLICATE_TABLE__', ''
+        $parsed = $json | ConvertFrom-Json
+        $parsed | Should -HaveCount 3
+        foreach ($item in $parsed) {
+            $item.PSObject.Properties.Name | Should -Contain 'Policy'
+            $item.PSObject.Properties.Name | Should -Contain 'Value'
+            $item.PSObject.Properties.Name | Should -Contain 'Side'
+        }
+    }
+
+    It 'ProfileType message matches format "{N} duplicate settings — also in: {policy (Side), ...}"' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Encryption'; Value = 'AES256'; DefinitionId = 'def_enc' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Policy X'; Settings = @(@{ Name = 'Encryption'; Value = 'AES128'; DefinitionId = 'def_enc' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildDuplicateModel }
+        $entries = $result.ManualReview.'Duplicate Settings (Different Values)'
+        $entries | Should -Not -BeNullOrEmpty
+        $profileType = $entries[0].ProfileType
+        # Must match: "{N} duplicate settings — also in: {policy (Side), ...}"
+        $profileType | Should -Match '^\d+ duplicate settings'
+        $profileType | Should -Match '\u2014 also in:'
+        $profileType | Should -Match '\(Source\)|\(Destination\)'
+    }
+}

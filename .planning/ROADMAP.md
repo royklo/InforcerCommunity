@@ -90,7 +90,7 @@ Plans:
   5. Destination column values that conflict with source display in bold red text
 **Plans:** 1 plan
 Plans:
-- [ ] 05-01-PLAN.md — TDD value display: expand/collapse toggle, copy-to-clipboard, bold red conflicts
+- [x] 05-01-PLAN.md — TDD value display: expand/collapse toggle, copy-to-clipboard, bold red conflicts
 **UI hint**: yes
 
 ### Phase 6: Assignments Display
@@ -104,7 +104,7 @@ Plans:
   4. When a filter is attached to an assignment, it displays on a separate muted line directly below the assignment
 **Plans:** 1 plan
 Plans:
-- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
+- [x] 06-01-PLAN.md — TDD assignment display: color-coded inline text, filter info on muted line, em dash empty state
 **UI hint**: yes
 
 ### Phase 7: Manual Review Rendering
@@ -117,9 +117,10 @@ Plans:
   3. Compliance rules render as a four-column table (Setting | Operator | Type | Expected Value), not as raw text
   4. When a policy appears in the duplicate settings data, its manual review section shows a horizontal table of the setting's values across all policies
   5. Each manual review policy panel displays a Source or Destination side badge, and a Deprecated badge if any setting is deprecated
-**Plans:** 1 plan
+**Plans:** 2 plans
 Plans:
-- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
+- [ ] 07-01-PLAN.md — TDD RED: failing Pester tests for MAN-01 through MAN-05 manual review rendering
+- [ ] 07-02-PLAN.md — TDD GREEN: CSS, rendering loop, and JS implementation for bash highlighting, compliance table, duplicate table
 **UI hint**: yes
 
 ### Phase 8: Table Enhancements
@@ -174,9 +175,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Noise Exclusion | 1/1 | Complete | - |
 | 3. Deprecated Settings | 1/1 | Complete | - |
 | 4. Duplicate Detection Engine | 1/1 | Complete | - |
-| 5. Value Display | 0/1 | Planning complete | - |
-| 6. Assignments Display | 0/TBD | Not started | - |
-| 7. Manual Review Rendering | 0/TBD | Not started | - |
+| 5. Value Display | 1/1 | Complete | - |
+| 6. Assignments Display | 1/1 | Complete | - |
+| 7. Manual Review Rendering | 0/2 | Not started | - |
 | 8. Table Enhancements | 0/TBD | Not started | - |
 | 9. Filtering and Navigation | 0/TBD | Not started | - |
 | 10. Duplicate Settings Tab | 0/TBD | Not started | - |

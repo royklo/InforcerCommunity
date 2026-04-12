@@ -76,7 +76,7 @@ Plans:
   5. Duplicate data is available to downstream HTML phases (value keyed by settingDefinitionId + all policy/value pairs)
 **Plans:** 1 plan
 Plans:
-- [ ] 04-01-PLAN.md — TDD duplicate detection engine with $scanForDuplicates scriptblock and ENG-02/ENG-04 tests
+- [x] 04-01-PLAN.md — TDD duplicate detection engine with $scanForDuplicates scriptblock and ENG-02/ENG-04 tests
 
 ### Phase 5: Value Display
 **Goal**: Long setting values are readable without cluttering the table, conflicting values are visually prominent, and values can be copied with one click
@@ -90,7 +90,7 @@ Plans:
   5. Destination column values that conflict with source display in bold red text
 **Plans:** 1 plan
 Plans:
-- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
+- [ ] 05-01-PLAN.md — TDD value display: expand/collapse toggle, copy-to-clipboard, bold red conflicts
 **UI hint**: yes
 
 ### Phase 6: Assignments Display
@@ -166,15 +166,15 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Matching Foundation | 0/1 | Planning complete | - |
-| 2. Noise Exclusion | 0/1 | Planning complete | - |
-| 3. Deprecated Settings | 0/1 | Planning complete | - |
-| 4. Duplicate Detection Engine | 0/1 | Planning complete | - |
-| 5. Value Display | 0/TBD | Not started | - |
+| 1. Matching Foundation | 1/1 | Complete | - |
+| 2. Noise Exclusion | 1/1 | Complete | - |
+| 3. Deprecated Settings | 1/1 | Complete | - |
+| 4. Duplicate Detection Engine | 1/1 | Complete | - |
+| 5. Value Display | 0/1 | Planning complete | - |
 | 6. Assignments Display | 0/TBD | Not started | - |
 | 7. Manual Review Rendering | 0/TBD | Not started | - |
 | 8. Table Enhancements | 0/TBD | Not started | - |

@@ -212,14 +212,18 @@ function Compare-InforcerDocModels {
     }
 
     # ── Helper: build a lookup from setting paths ─────────────────────────
-    # Returns hashtable keyed by SettingPath -> @{ Name; Value; SettingPath; DefinitionId }
+    # Returns hashtable keyed by DefinitionId (or SettingPath fallback) -> @{ Name; Value; SettingPath; DefinitionId }
     # When duplicate paths occur, uses catalog CategoryName for disambiguation
     $buildSettingLookup = {
         param([array]$Settings)
         $paths = & $buildSettingPaths $Settings
         $lookup = [ordered]@{}
         foreach ($p in $paths) {
-            $key = $p.SettingPath
+            $key = if (-not [string]::IsNullOrEmpty($p.DefinitionId)) {
+                $p.DefinitionId.ToLowerInvariant()
+            } else {
+                $p.SettingPath.ToLowerInvariant()
+            }
             # Skip excluded settings
             if (& $isExcludedSetting $p.Name) { continue }
             if (& $isExcludedSetting $key) { continue }
@@ -446,21 +450,21 @@ function Compare-InforcerDocModels {
                     $srcLookup = & $buildSettingLookup $srcPolicy.Settings
                     $dstLookup = & $buildSettingLookup $dstPolicy.Settings
 
-                    # Collect all setting paths
-                    $allSettingPaths = [System.Collections.Generic.List[string]]::new()
+                    # Collect all setting keys (definitionId or settingPath depending on policy type)
+                    $allSettingKeys = [System.Collections.Generic.List[string]]::new()
                     foreach ($k in $srcLookup.Keys) {
-                        if (-not $allSettingPaths.Contains($k)) { [void]$allSettingPaths.Add($k) }
+                        if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
                     }
                     foreach ($k in $dstLookup.Keys) {
-                        if (-not $allSettingPaths.Contains($k)) { [void]$allSettingPaths.Add($k) }
+                        if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
                     }
 
-                    foreach ($settingPath in $allSettingPaths) {
-                        $inSrc = $srcLookup.Contains($settingPath)
-                        $inDst = $dstLookup.Contains($settingPath)
-                        $srcVal = if ($inSrc) { $srcLookup[$settingPath].Value } else { '' }
-                        $dstVal = if ($inDst) { $dstLookup[$settingPath].Value } else { '' }
-                        $displayName = if ($inSrc) { $srcLookup[$settingPath].Name } else { $dstLookup[$settingPath].Name }
+                    foreach ($settingKey in $allSettingKeys) {
+                        $inSrc = $srcLookup.Contains($settingKey)
+                        $inDst = $dstLookup.Contains($settingKey)
+                        $srcVal = if ($inSrc) { $srcLookup[$settingKey].Value } else { '' }
+                        $dstVal = if ($inDst) { $dstLookup[$settingKey].Value } else { '' }
+                        $displayName = if ($inSrc) { $srcLookup[$settingKey].Name } else { $dstLookup[$settingKey].Name }
 
                         # Skip if both values are empty/not-configured
                         if ((& $isEmptyValue $srcVal) -and (& $isEmptyValue $dstVal)) { continue }
@@ -481,7 +485,7 @@ function Compare-InforcerDocModels {
                         $row = @{
                             ItemType     = 'Setting'
                             Name         = $displayName
-                            SettingPath  = $settingPath
+                            SettingPath  = if ($inSrc) { $srcLookup[$settingKey].SettingPath } else { $dstLookup[$settingKey].SettingPath }
                             Category     = $categoryLabel
                             Status       = $status
                             SourcePolicy = $srcPolicyName
@@ -504,15 +508,15 @@ function Compare-InforcerDocModels {
                         $srcAssignStr  = if ($IncludingAssignments) { & $formatAssignment $srcPolicy.Assignments } else { '' }
                         $srcLookup = & $buildSettingLookup $srcPolicy.Settings
 
-                        foreach ($settingPath in $srcLookup.Keys) {
-                            $srcVal = $srcLookup[$settingPath].Value
+                        foreach ($settingKey in $srcLookup.Keys) {
+                            $srcVal = $srcLookup[$settingKey].Value
                             # Skip empty source-only settings
                             if (& $isEmptyValue $srcVal) { continue }
 
                             $row = @{
                                 ItemType     = 'Setting'
-                                Name         = $srcLookup[$settingPath].Name
-                                SettingPath  = $settingPath
+                                Name         = $srcLookup[$settingKey].Name
+                                SettingPath  = $srcLookup[$settingKey].SettingPath
                                 Category     = $categoryLabel
                                 Status       = 'SourceOnly'
                                 SourcePolicy = $srcPolicyName
@@ -536,15 +540,15 @@ function Compare-InforcerDocModels {
                         $dstAssignStr  = if ($IncludingAssignments) { & $formatAssignment $dstPolicy.Assignments } else { '' }
                         $dstLookup = & $buildSettingLookup $dstPolicy.Settings
 
-                        foreach ($settingPath in $dstLookup.Keys) {
-                            $dstVal = $dstLookup[$settingPath].Value
+                        foreach ($settingKey in $dstLookup.Keys) {
+                            $dstVal = $dstLookup[$settingKey].Value
                             # Skip empty dest-only settings
                             if (& $isEmptyValue $dstVal) { continue }
 
                             $row = @{
                                 ItemType     = 'Setting'
-                                Name         = $dstLookup[$settingPath].Name
-                                SettingPath  = $settingPath
+                                Name         = $dstLookup[$settingKey].Name
+                                SettingPath  = $dstLookup[$settingKey].SettingPath
                                 Category     = $categoryLabel
                                 Status       = 'DestOnly'
                                 SourcePolicy = ''

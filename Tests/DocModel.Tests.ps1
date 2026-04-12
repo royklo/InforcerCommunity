@@ -1076,12 +1076,12 @@ Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
     It 'setting value starts with __DUPLICATE_TABLE__ followed by valid JSON with Policy, Value, Side' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
+            # Exactly 2 policies with different values — __DUPLICATE_TABLE__ JSON must have exactly 2 entries
             $src = & $buildModel 'SourceTenant' 'src-id' @(
-                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled';  DefinitionId = 'def_fw' }) },
-                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Firewall'; Value = 'Disabled'; DefinitionId = 'def_fw' }) }
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_fw' }) }
             )
             $dest = & $buildModel 'DestTenant' 'dest-id' @(
-                @{ Name = 'Policy C'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_fw' }) }
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Firewall'; Value = 'Disabled'; DefinitionId = 'def_fw' }) }
             )
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $buildDuplicateModel }

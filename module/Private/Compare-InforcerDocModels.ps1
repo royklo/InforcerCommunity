@@ -663,7 +663,173 @@ function Compare-InforcerDocModels {
     & $scanForDeprecated $SourceModel 'Source'
     & $scanForDeprecated $DestinationModel 'Destination'
 
-    # manualReview now contains: script/remediation/custom compliance + deprecated policies
+    # ── Duplicate Settings scan (cross-policy, cross-tenant) ──────────────
+    # Finds settings appearing in 2+ policies with different values.
+    # Per D-01: adds entries to $manualReview under 'Duplicate Settings (Different Values)'
+    # Per D-05: only scans settings catalog and administrative templates categories
+    # Per D-06: scopes per product (platform) — no cross-product matching
+    $scanForDuplicates = {
+        # Phase 1: Build per-product setting index
+        $productSettingMaps = [ordered]@{}
+
+        foreach ($side in @('Source', 'Destination')) {
+            $model = if ($side -eq 'Source') { $SourceModel } else { $DestinationModel }
+            if ($null -eq $model -or $null -eq $model.Products) { continue }
+
+            foreach ($prodName in $model.Products.Keys) {
+                if (-not $productSettingMaps.Contains($prodName)) {
+                    $productSettingMaps[$prodName] = [ordered]@{}
+                }
+                $settingMap = $productSettingMaps[$prodName]
+
+                foreach ($catName in $model.Products[$prodName].Categories.Keys) {
+                    # D-05: only settings catalog and administrative templates
+                    if ($catName -notmatch 'settings catalog|administrative templates') { continue }
+
+                    foreach ($policy in @($model.Products[$prodName].Categories[$catName])) {
+                        if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
+
+                        $paths = & $buildSettingPaths $policy.Settings
+
+                        # D-09: count definitionId occurrences within this policy
+                        $defsInPolicy = [System.Collections.Generic.Dictionary[string,int]]::new(
+                            [System.StringComparer]::OrdinalIgnoreCase
+                        )
+                        foreach ($p in $paths) {
+                            if (-not [string]::IsNullOrEmpty($p.DefinitionId)) {
+                                $defKeyLower = $p.DefinitionId.ToLowerInvariant()
+                                if ($defsInPolicy.ContainsKey($defKeyLower)) {
+                                    $defsInPolicy[$defKeyLower]++
+                                } else {
+                                    $defsInPolicy[$defKeyLower] = 1
+                                }
+                            }
+                        }
+
+                        foreach ($p in $paths) {
+                            # D-08: require definitionId
+                            if ([string]::IsNullOrEmpty($p.DefinitionId)) { continue }
+                            # Noise exclusion (reuse existing helper)
+                            if (& $isExcludedSetting $p.Name $p.Value) { continue }
+                            $defKeyLower = $p.DefinitionId.ToLowerInvariant()
+                            # D-09: skip intra-policy repeats
+                            if ($defsInPolicy[$defKeyLower] -gt 1) { continue }
+
+                            # D-07: settingPath lowercased as dedup key
+                            $dupeKey = $p.SettingPath.ToLowerInvariant()
+                            if (-not $settingMap.Contains($dupeKey)) {
+                                $settingMap[$dupeKey] = [System.Collections.Generic.List[object]]::new()
+                            }
+                            [void]$settingMap[$dupeKey].Add(@{
+                                Value       = $p.Value
+                                PolicyName  = $policy.Basics.Name
+                                SettingName = $p.Name
+                                SettingPath = $p.SettingPath
+                                Side        = $side
+                            })
+                        }
+                    }
+                }
+            }
+        }
+
+        # Phase 2: Detect duplicates and build ManualReview entries
+        $duplicateItems = [System.Collections.Generic.List[object]]::new()
+        $processedPolicySides = [System.Collections.Generic.HashSet[string]]::new()
+        # O(1) lookup for existing items by policyKey (avoids Where-Object O(n) per Pitfall 4)
+        $itemLookup = @{}
+
+        foreach ($prodName in $productSettingMaps.Keys) {
+            $settingMap = $productSettingMaps[$prodName]
+            foreach ($dupeKey in $settingMap.Keys) {
+                $entries = $settingMap[$dupeKey]
+                if ($entries.Count -lt 2) { continue }
+
+                # Check for 2+ unique values (case-insensitive)
+                $uniqueValues = [System.Collections.Generic.HashSet[string]]::new(
+                    [string[]]($entries | ForEach-Object { $_.Value }),
+                    [System.StringComparer]::OrdinalIgnoreCase
+                )
+                if ($uniqueValues.Count -lt 2) { continue }
+
+                # D-02: Build __DUPLICATE_TABLE__ encoded value
+                $policyValues = $entries | ForEach-Object {
+                    @{ Policy = $_.PolicyName; Value = $_.Value; Side = $_.Side }
+                }
+                $tableJson = '__DUPLICATE_TABLE__' + ($policyValues | ConvertTo-Json -Depth 100 -Compress)
+
+                foreach ($entry in $entries) {
+                    $policyKey = "$($entry.Side)`0$($entry.PolicyName)"
+                    $settingKey = if ($entry.SettingPath) { $entry.SettingPath } else { $entry.SettingName }
+
+                    if ($processedPolicySides.Contains($policyKey)) {
+                        # Add setting to existing item
+                        $existing = $itemLookup[$policyKey]
+                        if ($null -ne $existing) {
+                            $alreadyHas = $false
+                            foreach ($s in $existing.Settings) {
+                                if ($s.Name -eq $settingKey) { $alreadyHas = $true; break }
+                            }
+                            if (-not $alreadyHas) {
+                                [void]$existing.Settings.Add(@{ Name = $settingKey; Value = $tableJson })
+                                # D-03: Recompute ProfileType with updated setting count
+                                $otherPolicies = [System.Collections.Generic.HashSet[string]]::new()
+                                foreach ($s in $existing.Settings) {
+                                    $jsonPart = $s.Value -replace '^__DUPLICATE_TABLE__', ''
+                                    try {
+                                        $pairs = $jsonPart | ConvertFrom-Json -Depth 10
+                                        foreach ($pair in $pairs) {
+                                            if ($pair.Policy -ne $entry.PolicyName -or $pair.Side -ne $entry.Side) {
+                                                [void]$otherPolicies.Add("$($pair.Policy) ($($pair.Side))")
+                                            }
+                                        }
+                                    } catch { }
+                                }
+                                $existing.ProfileType = "$($existing.Settings.Count) duplicate settings `u{2014} also in: $($otherPolicies -join ', ')"
+                            }
+                        }
+                        continue
+                    }
+                    [void]$processedPolicySides.Add($policyKey)
+
+                    # D-03: Build "also in" list excluding current policy
+                    $otherPolicies = $policyValues |
+                        Where-Object { $_.Policy -ne $entry.PolicyName -or $_.Side -ne $entry.Side } |
+                        ForEach-Object { "$($_.Policy) ($($_.Side))" } |
+                        Select-Object -Unique
+
+                    $settingsList = [System.Collections.Generic.List[object]]::new()
+                    [void]$settingsList.Add(@{ Name = $settingKey; Value = $tableJson })
+
+                    # D-01: ManualReview entry shape
+                    $item = @{
+                        PolicyName    = $entry.PolicyName
+                        Side          = $entry.Side
+                        ProfileType   = "1 duplicate settings `u{2014} also in: $($otherPolicies -join ', ')"
+                        Settings      = $settingsList
+                        HasDeprecated = $false
+                    }
+                    [void]$duplicateItems.Add($item)
+                    $itemLookup[$policyKey] = $item
+                }
+            }
+        }
+
+        # D-01: Add to ManualReview under canonical key
+        if ($duplicateItems.Count -gt 0) {
+            $dupeCategory = 'Duplicate Settings (Different Values)'
+            if ($manualReview.Contains($dupeCategory)) {
+                foreach ($item in $duplicateItems) {
+                    [void]$manualReview[$dupeCategory].Add($item)
+                }
+            } else {
+                $manualReview[$dupeCategory] = $duplicateItems
+            }
+        }
+    }
+    & $scanForDuplicates
+
+    # manualReview now contains: script/remediation/custom compliance + deprecated policies + duplicate settings
 
     # ── Alignment score ───────────────────────────────────────────────────
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly

@@ -547,3 +547,177 @@ Describe 'ConvertTo-InforcerComparisonHtml - Value Display' -Tag 'VAL', 'Phase5'
         $script:ValHtml | Should -Match 'class="value-text">ValueA</span>'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Assignments Display
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Assignments Display' -Tag 'ASG', 'Phase6' {
+
+    BeforeAll {
+        # Minimal comparison model with IncludingAssignments = $true and rows covering all assignment types:
+        # Row 1: include group (no prefix), Row 2: exclude group (red), Row 3: All Devices/All Users (blue),
+        # Row 4: include with filter suffix (filter line) + empty dest (em dash)
+        $script:CompModelAsg = @{
+            SourceName           = 'Source Tenant'
+            DestinationName      = 'Dest Tenant'
+            IncludingAssignments = $true
+            Products             = [ordered]@{
+                Windows = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType          = 'Setting'
+                                    Name              = 'Include Row'
+                                    SettingPath       = ''
+                                    Category          = 'Windows / Settings Catalog'
+                                    Status            = 'Matched'
+                                    SourcePolicy      = 'Policy A'
+                                    SourceValue       = 'Val1'
+                                    DestPolicy        = 'Policy A'
+                                    DestValue         = 'Val1'
+                                    IsDeprecated      = $false
+                                    SourceAssignment  = 'Marketing Team'
+                                    DestAssignment    = 'Marketing Team'
+                                },
+                                @{
+                                    ItemType          = 'Setting'
+                                    Name              = 'Exclude Row'
+                                    SettingPath       = ''
+                                    Category          = 'Windows / Settings Catalog'
+                                    Status            = 'Matched'
+                                    SourcePolicy      = 'Policy B'
+                                    SourceValue       = 'Val2'
+                                    DestPolicy        = 'Policy B'
+                                    DestValue         = 'Val2'
+                                    IsDeprecated      = $false
+                                    SourceAssignment  = 'Exclude: Finance Team'
+                                    DestAssignment    = 'Exclude: Finance Team'
+                                },
+                                @{
+                                    ItemType          = 'Setting'
+                                    Name              = 'All Assignment Row'
+                                    SettingPath       = ''
+                                    Category          = 'Windows / Settings Catalog'
+                                    Status            = 'Matched'
+                                    SourcePolicy      = 'Policy C'
+                                    SourceValue       = 'Val3'
+                                    DestPolicy        = 'Policy C'
+                                    DestValue         = 'Val3'
+                                    IsDeprecated      = $false
+                                    SourceAssignment  = 'All Devices'
+                                    DestAssignment    = 'All Users'
+                                },
+                                @{
+                                    ItemType          = 'Setting'
+                                    Name              = 'Filter Row'
+                                    SettingPath       = ''
+                                    Category          = 'Windows / Settings Catalog'
+                                    Status            = 'Matched'
+                                    SourcePolicy      = 'Policy D'
+                                    SourceValue       = 'Val4'
+                                    DestPolicy        = 'Policy D'
+                                    DestValue         = 'Val4'
+                                    IsDeprecated      = $false
+                                    SourceAssignment  = 'Marketing Team (include: Department = IT)'
+                                    DestAssignment    = ''
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview  = [ordered]@{}
+            GeneratedAt   = [datetime]::UtcNow
+        }
+
+        $script:AsgHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelAsg } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # ASG-01: Include-type group renders as plain text in default foreground, no "Include:" prefix, no badge class
+    It 'include-type assignment does NOT contain assign-tag class' -Tag 'ASG-01' {
+        $script:AsgHtml | Should -Not -Match 'class="assign-tag'
+    }
+
+    It 'include-type assignment does NOT prefix group name with "Include:"' -Tag 'ASG-01' {
+        # "Marketing Team" should appear without "Include:" prefix in HTML
+        $script:AsgHtml | Should -Not -Match '>Include:\s*Marketing Team'
+    }
+
+    It 'include-type assignment renders group name with assign-include class' -Tag 'ASG-01' {
+        $script:AsgHtml | Should -Match 'class="assign-include"'
+    }
+
+    # ASG-02: Exclude-type group renders in red with "Exclude:" prefix
+    It 'exclude-type assignment contains assign-exclude class' -Tag 'ASG-02' {
+        $script:AsgHtml | Should -Match 'class="assign-exclude"'
+    }
+
+    It 'exclude-type assignment text starts with Exclude:' -Tag 'ASG-02' {
+        $script:AsgHtml | Should -Match 'assign-exclude[^>]*>Exclude:'
+    }
+
+    # ASG-03: All Devices and All Users render with assign-all class (blue)
+    It 'All Devices assignment contains assign-all class' -Tag 'ASG-03' {
+        $script:AsgHtml | Should -Match 'class="assign-all"'
+    }
+
+    It 'All Users assignment also has assign-all class' -Tag 'ASG-03' {
+        # Both All Devices and All Users rows should produce assign-all spans
+        $allSpanMatches = ([regex]::Matches($script:AsgHtml, 'class="assign-all"')).Count
+        $allSpanMatches | Should -BeGreaterThan 1
+    }
+
+    # ASG-04: Filter info on a separate muted line below the assignment
+    It 'assignment with filter renders assign-filter span' -Tag 'ASG-04' {
+        $script:AsgHtml | Should -Match 'class="assign-filter"'
+    }
+
+    It 'assign-filter span contains filter parenthetical text' -Tag 'ASG-04' {
+        $script:AsgHtml | Should -Match 'assign-filter[^>]*>\s*\(include:'
+    }
+
+    # ASG-EMPTY: Empty assignment string displays as em dash in muted color
+    It 'empty assignment string renders em dash' -Tag 'ASG-04' {
+        $script:AsgHtml | Should -Match '&mdash;'
+    }
+
+    # CSS: assign-tag removed, assign-filter added
+    It 'CSS does NOT contain .assign-tag class definition' {
+        $script:AsgHtml | Should -Not -Match '\.assign-tag\s*\{'
+    }
+
+    It 'CSS contains .assign-filter class definition' {
+        $script:AsgHtml | Should -Match '\.assign-filter\s*\{'
+    }
+
+    # Format-InforcerAssignmentString: filter suffix appended when Filter and FilterMode present
+    It 'Format-InforcerAssignmentString appends filter parenthetical suffix when Filter and FilterMode are set' -Tag 'ASG-04' {
+        $result = InModuleScope InforcerCommunity {
+            $mockAssignment = [PSCustomObject]@{
+                Type       = 'Group (Include)'
+                Target     = 'Marketing Team'
+                Filter     = 'Department = IT'
+                FilterMode = 'Include'
+            }
+            Format-InforcerAssignmentString -Assignments @($mockAssignment)
+        }
+        $result | Should -Match '\(include: Department = IT\)'
+    }
+
+    It 'Format-InforcerAssignmentString Group (Include) emits just target without Include: prefix' -Tag 'ASG-01' {
+        $result = InModuleScope InforcerCommunity {
+            $mockAssignment = [PSCustomObject]@{
+                Type       = 'Group (Include)'
+                Target     = 'Sales Group'
+                Filter     = ''
+                FilterMode = ''
+            }
+            Format-InforcerAssignmentString -Assignments @($mockAssignment)
+        }
+        $result | Should -Be 'Sales Group'
+        $result | Should -Not -Match 'Include:'
+    }
+}

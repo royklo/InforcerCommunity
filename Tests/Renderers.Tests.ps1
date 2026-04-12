@@ -429,9 +429,9 @@ Describe 'ConvertTo-InforcerComparisonHtml - ENG-03 deprecated badge' -Tag 'ENG-
         $html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelDepr } {
             ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
         }
-        # The normal setting row should NOT have a badge-deprecated span
-        # Extract the table row for Normal Setting and check it does not contain badge-deprecated
-        $html | Should -Match 'Normal Setting</td>'
+        # The normal setting row should NOT have a badge-deprecated span immediately after its name
+        # Plan 08-02 wraps names in <strong>, so the non-deprecated row closes with </strong> (no badge)
+        $html | Should -Match '<strong>Normal Setting</strong></td>'
     }
 }
 

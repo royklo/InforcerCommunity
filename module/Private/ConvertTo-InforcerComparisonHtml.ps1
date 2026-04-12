@@ -654,6 +654,28 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                 return $html.ToString()
             }
 
+            # ── Duplicate badge lookup map (Phase 8 TBL-02, per D-05/D-08) ──
+            $duplicateLookup = @{}
+            $dupeCategory = 'Duplicate Settings (Different Values)'
+            if ($ComparisonModel.ManualReview -and $ComparisonModel.ManualReview.Contains($dupeCategory)) {
+                foreach ($item in $ComparisonModel.ManualReview[$dupeCategory]) {
+                    foreach ($s in $item.Settings) {
+                        if ($s.Value -match '^__DUPLICATE_TABLE__') {
+                            $jsonPart = $s.Value -replace '^__DUPLICATE_TABLE__', ''
+                            try {
+                                $pairs = $jsonPart | ConvertFrom-Json -Depth 10
+                                $dupeKey = $s.Name.ToLowerInvariant()
+                                if (-not $duplicateLookup.ContainsKey($dupeKey)) {
+                                    $duplicateLookup[$dupeKey] = $pairs
+                                }
+                            } catch {
+                                Write-Verbose "Failed to parse duplicate table JSON for '$($s.Name)': $_"
+                            }
+                        }
+                    }
+                }
+            }
+
             foreach ($row in $allRows) {
                 $status = $row.Status
 
@@ -684,14 +706,25 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                 [void]$sb.Append('</td>')
 
                 # Setting/Policy name
+                # Duplicate badge lookup (per D-05 through D-08)
+                $rowKey = if ($row.SettingPath) { $row.SettingPath.ToLowerInvariant() } else { $row.Name.ToLowerInvariant() }
+                $dupeBadge = ''
+                if ($duplicateLookup.ContainsKey($rowKey)) {
+                    $allPolicies = $duplicateLookup[$rowKey]
+                    $currentPol  = if ($row.SourcePolicy) { $row.SourcePolicy } else { $row.DestPolicy }
+                    $others = @($allPolicies | Where-Object { $_.Policy -ne $currentPol } |
+                              ForEach-Object { "$($_.Policy) ($($_.Side))" })
+                    $tooltipText = if ($others.Count -gt 0) { "Also configured in: $($others -join ', ')" } else { 'Duplicate setting — see Duplicate Settings tab' }
+                    $encTooltip  = [System.Net.WebUtility]::HtmlEncode($tooltipText)
+                    $dupeBadge   = " <span class=`"badge-duplicate`" title=`"$encTooltip`">&#x26A0; Duplicate</span>"
+                }
+
+                # Setting name cell (per D-09 through D-11: bold name, deprecated badge, duplicate badge, path)
                 $deprBadge = if ($row.IsDeprecated -eq $true) { ' <span class="badge-deprecated">&#x26A0; Deprecated</span>' } else { '' }
                 $settingPath = "$($row.SettingPath)"
                 $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
-                if ($settingPath -match ' > ') {
-                    [void]$sb.Append("<td class=`"setting-name`">$encName$deprBadge<span class=`"setting-path`">$encPath</span></td>")
-                } else {
-                    [void]$sb.Append("<td class=`"setting-name`">$encName$deprBadge</td>")
-                }
+                $pathHtml = if (-not [string]::IsNullOrEmpty($settingPath)) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong>$deprBadge$dupeBadge$pathHtml</td>")
 
                 # Category column (already stripped of product prefix)
                 [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCategory</td>")
@@ -1208,6 +1241,56 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('        wrap.appendChild(btn);')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('} catch(e) { console.warn("Syntax highlighting error:", e); }')
+    [void]$sb.AppendLine('// Column resize (Phase 8 TBL-01, per D-01 through D-04)')
+    [void]$sb.AppendLine('try {')
+    [void]$sb.AppendLine('(function() {')
+    [void]$sb.AppendLine('  var table = document.getElementById(''comparison-table'');')
+    [void]$sb.AppendLine('  if (!table) return;')
+    [void]$sb.AppendLine('  var ths = table.querySelectorAll(''thead th'');')
+    [void]$sb.AppendLine('  var defaultWidths = [];')
+    [void]$sb.AppendLine('  var minWidths = [];')
+    [void]$sb.AppendLine('  // Capture default widths after layout (per D-03)')
+    [void]$sb.AppendLine('  ths.forEach(function(th, i) {')
+    [void]$sb.AppendLine('    defaultWidths[i] = th.offsetWidth;')
+    [void]$sb.AppendLine('    minWidths[i] = (i === 0) ? 40 : 60;')
+    [void]$sb.AppendLine('  });')
+    [void]$sb.AppendLine('  // Set table-layout: fixed after capturing widths (Pitfall 1)')
+    [void]$sb.AppendLine('  ths.forEach(function(th) { th.style.width = th.offsetWidth + ''px''; });')
+    [void]$sb.AppendLine('  table.style.tableLayout = ''fixed'';')
+    [void]$sb.AppendLine('  ths.forEach(function(th, i) {')
+    [void]$sb.AppendLine('    var handle = document.createElement(''div'');')
+    [void]$sb.AppendLine('    handle.className = ''col-resize-handle'';')
+    [void]$sb.AppendLine('    th.appendChild(handle);')
+    [void]$sb.AppendLine('    // Double-click resets to default width (per D-03)')
+    [void]$sb.AppendLine('    handle.addEventListener(''dblclick'', function(e) {')
+    [void]$sb.AppendLine('      e.stopPropagation();')
+    [void]$sb.AppendLine('      e.preventDefault();')
+    [void]$sb.AppendLine('      th.style.width = defaultWidths[i] + ''px'';')
+    [void]$sb.AppendLine('    });')
+    [void]$sb.AppendLine('    var startX, startW;')
+    [void]$sb.AppendLine('    handle.addEventListener(''mousedown'', function(e) {')
+    [void]$sb.AppendLine('      e.stopPropagation();')
+    [void]$sb.AppendLine('      e.preventDefault();')
+    [void]$sb.AppendLine('      startX = e.pageX;')
+    [void]$sb.AppendLine('      startW = th.offsetWidth;')
+    [void]$sb.AppendLine('      handle.classList.add(''resizing'');')
+    [void]$sb.AppendLine('      document.body.style.cursor = ''col-resize'';')
+    [void]$sb.AppendLine('      document.addEventListener(''mousemove'', onMouseMove);')
+    [void]$sb.AppendLine('      document.addEventListener(''mouseup'', onMouseUp);')
+    [void]$sb.AppendLine('    });')
+    [void]$sb.AppendLine('    function onMouseMove(e) {')
+    [void]$sb.AppendLine('      var w = Math.max(minWidths[i], startW + (e.pageX - startX));')
+    [void]$sb.AppendLine('      th.style.width = w + ''px'';')
+    [void]$sb.AppendLine('    }')
+    [void]$sb.AppendLine('    function onMouseUp() {')
+    [void]$sb.AppendLine('      handle.classList.remove(''resizing'');')
+    [void]$sb.AppendLine('      document.body.style.cursor = '''';')
+    [void]$sb.AppendLine('      document.removeEventListener(''mousemove'', onMouseMove);')
+    [void]$sb.AppendLine('      document.removeEventListener(''mouseup'', onMouseUp);')
+    [void]$sb.AppendLine('    }')
+    [void]$sb.AppendLine('  });')
+    [void]$sb.AppendLine('})();')
+    [void]$sb.AppendLine('} catch(e) { console.warn(''Column resize error:'', e); }')
     [void]$sb.AppendLine('</script>')
 
     # ── Close body/html ────────────────────────────────────────────────────

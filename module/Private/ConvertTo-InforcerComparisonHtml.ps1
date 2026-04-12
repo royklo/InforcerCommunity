@@ -627,12 +627,13 @@ tr:hover td { background: var(--accent-soft); }
                 [void]$sb.Append('</td>')
 
                 # Setting/Policy name
+                $deprBadge = if ($row.IsDeprecated -eq $true) { ' <span class="badge-deprecated">&#x26A0; Deprecated</span>' } else { '' }
                 $settingPath = "$($row.SettingPath)"
                 $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
                 if ($settingPath -match ' > ') {
-                    [void]$sb.Append("<td class=`"setting-name`">$encName<span class=`"setting-path`">$encPath</span></td>")
+                    [void]$sb.Append("<td class=`"setting-name`">$encName$deprBadge<span class=`"setting-path`">$encPath</span></td>")
                 } else {
-                    [void]$sb.Append("<td class=`"setting-name`">$encName</td>")
+                    [void]$sb.Append("<td class=`"setting-name`">$encName$deprBadge</td>")
                 }
 
                 # Category column (already stripped of product prefix)

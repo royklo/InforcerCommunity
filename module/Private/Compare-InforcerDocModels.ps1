@@ -163,6 +163,20 @@ function Compare-InforcerDocModels {
         return ''
     }
 
+    # ── Helper: check if a setting is deprecated (name, value, or catalog) ──
+    $isSettingDeprecated = {
+        param([string]$Name, [string]$Value, [string]$DefId)
+        $isDepr = $Name -match 'deprecated' -or $Value -match 'deprecated'
+        if (-not $isDepr -and -not [string]::IsNullOrEmpty($DefId) -and
+            $null -ne $script:InforcerSettingsCatalog -and
+            $script:InforcerSettingsCatalog.ContainsKey($DefId)) {
+            if ($script:InforcerSettingsCatalog[$DefId].DisplayName -match 'deprecated') {
+                $isDepr = $true
+            }
+        }
+        return $isDepr
+    }
+
     # ── Helper: build setting paths from the Indent hierarchy ─────────────
     # Walks the Settings array and returns a list of hashtables:
     #   @{ Name; SettingPath; Value; DefinitionId }
@@ -215,6 +229,7 @@ function Compare-InforcerDocModels {
                     SettingPath  = $settingPath
                     Value        = $value
                     DefinitionId = $defId
+                    IsDeprecated = (& $isSettingDeprecated $name $value $defId)
                 })
             }
         }
@@ -504,6 +519,7 @@ function Compare-InforcerDocModels {
                             SourceValue  = $srcVal
                             DestPolicy   = $dstPolicyName
                             DestValue    = $dstVal
+                            IsDeprecated = if ($inSrc) { $srcLookup[$settingKey].IsDeprecated -eq $true } else { $dstLookup[$settingKey].IsDeprecated -eq $true }
                         }
                         if ($IncludingAssignments) {
                             $row.SourceAssignment = $srcAssignStr
@@ -535,6 +551,7 @@ function Compare-InforcerDocModels {
                                 SourceValue  = $srcVal
                                 DestPolicy   = ''
                                 DestValue    = ''
+                                IsDeprecated = $srcLookup[$settingKey].IsDeprecated -eq $true
                             }
                             if ($IncludingAssignments) {
                                 $row.SourceAssignment = $srcAssignStr
@@ -567,6 +584,7 @@ function Compare-InforcerDocModels {
                                 SourceValue  = ''
                                 DestPolicy   = $dstPolicyName
                                 DestValue    = $dstVal
+                                IsDeprecated = $dstLookup[$settingKey].IsDeprecated -eq $true
                             }
                             if ($IncludingAssignments) {
                                 $row.SourceAssignment = ''

@@ -330,10 +330,26 @@ tr:hover td { background: var(--accent-soft); }
     margin-top: 2px;
 }
 .value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
-.value-truncate { max-height: 7.5em; overflow: hidden; cursor: pointer; position: relative; }
-.value-truncate::after { content: '... expand'; position: absolute; bottom: 0; right: 0; padding-left: 1rem; background: linear-gradient(90deg, transparent, var(--bg-card) 40%); font-size: 0.65rem; color: var(--accent); font-style: italic; }
-.value-truncate.expanded { max-height: none; }
-.value-truncate.expanded::after { content: 'collapse ▴'; position: static; display: block; text-align: right; background: none; padding: 0.25rem 0 0; }
+.value-truncate { max-height: 4.5em; overflow: hidden; position: relative; }
+.value-truncate.expanded { max-height: none; white-space: pre-wrap; }
+.value-toggle-btn {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    font-size: 0.625rem; font-weight: 400; color: var(--warning);
+    background: none; border: none; padding: 0; cursor: pointer;
+    transition: opacity var(--transition); font-family: inherit;
+}
+.value-toggle-btn:hover { opacity: 0.75; }
+.value-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; }
+.value-copy-btn {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    font-size: 0.625rem; font-weight: 400; color: var(--muted);
+    background: none; border: none; padding: 0; cursor: pointer;
+    opacity: 0; transition: opacity var(--transition), color var(--transition);
+    font-family: inherit;
+}
+.value-copy-btn:hover { color: var(--text); }
+.value-copy-btn.copied { color: var(--success); opacity: 1; }
+td.value-cell:hover .value-copy-btn { opacity: 1; }
 .ps-code { background: #1e1e1e !important; color: #d4d4d4; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }
@@ -645,11 +661,12 @@ tr:hover td { background: var(--accent-soft); }
                 } else {
                     $encSrcPolicy = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
                     $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
+                    $encSrcValueAttr = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
                     [void]$sb.Append("<td>$encSrcPolicy</td>")
                     if ($row.SourceValue.Length -gt 100) {
-                        [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-truncate`">$encSrcValue</div></td>")
+                        [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><div class=`"value-truncate`">$encSrcValue</div><div class=`"value-actions`"><button type=`"button`" class=`"value-toggle-btn`">&#9660; More</button><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encSrcValueAttr`">&#128203; Copy</button></div></div></td>")
                     } else {
-                        [void]$sb.Append("<td class=`"value-cell`">$encSrcValue</td>")
+                        [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><span class=`"value-text`">$encSrcValue</span><div class=`"value-actions`"><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encSrcValueAttr`">&#128203; Copy</button></div></div></td>")
                     }
                 }
 
@@ -657,14 +674,15 @@ tr:hover td { background: var(--accent-soft); }
                 if ($status -eq 'SourceOnly') {
                     [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
                 } else {
-                    $encDstPolicy = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
-                    $encDstValue  = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
-                    $valueCls = if ($status -eq 'Conflicting') { 'value-cell value-diff' } else { 'value-cell' }
+                    $encDstPolicy    = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
+                    $encDstValue     = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
+                    $encDstValueAttr = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
+                    $innerCls = if ($status -eq 'Conflicting') { ' value-diff' } else { '' }
                     [void]$sb.Append("<td>$encDstPolicy</td>")
                     if ($row.DestValue.Length -gt 100) {
-                        [void]$sb.Append("<td class=`"$valueCls`"><div class=`"value-truncate`">$encDstValue</div></td>")
+                        [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><div class=`"value-truncate$innerCls`">$encDstValue</div><div class=`"value-actions`"><button type=`"button`" class=`"value-toggle-btn`">&#9660; More</button><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encDstValueAttr`">&#128203; Copy</button></div></div></td>")
                     } else {
-                        [void]$sb.Append("<td class=`"$valueCls`">$encDstValue</td>")
+                        [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><span class=`"value-text$innerCls`">$encDstValue</span><div class=`"value-actions`"><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encDstValueAttr`">&#128203; Copy</button></div></div></td>")
                     }
                 }
 
@@ -929,10 +947,32 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
-    [void]$sb.AppendLine('// Click to expand long values')
+    [void]$sb.AppendLine('// Expand/collapse long values via More/Less toggle buttons')
     [void]$sb.AppendLine('document.addEventListener("click", function(e) {')
-    [void]$sb.AppendLine('    var el = e.target.closest(".value-truncate");')
-    [void]$sb.AppendLine('    if (el) el.classList.toggle("expanded");')
+    [void]$sb.AppendLine('    var btn = e.target.closest(".value-toggle-btn");')
+    [void]$sb.AppendLine('    if (!btn) return;')
+    [void]$sb.AppendLine('    var wrap = btn.closest(".value-wrap");')
+    [void]$sb.AppendLine('    var truncEl = wrap && wrap.querySelector(".value-truncate");')
+    [void]$sb.AppendLine('    if (!truncEl) return;')
+    [void]$sb.AppendLine('    var expanded = truncEl.classList.toggle("expanded");')
+    [void]$sb.AppendLine('    btn.innerHTML = expanded ? "\u25B2 Less" : "\u25BC More";')
+    [void]$sb.AppendLine('});')
+    [void]$sb.AppendLine('// Copy value to clipboard on value-copy-btn click')
+    [void]$sb.AppendLine('document.addEventListener("click", function(e) {')
+    [void]$sb.AppendLine('    var btn = e.target.closest(".value-copy-btn");')
+    [void]$sb.AppendLine('    if (!btn) return;')
+    [void]$sb.AppendLine('    var val = btn.getAttribute("data-value");')
+    [void]$sb.AppendLine('    if (!val) return;')
+    [void]$sb.AppendLine('    if (navigator.clipboard && navigator.clipboard.writeText) {')
+    [void]$sb.AppendLine('        navigator.clipboard.writeText(val).then(function() {')
+    [void]$sb.AppendLine('            btn.classList.add("copied");')
+    [void]$sb.AppendLine('            btn.innerHTML = "\u2713 Copied!";')
+    [void]$sb.AppendLine('            setTimeout(function() {')
+    [void]$sb.AppendLine('                btn.classList.remove("copied");')
+    [void]$sb.AppendLine('                btn.innerHTML = "\uD83D\uDCCB Copy";')
+    [void]$sb.AppendLine('            }, 1500);')
+    [void]$sb.AppendLine('        });')
+    [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('});')
     [void]$sb.AppendLine('var sortState = {};')
     [void]$sb.AppendLine('function sortTable(th, colIdx) {')

@@ -119,8 +119,8 @@ Plans:
   5. Each manual review policy panel displays a Source or Destination side badge, and a Deprecated badge if any setting is deprecated
 **Plans:** 2 plans
 Plans:
-- [ ] 07-01-PLAN.md — TDD RED: failing Pester tests for MAN-01 through MAN-05 manual review rendering
-- [ ] 07-02-PLAN.md — TDD GREEN: CSS, rendering loop, and JS implementation for bash highlighting, compliance table, duplicate table
+- [x] 07-01-PLAN.md — TDD RED: failing Pester tests for MAN-01 through MAN-05 manual review rendering
+- [x] 07-02-PLAN.md — TDD GREEN: CSS, rendering loop, and JS implementation for bash highlighting, compliance table, duplicate table
 **UI hint**: yes
 
 ### Phase 8: Table Enhancements
@@ -131,9 +131,10 @@ Plans:
   1. The user can drag column borders left or right to resize columns; double-clicking a border resets that column to its default width
   2. Settings identified as duplicates show an amber badge in the setting name cell; hovering the badge reveals a tooltip listing the other policies containing the same setting
   3. The setting name cell displays the bold setting name on the first line and the muted setting path on the second line
-**Plans:** 1 plan
+**Plans:** 2 plans
 Plans:
-- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
+- [ ] 08-01-PLAN.md — TDD RED: failing Pester tests for TBL-01 through TBL-03 table enhancements
+- [ ] 08-02-PLAN.md — TDD GREEN: CSS, duplicate lookup, setting name cell, and column resize JS implementation
 **UI hint**: yes
 
 ### Phase 9: Filtering and Navigation
@@ -178,6 +179,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Value Display | 1/1 | Complete | - |
 | 6. Assignments Display | 1/1 | Complete | - |
 | 7. Manual Review Rendering | 0/2 | Not started | - |
-| 8. Table Enhancements | 0/TBD | Not started | - |
+| 8. Table Enhancements | 0/2 | Not started | - |
 | 9. Filtering and Navigation | 0/TBD | Not started | - |
 | 10. Duplicate Settings Tab | 0/TBD | Not started | - |

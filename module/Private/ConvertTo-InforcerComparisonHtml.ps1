@@ -1022,14 +1022,19 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 
             [void]$sb.Append("<tr data-setting=`"$encSettingName`" data-policies=`"$encPoliciesAttr`" data-policies-json=`"$encPoliciesJson`">")
 
-            # Column 1: Setting name — use SettingName from policy data for display, SettingPath below
+            # Column 1: Setting name + category path below
             $firstPolicy = $dupRow.Policies | Select-Object -First 1
             $displayName = if ($firstPolicy.SettingName) { $firstPolicy.SettingName } else { $dupRow.Name }
             $settingPath = if ($firstPolicy.SettingPath) { $firstPolicy.SettingPath } else { $dupRow.Name }
+            $category = if ($firstPolicy.Category) { $firstPolicy.Category } else { '' }
             $encDisplayName = [System.Net.WebUtility]::HtmlEncode($displayName)
             $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
+            $encCategory = [System.Net.WebUtility]::HtmlEncode($category)
+            # Show path if different from display name, and category if available
             $pathLine = if ($settingPath -ne $displayName) {
                 "<span class=`"dup-setting-path`">$encPath</span>"
+            } elseif (-not [string]::IsNullOrWhiteSpace($category)) {
+                "<span class=`"dup-setting-path`">$encCategory</span>"
             } else { '' }
             [void]$sb.Append("<td class=`"dup-tab-setting`"><strong>$encDisplayName</strong>$pathLine</td>")
 

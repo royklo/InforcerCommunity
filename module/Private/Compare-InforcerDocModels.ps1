@@ -726,6 +726,7 @@ function Compare-InforcerDocModels {
                                 SettingName = $p.Name
                                 SettingPath = $p.SettingPath
                                 Side        = $side
+                                Category    = "$prodName / $catName"
                             })
                         }
                     }
@@ -754,7 +755,7 @@ function Compare-InforcerDocModels {
 
                 # D-02: Build __DUPLICATE_TABLE__ encoded value
                 $policyValues = $entries | ForEach-Object {
-                    @{ Policy = $_.PolicyName; Value = $_.Value; Side = $_.Side; SettingName = $_.SettingName; SettingPath = $_.SettingPath }
+                    @{ Policy = $_.PolicyName; Value = $_.Value; Side = $_.Side; SettingName = $_.SettingName; SettingPath = $_.SettingPath; Category = $_.Category }
                 }
                 $tableJson = '__DUPLICATE_TABLE__' + ($policyValues | ConvertTo-Json -Depth 100 -Compress)
 

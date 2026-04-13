@@ -754,7 +754,7 @@ function Compare-InforcerDocModels {
 
                 # D-02: Build __DUPLICATE_TABLE__ encoded value
                 $policyValues = $entries | ForEach-Object {
-                    @{ Policy = $_.PolicyName; Value = $_.Value; Side = $_.Side }
+                    @{ Policy = $_.PolicyName; Value = $_.Value; Side = $_.Side; SettingName = $_.SettingName; SettingPath = $_.SettingPath }
                 }
                 $tableJson = '__DUPLICATE_TABLE__' + ($policyValues | ConvertTo-Json -Depth 100 -Compress)
 

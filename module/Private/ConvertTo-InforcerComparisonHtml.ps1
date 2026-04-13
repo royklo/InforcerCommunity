@@ -553,7 +553,8 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('    <div class="summary-tile dest-only"><div class="count" id="countDest">0</div><div class="label">Destination Only</div></div>')
     [void]$sb.AppendLine('</div>')
 
-    # ── Search bar ─────────────────────────────────────────────────────────
+    # ── Search bar (wrapped in comparison-filters container for tab toggling) ──
+    [void]$sb.AppendLine('<div id="comparison-filters">')
     [void]$sb.AppendLine('<div class="search-bar">')
     [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search setting name, path, values, policies, category..." oninput="applyFilters()">')
     [void]$sb.AppendLine('</div>')
@@ -589,6 +590,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('    <button id="clear-filters-btn" class="hidden" onclick="clearFilters()" style="color:var(--danger);background:none;border:none;font-size:0.75rem;font-weight:600;cursor:pointer;padding:0.25rem 0.5rem">Clear filters</button>')
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.75rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
+    [void]$sb.AppendLine('</div>')  # end comparison-filters
 
     # ── Tab navigation ──────────────────────────────────────────────────
     $manualReview = $ComparisonModel.ManualReview
@@ -1020,15 +1022,14 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 
             [void]$sb.Append("<tr data-setting=`"$encSettingName`" data-policies=`"$encPoliciesAttr`" data-policies-json=`"$encPoliciesJson`">")
 
-            # Column 1: Setting name — show last path segment as display name, full path below
-            $displayName = if ($dupRow.Name -match ' > ') {
-                ($dupRow.Name -split ' > ')[-1]
-            } elseif ($dupRow.Name -match '/') {
-                ($dupRow.Name -split '/')[-1]
-            } else { $dupRow.Name }
+            # Column 1: Setting name — use SettingName from policy data for display, SettingPath below
+            $firstPolicy = $dupRow.Policies | Select-Object -First 1
+            $displayName = if ($firstPolicy.SettingName) { $firstPolicy.SettingName } else { $dupRow.Name }
+            $settingPath = if ($firstPolicy.SettingPath) { $firstPolicy.SettingPath } else { $dupRow.Name }
             $encDisplayName = [System.Net.WebUtility]::HtmlEncode($displayName)
-            $pathLine = if ($displayName -ne $dupRow.Name) {
-                "<span class=`"dup-setting-path`">$encSettingName</span>"
+            $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
+            $pathLine = if ($settingPath -ne $displayName) {
+                "<span class=`"dup-setting-path`">$encPath</span>"
             } else { '' }
             [void]$sb.Append("<td class=`"dup-tab-setting`"><strong>$encDisplayName</strong>$pathLine</td>")
 
@@ -1315,6 +1316,8 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-" + tabId);')
     [void]$sb.AppendLine('    if (tab) tab.classList.add("active");')
     [void]$sb.AppendLine('    (event.currentTarget || event.target).classList.add("active");')
+    [void]$sb.AppendLine('    var cf = document.getElementById("comparison-filters");')
+    [void]$sb.AppendLine('    if (cf) cf.style.display = (tabId === "comparison") ? "" : "none";')
     [void]$sb.AppendLine('}')
     if ($hasDuplicates) {
         [void]$sb.AppendLine("var dupPolicyCount = $dupPolicyCount;")

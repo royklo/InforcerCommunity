@@ -1231,3 +1231,225 @@ Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Duplicates Tab
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab' {
+
+    BeforeAll {
+        # ---------------------------------------------------------------------------
+        # Fixture 1: $script:DupModel — ComparisonModel WITH duplicate settings
+        # ManualReview key: 'Duplicate Settings (Different Values)'
+        # Three duplicate setting items using __DUPLICATE_TABLE__ JSON payload.
+        # ---------------------------------------------------------------------------
+
+        # Item 1: same-tenant scenario — two Source policies conflict on deviceLock_maxMinutesOfInactivity
+        $item1Value = '__DUPLICATE_TABLE__[{"Policy":"Baseline Security","Value":"5","Side":"Source"},{"Policy":"Strict Policy","Value":"15","Side":"Source"}]'
+        # Item 2: cross-tenant scenario — same setting in both Source and Destination, plus extra Source
+        $item2Value = '__DUPLICATE_TABLE__[{"Policy":"Corp Firewall","Value":"true","Side":"Source"},{"Policy":"Corp Firewall","Value":"true","Side":"Destination"},{"Policy":"Legacy FW","Value":"false","Side":"Source"}]'
+        # Item 3: all-unique scenario — three policies with entirely different values
+        $item3Value = '__DUPLICATE_TABLE__[{"Policy":"Policy A","Value":"xtsAes128","Side":"Source"},{"Policy":"Policy B","Value":"xtsAes256","Side":"Destination"},{"Policy":"Policy C","Value":"aesCbc128","Side":"Source"}]'
+
+        $script:DupModel = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = '2026-01-01'
+            AlignmentScore  = 75
+            TotalItems      = 5
+            Counters        = @{ Matched = 3; Conflicting = 1; SourceOnly = 1; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 3; Conflicting = 1; SourceOnly = 1; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{
+                'Duplicate Settings (Different Values)' = [System.Collections.Generic.List[object]]@(
+                    @{
+                        PolicyName    = 'Baseline Security'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'deviceLock_maxMinutesOfInactivity'; Value = $item1Value; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    @{
+                        PolicyName    = 'Corp Firewall'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'firewall_enableFirewall'; Value = $item2Value; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    @{
+                        PolicyName    = 'Policy A'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'bitlocker_encryptionMethod'; Value = $item3Value; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    }
+                )
+            }
+        }
+
+        $script:DupHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:DupModel } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+
+        # ---------------------------------------------------------------------------
+        # Fixture 2: $script:NoDupModel — ComparisonModel WITHOUT any duplicates
+        # ManualReview is empty — tab should be hidden entirely.
+        # ---------------------------------------------------------------------------
+        $script:NoDupModel = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = '2026-01-01'
+            AlignmentScore  = 90
+            TotalItems      = 5
+            Counters        = @{ Matched = 5; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 5; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{}
+        }
+
+        $script:NoDupHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:NoDupModel } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-01: Tab button and content div
+    # -------------------------------------------------------------------------
+    Context 'DUP-01: Tab button and content' {
+        It 'renders Duplicates tab button when duplicates exist' -Tag 'DUP-01' {
+            # D-01: Duplicates tab button calls switchTab('duplicates')
+            $script:DupHtml | Should -Match "switchTab\('duplicates'\)"
+        }
+
+        It 'Duplicates tab button shows count badge with 3' -Tag 'DUP-01' {
+            # D-01: count badge shows number of unique duplicate settings (3 in fixture)
+            $script:DupHtml | Should -Match 'Duplicates.*<span[^>]*status-badge[^>]*>3</span>'
+        }
+
+        It 'does NOT render Duplicates tab button when no duplicates' -Tag 'DUP-01' {
+            # D-02: when no duplicates exist, tab button must not appear
+            $script:NoDupHtml | Should -Not -Match "switchTab\('duplicates'\)"
+        }
+
+        It 'renders tab-duplicates content div when duplicates exist' -Tag 'DUP-01' {
+            # D-01: content div with id="tab-duplicates" must be present
+            $script:DupHtml | Should -Match 'id="tab-duplicates"'
+        }
+
+        It 'does NOT render tab-duplicates div when no duplicates' -Tag 'DUP-01' {
+            # D-02: when no duplicates, content div must not appear
+            $script:NoDupHtml | Should -Not -Match 'tab-duplicates'
+        }
+
+        It 'renders amber info banner with warning text' -Tag 'DUP-01' {
+            # D-03: informational amber banner at top of tab explaining duplicate settings
+            $script:DupHtml | Should -Match 'dup-info-banner'
+            $script:DupHtml | Should -Match 'Duplicate Settings Detected'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-02: Three-column table with policy entries
+    # -------------------------------------------------------------------------
+    Context 'DUP-02: Three-column table with policy entries' {
+        It 'renders dup-tab-table with three column headers' -Tag 'DUP-02' {
+            # D-04: three-column table: Setting | Policies & Values | Analysis
+            $script:DupHtml | Should -Match 'dup-tab-table'
+            $script:DupHtml | Should -Match '>Setting<'
+            $script:DupHtml | Should -Match '>Policies &amp; Values<'
+            $script:DupHtml | Should -Match '>Analysis<'
+        }
+
+        It 'renders setting name deviceLock_maxMinutesOfInactivity in table row' -Tag 'DUP-02' {
+            # D-04: setting names from the fixture must appear as row data
+            $script:DupHtml | Should -Match 'deviceLock_maxMinutesOfInactivity'
+        }
+
+        It 'renders Source side badge for source policy' -Tag 'DUP-02' {
+            # D-05, D-06: Source badge reuses .side-badge .side-source CSS classes
+            $script:DupHtml | Should -Match 'side-badge side-source.*Source'
+        }
+
+        It 'renders Destination side badge for destination policy' -Tag 'DUP-02' {
+            # D-05, D-06: Destination badge reuses .side-badge .side-dest CSS classes
+            $script:DupHtml | Should -Match 'side-badge side-dest.*Destination'
+        }
+
+        It 'renders policy values in dup-policy-value class' -Tag 'DUP-02' {
+            # D-05: value displayed in monospace amber text below policy name
+            $script:DupHtml | Should -Match 'dup-policy-value'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-03: Analysis messaging via analyzeDuplicate JS
+    # -------------------------------------------------------------------------
+    Context 'DUP-03: Analysis messaging via analyzeDuplicate JS' {
+        It 'HTML contains analyzeDuplicate JavaScript function' -Tag 'DUP-03' {
+            # D-07: analyzeDuplicate() function ported from IntuneLens DuplicateSettingsTab.tsx
+            $script:DupHtml | Should -Match 'function analyzeDuplicate\('
+        }
+
+        It 'table rows contain data-policies-json attribute with valid JSON' -Tag 'DUP-03' {
+            # D-09: each row carries the policies JSON for analyzeDuplicate() to consume
+            $script:DupHtml | Should -Match 'data-policies-json="'
+        }
+
+        It 'analysis cells have dup-analysis-text class' -Tag 'DUP-03' {
+            # D-08: analysis text rendered in small muted text with relaxed line-height
+            $script:DupHtml | Should -Match 'dup-analysis-text'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-04: Duplicate tab search
+    # -------------------------------------------------------------------------
+    Context 'DUP-04: Duplicate tab search' {
+        It 'renders search input with correct placeholder' -Tag 'DUP-04' {
+            # D-10: independent search input inside the Duplicates tab content area
+            $script:DupHtml | Should -Match 'placeholder="Search settings or policies\.\.\."'
+        }
+
+        It 'HTML contains dupTabSearch JavaScript function' -Tag 'DUP-04' {
+            # D-11: real-time search function for filtering duplicate table rows
+            $script:DupHtml | Should -Match 'function dupTabSearch\('
+        }
+
+        It 'renders summary line with dup-summary id' -Tag 'DUP-04' {
+            # D-12: summary line "Showing X of Y duplicate settings across Z policies"
+            $script:DupHtml | Should -Match 'id="dup-summary"'
+        }
+
+        It 'table rows contain data-setting and data-policies attributes for JS filtering' -Tag 'DUP-04' {
+            # D-11: data attributes for case-insensitive substring matching in JS
+            $script:DupHtml | Should -Match 'data-setting="'
+            $script:DupHtml | Should -Match 'data-policies="'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-01: CSS classes for Duplicates tab
+    # -------------------------------------------------------------------------
+    Context 'DUP-01: CSS classes' {
+        It 'CSS block contains dup-tab-table class' -Tag 'DUP-01' {
+            # UI-SPEC: .dup-tab-table — three-column duplicate table
+            $script:DupHtml | Should -Match '\.dup-tab-table\s*\{'
+        }
+
+        It 'CSS block contains dup-info-banner class' -Tag 'DUP-01' {
+            # UI-SPEC: .dup-info-banner — amber informational banner
+            $script:DupHtml | Should -Match '\.dup-info-banner\s*\{'
+        }
+
+        It 'CSS block contains dup-policy-value class with monospace font' -Tag 'DUP-02' {
+            # UI-SPEC: .dup-policy-value — monospace amber value text
+            $script:DupHtml | Should -Match '\.dup-policy-value\s*\{[^}]*monospace'
+        }
+    }
+}

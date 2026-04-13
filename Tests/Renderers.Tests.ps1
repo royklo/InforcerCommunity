@@ -1453,3 +1453,195 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - BUG-01 deprecated badge rendering
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - BUG-01 deprecated badge rendering' -Tag 'BUG-01', 'Phase11' {
+
+    BeforeAll {
+        $script:Bug01Model = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = [datetime]::UtcNow
+            AlignmentScore  = 75
+            TotalItems      = 3
+            Counters        = @{ Matched = 2; Conflicting = 1; SourceOnly = 0; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 2; Conflicting = 1; SourceOnly = 0; DestOnly = 0 }
+            Products        = [ordered]@{
+                'Windows' = @{
+                    Counters   = @{ Matched = 2; Conflicting = 1; SourceOnly = 0; DestOnly = 0 }
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Deprecated BitLocker'
+                                    SettingPath  = 'deprecated_bitlocker'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Baseline Policy'
+                                    SourceValue  = 'Enabled'
+                                    DestPolicy   = 'Baseline Policy'
+                                    DestValue    = 'Enabled'
+                                    IsDeprecated = $true
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Normal Firewall'
+                                    SettingPath  = 'firewall_enable'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Baseline Policy'
+                                    SourceValue  = 'true'
+                                    DestPolicy   = 'Baseline Policy'
+                                    DestValue    = 'true'
+                                    IsDeprecated = $false
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Missing Flag Setting'
+                                    SettingPath  = 'missing_flag'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Conflicting'
+                                    SourcePolicy = 'Baseline Policy'
+                                    SourceValue  = 'val1'
+                                    DestPolicy   = 'Baseline Policy'
+                                    DestValue    = 'val2'
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview = [ordered]@{}
+        }
+
+        $script:Bug01Html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:Bug01Model } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    It 'renders badge-deprecated for IsDeprecated=$true row' {
+        $script:Bug01Html | Should -Match 'Deprecated BitLocker.*badge-deprecated'
+    }
+
+    It 'does NOT render badge-deprecated for IsDeprecated=$false row' {
+        # Normal Firewall row should close with </strong> and NOT have badge-deprecated before next </td>
+        $script:Bug01Html | Should -Match '<strong>Normal Firewall</strong>(?!.*badge-deprecated.*</td>)'
+    }
+
+    It 'does NOT render badge-deprecated when IsDeprecated key is absent' {
+        # Missing Flag Setting has no IsDeprecated key — should not render badge-deprecated
+        $script:Bug01Html | Should -Match '<strong>Missing Flag Setting</strong>(?!.*badge-deprecated.*</td>)'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - BUG-02 manual review content
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - BUG-02 manual review content' -Tag 'BUG-02', 'Phase11' {
+
+    BeforeAll {
+        $script:Bug02Model = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = [datetime]::UtcNow
+            AlignmentScore  = 50
+            TotalItems      = 0
+            Counters        = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{
+                'Proactive Remediations' = [System.Collections.Generic.List[object]]@(
+                    @{
+                        PolicyName    = 'Detection Script Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'deviceHealthScript'
+                        HasDeprecated = $false
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'DetectionScript';    Value = 'Get-Process | Where-Object { $_.CPU -gt 80 }'; IsDeprecated = $false },
+                            @{ Name = 'RemediationScript';  Value = 'Stop-Process -Name bloatware -Force';          IsDeprecated = $false }
+                        )
+                    }
+                )
+            }
+        }
+
+        $script:Bug02Html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:Bug02Model } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    It 'renders manual-review-card details element' {
+        $script:Bug02Html | Should -Match 'manual-review-card'
+    }
+
+    It 'renders setting names inside manual review body' {
+        $script:Bug02Html | Should -Match 'DetectionScript'
+        $script:Bug02Html | Should -Match 'RemediationScript'
+    }
+
+    It 'renders policy profile type in manual review card' {
+        $script:Bug02Html | Should -Match 'deviceHealthScript'
+    }
+
+    It 'renders manual-review-setting div for each setting' {
+        # Count occurrences of manual-review-setting class — expect at least 2
+        $matches = [regex]::Matches($script:Bug02Html, 'manual-review-setting')
+        $matches.Count | Should -BeGreaterOrEqual 2
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - BUG-03 duplicate tab values
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - BUG-03 duplicate tab values' -Tag 'BUG-03', 'Phase11' {
+
+    BeforeAll {
+        $script:Bug03Model = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = [datetime]::UtcNow
+            AlignmentScore  = 50
+            TotalItems      = 0
+            Counters        = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{
+                'Duplicate Settings (Different Values)' = [System.Collections.Generic.List[object]]@(
+                    @{
+                        PolicyName    = 'Security Baseline'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        HasDeprecated = $false
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{
+                                Name         = 'deviceLock_maxInactivity'
+                                Value        = '__DUPLICATE_TABLE__[{"Policy":"Security Baseline","Value":"5","Side":"Source","SettingName":"deviceLock_maxInactivity","SettingPath":"deviceLock_maxInactivity","Category":"Windows / Settings Catalog"},{"Policy":"Strict Policy","Value":"15","Side":"Source","SettingName":"deviceLock_maxInactivity","SettingPath":"deviceLock_maxInactivity","Category":"Windows / Settings Catalog"}]'
+                                IsDeprecated = $false
+                            }
+                        )
+                    }
+                )
+            }
+        }
+
+        $script:Bug03Html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:Bug03Model } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    It 'renders value "5" in duplicate tab policy entry' {
+        $script:Bug03Html | Should -Match 'dup-policy-value[^<]*>5<'
+    }
+
+    It 'renders value "15" in duplicate tab policy entry' {
+        $script:Bug03Html | Should -Match 'dup-policy-value[^<]*>15<'
+    }
+
+    It 'renders both policy names in duplicate tab' {
+        $script:Bug03Html | Should -Match 'Security Baseline'
+        $script:Bug03Html | Should -Match 'Strict Policy'
+    }
+}

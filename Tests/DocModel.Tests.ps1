@@ -1234,3 +1234,147 @@ Describe 'Compare-InforcerDocModels - ENG-04 cross-tenant duplicates' -Tag 'ENG-
         $profileType | Should -Match '\(Source\)|\(Destination\)'
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: Compare-InforcerDocModels - BUG-04 duplicate-only exclusion
+# ---------------------------------------------------------------------------
+Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG-04', 'Phase11' {
+
+    BeforeAll {
+        # Reuse the helper pattern from ENG-02 tests
+        $script:BuildBug04Model = {
+            param(
+                [string]$TenantName,
+                [string]$TenantId,
+                [array]$Policies,
+                [string]$Product  = 'Windows',
+                [string]$Category = 'Settings Catalog'
+            )
+            $policyList = @(
+                $Policies | ForEach-Object {
+                    $p = $_
+                    @{
+                        Basics   = @{ Name = $p.Name; ProfileType = 'Settings Catalog'; Platform = $Product }
+                        Settings = @(
+                            $p.Settings | ForEach-Object {
+                                $s = $_
+                                [PSCustomObject]@{
+                                    Name         = $s.Name
+                                    Value        = $s.Value
+                                    Indent       = if ($null -ne $s.Indent) { $s.Indent } else { 0 }
+                                    IsConfigured = if ($null -ne $s.IsConfigured) { $s.IsConfigured } else { $true }
+                                    DefinitionId = $s.DefinitionId
+                                }
+                            }
+                        )
+                        Assignments = @()
+                    }
+                }
+            )
+            @{
+                TenantName = $TenantName
+                TenantId   = $TenantId
+                Products   = [ordered]@{
+                    $Product = @{
+                        Categories = [ordered]@{
+                            $Category = $policyList
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    It 'duplicate-only setting appears in ManualReview' {
+        # Source has 2 policies with same setting (different values) = duplicate
+        # Destination has NO matching setting = duplicate-only (no cross-tenant comparison)
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Baseline'; Settings = @(@{ Name = 'Screen Lock Timeout'; Value = '5';  DefinitionId = 'device_lock_timeout_001' }) },
+                @{ Name = 'Strict';   Settings = @(@{ Name = 'Screen Lock Timeout'; Value = '15'; DefinitionId = 'device_lock_timeout_001' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Baseline'; Settings = @(@{ Name = 'Other Setting'; Value = 'xyz'; DefinitionId = 'other_setting_001' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $script:BuildBug04Model }
+
+        $dupEntries = $result.ManualReview.'Duplicate Settings (Different Values)'
+        $dupEntries | Should -Not -BeNullOrEmpty
+        # Find the Screen Lock Timeout in the duplicate entries' settings
+        $found = $false
+        foreach ($entry in $dupEntries) {
+            foreach ($s in $entry.Settings) {
+                if ($s.Name -match 'Screen Lock Timeout' -or $s.Value -match 'Screen Lock Timeout') {
+                    $found = $true
+                }
+            }
+        }
+        $found | Should -Be $true
+    }
+
+    It 'duplicate-only setting is excluded from ComparisonRows' {
+        # Same setup: duplicate setting exists only on Source side
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Baseline'; Settings = @(@{ Name = 'Screen Lock Timeout'; Value = '5';  DefinitionId = 'device_lock_timeout_001' }) },
+                @{ Name = 'Strict';   Settings = @(@{ Name = 'Screen Lock Timeout'; Value = '15'; DefinitionId = 'device_lock_timeout_001' }) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Baseline'; Settings = @(@{ Name = 'Other Setting'; Value = 'xyz'; DefinitionId = 'other_setting_001' }) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $script:BuildBug04Model }
+
+        # Iterate all ComparisonRows — none should contain 'Screen Lock Timeout'
+        $foundInComparison = $false
+        foreach ($prodKey in $result.Products.Keys) {
+            foreach ($catKey in $result.Products[$prodKey].Categories.Keys) {
+                foreach ($row in $result.Products[$prodKey].Categories[$catKey].ComparisonRows) {
+                    if ($row.Name -eq 'Screen Lock Timeout') {
+                        $foundInComparison = $true
+                    }
+                }
+            }
+        }
+        $foundInComparison | Should -Be $false
+    }
+
+    It 'settings with both comparison and duplicate presence remain in ComparisonRows' {
+        # Source has 2 policies with same setting (duplicate) AND Destination has a match (comparison)
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{ Name = 'Baseline'; Settings = @(
+                    @{ Name = 'Screen Lock Timeout'; Value = '5';  DefinitionId = 'device_lock_timeout_001' },
+                    @{ Name = 'Encryption';          Value = 'AES256'; DefinitionId = 'def_enc' }
+                ) },
+                @{ Name = 'Strict';   Settings = @(
+                    @{ Name = 'Screen Lock Timeout'; Value = '15'; DefinitionId = 'device_lock_timeout_001' }
+                ) }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{ Name = 'Baseline'; Settings = @(
+                    @{ Name = 'Screen Lock Timeout'; Value = '10'; DefinitionId = 'device_lock_timeout_001' },
+                    @{ Name = 'Encryption';          Value = 'AES128'; DefinitionId = 'def_enc' }
+                ) }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $script:BuildBug04Model }
+
+        # Screen Lock Timeout has a cross-tenant match (Matched/Conflicting) so it should stay in ComparisonRows
+        $foundInComparison = $false
+        foreach ($prodKey in $result.Products.Keys) {
+            foreach ($catKey in $result.Products[$prodKey].Categories.Keys) {
+                foreach ($row in $result.Products[$prodKey].Categories[$catKey].ComparisonRows) {
+                    if ($row.Name -eq 'Screen Lock Timeout') {
+                        $foundInComparison = $true
+                    }
+                }
+            }
+        }
+        $foundInComparison | Should -Be $true
+    }
+}

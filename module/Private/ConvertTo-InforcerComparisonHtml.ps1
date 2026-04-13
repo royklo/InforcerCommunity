@@ -480,6 +480,10 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .dup-tab-analysis-col { width:35%; }
 .dup-policy-entry { margin-bottom:0.5rem; }
 .dup-policy-entry:last-child { margin-bottom:0; }
+.dup-policy-entry .side-badge { display:inline-block; padding:0.125rem 0.5rem; border-radius:999px; font-size:0.7rem; font-weight:600; }
+.dup-policy-entry .side-source { background:var(--info-bg); color:var(--info); }
+.dup-policy-entry .side-dest { background:var(--warning-bg); color:var(--warning); }
+.dup-setting-path { display:block; font-size:0.6875rem; color:var(--muted); font-weight:400; margin-top:0.125rem; }
 .dup-policy-value { font-family:"SF Mono","Cascadia Code","Consolas",monospace; font-size:0.75rem; color:var(--warning); word-break:break-word; display:block; margin-top:0.25rem; }
 .dup-analysis-text { font-size:0.6875rem; color:var(--muted); line-height:1.6; margin:0; }
 .dup-table-scroll { border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; }
@@ -1016,8 +1020,17 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 
             [void]$sb.Append("<tr data-setting=`"$encSettingName`" data-policies=`"$encPoliciesAttr`" data-policies-json=`"$encPoliciesJson`">")
 
-            # Column 1: Setting name
-            [void]$sb.Append("<td class=`"dup-tab-setting`"><strong>$encSettingName</strong></td>")
+            # Column 1: Setting name — show last path segment as display name, full path below
+            $displayName = if ($dupRow.Name -match ' > ') {
+                ($dupRow.Name -split ' > ')[-1]
+            } elseif ($dupRow.Name -match '/') {
+                ($dupRow.Name -split '/')[-1]
+            } else { $dupRow.Name }
+            $encDisplayName = [System.Net.WebUtility]::HtmlEncode($displayName)
+            $pathLine = if ($displayName -ne $dupRow.Name) {
+                "<span class=`"dup-setting-path`">$encSettingName</span>"
+            } else { '' }
+            [void]$sb.Append("<td class=`"dup-tab-setting`"><strong>$encDisplayName</strong>$pathLine</td>")
 
             # Column 2: Policies & Values (per D-05)
             [void]$sb.Append('<td class="dup-tab-policies">')

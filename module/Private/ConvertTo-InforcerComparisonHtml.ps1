@@ -231,11 +231,16 @@ body {
 .filter-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .filter-pill {
     background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
-    padding: 0.3rem 0.75rem; border-radius: 999px; font-size: 0.75rem; cursor: pointer;
+    padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; cursor: pointer;
     transition: all var(--transition); font-family: inherit; font-weight: 500;
 }
 .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
 .filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.filter-pill-matched.active   { background: var(--success); color: #fff; border-color: var(--success); }
+.filter-pill-conflicting.active { background: var(--danger);  color: #fff; border-color: var(--danger); }
+.filter-pill-source-only.active { background: var(--info);    color: #fff; border-color: var(--info); }
+.filter-pill-dest-only.active { background: var(--warning); color: #fff; border-color: var(--warning); }
+.hidden { display: none !important; }
 .status-hidden { display: none !important; }
 /* Toggle CSS removed — deprecated settings now in their own tab */
 .manual-item {
@@ -558,7 +563,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     }
     [void]$sb.AppendLine('</select>')
     [void]$sb.AppendLine('</div>')
-    [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.9rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
+    [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.75rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
 
     # ── Tab navigation ──────────────────────────────────────────────────
     $manualReview = $ComparisonModel.ManualReview

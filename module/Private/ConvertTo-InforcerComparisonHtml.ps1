@@ -464,6 +464,29 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .manual-review-setting:nth-child(even) { background: var(--row-alt); }
 .setting-deprecated { background: transparent !important; padding: 0.25rem 0.5rem; margin: 0.1rem 0; }
 .setting-deprecated .setting-name { color: var(--danger); font-weight: 600; }
+.dup-info-banner { display:flex; gap:0.75rem; align-items:flex-start; border:1px solid var(--warning); border-left:4px solid var(--warning); border-radius:var(--radius-sm); background:var(--warning-bg); padding:1rem; margin-bottom:1rem; }
+.dup-banner-icon { color:var(--warning); font-size:1.1rem; flex-shrink:0; margin-top:0.1rem; }
+.dup-banner-title { font-size:0.875rem; font-weight:600; color:var(--text); margin:0 0 0.25rem; }
+.dup-banner-body { font-size:0.8125rem; color:var(--text-secondary); margin:0 0 0.25rem; }
+.dup-banner-note { font-size:0.75rem; color:var(--muted); font-style:italic; margin:0; }
+.dup-tab-table { width:100%; border-collapse:collapse; font-size:0.8125rem; }
+.dup-tab-table thead { position:sticky; top:0; z-index:10; }
+.dup-tab-table th { text-align:left; padding:0.5rem 0.75rem; font-size:0.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); border-bottom:1px solid var(--border); background:var(--bg-card); }
+.dup-tab-table td { padding:0.5rem 0.75rem; vertical-align:top; border-bottom:1px solid var(--border-subtle); }
+.dup-tab-table tbody tr:nth-child(even) { background:var(--row-alt); }
+.dup-tab-table tbody tr:hover { background:var(--accent-soft); }
+.dup-tab-setting { font-weight:600; color:var(--text); width:30%; }
+.dup-tab-policies { width:35%; }
+.dup-tab-analysis-col { width:35%; }
+.dup-policy-entry { margin-bottom:0.5rem; }
+.dup-policy-entry:last-child { margin-bottom:0; }
+.dup-policy-value { font-family:"SF Mono","Cascadia Code","Consolas",monospace; font-size:0.75rem; color:var(--warning); word-break:break-word; display:block; margin-top:0.25rem; }
+.dup-analysis-text { font-size:0.6875rem; color:var(--muted); line-height:1.6; margin:0; }
+.dup-table-scroll { border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; }
+.dup-table-scroll-inner { overflow-y:auto; max-height:calc(100vh - 400px); }
+.dup-summary { font-size:0.75rem; color:var(--muted); margin:0.5rem 0 1rem; }
+.dup-no-results { display:none; padding:3rem 0; text-align:center; color:var(--muted); font-size:0.875rem; }
+.tab-btn .status-badge { pointer-events:none; }
 '@
 
     # ── Extract model values ───────────────────────────────────────────────
@@ -568,10 +591,42 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     $hasManualReview = $null -ne $manualReview -and $manualReview.Count -gt 0
     $mrCount = if ($hasManualReview) { ($manualReview.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum } else { 0 }
 
+    # ── Duplicate data collection (must be before tab nav so $hasDuplicates is ready) ──
+    $duplicateLookup = @{}
+    $dupRows = [System.Collections.Generic.List[hashtable]]::new()
+    $dupSeen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $dupeCategory = 'Duplicate Settings (Different Values)'
+    if ($ComparisonModel.ManualReview -and $ComparisonModel.ManualReview.Contains($dupeCategory)) {
+        foreach ($item in $ComparisonModel.ManualReview[$dupeCategory]) {
+            foreach ($s in $item.Settings) {
+                if ($s.Value -match '^__DUPLICATE_TABLE__') {
+                    $jsonPart = $s.Value -replace '^__DUPLICATE_TABLE__', ''
+                    try {
+                        $pairs = $jsonPart | ConvertFrom-Json -Depth 10
+                        $dupeKey = $s.Name.ToLowerInvariant()
+                        if (-not $duplicateLookup.ContainsKey($dupeKey)) {
+                            $duplicateLookup[$dupeKey] = $pairs
+                        }
+                        if ($dupSeen.Add($dupeKey)) {
+                            $dupRows.Add(@{ Name = $s.Name; Policies = $pairs })
+                        }
+                    } catch {
+                        Write-Verbose "Failed to parse duplicate table JSON for '$($s.Name)': $_"
+                    }
+                }
+            }
+        }
+    }
+    $dupCount = $dupRows.Count
+    $hasDuplicates = $dupCount -gt 0
+
     [void]$sb.AppendLine('<div class="tab-nav">')
     [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'')">Comparison</button>')
     if ($hasManualReview) {
         [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review')`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
+    }
+    if ($hasDuplicates) {
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('duplicates')`">Duplicates <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$dupCount</span></button>")
     }
     [void]$sb.AppendLine('</div>')
 
@@ -657,27 +712,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                 return $html.ToString()
             }
 
-            # ── Duplicate badge lookup map (Phase 8 TBL-02, per D-05/D-08) ──
-            $duplicateLookup = @{}
-            $dupeCategory = 'Duplicate Settings (Different Values)'
-            if ($ComparisonModel.ManualReview -and $ComparisonModel.ManualReview.Contains($dupeCategory)) {
-                foreach ($item in $ComparisonModel.ManualReview[$dupeCategory]) {
-                    foreach ($s in $item.Settings) {
-                        if ($s.Value -match '^__DUPLICATE_TABLE__') {
-                            $jsonPart = $s.Value -replace '^__DUPLICATE_TABLE__', ''
-                            try {
-                                $pairs = $jsonPart | ConvertFrom-Json -Depth 10
-                                $dupeKey = $s.Name.ToLowerInvariant()
-                                if (-not $duplicateLookup.ContainsKey($dupeKey)) {
-                                    $duplicateLookup[$dupeKey] = $pairs
-                                }
-                            } catch {
-                                Write-Verbose "Failed to parse duplicate table JSON for '$($s.Name)': $_"
-                            }
-                        }
-                    }
-                }
-            }
+            # $duplicateLookup already populated above (before tab nav), reused here for TBL-02 badges
 
             foreach ($row in $allRows) {
                 $status = $row.Status
@@ -920,6 +955,83 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
         }
 
         [void]$sb.AppendLine('</div>')  # end tab-manual-review
+    }
+
+    # ── Duplicates tab content ──────────────────────────────────────────────
+    if ($hasDuplicates) {
+        # Count unique policy names across all duplicate rows
+        $dupPolicyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($dr in $dupRows) {
+            foreach ($p in $dr.Policies) { [void]$dupPolicyNames.Add($p.Policy) }
+        }
+        $dupPolicyCount = $dupPolicyNames.Count
+
+        [void]$sb.AppendLine('<div class="tab-content" id="tab-duplicates">')
+
+        # Amber info banner (per D-03, UI-SPEC copywriting)
+        [void]$sb.AppendLine('<div class="dup-info-banner">')
+        [void]$sb.AppendLine('    <span class="dup-banner-icon">&#9888;</span>')
+        [void]$sb.AppendLine('    <div>')
+        [void]$sb.AppendLine('        <p class="dup-banner-title">Duplicate Settings Detected</p>')
+        [void]$sb.AppendLine('        <p class="dup-banner-body">These settings appear in multiple policies with conflicting values. Review each entry to ensure your policies are aligned.</p>')
+        [void]$sb.AppendLine('    </div>')
+        [void]$sb.AppendLine('</div>')
+
+        # Search bar (per D-10, reusing .search-bar CSS from Phase 9)
+        [void]$sb.AppendLine('<div class="search-bar">')
+        [void]$sb.AppendLine('    <input type="text" placeholder="Search settings or policies..." oninput="dupTabSearch(this.value)">')
+        [void]$sb.AppendLine('</div>')
+
+        # Summary line (per D-12)
+        [void]$sb.AppendLine("<div class=`"dup-summary`" id=`"dup-summary`">Showing <strong>$dupCount</strong> of <strong>$dupCount</strong> duplicate settings across <strong>$dupPolicyCount</strong> policies</div>")
+
+        # No-results message
+        [void]$sb.AppendLine('<div id="dup-no-results" class="dup-no-results">No duplicate settings match your search.</div>')
+
+        # Three-column table (per D-04)
+        [void]$sb.AppendLine('<div class="dup-table-scroll">')
+        [void]$sb.AppendLine('<div class="dup-table-scroll-inner">')
+        [void]$sb.AppendLine('<table class="dup-tab-table">')
+        [void]$sb.AppendLine('<thead><tr><th>Setting</th><th>Policies &amp; Values</th><th>Analysis</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody id="dup-table-body">')
+
+        foreach ($dupRow in $dupRows) {
+            $encSettingName = [System.Net.WebUtility]::HtmlEncode($dupRow.Name)
+            # data-policies attribute for text search (per D-11)
+            $policiesText = ($dupRow.Policies | ForEach-Object { "$($_.Policy) $($_.Value)" }) -join ' '
+            $encPoliciesAttr = [System.Net.WebUtility]::HtmlEncode($policiesText)
+            # data-policies-json for analyzeDuplicate() (per D-07/D-09)
+            $policiesJson = ($dupRow.Policies | ConvertTo-Json -Depth 5 -Compress)
+            $encPoliciesJson = [System.Net.WebUtility]::HtmlEncode($policiesJson)
+
+            [void]$sb.Append("<tr data-setting=`"$encSettingName`" data-policies=`"$encPoliciesAttr`" data-policies-json=`"$encPoliciesJson`">")
+
+            # Column 1: Setting name
+            [void]$sb.Append("<td class=`"dup-tab-setting`"><strong>$encSettingName</strong></td>")
+
+            # Column 2: Policies & Values (per D-05)
+            [void]$sb.Append('<td class="dup-tab-policies">')
+            foreach ($p in $dupRow.Policies) {
+                $encPol = [System.Net.WebUtility]::HtmlEncode($p.Policy)
+                $encVal = [System.Net.WebUtility]::HtmlEncode($p.Value)
+                $sideCls = if ($p.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
+                $sideLabel = [System.Net.WebUtility]::HtmlEncode($p.Side)
+                [void]$sb.Append('<div class="dup-policy-entry">')
+                [void]$sb.Append("<div><strong>$encPol</strong> <span class=`"side-badge $sideCls`">$sideLabel</span></div>")
+                [void]$sb.Append("<div class=`"dup-policy-value`">$encVal</div>")
+                [void]$sb.Append('</div>')
+            }
+            [void]$sb.Append('</td>')
+
+            # Column 3: Analysis — populated by JS on DOMContentLoaded (per D-07)
+            [void]$sb.Append('<td class="dup-tab-analysis-col"><p class="dup-analysis-text"></p></td>')
+            [void]$sb.AppendLine('</tr>')
+        }
+
+        [void]$sb.AppendLine('</tbody></table>')
+        [void]$sb.AppendLine('</div></div>')  # close dup-table-scroll-inner and dup-table-scroll
+
+        [void]$sb.AppendLine('</div>')  # end tab-duplicates
     }
 
     # ── Footer ─────────────────────────────────────────────────────────────
@@ -1180,8 +1292,67 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('    document.querySelectorAll(".tab-btn").forEach(function(b) { b.classList.remove("active"); });')
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-" + tabId);')
     [void]$sb.AppendLine('    if (tab) tab.classList.add("active");')
-    [void]$sb.AppendLine('    event.target.classList.add("active");')
+    [void]$sb.AppendLine('    (event.currentTarget || event.target).classList.add("active");')
     [void]$sb.AppendLine('}')
+    if ($hasDuplicates) {
+        [void]$sb.AppendLine("var dupPolicyCount = $dupPolicyCount;")
+        [void]$sb.AppendLine('function analyzeDuplicate(policies) {')
+        [void]$sb.AppendLine('    var uniqueValues = new Set(policies.map(function(p) { return p.Value; }));')
+        [void]$sb.AppendLine('    var srcEntries = policies.filter(function(p) { return p.Side === ''Source''; });')
+        [void]$sb.AppendLine('    var dstEntries = policies.filter(function(p) { return p.Side === ''Destination''; });')
+        [void]$sb.AppendLine('    var hasBothSides = srcEntries.length > 0 && dstEntries.length > 0;')
+        [void]$sb.AppendLine('    var srcNames = new Set(srcEntries.map(function(p) { return p.Policy.toLowerCase(); }));')
+        [void]$sb.AppendLine('    var matchedPairs = dstEntries.filter(function(d) { return srcNames.has(d.Policy.toLowerCase()); });')
+        [void]$sb.AppendLine('    var crossTenantMatch = matchedPairs.length > 0 && matchedPairs.some(function(d) {')
+        [void]$sb.AppendLine('        var src = srcEntries.find(function(s) { return s.Policy.toLowerCase() === d.Policy.toLowerCase(); });')
+        [void]$sb.AppendLine('        return src && src.Value === d.Value;')
+        [void]$sb.AppendLine('    });')
+        [void]$sb.AppendLine('    var valueCounts = new Map();')
+        [void]$sb.AppendLine('    for (var i = 0; i < policies.length; i++) {')
+        [void]$sb.AppendLine('        var v = policies[i].Value;')
+        [void]$sb.AppendLine('        valueCounts.set(v, (valueCounts.get(v) || 0) + 1);')
+        [void]$sb.AppendLine('    }')
+        [void]$sb.AppendLine('    var majorityEntry = null;')
+        [void]$sb.AppendLine('    valueCounts.forEach(function(count, val) {')
+        [void]$sb.AppendLine('        if (!majorityEntry || count > majorityEntry[1]) majorityEntry = [val, count];')
+        [void]$sb.AppendLine('    });')
+        [void]$sb.AppendLine('    var majorityValue = majorityEntry ? majorityEntry[0] : null;')
+        [void]$sb.AppendLine('    var outliers = policies.filter(function(p) { return p.Value !== majorityValue; });')
+        [void]$sb.AppendLine('    if (!hasBothSides) {')
+        [void]$sb.AppendLine('        if (outliers.length > 0) {')
+        [void]$sb.AppendLine('            var outlierNames = outliers.map(function(p) { return p.Policy; }).join('', '');')
+        [void]$sb.AppendLine('            return policies.length + '' policies in the same tenant configure this setting with different values. "'' + outlierNames + ''" differs from the others. If assignments overlap, Intune will report a conflict and the setting may not apply until the conflict is resolved.'';')
+        [void]$sb.AppendLine('        }')
+        [void]$sb.AppendLine('        return policies.length + '' policies configure this setting differently within the same tenant. If assignments overlap, Intune will report a conflict and the setting may not apply until resolved.'';')
+        [void]$sb.AppendLine('    }')
+        [void]$sb.AppendLine('    if (crossTenantMatch && outliers.length > 0) {')
+        [void]$sb.AppendLine('        var outlierNames2 = outliers.map(function(p) { return p.Policy + '' ('' + p.Side + '')''; }).join('', '');')
+        [void]$sb.AppendLine('        return ''The cross-tenant comparison matches, but '' + outlierNames2 + '' has a different value. If its assignments overlap with the matching policies, Intune will report a conflict and the setting may not apply until resolved.'';')
+        [void]$sb.AppendLine('    }')
+        [void]$sb.AppendLine('    if (uniqueValues.size === policies.length) {')
+        [void]$sb.AppendLine('        return ''Every policy has a unique value for this setting. Review which value should be the standard across both tenants.'';')
+        [void]$sb.AppendLine('    }')
+        [void]$sb.AppendLine('    return ''This setting is configured in '' + policies.length + '' policies across both tenants with '' + uniqueValues.size + '' different values. Review to ensure consistency.'';')
+        [void]$sb.AppendLine('}')
+        [void]$sb.AppendLine('function dupTabSearch(query) {')
+        [void]$sb.AppendLine('    var q = query.toLowerCase();')
+        [void]$sb.AppendLine('    var rows = document.querySelectorAll(''#dup-table-body tr'');')
+        [void]$sb.AppendLine('    var shown = 0;')
+        [void]$sb.AppendLine('    rows.forEach(function(row) {')
+        [void]$sb.AppendLine('        var setting = (row.getAttribute(''data-setting'') || '''').toLowerCase();')
+        [void]$sb.AppendLine('        var policies = (row.getAttribute(''data-policies'') || '''').toLowerCase();')
+        [void]$sb.AppendLine('        var match = !q || setting.indexOf(q) >= 0 || policies.indexOf(q) >= 0;')
+        [void]$sb.AppendLine('        row.style.display = match ? '''' : ''none'';')
+        [void]$sb.AppendLine('        if (match) shown++;')
+        [void]$sb.AppendLine('    });')
+        [void]$sb.AppendLine('    var summary = document.getElementById(''dup-summary'');')
+        [void]$sb.AppendLine('    if (summary) {')
+        [void]$sb.AppendLine('        summary.innerHTML = ''Showing <strong>'' + shown + ''</strong> of <strong>'' + rows.length + ''</strong> duplicate settings across <strong>'' + dupPolicyCount + ''</strong> policies'';')
+        [void]$sb.AppendLine('    }')
+        [void]$sb.AppendLine('    var noResults = document.getElementById(''dup-no-results'');')
+        [void]$sb.AppendLine('    if (noResults) noResults.style.display = (shown === 0 && q) ? '''' : ''none'';')
+        [void]$sb.AppendLine('}')
+    }
     [void]$sb.AppendLine('// PowerShell syntax highlighting — works on textContent to avoid entity issues')
     [void]$sb.AppendLine('function escHtml(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }')
     [void]$sb.AppendLine('function highlightPS(code) {')
@@ -1226,6 +1397,19 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('// Apply filters FIRST to hide deprecated rows (must run before any cosmetic JS)')
     [void]$sb.AppendLine('applyFilters();')
+    if ($hasDuplicates) {
+        [void]$sb.AppendLine('// Populate analyzeDuplicate() analysis text for each duplicate row')
+        [void]$sb.AppendLine('document.querySelectorAll(''#dup-table-body tr'').forEach(function(row) {')
+        [void]$sb.AppendLine('    var jsonAttr = row.getAttribute(''data-policies-json'');')
+        [void]$sb.AppendLine('    if (!jsonAttr) return;')
+        [void]$sb.AppendLine('    try {')
+        [void]$sb.AppendLine('        var policies = JSON.parse(jsonAttr);')
+        [void]$sb.AppendLine('        var cell = row.querySelector(''.dup-analysis-text'');')
+        [void]$sb.AppendLine('        if (cell) cell.textContent = analyzeDuplicate(policies);')
+        [void]$sb.AppendLine('    } catch(e) { /* skip malformed JSON */ }')
+        [void]$sb.AppendLine('});')
+        [void]$sb.AppendLine('dupTabSearch('''');')
+    }
     [void]$sb.AppendLine('// Syntax highlighting and copy buttons (wrapped in try/catch to never block filters)')
     [void]$sb.AppendLine('try {')
     [void]$sb.AppendLine('    document.querySelectorAll(".ps-code code").forEach(highlightPS);')

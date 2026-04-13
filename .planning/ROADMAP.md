@@ -133,8 +133,8 @@ Plans:
   3. The setting name cell displays the bold setting name on the first line and the muted setting path on the second line
 **Plans:** 2 plans
 Plans:
-- [ ] 08-01-PLAN.md — TDD RED: failing Pester tests for TBL-01 through TBL-03 table enhancements
-- [ ] 08-02-PLAN.md — TDD GREEN: CSS, duplicate lookup, setting name cell, and column resize JS implementation
+- [x] 08-01-PLAN.md — TDD RED: failing Pester tests for TBL-01 through TBL-03 table enhancements
+- [x] 08-02-PLAN.md — TDD GREEN: CSS, duplicate lookup, setting name cell, and column resize JS implementation
 **UI hint**: yes
 
 ### Phase 9: Filtering and Navigation
@@ -146,9 +146,10 @@ Plans:
   2. A filter summary line reads "Showing X settings across Y policies" and updates whenever any filter changes
   3. Status pills (Conflicting, Source Only, Dest Only, Matched) support multi-select — clicking one toggles it without clearing others
   4. The search field filters rows matching input against setting name, setting path, both value columns, policy names, and category
-**Plans:** 1 plan
+**Plans:** 2 plans
 Plans:
-- [ ] 03-01-PLAN.md — TDD deprecated detection (IsDeprecated flag) and comparison table badge rendering
+- [ ] 09-01-PLAN.md — TDD RED: failing Pester tests for FLT-01 through FLT-04 filtering and navigation
+- [ ] 09-02-PLAN.md — TDD GREEN: CSS, HTML rendering, and JS implementation for category composites, status pill colors, clear filters
 **UI hint**: yes
 
 ### Phase 10: Duplicate Settings Tab
@@ -178,7 +179,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. Duplicate Detection Engine | 1/1 | Complete | - |
 | 5. Value Display | 1/1 | Complete | - |
 | 6. Assignments Display | 1/1 | Complete | - |
-| 7. Manual Review Rendering | 0/2 | Not started | - |
-| 8. Table Enhancements | 0/2 | Not started | - |
-| 9. Filtering and Navigation | 0/TBD | Not started | - |
+| 7. Manual Review Rendering | 2/2 | Complete | - |
+| 8. Table Enhancements | 2/2 | Complete | - |
+| 9. Filtering and Navigation | 0/2 | Not started | - |
 | 10. Duplicate Settings Tab | 0/TBD | Not started | - |

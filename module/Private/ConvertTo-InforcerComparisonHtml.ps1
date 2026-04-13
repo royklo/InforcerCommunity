@@ -560,13 +560,14 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('</div>')
 
     # ── Collect all unique categories for the filter dropdown (Fix 5: before rendering) ──
+    # D-01/D-02: Use "$productName / $categoryName" composite from outer loop keys, not $row.Category
     $allCategories = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($productName in $products.Keys) {
         $productData = $products[$productName]
         foreach ($categoryName in $productData.Categories.Keys) {
             $categoryData = $productData.Categories[$categoryName]
             foreach ($r in $categoryData.ComparisonRows) {
-                $cat = if ($r.Category) { $r.Category } else { "$productName / $categoryName" }
+                $cat = "$productName / $categoryName"
                 if (-not [string]::IsNullOrWhiteSpace($cat)) { [void]$allCategories.Add($cat) }
             }
         }
@@ -644,17 +645,19 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     # ── Comparison tab ───────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
 
-    # Collect ALL comparison rows into a single flat list
+    # Collect ALL comparison rows into a single flat list with composite category
+    # D-01/D-02: composite = "$productName / $categoryName" (outer loop keys, not $row.Category)
     $allRows = [System.Collections.Generic.List[object]]::new()
     foreach ($productName in $products.Keys) {
         $productData = $products[$productName]
         foreach ($categoryName in $productData.Categories.Keys) {
+            $compositeCategory = "$productName / $categoryName"
             foreach ($r in $productData.Categories[$categoryName].ComparisonRows) {
-                [void]$allRows.Add($r)
+                [void]$allRows.Add([PSCustomObject]@{ Row = $r; CompositeCategory = $compositeCategory })
             }
         }
     }
-    $allRows = @($allRows | Sort-Object { $_.Name })
+    $allRows = @($allRows | Sort-Object { $_.Row.Name })
 
     # Deprecated policies are in ManualReview with HasDeprecated flag
 
@@ -725,7 +728,9 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 
             # $duplicateLookup already populated above (before tab nav), reused here for TBL-02 badges
 
-            foreach ($row in $allRows) {
+            foreach ($rowWrapper in $allRows) {
+                # Unpack wrapper: $row is the actual data row, $compositeCategory is "$productName / $categoryName"
+                $row = $rowWrapper.Row
                 $status = $row.Status
 
                 # Status badge
@@ -738,7 +743,8 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                 }
 
                 $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
-                $encCategory = [System.Net.WebUtility]::HtmlEncode($row.Category)
+                # D-01/D-02: use composite "$productName / $categoryName" from outer loop, not $row.Category
+                $encCategory = [System.Net.WebUtility]::HtmlEncode($rowWrapper.CompositeCategory)
                 # Determine if both source and dest values are empty
                 $srcValRaw = "$($row.SourceValue)".Trim()
                 $dstValRaw = "$($row.DestValue)".Trim()

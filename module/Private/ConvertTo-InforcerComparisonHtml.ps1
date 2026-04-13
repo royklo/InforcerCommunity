@@ -589,7 +589,12 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     # ── Tab navigation ──────────────────────────────────────────────────
     $manualReview = $ComparisonModel.ManualReview
     $hasManualReview = $null -ne $manualReview -and $manualReview.Count -gt 0
-    $mrCount = if ($hasManualReview) { ($manualReview.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum } else { 0 }
+    # Exclude duplicate category from MR count — duplicates have their own tab (Phase 10)
+    $mrCount = if ($hasManualReview) {
+        $dupeKey = 'Duplicate Settings (Different Values)'
+        ($manualReview.Keys | Where-Object { $_ -ne $dupeKey } | ForEach-Object { $manualReview[$_].Count } | Measure-Object -Sum).Sum
+    } else { 0 }
+    $hasManualReview = $mrCount -gt 0
 
     # ── Duplicate data collection (must be before tab nav so $hasDuplicates is ready) ──
     $duplicateLookup = @{}
@@ -828,6 +833,8 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
         [void]$sb.AppendLine('</div>')
 
         foreach ($catLabel in $manualReview.Keys) {
+            # Skip duplicates category — rendered in dedicated Duplicates tab (Phase 10)
+            if ($catLabel -eq 'Duplicate Settings (Different Values)') { continue }
             $policies = $manualReview[$catLabel]
             $encCatLabel = [System.Net.WebUtility]::HtmlEncode($catLabel)
             [void]$sb.AppendLine("<h3 style=`"font-size:0.95rem;margin:1.5rem 0 0.75rem;color:var(--text)`">$encCatLabel</h3>")

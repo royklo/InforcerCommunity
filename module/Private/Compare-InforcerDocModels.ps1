@@ -830,6 +830,41 @@ function Compare-InforcerDocModels {
     }
     & $scanForDuplicates
 
+    # ── BUG-04: Remove duplicate-only settings from ComparisonRows ──────
+    # Settings that exist ONLY as duplicates (SourceOnly/DestOnly with no
+    # cross-tenant comparison) should appear exclusively in the Duplicates
+    # tab, not pollute the comparison table.
+    $dupeCategory = 'Duplicate Settings (Different Values)'
+    if ($manualReview.Contains($dupeCategory)) {
+        $dupSettingPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($item in $manualReview[$dupeCategory]) {
+            foreach ($s in $item.Settings) {
+                $settingPath = $s.Name
+                [void]$dupSettingPaths.Add($settingPath)
+            }
+        }
+
+        foreach ($prodName in @($products.Keys)) {
+            foreach ($catName in @($products[$prodName].Categories.Keys)) {
+                $rows = $products[$prodName].Categories[$catName].ComparisonRows
+                $toRemove = [System.Collections.Generic.List[object]]::new()
+                foreach ($row in $rows) {
+                    $rowPath = if ($row.SettingPath) { $row.SettingPath } else { $row.Name }
+                    if ($dupSettingPaths.Contains($rowPath)) {
+                        if ($row.Status -eq 'SourceOnly' -or $row.Status -eq 'DestOnly') {
+                            [void]$toRemove.Add($row)
+                        }
+                    }
+                }
+                foreach ($row in $toRemove) {
+                    [void]$rows.Remove($row)
+                    $counters[$row.Status]--
+                    $products[$prodName].Counters[$row.Status]--
+                }
+            }
+        }
+    }
+
     # manualReview now contains: script/remediation/custom compliance + deprecated policies + duplicate settings
 
     # ── Alignment score ───────────────────────────────────────────────────

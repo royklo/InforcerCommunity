@@ -1090,10 +1090,19 @@ Describe 'ConvertTo-InforcerComparisonHtml - Table Enhancements' -Tag 'TBL', 'Ph
 Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT', 'Phase9' {
 
     BeforeAll {
-        # Fixture: two-product ComparisonModel (Intune + Entra) for multi-product category testing
-        # Row.Category values contain the full product-prefixed string as produced by the engine.
-        # D-01/D-02: after Phase 9, data-category should keep the FULL value (stop stripping).
-        # Currently the code strips the product prefix, so FLT-01 tests will FAIL (RED).
+        # Fixture: two-product ComparisonModel (Intune + Entra) for multi-product category testing.
+        #
+        # D-01 requires the category dropdown and data-category attributes to use the
+        # "ProductKey / CategoryKey" composite built from the outer loop variables
+        # ($productName and $categoryName), NOT from $row.Category directly.
+        #
+        # Fixture uses:
+        #   Products["Intune"].Categories["Settings Catalog"]  -> expected composite: "Intune / Settings Catalog"
+        #   Products["Entra"].Categories["Conditional Access"] -> expected composite: "Entra / Conditional Access"
+        #
+        # $row.Category contains the raw engine value ("Intune / Windows / Settings Catalog")
+        # which is a DIFFERENT string than the required composite. FLT-01 tests FAIL (RED) because
+        # the current code uses $row.Category directly instead of building the composite.
 
         $script:CompModelFlt = @{
             SourceName      = 'Source Tenant'
@@ -1150,22 +1159,28 @@ Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT
     }
 
     # -------------------------------------------------------------------------
-    # FLT-01: Category dropdown — full Product / Category composite (D-01, D-02)
+    # FLT-01: Category dropdown — Product / Category composite (D-01, D-02)
+    # These tests assert that data-category and dropdown options use the
+    # "$productName / $categoryName" composite from the outer loop, not $row.Category.
+    # RED: current code uses $row.Category directly, producing "Intune / Windows / Settings Catalog"
+    # instead of the required "Intune / Settings Catalog".
     # -------------------------------------------------------------------------
     Context 'FLT-01: Category dropdown' {
-        It 'data-category attribute contains full Intune composite value' -Tag 'FLT-01' -Pending {
-            # D-01: rows should have data-category="Intune / Windows / Settings Catalog" (not stripped)
-            $script:FltHtml | Should -Match 'data-category="Intune / Windows / Settings Catalog"'
+        It 'data-category attribute on Intune row uses ProductKey/CategoryKey composite' -Tag 'FLT-01' {
+            # D-01: composite = "$productName / $categoryName" = "Intune / Settings Catalog"
+            # Current code outputs $row.Category = "Intune / Windows / Settings Catalog" — FAIL
+            $script:FltHtml | Should -Match 'data-category="Intune / Settings Catalog"'
         }
 
-        It 'category dropdown option value contains full Intune composite value' -Tag 'FLT-01' -Pending {
-            # D-02: dropdown options must use full composite, not stripped value
-            $script:FltHtml | Should -Match '<option value="Intune / Windows / Settings Catalog">Intune / Windows / Settings Catalog</option>'
+        It 'category dropdown has option with Intune composite value' -Tag 'FLT-01' {
+            # D-02: dropdown options must list "Intune / Settings Catalog" not the raw $row.Category
+            $script:FltHtml | Should -Match 'value="Intune / Settings Catalog"'
         }
 
-        It 'data-category attribute contains full Entra composite value' -Tag 'FLT-01' -Pending {
-            # Multi-product: Entra row should have data-category="Entra / Conditional Access / Policies"
-            $script:FltHtml | Should -Match 'data-category="Entra / Conditional Access / Policies"'
+        It 'data-category attribute on Entra row uses ProductKey/CategoryKey composite' -Tag 'FLT-01' {
+            # Multi-product: composite = "Entra / Conditional Access"
+            # Current code outputs $row.Category = "Entra / Conditional Access / Policies" — FAIL
+            $script:FltHtml | Should -Match 'data-category="Entra / Conditional Access"'
         }
     }
 
@@ -1173,8 +1188,8 @@ Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT
     # FLT-02: Filter summary font size (D-03)
     # -------------------------------------------------------------------------
     Context 'FLT-02: Filter summary' {
-        It 'filter-summary div uses font-size:0.75rem not 0.9rem' -Tag 'FLT-02' -Pending {
-            # D-03: UI-SPEC requires 0.75rem; current code has 0.9rem — should FAIL
+        It 'filter-summary div uses font-size:0.75rem' -Tag 'FLT-02' {
+            # D-03: UI-SPEC requires 0.75rem
             $script:FltHtml | Should -Match 'filter-summary.*font-size:0\.75rem'
         }
     }
@@ -1183,39 +1198,39 @@ Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT
     # FLT-03: Status pills — no All pill, per-status CSS classes (D-04, D-05, D-06)
     # -------------------------------------------------------------------------
     Context 'FLT-03: Status pills' {
-        It 'does NOT render the All pill' -Tag 'FLT-03' -Pending {
-            # D-06: All pill removed; current code has it — should FAIL
+        It 'does NOT render the All filter pill' -Tag 'FLT-03' {
+            # D-06: All pill removed — filtering is toggle-based, not reset-to-all
             $script:FltHtml | Should -Not -Match "filterByStatus\(this,'All'\)"
         }
 
-        It 'Matched pill has filter-pill-matched CSS class' -Tag 'FLT-03' -Pending {
-            # D-05: per-status CSS class; current code only uses filter-pill — should FAIL
+        It 'Matched pill has filter-pill-matched CSS class' -Tag 'FLT-03' {
+            # D-05: per-status CSS class enables unique active color per status
             $script:FltHtml | Should -Match 'class="filter-pill filter-pill-matched"'
         }
 
-        It 'Conflicting pill has filter-pill-conflicting CSS class' -Tag 'FLT-03' -Pending {
+        It 'Conflicting pill has filter-pill-conflicting CSS class' -Tag 'FLT-03' {
             $script:FltHtml | Should -Match 'class="filter-pill filter-pill-conflicting"'
         }
 
-        It 'Source Only pill has filter-pill-source-only CSS class' -Tag 'FLT-03' -Pending {
+        It 'Source Only pill has filter-pill-source-only CSS class' -Tag 'FLT-03' {
             $script:FltHtml | Should -Match 'class="filter-pill filter-pill-source-only"'
         }
 
-        It 'Dest Only pill has filter-pill-dest-only CSS class' -Tag 'FLT-03' -Pending {
+        It 'Dest Only pill has filter-pill-dest-only CSS class' -Tag 'FLT-03' {
             $script:FltHtml | Should -Match 'class="filter-pill filter-pill-dest-only"'
         }
 
-        It 'CSS block contains filter-pill-matched.active rule with var(--success)' -Tag 'FLT-03' -Pending {
-            # D-04: each status pill has its own active colour; current code has generic .filter-pill.active — should FAIL
+        It 'CSS block contains filter-pill-matched.active rule with var(--success)' -Tag 'FLT-03' {
+            # D-04: each status pill has its own active colour using status-specific CSS variables
             $script:FltHtml | Should -Match '\.filter-pill-matched\.active'
         }
 
-        It 'CSS block contains filter-pill-conflicting.active rule with var(--danger)' -Tag 'FLT-03' -Pending {
+        It 'CSS block contains filter-pill-conflicting.active rule with var(--danger)' -Tag 'FLT-03' {
             $script:FltHtml | Should -Match '\.filter-pill-conflicting\.active'
         }
 
-        It 'CSS block contains .hidden rule with display: none !important' -Tag 'FLT-03' -Pending {
-            # D-06: rows hidden via .hidden class, not .status-hidden; current code uses .status-hidden — should FAIL
+        It 'CSS block contains .hidden rule with display: none !important' -Tag 'FLT-03' {
+            # D-06: clear-filters button visibility managed via .hidden class
             $script:FltHtml | Should -Match '\.hidden\s*\{[^}]*display:\s*none\s*!important'
         }
     }
@@ -1224,9 +1239,8 @@ Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT
     # FLT-04: Search placeholder (D-07, D-08)
     # -------------------------------------------------------------------------
     Context 'FLT-04: Search' {
-        It 'search input placeholder matches D-08 specification' -Tag 'FLT-04' -Pending {
+        It 'search input placeholder matches D-08 specification' -Tag 'FLT-04' {
             # D-08: placeholder = "Search setting name, path, values, policies, category..."
-            # Current code has "Search policies, settings, values..." — should FAIL
             $script:FltHtml | Should -Match 'placeholder="Search setting name, path, values, policies, category\.\.\."'
         }
     }

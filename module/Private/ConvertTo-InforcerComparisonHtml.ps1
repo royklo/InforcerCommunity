@@ -528,7 +528,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 
     # ── Search bar ─────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="search-bar">')
-    [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search policies, settings, values..." oninput="searchAll(this.value)">')
+    [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search setting name, path, values, policies, category..." oninput="searchAll(this.value)">')
     [void]$sb.AppendLine('</div>')
 
     # ── Collect all unique categories for the filter dropdown (Fix 5: before rendering) ──
@@ -538,9 +538,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
         foreach ($categoryName in $productData.Categories.Keys) {
             $categoryData = $productData.Categories[$categoryName]
             foreach ($r in $categoryData.ComparisonRows) {
-                $cat = if ($r.Category) { $r.Category } else { $categoryName }
-                # Strip product prefix for display (e.g., "Intune / Windows / Settings Catalog" → "Windows / Settings Catalog")
-                if ($cat -match '^[^/]+\s*/\s*(.+)$') { $cat = $Matches[1] }
+                $cat = if ($r.Category) { $r.Category } else { "$productName / $categoryName" }
                 if (-not [string]::IsNullOrWhiteSpace($cat)) { [void]$allCategories.Add($cat) }
             }
         }
@@ -549,11 +547,10 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     # ── Filter pills ──────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="filter-bar">')
     [void]$sb.AppendLine('    <span class="filter-label">Filter:</span>')
-    [void]$sb.AppendLine('    <button class="filter-pill active" onclick="filterByStatus(this,''All'')">All</button>')
-    [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''Matched'')">Matched</button>')
-    [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''Conflicting'')">Conflicting</button>')
-    [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''SourceOnly'')">Source Only</button>')
-    [void]$sb.AppendLine('    <button class="filter-pill" onclick="filterByStatus(this,''DestOnly'')">Dest Only</button>')
+    [void]$sb.AppendLine('    <button class="filter-pill filter-pill-matched" onclick="filterByStatus(this,''Matched'')">Matched</button>')
+    [void]$sb.AppendLine('    <button class="filter-pill filter-pill-conflicting" onclick="filterByStatus(this,''Conflicting'')">Conflicting</button>')
+    [void]$sb.AppendLine('    <button class="filter-pill filter-pill-source-only" onclick="filterByStatus(this,''SourceOnly'')">Source Only</button>')
+    [void]$sb.AppendLine('    <button class="filter-pill filter-pill-dest-only" onclick="filterByStatus(this,''DestOnly'')">Dest Only</button>')
     # Category filter dropdown
     [void]$sb.Append('    <select id="category-filter" onchange="applyFilters()" style="margin-left:0.75rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text);font-size:0.75rem;font-family:inherit;cursor:pointer">')
     [void]$sb.Append('<option value="All">All categories</option>')
@@ -562,6 +559,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
         [void]$sb.Append("<option value=`"$encCat`">$encCat</option>")
     }
     [void]$sb.AppendLine('</select>')
+    [void]$sb.AppendLine('    <button id="clear-filters-btn" class="hidden" onclick="clearFilters()" style="color:var(--danger);background:none;border:none;font-size:0.75rem;font-weight:600;cursor:pointer;padding:0.25rem 0.5rem">Clear filters</button>')
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.75rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
 
@@ -694,10 +692,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                 }
 
                 $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
-                # Strip product prefix from category for display and filtering
-                $strippedCategory = $row.Category
-                if ($strippedCategory -match '^[^/]+\s*/\s*(.+)$') { $strippedCategory = $Matches[1] }
-                $encCategory = [System.Net.WebUtility]::HtmlEncode($strippedCategory)
+                $encCategory = [System.Net.WebUtility]::HtmlEncode($row.Category)
                 # Determine if both source and dest values are empty
                 $srcValRaw = "$($row.SourceValue)".Trim()
                 $dstValRaw = "$($row.DestValue)".Trim()

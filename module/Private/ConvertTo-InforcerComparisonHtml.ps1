@@ -1014,9 +1014,9 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
             # data-policies attribute for text search (per D-11)
             $policiesText = ($dupRow.Policies | ForEach-Object { "$($_.Policy) $($_.Value)" }) -join ' '
             $encPoliciesAttr = [System.Net.WebUtility]::HtmlEncode($policiesText)
-            # data-policies-json for analyzeDuplicate() (per D-07/D-09)
+            # data-policies-json for analyzeDuplicate() — base64-encoded to avoid HTML parser issues with CDATA/angle brackets in values
             $policiesJson = ($dupRow.Policies | ConvertTo-Json -Depth 5 -Compress)
-            $encPoliciesJson = [System.Net.WebUtility]::HtmlEncode($policiesJson)
+            $encPoliciesJson = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($policiesJson))
 
             [void]$sb.Append("<tr data-setting=`"$encSettingName`" data-policies=`"$encPoliciesAttr`" data-policies-json=`"$encPoliciesJson`">")
 
@@ -1425,7 +1425,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
         [void]$sb.AppendLine('    var jsonAttr = row.getAttribute(''data-policies-json'');')
         [void]$sb.AppendLine('    if (!jsonAttr) return;')
         [void]$sb.AppendLine('    try {')
-        [void]$sb.AppendLine('        var policies = JSON.parse(jsonAttr);')
+        [void]$sb.AppendLine('        var policies = JSON.parse(atob(jsonAttr));')
         [void]$sb.AppendLine('        var cell = row.querySelector(''.dup-analysis-text'');')
         [void]$sb.AppendLine('        if (cell) cell.textContent = analyzeDuplicate(policies);')
         [void]$sb.AppendLine('    } catch(e) { /* skip malformed JSON */ }')

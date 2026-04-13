@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-02T15:19:24Z",
+  "generatedAt": "2026-04-13T06:57:37Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -7,7 +7,7 @@
         "tenantFriendlyName": "string",
         "tenantDnsName": "string",
         "msTenantId": "string",
-        "secureScore": "number",
+        "secureScore": "integer",
         "isBaseline": "boolean",
         "lastBackupTimestamp": "datetime",
         "recentChanges": "integer",

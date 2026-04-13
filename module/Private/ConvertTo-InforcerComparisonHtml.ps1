@@ -875,9 +875,10 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                                 foreach ($colKey in $policyColumns.Keys) {
                                     $col = $policyColumns[$colKey]
                                     $encPolicy = [System.Net.WebUtility]::HtmlEncode($col.Policy)
-                                    $sideCls2 = if ($col.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
+                                    # Use $colSideCls (not $sideCls) to avoid shadowing the outer policy-loop variable
+                                    $colSideCls = if ($col.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
                                     $encSide = [System.Net.WebUtility]::HtmlEncode($col.Side)
-                                    $headerCells += "<th><span class=`"side-badge $sideCls2`">$encSide</span> $encPolicy</th>"
+                                    $headerCells += "<th><span class=`"side-badge $colSideCls`">$encSide</span> $encPolicy</th>"
                                 }
                                 [void]$sb.AppendLine("    <thead><tr>$headerCells</tr></thead>")
                                 # Body row — one row for this setting

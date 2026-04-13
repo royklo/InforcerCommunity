@@ -769,10 +769,11 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                     [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
                 } else {
                     $encSrcPolicy = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
-                    $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
-                    $encSrcValueAttr = [System.Net.WebUtility]::HtmlEncode($row.SourceValue)
+                    $rawSrcValue  = if ($null -ne $row.SourceValue) { "$($row.SourceValue)" } else { '' }
+                    $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($rawSrcValue)
+                    $encSrcValueAttr = $rawSrcValue.Replace('"', '&quot;')
                     [void]$sb.Append("<td>$encSrcPolicy</td>")
-                    if ($row.SourceValue.Length -gt 100) {
+                    if ($rawSrcValue.Length -gt 100) {
                         [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><div class=`"value-truncate`">$encSrcValue</div><div class=`"value-actions`"><button type=`"button`" class=`"value-toggle-btn`">&#9660; More</button><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encSrcValueAttr`">&#128203; Copy</button></div></div></td>")
                     } else {
                         [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><span class=`"value-text`">$encSrcValue</span><div class=`"value-actions`"><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encSrcValueAttr`">&#128203; Copy</button></div></div></td>")
@@ -784,11 +785,12 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                     [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
                 } else {
                     $encDstPolicy    = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
-                    $encDstValue     = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
-                    $encDstValueAttr = [System.Net.WebUtility]::HtmlEncode($row.DestValue)
+                    $rawDstValue     = if ($null -ne $row.DestValue) { "$($row.DestValue)" } else { '' }
+                    $encDstValue     = [System.Net.WebUtility]::HtmlEncode($rawDstValue)
+                    $encDstValueAttr = $rawDstValue.Replace('"', '&quot;')
                     $innerCls = if ($status -eq 'Conflicting') { ' value-diff' } else { '' }
                     [void]$sb.Append("<td>$encDstPolicy</td>")
-                    if ($row.DestValue.Length -gt 100) {
+                    if ($rawDstValue.Length -gt 100) {
                         [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><div class=`"value-truncate$innerCls`">$encDstValue</div><div class=`"value-actions`"><button type=`"button`" class=`"value-toggle-btn`">&#9660; More</button><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encDstValueAttr`">&#128203; Copy</button></div></div></td>")
                     } else {
                         [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><span class=`"value-text$innerCls`">$encDstValue</span><div class=`"value-actions`"><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encDstValueAttr`">&#128203; Copy</button></div></div></td>")

@@ -1042,7 +1042,12 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
             [void]$sb.Append('<td class="dup-tab-policies">')
             foreach ($p in $dupRow.Policies) {
                 $encPol = [System.Net.WebUtility]::HtmlEncode($p.Policy)
-                $encVal = [System.Net.WebUtility]::HtmlEncode($p.Value)
+                $rawVal = "$($p.Value)"
+                $encVal = if ([string]::IsNullOrWhiteSpace($rawVal)) {
+                    '<span style="color:var(--muted);font-style:italic">Not configured</span>'
+                } else {
+                    [System.Net.WebUtility]::HtmlEncode($rawVal)
+                }
                 $sideCls = if ($p.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
                 $sideLabel = [System.Net.WebUtility]::HtmlEncode($p.Side)
                 [void]$sb.Append('<div class="dup-policy-entry">')

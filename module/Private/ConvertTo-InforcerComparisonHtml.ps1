@@ -551,7 +551,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 
     # ── Search bar ─────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="search-bar">')
-    [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search setting name, path, values, policies, category..." oninput="searchAll(this.value)">')
+    [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search setting name, path, values, policies, category..." oninput="applyFilters()">')
     [void]$sb.AppendLine('</div>')
 
     # ── Collect all unique categories for the filter dropdown (Fix 5: before rendering) ──
@@ -1225,7 +1225,6 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('        });')
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('}')
-    [void]$sb.AppendLine('function searchAll() { applyFilters(); }')
     [void]$sb.AppendLine('// Expand/collapse long values via More/Less toggle buttons')
     [void]$sb.AppendLine('document.addEventListener("click", function(e) {')
     [void]$sb.AppendLine('    var btn = e.target.closest(".value-toggle-btn");')

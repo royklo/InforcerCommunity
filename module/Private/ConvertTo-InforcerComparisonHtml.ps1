@@ -633,12 +633,12 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     $hasDuplicates = $dupCount -gt 0
 
     [void]$sb.AppendLine('<div class="tab-nav">')
-    [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'')">Comparison</button>')
+    [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'', event)">Comparison</button>')
     if ($hasManualReview) {
-        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review')`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review', event)`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
     }
     if ($hasDuplicates) {
-        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('duplicates')`">Duplicates <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$dupCount</span></button>")
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('duplicates', event)`">Duplicates <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$dupCount</span></button>")
     }
     [void]$sb.AppendLine('</div>')
 
@@ -1326,12 +1326,13 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('    if (cf) cf.value = "All";')
     [void]$sb.AppendLine('    applyFilters();')
     [void]$sb.AppendLine('}')
-    [void]$sb.AppendLine('function switchTab(tabId) {')
+    [void]$sb.AppendLine('function switchTab(tabId, evt) {')
     [void]$sb.AppendLine('    document.querySelectorAll(".tab-content").forEach(function(t) { t.classList.remove("active"); });')
     [void]$sb.AppendLine('    document.querySelectorAll(".tab-btn").forEach(function(b) { b.classList.remove("active"); });')
     [void]$sb.AppendLine('    var tab = document.getElementById("tab-" + tabId);')
     [void]$sb.AppendLine('    if (tab) tab.classList.add("active");')
-    [void]$sb.AppendLine('    (event.currentTarget || event.target).classList.add("active");')
+    [void]$sb.AppendLine('    var src = evt ? (evt.currentTarget || evt.target) : null;')
+    [void]$sb.AppendLine('    if (src) src.classList.add("active");')
     [void]$sb.AppendLine('    var cf = document.getElementById("comparison-filters");')
     [void]$sb.AppendLine('    if (cf) cf.style.display = (tabId === "comparison") ? "" : "none";')
     [void]$sb.AppendLine('}')

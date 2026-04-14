@@ -137,6 +137,62 @@ function ConvertTo-InforcerSettingRows {
     $rows
 }
 
+function ConvertTo-FriendlySettingName {
+    <#
+    .SYNOPSIS
+        Converts camelCase property names to human-readable titles.
+    .DESCRIPTION
+        Splits camelCase/PascalCase identifiers into space-separated words with title casing.
+        Preserves known acronyms (VPN, DNS, PIN, etc.) as uppercase. Names that already
+        contain spaces are returned unchanged.
+    .PARAMETER Name
+        The camelCase property name to convert.
+    .EXAMPLE
+        ConvertTo-FriendlySettingName -Name 'activeHoursEnd'
+        # Returns: Active Hours End
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name
+    )
+
+    # Skip if already friendly (contains spaces) or is empty
+    if ([string]::IsNullOrWhiteSpace($Name) -or $Name.Contains(' ')) {
+        return $Name
+    }
+
+    # Known acronyms to preserve as uppercase
+    $acronyms = @('MAM','MDM','VPN','DNS','URL','OMA','URI','SSID','WIFI','UUID','PIN','USB','DMA','TPM','VBA','MFA','AAD','DLP','OS','IP','ID','IT','UI','HTTP','HTTPS','API','SSO','SMS','OTP','TCP','UDP','SSL','TLS','LDAP','SCEP','PKCS','EAP','PEAP','WPA','WEP','NAT','DHCP','FQDN','IOS','MACOS','P2P')
+
+    # Insert space before each uppercase letter that follows a lowercase letter
+    # Also insert space before a run of uppercase followed by lowercase (e.g. "PINReset" -> "PIN Reset")
+    $result = [System.Text.RegularExpressions.Regex]::Replace($Name, '(?<=[a-z])(?=[A-Z])', ' ')
+    $result = [System.Text.RegularExpressions.Regex]::Replace($result, '(?<=[A-Z])(?=[A-Z][a-z])', ' ')
+
+    # Title-case each word, then restore known acronyms
+    $words = $result -split '\s+'
+    $output = [System.Collections.Generic.List[string]]::new()
+    foreach ($word in $words) {
+        if ([string]::IsNullOrWhiteSpace($word)) { continue }
+        $upper = $word.ToUpperInvariant()
+        # Check if this word (case-insensitive) matches a known acronym
+        $matched = $false
+        foreach ($acr in $acronyms) {
+            if ($upper -eq $acr) {
+                [void]$output.Add($acr)
+                $matched = $true
+                break
+            }
+        }
+        if (-not $matched) {
+            # Title case: first letter upper, rest as-is (preserve casing in mixed words)
+            [void]$output.Add($word.Substring(0,1).ToUpperInvariant() + $word.Substring(1))
+        }
+    }
+    return ($output -join ' ')
+}
+
 function ConvertTo-FlatSettingRows {
     <#
     .SYNOPSIS
@@ -183,7 +239,7 @@ function ConvertTo-FlatSettingRows {
         $val = $prop.Value
         if ($val -is [PSObject] -and $val.PSObject.Properties.Count -gt 0 -and $Depth -lt 2) {
             [void]$rows.Add([PSCustomObject]@{
-                Name        = $prop.Name
+                Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
                 Value       = ''
                 Indent      = $Depth
                 IsConfigured = $false
@@ -194,7 +250,7 @@ function ConvertTo-FlatSettingRows {
         } elseif ($val -is [array] -and $val.Count -gt 0 -and $val[0] -is [PSObject] -and $Depth -lt 2) {
             # Array of objects — show count and recurse into each item
             [void]$rows.Add([PSCustomObject]@{
-                Name        = $prop.Name
+                Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
                 Value       = "$($val.Count) items"
                 Indent      = $Depth
                 IsConfigured = $true
@@ -230,7 +286,7 @@ function ConvertTo-FlatSettingRows {
                           if ([string]::IsNullOrWhiteSpace($joined) -and $val.Count -gt 0) { "$($val.Count) items" } else { $joined }
                       } else { $val.ToString() }
             [void]$rows.Add([PSCustomObject]@{
-                Name        = $prop.Name
+                Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
                 Value       = $strVal
                 Indent      = $Depth
                 IsConfigured = $true

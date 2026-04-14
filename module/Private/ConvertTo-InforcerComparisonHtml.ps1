@@ -497,12 +497,12 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     $sourceName      = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.SourceName)
     $destName        = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.DestinationName)
     $generatedAt     = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.GeneratedAt)
-    $alignmentScore  = $ComparisonModel.AlignmentScore
-    $totalItems      = $ComparisonModel.TotalItems
-    $matched         = $ComparisonModel.Counters.Matched
-    $conflicting     = $ComparisonModel.Counters.Conflicting
-    $sourceOnly      = $ComparisonModel.Counters.SourceOnly
-    $destOnly        = $ComparisonModel.Counters.DestOnly
+    $alignmentScore  = if ($null -ne $ComparisonModel.AlignmentScore) { $ComparisonModel.AlignmentScore } else { 0 }
+    $totalItems      = if ($null -ne $ComparisonModel.TotalItems) { $ComparisonModel.TotalItems } else { 0 }
+    $matched         = if ($null -ne $ComparisonModel.Counters.Matched) { $ComparisonModel.Counters.Matched } else { 0 }
+    $conflicting     = if ($null -ne $ComparisonModel.Counters.Conflicting) { $ComparisonModel.Counters.Conflicting } else { 0 }
+    $sourceOnly      = if ($null -ne $ComparisonModel.Counters.SourceOnly) { $ComparisonModel.Counters.SourceOnly } else { 0 }
+    $destOnly        = if ($null -ne $ComparisonModel.Counters.DestOnly) { $ComparisonModel.Counters.DestOnly } else { 0 }
     $products        = $ComparisonModel.Products
     $inclAssignments = $ComparisonModel.IncludingAssignments
 

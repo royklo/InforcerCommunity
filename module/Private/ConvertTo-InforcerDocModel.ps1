@@ -226,12 +226,8 @@ function ConvertTo-InforcerDocModel {
                 if ($prodLower -match [regex]::Escape($ip)) { $isIntuneRelevant = $true; break }
             }
             if (-not $isIntuneRelevant) { continue }
-            # Skip compliance policies
-            $catLower = $catKey.ToLowerInvariant()
-            if ($catLower -match 'compliance') { continue }
-            # Skip enrollment/autopilot categories
-            if ($catLower -match 'enrollment|autopilot') { continue }
             # Skip exchange categories (Defender for Office 365, not Intune)
+            $catLower = $catKey.ToLowerInvariant()
             if ($catLower -match '^exchange') { continue }
         }
 

@@ -1337,8 +1337,8 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
     # -------------------------------------------------------------------------
     Context 'DUP-01: Tab button and content' {
         It 'renders Duplicates tab button when duplicates exist' -Tag 'DUP-01' {
-            # D-01: Duplicates tab button calls switchTab('duplicates')
-            $script:DupHtml | Should -Match "switchTab\('duplicates'\)"
+            # D-01: Duplicates tab button calls switchTab('duplicates', event)
+            $script:DupHtml | Should -Match "switchTab\('duplicates',\s*event\)"
         }
 
         It 'Duplicates tab button shows count badge with 3' -Tag 'DUP-01' {

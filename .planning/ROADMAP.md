@@ -148,7 +148,7 @@ Plans:
   4. The search field filters rows matching input against setting name, setting path, both value columns, policy names, and category
 **Plans:** 2 plans
 Plans:
-- [ ] 09-01-PLAN.md — TDD RED: failing Pester tests for FLT-01 through FLT-04 filtering and navigation
+- [x] 09-01-PLAN.md — TDD RED: failing Pester tests for FLT-01 through FLT-04 filtering and navigation
 - [x] 09-02-PLAN.md — TDD GREEN: CSS, HTML rendering, and JS implementation for category composites, status pill colors, clear filters
 **UI hint**: yes
 

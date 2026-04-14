@@ -788,7 +788,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                     $encSrcPolicy = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
                     $rawSrcValue  = if ($null -ne $row.SourceValue) { "$($row.SourceValue)" } else { '' }
                     $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($rawSrcValue)
-                    $encSrcValueAttr = $rawSrcValue.Replace('"', '&quot;')
+                    $encSrcValueAttr = [System.Net.WebUtility]::HtmlEncode($rawSrcValue)
                     [void]$sb.Append("<td>$encSrcPolicy</td>")
                     if ($rawSrcValue.Length -gt 100) {
                         [void]$sb.Append("<td class=`"value-cell`"><div class=`"value-wrap`"><div class=`"value-truncate`">$encSrcValue</div><div class=`"value-actions`"><button type=`"button`" class=`"value-toggle-btn`">&#9660; More</button><button type=`"button`" class=`"value-copy-btn`" data-value=`"$encSrcValueAttr`">&#128203; Copy</button></div></div></td>")
@@ -804,7 +804,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                     $encDstPolicy    = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
                     $rawDstValue     = if ($null -ne $row.DestValue) { "$($row.DestValue)" } else { '' }
                     $encDstValue     = [System.Net.WebUtility]::HtmlEncode($rawDstValue)
-                    $encDstValueAttr = $rawDstValue.Replace('"', '&quot;')
+                    $encDstValueAttr = [System.Net.WebUtility]::HtmlEncode($rawDstValue)
                     $innerCls = if ($status -eq 'Conflicting') { ' value-diff' } else { '' }
                     [void]$sb.Append("<td>$encDstPolicy</td>")
                     if ($rawDstValue.Length -gt 100) {

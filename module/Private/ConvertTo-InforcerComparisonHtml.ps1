@@ -857,6 +857,9 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    <strong>Deprecated settings:</strong> Policies flagged with <em>contains deprecated settings</em> use configurations that Microsoft may remove in future updates. Plan to migrate these to their modern replacements before they stop working.<br>')
     [void]$sb.AppendLine('    <strong>Custom compliance:</strong> Custom discovery scripts define their own compliance rules and need human verification to confirm they match across environments.')
         [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('<div style="display:flex;justify-content:flex-end;margin:0.25rem 0 0.5rem">')
+        [void]$sb.AppendLine('    <button type="button" id="mr-expand-all-btn" onclick="toggleAllManualReview()" style="font-size:0.75rem;font-weight:600;padding:0.35rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:all 0.15s ease">Expand All</button>')
+        [void]$sb.AppendLine('</div>')
 
         foreach ($catLabel in $manualReview.Keys) {
             # Skip duplicates category — rendered in dedicated Duplicates tab (Phase 10)
@@ -1375,6 +1378,14 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    if (src) src.classList.add("active");')
     [void]$sb.AppendLine('    var cf = document.getElementById("comparison-filters");')
     [void]$sb.AppendLine('    if (cf) cf.style.display = (tabId === "comparison") ? "" : "none";')
+    [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('function toggleAllManualReview() {')
+    [void]$sb.AppendLine('    var btn = document.getElementById("mr-expand-all-btn");')
+    [void]$sb.AppendLine('    var cards = document.querySelectorAll(".manual-review-card");')
+    [void]$sb.AppendLine('    var allOpen = true;')
+    [void]$sb.AppendLine('    cards.forEach(function(d) { if (!d.open) allOpen = false; });')
+    [void]$sb.AppendLine('    cards.forEach(function(d) { d.open = !allOpen; });')
+    [void]$sb.AppendLine('    btn.textContent = allOpen ? "Expand All" : "Collapse All";')
     [void]$sb.AppendLine('}')
     if ($hasDuplicates) {
         [void]$sb.AppendLine("var dupPolicyCount = $dupPolicyCount;")

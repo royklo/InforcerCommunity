@@ -940,7 +940,9 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                                     [void]$sb.AppendLine('    </tbody></table>')
                                     $rulesRendered = $true
                                 }
-                            } catch { }
+                            } catch {
+                                Write-Verbose "Failed to parse compliance rules JSON for '$($s.Name)': $_"
+                            }
                             if (-not $rulesRendered) {
                                 # Graceful degradation — fall through to default display (D-07)
                                 $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)

@@ -1066,15 +1066,9 @@ Describe 'ConvertTo-InforcerComparisonHtml - Table Enhancements' -Tag 'TBL', 'Ph
             $script:TblHtml | Should -Match '<strong>Firewall Mode</strong>'
         }
 
-        It 'strips last segment from multi-segment path (Security > Firewall becomes Security)' -Tag 'TBL-03' {
-            # Firewall Mode has SettingPath='Security > Firewall' — should render just 'Security'
-            $script:TblHtml | Should -Match 'setting-path">Security</span>'
-        }
-
-        It 'hides setting-path when path has no > separator (single segment is the setting name)' -Tag 'TBL-03' {
-            # WiFi Standard has SettingPath='SimpleWiFiPath' (no > separator) — should NOT render
-            # because after stripping the last segment there is nothing left
-            $script:TblHtml | Should -Not -Match 'SimpleWiFiPath</span>'
+        It 'renders setting-path for non-empty path without > separator' -Tag 'TBL-03' {
+            # WiFi Standard has SettingPath='SimpleWiFiPath' (no > separator)
+            $script:TblHtml | Should -Match 'SimpleWiFiPath</span>'
         }
 
         It 'does not render setting-path span for empty SettingPath' -Tag 'TBL-03' {

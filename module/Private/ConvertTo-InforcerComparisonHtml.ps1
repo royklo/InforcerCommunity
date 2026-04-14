@@ -775,7 +775,8 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                 $deprBadge = if ($row.IsDeprecated -eq $true) { ' <span class="badge-deprecated">&#x26A0; Deprecated</span>' } else { '' }
                 $settingPath = "$($row.SettingPath)"
                 $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
-                $pathHtml = if (-not [string]::IsNullOrEmpty($settingPath)) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                # Only show path when it adds context beyond the setting name itself
+                $pathHtml = if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
                 [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong>$deprBadge$dupeBadge$pathHtml</td>")
 
                 # Category column (already stripped of product prefix)

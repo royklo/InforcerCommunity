@@ -402,7 +402,7 @@ function Compare-InforcerDocModels {
 
             # Route non-comparable categories to manual review
             $catLower = $categoryName.ToLowerInvariant()
-            if ($catLower -match 'script|remediation|custom compliance') {
+            if ($catLower -match 'script|remediation|compliance|enrollment|autopilot') {
                 # Add to manual review instead of comparison
                 # Helper: collect settings with base64 decoding for script content
                 $collectMRSettings = {

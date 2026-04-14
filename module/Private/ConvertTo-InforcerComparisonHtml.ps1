@@ -1443,7 +1443,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    chip.setAttribute("data-col", colIdx);')
     [void]$sb.AppendLine('    chip.innerHTML = ''<label>'' + label + '':</label>'' +')
     [void]$sb.AppendLine('        ''<input type="text" placeholder="contains..." oninput="applyFilters()">'' +')
-    [void]$sb.AppendLine('        ''<button class="adv-chip-remove" onclick="removeAdvFilter('''''' + key + '''''')">&times;</button>'';')
+    [void]$sb.AppendLine('        ''<button class="adv-chip-remove" onclick="removeAdvFilter(\x27'' + key + ''\x27)">&times;</button>'';')
     [void]$sb.AppendLine('    container.appendChild(chip);')
     [void]$sb.AppendLine('    var menu = document.getElementById("adv-filter-menu");')
     [void]$sb.AppendLine('    menu.querySelectorAll("button").forEach(function(b) {')

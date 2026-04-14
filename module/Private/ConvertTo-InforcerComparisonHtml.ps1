@@ -424,6 +424,7 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .assign-all { font-size: 0.75rem; color: var(--info); }
 .assign-filter { display: block; font-size: 0.625rem; color: var(--muted); white-space: normal; word-break: break-word; }
 .assign-empty { font-size: 0.75rem; color: var(--muted); }
+table.hide-assignments .col-assign { display: none; }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center; user-select: none; }
@@ -589,6 +590,9 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     }
     [void]$sb.AppendLine('</select>')
     [void]$sb.AppendLine('    <button id="clear-filters-btn" class="hidden" onclick="clearFilters()" style="color:var(--danger);background:none;border:none;font-size:0.75rem;font-weight:600;cursor:pointer;padding:0.25rem 0.5rem">Clear filters</button>')
+    if ($inclAssignments) {
+        [void]$sb.AppendLine('    <label style="margin-left:auto;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:var(--text-secondary);cursor:pointer;user-select:none"><input type="checkbox" id="toggle-assignments" checked onchange="toggleAssignments(this.checked)"> Show assignments</label>')
+    }
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.75rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
     [void]$sb.AppendLine('</div>')  # end comparison-filters
@@ -668,13 +672,13 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
         [void]$sb.Append('            <th style="width:4%;cursor:pointer" onclick="sortTable(this,0)">Status &#x25B4;&#x25BE;</th>')
         [void]$sb.Append('<th style="width:20%;cursor:pointer" onclick="sortTable(this,1)">Setting &#x25B4;&#x25BE;</th>')
         [void]$sb.Append('<th style="width:14%;cursor:pointer" onclick="sortTable(this,2)">Category &#x25B4;&#x25BE;</th>')
-        [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,3)">Source Policy &#x25B4;&#x25BE;</th>')
-        [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,4)">Source Value &#x25B4;&#x25BE;</th>')
-        [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,5)">Dest Policy &#x25B4;&#x25BE;</th>')
-        [void]$sb.Append('<th style="width:15%;cursor:pointer" onclick="sortTable(this,6)">Dest Value &#x25B4;&#x25BE;</th>')
+        [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,3)`">$sourceName Policy &#x25B4;&#x25BE;</th>")
+        [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,4)`">$sourceName Value &#x25B4;&#x25BE;</th>")
+        [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,5)`">$destName Policy &#x25B4;&#x25BE;</th>")
+        [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,6)`">$destName Value &#x25B4;&#x25BE;</th>")
         if ($inclAssignments) {
-            [void]$sb.Append('<th>Source Assignment</th>')
-            [void]$sb.Append('<th>Dest Assignment</th>')
+            [void]$sb.Append("<th class=`"col-assign`">$sourceName Assignment</th>")
+            [void]$sb.Append("<th class=`"col-assign`">$destName Assignment</th>")
         }
         [void]$sb.AppendLine('')
         [void]$sb.AppendLine('        </tr></thead>')
@@ -819,8 +823,8 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                 if ($inclAssignments) {
                     $srcAssignHtml = & $formatAssignHtml $row.SourceAssignment
                     $dstAssignHtml = & $formatAssignHtml $row.DestAssignment
-                    [void]$sb.Append("<td class=`"value-cell`">$srcAssignHtml</td>")
-                    [void]$sb.Append("<td class=`"value-cell`">$dstAssignHtml</td>")
+                    [void]$sb.Append("<td class=`"value-cell col-assign`">$srcAssignHtml</td>")
+                    [void]$sb.Append("<td class=`"value-cell col-assign`">$dstAssignHtml</td>")
                 }
 
                 [void]$sb.AppendLine('</tr>')
@@ -1328,6 +1332,11 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
     [void]$sb.AppendLine('    var cf = document.getElementById("category-filter");')
     [void]$sb.AppendLine('    if (cf) cf.value = "All";')
     [void]$sb.AppendLine('    applyFilters();')
+    [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('function toggleAssignments(show) {')
+    [void]$sb.AppendLine('    var tbl = document.getElementById("comparison-table");')
+    [void]$sb.AppendLine('    if (!tbl) return;')
+    [void]$sb.AppendLine('    if (show) { tbl.classList.remove("hide-assignments"); } else { tbl.classList.add("hide-assignments"); }')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function switchTab(tabId, evt) {')
     [void]$sb.AppendLine('    document.querySelectorAll(".tab-content").forEach(function(t) { t.classList.remove("active"); });')

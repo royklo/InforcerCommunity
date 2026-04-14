@@ -774,8 +774,11 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
                 # Setting name cell (per D-09 through D-11: bold name, deprecated badge, duplicate badge, path)
                 $deprBadge = if ($row.IsDeprecated -eq $true) { ' <span class="badge-deprecated">&#x26A0; Deprecated</span>' } else { '' }
                 $settingPath = "$($row.SettingPath)"
-                $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
-                $pathHtml = if (-not [string]::IsNullOrEmpty($settingPath)) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                # Strip the last segment (setting name) — it is already shown as the bold heading above
+                $lastSep = $settingPath.LastIndexOf(' > ')
+                $categoryPath = if ($lastSep -gt 0) { $settingPath.Substring(0, $lastSep) } else { '' }
+                $encPath = [System.Net.WebUtility]::HtmlEncode($categoryPath)
+                $pathHtml = if (-not [string]::IsNullOrEmpty($categoryPath)) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
                 [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong>$deprBadge$dupeBadge$pathHtml</td>")
 
                 # Category column (already stripped of product prefix)
@@ -1035,11 +1038,14 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
             $displayName = if ($firstPolicy.SettingName) { $firstPolicy.SettingName } else { $dupRow.Name }
             $settingPath = if ($firstPolicy.SettingPath) { $firstPolicy.SettingPath } else { $dupRow.Name }
             $category = if ($firstPolicy.Category) { $firstPolicy.Category } else { '' }
+            # Strip the last segment (setting name) — it is already shown as the bold heading above
+            $lastSep = $settingPath.LastIndexOf(' > ')
+            $categoryPath = if ($lastSep -gt 0) { $settingPath.Substring(0, $lastSep) } else { '' }
             $encDisplayName = [System.Net.WebUtility]::HtmlEncode($displayName)
-            $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
+            $encPath = [System.Net.WebUtility]::HtmlEncode($categoryPath)
             $encCategory = [System.Net.WebUtility]::HtmlEncode($category)
-            # Show path if different from display name, and category if available
-            $pathLine = if ($settingPath -ne $displayName) {
+            # Show path if non-empty after stripping, otherwise fall back to category
+            $pathLine = if (-not [string]::IsNullOrEmpty($categoryPath)) {
                 "<span class=`"dup-setting-path`">$encPath</span>"
             } elseif (-not [string]::IsNullOrWhiteSpace($category)) {
                 "<span class=`"dup-setting-path`">$encCategory</span>"

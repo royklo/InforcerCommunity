@@ -365,7 +365,7 @@ function Compare-InforcerDocModels {
 
         foreach ($categoryName in $allCategories) {
             # Exclude Custom Indicators category entirely (noise — per-tenant unique data)
-            if ($categoryName -eq 'Custom Indicators') { continue }
+            if ($categoryName -match 'Custom Indicators') { continue }
 
             $srcPolicies = @()
             $dstPolicies = @()
@@ -687,7 +687,7 @@ function Compare-InforcerDocModels {
 
                 foreach ($catName in $model.Products[$prodName].Categories.Keys) {
                     # Exclude Custom Indicators category entirely (noise — per-tenant unique data)
-                    if ($catName -eq 'Custom Indicators') { continue }
+                    if ($catName -match 'Custom Indicators') { continue }
                     # D-05: only settings catalog and administrative templates
                     if ($catName -notmatch 'settings catalog|administrative templates') { continue }
 

@@ -425,6 +425,12 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .assign-filter { display: block; font-size: 0.625rem; color: var(--muted); white-space: normal; word-break: break-word; }
 .assign-empty { font-size: 0.75rem; color: var(--muted); }
 table.hide-assignments .col-assign { display: none; }
+.toggle-switch { position:relative; width:34px; height:18px; flex-shrink:0; }
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-switch .slider { position:absolute; inset:0; background:var(--border); border-radius:999px; cursor:pointer; transition:var(--transition); }
+.toggle-switch .slider::before { content:''; position:absolute; left:2px; top:2px; width:14px; height:14px; background:var(--bg-card); border-radius:50%; transition:var(--transition); }
+.toggle-switch input:checked + .slider { background:var(--accent); }
+.toggle-switch input:checked + .slider::before { transform:translateX(16px); }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center; user-select: none; }
@@ -591,7 +597,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('</select>')
     [void]$sb.AppendLine('    <button id="clear-filters-btn" class="hidden" onclick="clearFilters()" style="color:var(--danger);background:none;border:none;font-size:0.75rem;font-weight:600;cursor:pointer;padding:0.25rem 0.5rem">Clear filters</button>')
     if ($inclAssignments) {
-        [void]$sb.AppendLine('    <label style="margin-left:auto;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;color:var(--text-secondary);cursor:pointer;user-select:none"><input type="checkbox" id="toggle-assignments" checked onchange="toggleAssignments(this.checked)"> Show assignments</label>')
+        [void]$sb.AppendLine('    <label style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;color:var(--text-secondary);cursor:pointer;user-select:none"><span>Assignments</span><span class="toggle-switch"><input type="checkbox" id="toggle-assignments" checked onchange="toggleAssignments(this.checked)"><span class="slider"></span></span></label>')
     }
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.75rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
@@ -1035,19 +1041,24 @@ table.hide-assignments .col-assign { display: none; }
 
             [void]$sb.Append("<tr data-setting=`"$encSettingName`" data-policies=`"$encPoliciesAttr`" data-policies-json=`"$encPoliciesJson`">")
 
-            # Column 1: Setting name + category path below
+            # Column 1: Setting name + path below
+            # Use SettingPath for both display name (last segment) and path (full path)
             $firstPolicy = $dupRow.Policies | Select-Object -First 1
-            $displayName = if ($firstPolicy.SettingName) { $firstPolicy.SettingName } else { $dupRow.Name }
-            $settingPath = if ($firstPolicy.SettingPath) { $firstPolicy.SettingPath } else { $dupRow.Name }
-            $category = if ($firstPolicy.Category) { $firstPolicy.Category } else { '' }
+            $settingPath = if ($firstPolicy.SettingPath) { $firstPolicy.SettingPath } else { '' }
+            # Extract last segment of path as the display name (human-readable resolved name)
+            if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
+                $lastSep = $settingPath.LastIndexOf(' > ')
+                $displayName = $settingPath.Substring($lastSep + 3)
+            } else {
+                $displayName = if (-not [string]::IsNullOrEmpty($settingPath)) { $settingPath }
+                               elseif ($firstPolicy.SettingName) { $firstPolicy.SettingName }
+                               else { $dupRow.Name }
+            }
             $encDisplayName = [System.Net.WebUtility]::HtmlEncode($displayName)
             $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
-            $encCategory = [System.Net.WebUtility]::HtmlEncode($category)
-            # Show path if different from display name, and category if available
-            $pathLine = if ($settingPath -ne $displayName) {
+            # Show full path below the name when it adds context
+            $pathLine = if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath -ne $displayName) {
                 "<span class=`"dup-setting-path`">$encPath</span>"
-            } elseif (-not [string]::IsNullOrWhiteSpace($category)) {
-                "<span class=`"dup-setting-path`">$encCategory</span>"
             } else { '' }
             [void]$sb.Append("<td class=`"dup-tab-setting`"><strong>$encDisplayName</strong>$pathLine</td>")
 

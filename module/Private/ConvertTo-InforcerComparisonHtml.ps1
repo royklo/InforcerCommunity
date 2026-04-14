@@ -430,6 +430,14 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .assign-filter { display: block; font-size: 0.625rem; color: var(--muted); white-space: normal; word-break: break-word; }
 .assign-empty { font-size: 0.75rem; color: var(--muted); }
 table.hide-assignments .col-assign { display: none; }
+.cat-multiselect { position:relative; display:inline-block; }
+.cat-ms-btn { padding:4px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text); font-size:11px; font-family:inherit; cursor:pointer; font-weight:600; min-width:140px; text-align:left; }
+.cat-ms-btn:hover { border-color:var(--text); }
+.cat-ms-dropdown { display:none; position:absolute; top:100%; left:0; z-index:100; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-md); max-height:300px; overflow-y:auto; min-width:280px; padding:4px 0; margin-top:2px; }
+.cat-ms-dropdown.open { display:block; }
+.cat-ms-dropdown label { display:flex; align-items:center; gap:6px; padding:4px 12px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.cat-ms-dropdown label:hover { background:var(--accent-soft); }
+.col-assign { overflow:hidden; text-overflow:ellipsis; word-wrap:break-word; }
 .toggle-switch { position:relative; width:34px; height:18px; flex-shrink:0; }
 .toggle-switch input { opacity:0; width:0; height:0; }
 .toggle-switch .slider { position:absolute; inset:0; background:var(--border); border-radius:999px; cursor:pointer; transition:var(--transition); }
@@ -603,14 +611,13 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    <button class="filter-pill filter-pill-conflicting" onclick="filterByStatus(this,''Conflicting'')">Conflicting</button>')
     [void]$sb.AppendLine("    <button class=`"filter-pill filter-pill-source-only`" onclick=`"filterByStatus(this,'SourceOnly')`">$sourceName Only</button>")
     [void]$sb.AppendLine("    <button class=`"filter-pill filter-pill-dest-only`" onclick=`"filterByStatus(this,'DestOnly')`">$destName Only</button>")
-    # Category filter dropdown
-    [void]$sb.Append('    <select id="category-filter" onchange="applyFilters()" style="padding:4px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text);font-size:11px;font-family:inherit;cursor:pointer">')
-    [void]$sb.Append('<option value="All">All categories</option>')
+    # Category filter dropdown (multi-select with checkboxes)
+    [void]$sb.Append('    <div class="cat-multiselect" id="cat-multiselect"><button class="cat-ms-btn" onclick="toggleCatDropdown()">All categories</button><div class="cat-ms-dropdown" id="cat-ms-dropdown">')
     foreach ($catName in $allCategories) {
         $encCat = [System.Net.WebUtility]::HtmlEncode($catName)
-        [void]$sb.Append("<option value=`"$encCat`">$encCat</option>")
+        [void]$sb.Append("<label><input type=`"checkbox`" value=`"$encCat`" onchange=`"applyFilters()`"> $encCat</label>")
     }
-    [void]$sb.AppendLine('</select>')
+    [void]$sb.AppendLine('</div></div>')
     [void]$sb.AppendLine('    <span class="adv-filter-wrap"><button class="adv-filter-btn" onclick="toggleAdvMenu()" title="Add column filter">+ Filter</button><div class="adv-filter-menu" id="adv-filter-menu"><button onclick="addAdvFilter(''setting'',''Setting Name'',1)">Setting Name</button><button onclick="addAdvFilter(''policy'',''Policy Name'',3)">Policy Name</button><button onclick="addAdvFilter(''value'',''Value'',4)">Value</button></div></span>')
     [void]$sb.AppendLine('    <button id="clear-filters-btn" class="hidden" onclick="clearFilters()" style="color:var(--danger);background:none;border:none;font-size:0.75rem;font-weight:600;cursor:pointer;padding:0.25rem 0.5rem">Clear filters</button>')
     if ($inclAssignments) {
@@ -692,18 +699,28 @@ table.hide-assignments .col-assign { display: none; }
 
     if ($allRows.Count -gt 0) {
         [void]$sb.AppendLine('    <div class="table-wrap">')
-        [void]$sb.AppendLine('    <table id="comparison-table">')
+        [void]$sb.AppendLine('    <table id="comparison-table" style="table-layout:fixed;width:100%">')
         [void]$sb.AppendLine('        <thead><tr>')
-        [void]$sb.Append('            <th style="width:4%;cursor:pointer" onclick="sortTable(this,0)">Status &#x25B4;&#x25BE;</th>')
-        [void]$sb.Append('<th style="width:20%;cursor:pointer" onclick="sortTable(this,1)">Setting &#x25B4;&#x25BE;</th>')
-        [void]$sb.Append('<th style="width:14%;cursor:pointer" onclick="sortTable(this,2)">Category &#x25B4;&#x25BE;</th>')
-        [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,3)`">$sourceName Policy &#x25B4;&#x25BE;</th>")
-        [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,4)`">$sourceName Value &#x25B4;&#x25BE;</th>")
-        [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,5)`">$destName Policy &#x25B4;&#x25BE;</th>")
-        [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,6)`">$destName Value &#x25B4;&#x25BE;</th>")
         if ($inclAssignments) {
-            [void]$sb.Append("<th class=`"col-assign`">$sourceName Assignment</th>")
-            [void]$sb.Append("<th class=`"col-assign`">$destName Assignment</th>")
+            # Narrower widths to accommodate 2 assignment columns (9 cols total)
+            [void]$sb.Append('            <th style="width:3%;cursor:pointer" onclick="sortTable(this,0)">Status &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:17%;cursor:pointer" onclick="sortTable(this,1)">Setting &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:12%;cursor:pointer" onclick="sortTable(this,2)">Category &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append("<th style=`"width:13%;cursor:pointer`" onclick=`"sortTable(this,3)`">$sourceName Policy &#x25B4;&#x25BE;</th>")
+            [void]$sb.Append("<th style=`"width:13%;cursor:pointer`" onclick=`"sortTable(this,4)`">$sourceName Value &#x25B4;&#x25BE;</th>")
+            [void]$sb.Append("<th style=`"width:13%;cursor:pointer`" onclick=`"sortTable(this,5)`">$destName Policy &#x25B4;&#x25BE;</th>")
+            [void]$sb.Append("<th style=`"width:13%;cursor:pointer`" onclick=`"sortTable(this,6)`">$destName Value &#x25B4;&#x25BE;</th>")
+            [void]$sb.Append("<th class=`"col-assign`" style=`"width:8%`">$sourceName Assignment</th>")
+            [void]$sb.Append("<th class=`"col-assign`" style=`"width:8%`">$destName Assignment</th>")
+        } else {
+            # Standard widths for 7-column layout
+            [void]$sb.Append('            <th style="width:4%;cursor:pointer" onclick="sortTable(this,0)">Status &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:20%;cursor:pointer" onclick="sortTable(this,1)">Setting &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append('<th style="width:14%;cursor:pointer" onclick="sortTable(this,2)">Category &#x25B4;&#x25BE;</th>')
+            [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,3)`">$sourceName Policy &#x25B4;&#x25BE;</th>")
+            [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,4)`">$sourceName Value &#x25B4;&#x25BE;</th>")
+            [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,5)`">$destName Policy &#x25B4;&#x25BE;</th>")
+            [void]$sb.Append("<th style=`"width:15%;cursor:pointer`" onclick=`"sortTable(this,6)`">$destName Value &#x25B4;&#x25BE;</th>")
         }
         [void]$sb.AppendLine('')
         [void]$sb.AppendLine('        </tr></thead>')
@@ -1034,10 +1051,8 @@ table.hide-assignments .col-assign { display: none; }
         [void]$sb.AppendLine('    </div>')
         [void]$sb.AppendLine('</div>')
 
-        # Search bar (per D-10, reusing .search-bar CSS from Phase 9)
-        [void]$sb.AppendLine('<div class="search-bar">')
-        [void]$sb.AppendLine('    <input type="text" placeholder="Search settings or policies..." oninput="dupTabSearch(this.value)">')
-        [void]$sb.AppendLine('</div>')
+        # Search bar (per D-10, using .search CSS class for consistent styling)
+        [void]$sb.AppendLine('    <input class="search" type="text" placeholder="Search settings or policies..." oninput="dupTabSearch(this.value)" style="margin-bottom:0.75rem">')
 
         # Summary line (per D-12)
         [void]$sb.AppendLine("<div class=`"dup-summary`" id=`"dup-summary`">Showing <strong>$dupCount</strong> of <strong>$dupCount</strong> duplicate settings across <strong>$dupPolicyCount</strong> policies</div>")
@@ -1255,13 +1270,17 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    else { r.classList.remove(''light''); r.classList.add(''dark''); localStorage.setItem(''theme'',''dark''); }')
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('(function() { var s = localStorage.getItem(''theme''); if (s===''dark'') document.documentElement.classList.add(''dark''); else if (s===''light'') document.documentElement.classList.add(''light''); })();')
+    [void]$sb.AppendLine('function toggleCatDropdown() { var dd = document.getElementById("cat-ms-dropdown"); dd.classList.toggle("open"); }')
+    [void]$sb.AppendLine('document.addEventListener("click", function(e) { var wrap = document.getElementById("cat-multiselect"); if (wrap && !wrap.contains(e.target)) { document.getElementById("cat-ms-dropdown").classList.remove("open"); } });')
     [void]$sb.AppendLine('var activeFilters = new Set();')
     [void]$sb.AppendLine('function applyFilters() {')
     [void]$sb.AppendLine('    var q = (document.getElementById("search-input").value || "").toLowerCase().trim();')
     [void]$sb.AppendLine('    var showAll = activeFilters.size === 0;')
     [void]$sb.AppendLine('    // Deprecated settings are in their own tab — no toggle logic needed')
-    [void]$sb.AppendLine('    var catFilter = document.getElementById("category-filter");')
-    [void]$sb.AppendLine('    var selectedCat = catFilter ? catFilter.value : "All";')
+    [void]$sb.AppendLine('    var catChecked = [];')
+    [void]$sb.AppendLine('    var catWrap = document.getElementById("cat-multiselect");')
+    [void]$sb.AppendLine('    if (catWrap) { catWrap.querySelectorAll("input[type=checkbox]:checked").forEach(function(cb) { catChecked.push(cb.value); }); }')
+    [void]$sb.AppendLine('    var filterByCategory = catChecked.length > 0;')
     [void]$sb.AppendLine('    var excludeUnassigned = false;')
     [void]$sb.AppendLine('    var euToggle = document.getElementById("toggle-exclude-unassigned");')
     [void]$sb.AppendLine('    if (euToggle) excludeUnassigned = euToggle.checked;')
@@ -1271,7 +1290,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    tab.querySelectorAll("tbody tr[data-status]").forEach(function(tr) {')
     [void]$sb.AppendLine('        var matchesSearch = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;')
     [void]$sb.AppendLine('        var matchesFilter = showAll || activeFilters.has(tr.getAttribute("data-status"));')
-    [void]$sb.AppendLine('        var matchesCategory = selectedCat === "All" || tr.getAttribute("data-category") === selectedCat;')
+    [void]$sb.AppendLine('        var matchesCategory = !filterByCategory || catChecked.indexOf(tr.getAttribute("data-category")) >= 0;')
     [void]$sb.AppendLine('        var matchesAssigned = true;')
     [void]$sb.AppendLine('        if (excludeUnassigned) {')
     [void]$sb.AppendLine('            var cells = tr.querySelectorAll("td.col-assign");')
@@ -1313,13 +1332,15 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('        }')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    // No product sections to toggle — flat table')
+    [void]$sb.AppendLine('    var catBtn = catWrap && catWrap.querySelector(".cat-ms-btn");')
+    [void]$sb.AppendLine('    if (catBtn) { catBtn.textContent = filterByCategory ? catChecked.length + " selected" : "All categories"; }')
     [void]$sb.AppendLine('    // Update filter summary')
     [void]$sb.AppendLine('    var summary = document.getElementById("filter-summary");')
     [void]$sb.AppendLine("    if (summary) { summary.textContent = 'Showing ' + visibleCount + ' settings across ' + policySet.size + ' policies'; }")
     [void]$sb.AppendLine('    var clearBtn = document.getElementById("clear-filters-btn");')
     [void]$sb.AppendLine('    if (clearBtn) {')
     [void]$sb.AppendLine('        var hasAdvFilters = document.querySelectorAll("#active-adv-filters .adv-chip").length > 0;')
-    [void]$sb.AppendLine('        var hasActive = activeFilters.size > 0 || q !== "" || (catFilter && catFilter.value !== "All") || excludeUnassigned || hasAdvFilters;')
+    [void]$sb.AppendLine('        var hasActive = activeFilters.size > 0 || q !== "" || (document.querySelectorAll("#cat-multiselect input[type=checkbox]:checked").length > 0) || excludeUnassigned || hasAdvFilters;')
     [void]$sb.AppendLine('        clearBtn.classList.toggle("hidden", !hasActive);')
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('    // Also filter Manual Review tab by search')
@@ -1391,8 +1412,8 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    activeFilters.clear();')
     [void]$sb.AppendLine('    document.querySelectorAll(".filter-pill").forEach(function(p) { p.classList.remove("active"); });')
     [void]$sb.AppendLine('    document.getElementById("search-input").value = "";')
-    [void]$sb.AppendLine('    var cf = document.getElementById("category-filter");')
-    [void]$sb.AppendLine('    if (cf) cf.value = "All";')
+    [void]$sb.AppendLine('    var catWrap = document.getElementById("cat-multiselect");')
+    [void]$sb.AppendLine('    if (catWrap) { catWrap.querySelectorAll("input[type=checkbox]").forEach(function(cb) { cb.checked = false; }); var catBtn = catWrap.querySelector(".cat-ms-btn"); if (catBtn) catBtn.textContent = "All categories"; }')
     [void]$sb.AppendLine('    var euToggle = document.getElementById("toggle-exclude-unassigned");')
     [void]$sb.AppendLine('    if (euToggle) euToggle.checked = false;')
     [void]$sb.AppendLine('    var advContainer = document.getElementById("active-adv-filters");')

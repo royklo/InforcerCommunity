@@ -436,6 +436,20 @@ table.hide-assignments .col-assign { display: none; }
 .toggle-switch .slider::before { content:''; position:absolute; left:2px; top:2px; width:14px; height:14px; background:var(--bg-card); border-radius:50%; transition:var(--transition); }
 .toggle-switch input:checked + .slider { background:var(--accent); }
 .toggle-switch input:checked + .slider::before { transform:translateX(16px); }
+.adv-filter-wrap { display:inline-block; position:relative; }
+.adv-filter-btn { border:1px solid var(--border); border-radius:8px; background:var(--bg-card); color:var(--text); padding:4px 10px; font-size:11px; font-family:inherit; cursor:pointer; transition:var(--transition); }
+.adv-filter-btn:hover { border-color:var(--text); }
+.adv-filter-menu { position:absolute; top:100%; left:0; z-index:100; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); min-width:160px; padding:4px 0; display:none; }
+.adv-filter-menu.open { display:block; }
+.adv-filter-menu button { display:block; width:100%; text-align:left; padding:6px 12px; border:none; background:none; font-size:12px; color:var(--text); cursor:pointer; font-family:inherit; }
+.adv-filter-menu button:hover:not(:disabled) { background:var(--accent-soft); }
+.adv-filter-menu button:disabled { opacity:0.4; cursor:default; }
+#active-adv-filters { display:flex; flex-wrap:wrap; gap:0.5rem; padding:0 0.75rem; }
+#active-adv-filters:empty { display:none; }
+.adv-chip { display:inline-flex; align-items:center; gap:4px; background:var(--accent-soft); border:1px solid var(--accent); border-radius:6px; padding:2px 8px; font-size:11px; }
+.adv-chip label { font-weight:600; color:var(--accent); }
+.adv-chip input { border:1px solid var(--border); border-radius:4px; padding:2px 6px; font-size:11px; width:140px; background:var(--bg-card); color:var(--text); font-family:inherit; }
+.adv-chip .adv-chip-remove { cursor:pointer; color:var(--danger); font-weight:bold; margin-left:2px; border:none; background:none; font-size:13px; line-height:1; }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center; user-select: none; }
@@ -597,6 +611,7 @@ table.hide-assignments .col-assign { display: none; }
         [void]$sb.Append("<option value=`"$encCat`">$encCat</option>")
     }
     [void]$sb.AppendLine('</select>')
+    [void]$sb.AppendLine('    <span class="adv-filter-wrap"><button class="adv-filter-btn" onclick="toggleAdvMenu()" title="Add column filter">+ Filter</button><div class="adv-filter-menu" id="adv-filter-menu"><button onclick="addAdvFilter(''setting'',''Setting Name'',1)">Setting Name</button><button onclick="addAdvFilter(''policy'',''Policy Name'',3)">Policy Name</button><button onclick="addAdvFilter(''value'',''Value'',4)">Value</button></div></span>')
     [void]$sb.AppendLine('    <button id="clear-filters-btn" class="hidden" onclick="clearFilters()" style="color:var(--danger);background:none;border:none;font-size:0.75rem;font-weight:600;cursor:pointer;padding:0.25rem 0.5rem">Clear filters</button>')
     if ($inclAssignments) {
         [void]$sb.AppendLine('    <label style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;color:var(--text-secondary);cursor:pointer;user-select:none"><span>Exclude unassigned</span><span class="toggle-switch"><input type="checkbox" id="toggle-exclude-unassigned" onchange="applyFilters()"><span class="slider"></span></span></label>')
@@ -604,6 +619,7 @@ table.hide-assignments .col-assign { display: none; }
     }
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('<div id="filter-summary" style="font-size:0.75rem;font-weight:600;color:var(--accent);padding:0.5rem 0.75rem;margin:0.5rem 0;background:var(--accent-soft);border-radius:var(--radius-xs);"></div>')
+    [void]$sb.AppendLine('<div id="active-adv-filters"></div>')
     [void]$sb.AppendLine('</div>')  # end comparison-filters
 
     # ── Tab navigation ──────────────────────────────────────────────────

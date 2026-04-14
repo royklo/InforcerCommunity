@@ -198,6 +198,16 @@ function Compare-InforcerDocModels {
             $defId  = "$($setting.DefinitionId)"
             $isConfigured = $setting.IsConfigured -eq $true
 
+            # Resolve friendly display name from catalog when available
+            if (-not [string]::IsNullOrEmpty($defId) -and
+                $null -ne $script:InforcerSettingsCatalog -and
+                $script:InforcerSettingsCatalog.ContainsKey($defId)) {
+                $catalogEntry = $script:InforcerSettingsCatalog[$defId]
+                if (-not [string]::IsNullOrWhiteSpace($catalogEntry.DisplayName)) {
+                    $name = $catalogEntry.DisplayName
+                }
+            }
+
             if (-not $isConfigured) {
                 # Group header — update parent stack at this indent level
                 while ($parentStack.Count -gt $indent) {

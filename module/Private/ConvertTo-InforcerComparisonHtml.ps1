@@ -550,8 +550,8 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('<div class="summary-grid">')
     [void]$sb.AppendLine('    <div class="summary-tile matched"><div class="count" id="countMatched">0</div><div class="label">Matched</div></div>')
     [void]$sb.AppendLine('    <div class="summary-tile conflicting"><div class="count" id="countConflicting">0</div><div class="label">Conflicting</div></div>')
-    [void]$sb.AppendLine('    <div class="summary-tile source-only"><div class="count" id="countSource">0</div><div class="label">Source Only</div></div>')
-    [void]$sb.AppendLine('    <div class="summary-tile dest-only"><div class="count" id="countDest">0</div><div class="label">Destination Only</div></div>')
+    [void]$sb.AppendLine("    <div class=`"summary-tile source-only`"><div class=`"count`" id=`"countSource`">0</div><div class=`"label`">$sourceName Only</div></div>")
+    [void]$sb.AppendLine("    <div class=`"summary-tile dest-only`"><div class=`"count`" id=`"countDest`">0</div><div class=`"label`">$destName Only</div></div>")
     [void]$sb.AppendLine('</div>')
 
     # ── Search bar (wrapped in comparison-filters container for tab toggling) ──
@@ -579,8 +579,8 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    <span class="filter-label">Filter:</span>')
     [void]$sb.AppendLine('    <button class="filter-pill filter-pill-matched" onclick="filterByStatus(this,''Matched'')">Matched</button>')
     [void]$sb.AppendLine('    <button class="filter-pill filter-pill-conflicting" onclick="filterByStatus(this,''Conflicting'')">Conflicting</button>')
-    [void]$sb.AppendLine('    <button class="filter-pill filter-pill-source-only" onclick="filterByStatus(this,''SourceOnly'')">Source Only</button>')
-    [void]$sb.AppendLine('    <button class="filter-pill filter-pill-dest-only" onclick="filterByStatus(this,''DestOnly'')">Dest Only</button>')
+    [void]$sb.AppendLine("    <button class=`"filter-pill filter-pill-source-only`" onclick=`"filterByStatus(this,'SourceOnly')`">$sourceName Only</button>")
+    [void]$sb.AppendLine("    <button class=`"filter-pill filter-pill-dest-only`" onclick=`"filterByStatus(this,'DestOnly')`">$destName Only</button>")
     # Category filter dropdown
     [void]$sb.Append('    <select id="category-filter" onchange="applyFilters()" style="margin-left:0.75rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text);font-size:0.75rem;font-family:inherit;cursor:pointer">')
     [void]$sb.Append('<option value="All">All categories</option>')
@@ -741,8 +741,8 @@ table.hide-assignments .col-assign { display: none; }
                 switch ($status) {
                     'Matched'     { $statusHtml = '<span class="status-badge status-matched">&#10003;</span>' }
                     'Conflicting' { $statusHtml = '<span class="status-badge status-conflicting">&#10007;</span>' }
-                    'SourceOnly'  { $statusHtml = '<span class="status-badge status-source-only">Source Only</span>' }
-                    'DestOnly'    { $statusHtml = '<span class="status-badge status-dest-only">Dest Only</span>' }
+                    'SourceOnly'  { $statusHtml = "<span class=`"status-badge status-source-only`">$sourceName Only</span>" }
+                    'DestOnly'    { $statusHtml = "<span class=`"status-badge status-dest-only`">$destName Only</span>" }
                     default       { $statusHtml = [System.Net.WebUtility]::HtmlEncode($status) }
                 }
 

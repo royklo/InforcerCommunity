@@ -168,14 +168,14 @@ function ConvertTo-InforcerComparisonHtml {
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--bg);
     color: var(--text);
-    max-width: 1600px;
+    max-width: 1800px;
     margin: 0 auto;
-    padding: 0 1.5rem 3rem;
-    line-height: 1.65;
-    font-size: 0.9375rem;
+    padding: 0 20px 3rem;
+    line-height: 1.5;
+    font-size: 12px;
     -webkit-font-smoothing: antialiased;
 }
 .notch-bar {
@@ -219,27 +219,26 @@ body {
 .summary-tile.source-only .count { color: var(--warning); }
 .summary-tile.dest-only .count { color: var(--info); }
 .summary-tile.manual .count { color: var(--manual); }
-.search-bar { margin-bottom: 1rem; }
-.search-bar input {
-    width: 100%; padding: 0.625rem 0.875rem; border: 1px solid var(--border); border-radius: var(--radius-xs);
-    background: var(--bg-card); color: var(--text); font-size: 0.875rem; font-family: inherit; outline: none;
-    transition: border-color var(--transition), box-shadow var(--transition);
+.search {
+    width: 220px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg-card); color: var(--text); font-size: 12px; font-family: inherit; outline: none;
+    transition: border-color var(--transition);
 }
-.search-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search:focus { border-color: var(--accent); }
 .search-hidden { display: none !important; }
-.filter-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.filter-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.filter-bar { display: flex; align-items: center; gap: 8px; padding: 12px 0; flex-wrap: wrap; }
+.filter-label { display: none; }
 .filter-pill {
-    background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
-    padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; cursor: pointer;
-    transition: all var(--transition); font-family: inherit; font-weight: 500;
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 4px 12px; border-radius: 8px; font-size: 11px; cursor: pointer;
+    transition: all .15s; font-family: inherit; font-weight: 600;
 }
-.filter-pill:hover { border-color: var(--accent); color: var(--accent); }
-.filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.filter-pill-matched.active   { background: var(--success); color: #fff; border-color: var(--success); }
-.filter-pill-conflicting.active { background: var(--danger);  color: #fff; border-color: var(--danger); }
-.filter-pill-source-only.active { background: var(--info);    color: #fff; border-color: var(--info); }
-.filter-pill-dest-only.active { background: var(--warning); color: #fff; border-color: var(--warning); }
+.filter-pill:hover { border-color: var(--text); color: var(--text); }
+.filter-pill.active { color: #fff; }
+.filter-pill-matched.active   { background: #16a34a; border-color: #16a34a; }
+.filter-pill-conflicting.active { background: #dc2626; border-color: #dc2626; }
+.filter-pill-source-only.active { background: #3b82f6; border-color: #3b82f6; }
+.filter-pill-dest-only.active { background: #d97706; border-color: #d97706; }
 .hidden { display: none !important; }
 .status-hidden { display: none !important; }
 /* Toggle CSS removed — deprecated settings now in their own tab */
@@ -262,14 +261,19 @@ body {
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 .status-badge {
-    display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.75rem;
-    border-radius: var(--radius-xs); font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; white-space: nowrap;
 }
-.status-matched { background: var(--success-bg); color: var(--success); }
-.status-conflicting { background: var(--danger-bg); color: var(--danger); }
-.status-source-only { background: var(--warning-bg); color: var(--warning); }
-.status-dest-only { background: var(--info-bg); color: var(--info); }
-.status-manual { background: var(--manual-bg); color: var(--manual); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.status-matched { color: var(--success); }
+.status-matched .status-dot { background: var(--success); }
+.status-conflicting { color: var(--danger); }
+.status-conflicting .status-dot { background: var(--danger); }
+.status-source-only { color: var(--info); }
+.status-source-only .status-dot { background: var(--info); }
+.status-dest-only { color: var(--warning); }
+.status-dest-only .status-dot { background: var(--warning); }
+.status-manual { color: var(--manual); }
+.status-manual .status-dot { background: var(--manual); }
 .card {
     background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
     box-shadow: var(--shadow-sm); padding: 1.25rem 1.5rem; margin-bottom: 1rem; transition: box-shadow var(--transition);
@@ -314,15 +318,15 @@ h3 {
     border-bottom: 1px solid var(--border-subtle);
 }
 h3:first-child { margin-top: 0.375rem; }
-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; min-width: 400px; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 400px; }
 .table-wrap { overflow-x: auto; margin-bottom: 0.75rem; border-radius: var(--radius-xs); }
 th {
-    background: var(--header-bg); text-align: left; padding: 0.5rem 0.75rem; font-weight: 600;
-    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
-    border-bottom: 1px solid var(--border); user-select: none; position: relative;
+    background: var(--bg-card); text-align: left; padding: 8px 10px; font-weight: 600;
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+    border-bottom: 1px solid var(--border); user-select: none; position: relative; white-space: nowrap;
 }
-th[onclick]:hover { background: var(--accent-soft); color: var(--accent); }
-td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); vertical-align: top; color: var(--text); word-break: break-word; }
+th[onclick]:hover { color: var(--text); }
+td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text); word-break: break-word; }
 tr:last-child td { border-bottom: none; }
 tr:nth-child(even) td { background: var(--row-alt); }
 tr:hover td { background: var(--accent-soft); }
@@ -330,12 +334,13 @@ tr:hover td { background: var(--accent-soft); }
 .setting-name { color: var(--text-secondary); }
 .setting-path {
     display: block;
-    font-size: 0.7rem;
+    font-size: 9px;
     color: var(--muted);
-    margin-top: 2px;
+    margin-top: 1px;
+    word-break: break-word;
 }
-.setting-name strong { font-weight: 600; color: var(--text); }
-.value-cell { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; font-size: 0.75rem; }
+.setting-name strong { font-weight: 500; font-size: 11px; color: var(--text); }
+.value-cell { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 10px; word-break: break-word; }
 .value-truncate { max-height: 4.5em; overflow: hidden; position: relative; }
 .value-truncate.expanded { max-height: none; white-space: pre-wrap; }
 .value-toggle-btn {
@@ -560,11 +565,8 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine("    <div class=`"summary-tile dest-only`"><div class=`"count`" id=`"countDest`">0</div><div class=`"label`">$destName Only</div></div>")
     [void]$sb.AppendLine('</div>')
 
-    # ── Search bar (wrapped in comparison-filters container for tab toggling) ──
+    # ── Filters (wrapped in comparison-filters container for tab toggling) ──
     [void]$sb.AppendLine('<div id="comparison-filters">')
-    [void]$sb.AppendLine('<div class="search-bar">')
-    [void]$sb.AppendLine('    <input type="text" id="search-input" placeholder="Search setting name, path, values, policies, category..." oninput="applyFilters()">')
-    [void]$sb.AppendLine('</div>')
 
     # ── Collect all unique categories for the filter dropdown (Fix 5: before rendering) ──
     # D-01/D-02: Use "$productName / $categoryName" composite from outer loop keys, not $row.Category
@@ -582,13 +584,13 @@ table.hide-assignments .col-assign { display: none; }
 
     # ── Filter pills ──────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="filter-bar">')
-    [void]$sb.AppendLine('    <span class="filter-label">Filter:</span>')
+    [void]$sb.AppendLine('    <input class="search" id="search-input" type="text" placeholder="Quick search..." oninput="applyFilters()">')
     [void]$sb.AppendLine('    <button class="filter-pill filter-pill-matched" onclick="filterByStatus(this,''Matched'')">Matched</button>')
     [void]$sb.AppendLine('    <button class="filter-pill filter-pill-conflicting" onclick="filterByStatus(this,''Conflicting'')">Conflicting</button>')
     [void]$sb.AppendLine("    <button class=`"filter-pill filter-pill-source-only`" onclick=`"filterByStatus(this,'SourceOnly')`">$sourceName Only</button>")
     [void]$sb.AppendLine("    <button class=`"filter-pill filter-pill-dest-only`" onclick=`"filterByStatus(this,'DestOnly')`">$destName Only</button>")
     # Category filter dropdown
-    [void]$sb.Append('    <select id="category-filter" onchange="applyFilters()" style="margin-left:0.75rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text);font-size:0.75rem;font-family:inherit;cursor:pointer">')
+    [void]$sb.Append('    <select id="category-filter" onchange="applyFilters()" style="padding:4px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text);font-size:11px;font-family:inherit;cursor:pointer">')
     [void]$sb.Append('<option value="All">All categories</option>')
     foreach ($catName in $allCategories) {
         $encCat = [System.Net.WebUtility]::HtmlEncode($catName)
@@ -745,10 +747,10 @@ table.hide-assignments .col-assign { display: none; }
 
                 # Status badge
                 switch ($status) {
-                    'Matched'     { $statusHtml = '<span class="status-badge status-matched">&#10003;</span>' }
-                    'Conflicting' { $statusHtml = '<span class="status-badge status-conflicting">&#10007;</span>' }
-                    'SourceOnly'  { $statusHtml = "<span class=`"status-badge status-source-only`">$sourceName Only</span>" }
-                    'DestOnly'    { $statusHtml = "<span class=`"status-badge status-dest-only`">$destName Only</span>" }
+                    'Matched'     { $statusHtml = '<span class="status-badge status-matched"><span class="status-dot"></span>Match</span>' }
+                    'Conflicting' { $statusHtml = '<span class="status-badge status-conflicting"><span class="status-dot"></span>Conflict</span>' }
+                    'SourceOnly'  { $statusHtml = '<span class="status-badge status-source-only"><span class="status-dot"></span>Source Only</span>' }
+                    'DestOnly'    { $statusHtml = '<span class="status-badge status-dest-only"><span class="status-dot"></span>Dest Only</span>' }
                     default       { $statusHtml = [System.Net.WebUtility]::HtmlEncode($status) }
                 }
 

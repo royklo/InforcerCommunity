@@ -1239,9 +1239,8 @@ Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT
     # FLT-04: Search placeholder (D-07, D-08)
     # -------------------------------------------------------------------------
     Context 'FLT-04: Search' {
-        It 'search input placeholder matches D-08 specification' -Tag 'FLT-04' {
-            # D-08: placeholder = "Search setting name, path, values, policies, category..."
-            $script:FltHtml | Should -Match 'placeholder="Search setting name, path, values, policies, category\.\.\."'
+        It 'search input has placeholder text' -Tag 'FLT-04' {
+            $script:FltHtml | Should -Match 'placeholder="Quick search\.\.\."'
         }
     }
 }

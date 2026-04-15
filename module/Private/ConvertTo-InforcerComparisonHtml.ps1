@@ -290,12 +290,13 @@ summary {
     user-select: none; list-style: none; transition: background var(--transition);
 }
 summary::-webkit-details-marker { display: none; }
-summary::before {
+summary:not(.script-collapsible summary):not(.mr-category-section summary):not(.mr-platform-section summary)::before {
     content: ''; display: inline-block; width: 0.375rem; height: 0.375rem;
     border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
     transform: rotate(-45deg); margin-right: 0.625rem; transition: transform var(--transition); flex-shrink: 0;
 }
-details[open] > summary::before { transform: rotate(45deg); }
+details:not(.script-collapsible):not(.mr-category-section):not(.mr-platform-section)[open] > summary::before { transform: rotate(45deg); }
+.script-collapsible summary::before, .mr-category-section > summary::before, .mr-platform-section > summary::before { content: none !important; }
 summary:hover { background: var(--summary-hover); }
 .product-section { margin-bottom: 1rem; }
 .product-section > summary {
@@ -494,7 +495,6 @@ table.hide-assignments .col-assign { display: none; }
 .script-collapsible summary::-webkit-details-marker { display:none; }
 .script-collapsible summary::after { content:''; display:inline-block; width:6px; height:6px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(-45deg); transition:transform 0.2s ease; margin-left:auto; flex-shrink:0; }
 .script-collapsible[open] summary::after { transform:rotate(45deg); }
-.script-collapsible[open] summary::before { display:none; }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center; user-select: none; }
@@ -719,6 +719,14 @@ table.hide-assignments .col-assign { display: none; }
     $dupCount = $dupRows.Count
     $hasDuplicates = $dupCount -gt 0
 
+    # ── Collect deprecated settings for dedicated tab ──
+    $deprecatedRows = [System.Collections.Generic.List[object]]::new()
+    foreach ($entry in $allRows) {
+        if ($entry.Row.IsDeprecated -eq $true) { [void]$deprecatedRows.Add($entry) }
+    }
+    $deprecatedCount = $deprecatedRows.Count
+    $hasDeprecated = $deprecatedCount -gt 0
+
     [void]$sb.AppendLine('<div class="tab-nav">')
     [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'', event)">Comparison</button>')
     if ($hasManualReview) {
@@ -726,6 +734,9 @@ table.hide-assignments .col-assign { display: none; }
     }
     if ($hasDuplicates) {
         [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('duplicates', event)`">Duplicates <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$dupCount</span></button>")
+    }
+    if ($hasDeprecated) {
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('deprecated', event)`">Deprecated <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem;background:var(--danger-bg);color:var(--danger)`">$deprecatedCount</span></button>")
     }
     [void]$sb.AppendLine('</div>')
 
@@ -871,17 +882,9 @@ table.hide-assignments .col-assign { display: none; }
                 # Setting name cell (per D-09 through D-11: bold name, deprecated badge, duplicate badge, path)
                 $deprBadge = if ($row.IsDeprecated -eq $true) { ' <span class="badge-deprecated">&#x26A0; Deprecated</span>' } else { '' }
                 $settingPath = "$($row.SettingPath)"
-                # Strip the setting name from end of path to avoid redundancy
-                $displayPath = $settingPath
-                if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
-                    $lastSep = $settingPath.LastIndexOf(' > ')
-                    $lastSegment = $settingPath.Substring($lastSep + 3)
-                    if ($lastSegment -eq $row.Name) {
-                        $displayPath = $settingPath.Substring(0, $lastSep)
-                    }
-                }
-                $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
-                $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
+                # Show full path when it differs from the setting name (provides category context)
+                $pathHtml = if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
                 [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong>$deprBadge$dupeBadge$pathHtml</td>")
 
                 # Category column (already stripped of product prefix)
@@ -1277,6 +1280,47 @@ table.hide-assignments .col-assign { display: none; }
         [void]$sb.AppendLine('</div></div>')  # close dup-table-scroll-inner and dup-table-scroll
 
         [void]$sb.AppendLine('</div>')  # end tab-duplicates
+    }
+
+    # ── Deprecated tab content ────────────────────────────────────────────
+    if ($hasDeprecated) {
+        [void]$sb.AppendLine('<div class="tab-content" id="tab-deprecated">')
+        [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
+        [void]$sb.AppendLine('    <strong style="color:var(--danger)">&#x26A0; Deprecated Settings</strong><br>')
+        [void]$sb.AppendLine('    These settings use configurations that Microsoft may remove in future updates. Plan to migrate to modern replacements.')
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('<table id="deprecated-table" style="table-layout:fixed;width:100%">')
+        [void]$sb.AppendLine('    <thead><tr>')
+        [void]$sb.AppendLine('        <th style="width:6%">Status</th><th style="width:25%">Setting</th><th style="width:14%">Category</th>')
+        [void]$sb.AppendLine("        <th style=`"width:14%`">$sourceName Policy</th><th style=`"width:14%`">$sourceName Value</th>")
+        [void]$sb.AppendLine("        <th style=`"width:14%`">$destName Policy</th><th style=`"width:14%`">$destName Value</th>")
+        [void]$sb.AppendLine('    </tr></thead>')
+        [void]$sb.AppendLine('    <tbody>')
+        foreach ($entry in $deprecatedRows) {
+            $row = $entry.Row
+            $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
+            $encCat = [System.Net.WebUtility]::HtmlEncode($entry.CompositeCategory)
+            $encPath = [System.Net.WebUtility]::HtmlEncode("$($row.SettingPath)")
+            $pathHtml = if (-not [string]::IsNullOrEmpty($row.SettingPath) -and "$($row.SettingPath)" -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+            $status = $row.Status
+            $statusClass = switch ($status) { 'Matched' { 'matched' } 'Conflicting' { 'conflicting' } 'SourceOnly' { 'source-only' } 'DestOnly' { 'dest-only' } default { 'matched' } }
+            $statusLabel = switch ($status) { 'Matched' { 'Match' } 'Conflicting' { 'Conflict' } 'SourceOnly' { "$sourceName Only" } 'DestOnly' { "$destName Only" } default { $status } }
+            [void]$sb.Append("        <tr><td><span class=`"status-badge status-$statusClass`"><span class=`"status-dot`"></span>$statusLabel</span></td>")
+            [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong> <span class=`"badge-deprecated`">&#x26A0; Deprecated</span>$pathHtml</td>")
+            [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCat</td>")
+            $encSrcPol = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
+            $encSrcVal = [System.Net.WebUtility]::HtmlEncode("$($row.SourceValue)")
+            $encDstPol = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
+            $encDstVal = [System.Net.WebUtility]::HtmlEncode("$($row.DestinationValue)")
+            if ($status -eq 'DestOnly') { [void]$sb.Append('<td colspan="2" style="color:var(--muted);font-style:italic">Not configured</td>') }
+            else { [void]$sb.Append("<td>$encSrcPol</td><td class=`"value-cell`">$encSrcVal</td>") }
+            if ($status -eq 'SourceOnly') { [void]$sb.Append('<td colspan="2" style="color:var(--muted);font-style:italic">Not configured</td>') }
+            else { [void]$sb.Append("<td>$encDstPol</td><td class=`"value-cell`">$encDstVal</td>") }
+            [void]$sb.AppendLine('</tr>')
+        }
+        [void]$sb.AppendLine('    </tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')  # end tab-deprecated
     }
 
     # ── Footer ─────────────────────────────────────────────────────────────

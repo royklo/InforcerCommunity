@@ -1,11 +1,12 @@
 function Resolve-InforcerGraphEnrichment {
     <#
     .SYNOPSIS
-        Connects to Microsoft Graph and resolves group names, assignment filters, and scope tags for a tenant.
+        Connects to Microsoft Graph and resolves group names, assignment filters, scope tags, and compliance rules for a tenant.
     .DESCRIPTION
         Extracts unique group ObjectIDs from raw policy data, connects to Graph targeting the tenant's
-        Azure AD, and resolves IDs to display names. Returns a hashtable with GroupNameMap, FilterMap,
-        and ScopeTagMap ready for ConvertTo-InforcerDocModel.
+        Azure AD, and resolves IDs to display names. Also fetches compliance policy detection rules
+        (rulesContent) that the Inforcer API does not return. Returns a hashtable with GroupNameMap,
+        FilterMap, ScopeTagMap, and ComplianceRulesMap ready for ConvertTo-InforcerDocModel.
 
         Always performs a fresh Graph sign-in to ensure the correct Azure AD tenant context.
 
@@ -16,7 +17,7 @@ function Resolve-InforcerGraphEnrichment {
     .PARAMETER Label
         Display label for progress messages (e.g., 'Source', 'Destination').
     .OUTPUTS
-        Hashtable with keys: GroupNameMap, FilterMap, ScopeTagMap. Values are $null if Graph connection fails.
+        Hashtable with keys: GroupNameMap, FilterMap, ScopeTagMap, ComplianceRulesMap. Values are $null if Graph connection fails.
     #>
     [CmdletBinding()]
     param(
@@ -35,13 +36,13 @@ function Resolve-InforcerGraphEnrichment {
         $msTenantId = $DocData.Tenant.msTenantId
     }
 
-    $graphConnectParams = @{ RequiredScopes = @('Directory.Read.All') }
+    $graphConnectParams = @{ RequiredScopes = @('Directory.Read.All', 'DeviceManagementConfiguration.Read.All') }
     if ($msTenantId) { $graphConnectParams['TenantId'] = $msTenantId }
     $graphCtx = Connect-InforcerGraph @graphConnectParams
 
     if (-not $graphCtx) {
         Write-Warning "${prefix}Microsoft Graph connection failed. Falling back to raw ObjectIDs."
-        return @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null }
+        return @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null; ComplianceRulesMap = $null }
     }
 
     Write-Host "${prefix}Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
@@ -123,9 +124,34 @@ function Resolve-InforcerGraphEnrichment {
         Write-Host "${prefix}Loaded $($scopeTagMap.Count) scope tags" -ForegroundColor Gray
     }
 
+    # Fetch compliance rules (rulesContent) via Graph $expand — supplements Inforcer API gap
+    Write-Host "${prefix}Fetching compliance rules..." -ForegroundColor Gray
+    $complianceRulesMap = @{}
+    try {
+        $compPolicies = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies?$expand=deviceCompliancePolicyScript&$select=id,deviceCompliancePolicyScript'
+        if ($compPolicies) {
+            foreach ($cp in $compPolicies) {
+                if ($cp.deviceCompliancePolicyScript -and $cp.deviceCompliancePolicyScript.rulesContent) {
+                    $rulesB64 = $cp.deviceCompliancePolicyScript.rulesContent
+                    try {
+                        $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($rulesB64))
+                        $complianceRulesMap[$cp.id] = $decoded
+                    } catch {
+                        # If decode fails, store raw base64 — renderer can handle both
+                        $complianceRulesMap[$cp.id] = $rulesB64
+                    }
+                }
+            }
+            Write-Host "${prefix}Found compliance rules for $($complianceRulesMap.Count) policies" -ForegroundColor Gray
+        }
+    } catch {
+        Write-Warning "${prefix}Failed to fetch compliance rules: $($_.Exception.Message)"
+    }
+
     @{
-        GroupNameMap = $groupNameMap
-        FilterMap    = $filterMap
-        ScopeTagMap  = $scopeTagMap
+        GroupNameMap       = $groupNameMap
+        FilterMap          = $filterMap
+        ScopeTagMap        = $scopeTagMap
+        ComplianceRulesMap = $complianceRulesMap
     }
 }

@@ -1664,7 +1664,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    if (isDropdown) {')
     [void]$sb.AppendLine('        chip.setAttribute("data-type", "dropdown");')
     [void]$sb.AppendLine('        var options = [];')
-    [void]$sb.AppendLine('        if (key === "status") { options = [{v:"Matched",t:"Match"},{v:"Conflicting",t:"Conflict"},{v:"SourceOnly",t:"Source Only"},{v:"DestOnly",t:"Dest Only"}]; }')
+    [void]$sb.AppendLine('        if (key === "status") { options = [{v:"Match",t:"Match"},{v:"Conflict",t:"Conflict"},{v:"Source Only",t:"Source Only"},{v:"Dest Only",t:"Dest Only"}]; }')
     [void]$sb.AppendLine('        else if (key === "os") { options = [{v:"Windows",t:"Windows"},{v:"macOS",t:"macOS"},{v:"Android",t:"Android"},{v:"iOS",t:"iOS/iPadOS"}]; }')
     [void]$sb.AppendLine('        else if (key === "category") {')
     [void]$sb.AppendLine('            var catSet = new Set();')

@@ -419,7 +419,7 @@ function Compare-InforcerDocModels {
                             # Skip binary hash fields (not displayable)
                             if ($settingName -match '^hashed|Hash$') { continue }
                             # Decode base64 script content (but not hashes)
-                            if ($settingName -match '^(scriptContent|detectionScriptContent|remediationScriptContent)$') {
+                            if ($settingName -match '(?i)^(script\s*content|detection\s*script\s*content|remediation\s*script\s*content|scriptContent|detectionScriptContent|remediationScriptContent)$') {
                                 try {
                                     $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($settingValue))
                                     $settingValue = $decoded

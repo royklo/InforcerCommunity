@@ -1029,7 +1029,7 @@ table.hide-assignments .col-assign { display: none; }
                             }
                         }
                         # Priority 3 & 4: Script content — bash (shebang) vs PowerShell (D-02, D-04, D-01)
-                        elseif ($s.Name -match 'scriptContent|detectionScriptContent|remediationScriptContent' -and $s.Value.Length -gt 100) {
+                        elseif ($s.Name -match '(?i)script\s*content|detection\s*script\s*content|remediation\s*script\s*content|scriptContent|detectionScriptContent|remediationScriptContent' -and $s.Value.Length -gt 100) {
                             $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
                             $isBash = $s.Value.TrimStart() -match '^#!'
                             $preClass = if ($isBash) { 'sh-code' } else { 'ps-code' }

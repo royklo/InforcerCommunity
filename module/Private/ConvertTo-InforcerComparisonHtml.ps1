@@ -530,6 +530,8 @@ table.hide-assignments .col-assign { display: none; }
 .dup-table td.dup-conflict { background: var(--warning-bg); color: var(--warning); font-weight: 600; }
 .manual-review-setting .setting-name { color: var(--text); flex: 1; }
 .manual-review-setting .setting-value { color: var(--text-secondary); max-width: 40%; text-align: right; word-break: break-word; font-family: "SF Mono","Cascadia Code","Consolas",monospace; font-size: 0.75rem; }
+.setting-value.val-true { font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 1px 8px; border-radius: 4px; }
+.setting-value.val-false { color: var(--muted); opacity: 0.6; }
 .manual-review-setting:nth-child(even) { background: var(--row-alt); }
 .setting-deprecated { background: transparent !important; padding: 0.25rem 0.5rem; margin: 0.1rem 0; }
 .setting-deprecated .setting-name { color: var(--danger); font-weight: 600; }
@@ -1094,10 +1096,14 @@ table.hide-assignments .col-assign { display: none; }
                         $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
                         [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`">&#x26A0; $encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                     }
-                    # Priority 7: Default key-value display
+                    # Priority 7: Default key-value display (with boolean styling)
                     else {
                         $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
-                        [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
+                        $valClass = 'setting-value'
+                        $rawVal = "$($s.Value)".Trim()
+                        if ($rawVal -eq 'True' -or $rawVal -eq 'true') { $valClass = 'setting-value val-true' }
+                        elseif ($rawVal -eq 'False' -or $rawVal -eq 'false') { $valClass = 'setting-value val-false' }
+                        [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"$valClass`">$encSValue</span></div>")
                     }
                 }
             } else {

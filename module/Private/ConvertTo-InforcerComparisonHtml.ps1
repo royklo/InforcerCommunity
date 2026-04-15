@@ -997,6 +997,8 @@ table.hide-assignments .col-assign { display: none; }
                 foreach ($s in $policy.Settings) {
                     $encSName = [System.Net.WebUtility]::HtmlEncode($s.Name)
                     $isSettingDepr = $s.IsDeprecated -eq $true
+                    # Skip deprecated settings — they have their own dedicated tab
+                    if ($isSettingDepr) { continue }
                     # Priority 1: Duplicate table (D-08, D-09, D-10, D-11)
                     if ($s.Value -match '^__DUPLICATE_TABLE__') {
                         $dupJson = $s.Value.Substring('__DUPLICATE_TABLE__'.Length)
@@ -1337,7 +1339,7 @@ table.hide-assignments .col-assign { display: none; }
         foreach ($group in $deprSource) {
             $encPol = [System.Net.WebUtility]::HtmlEncode($group.Policy)
             [void]$sb.AppendLine("<details class=`"manual-review-card`" open>")
-            [void]$sb.AppendLine("    <summary><strong>$encPol</strong> <span class=`"badge-deprecated`">&#x26A0; $($group.Settings.Count) deprecated</span></summary>")
+            [void]$sb.AppendLine("    <summary><strong>$encPol</strong> <span class=`"status-badge`" style=`"font-size:0.65rem`">$($group.Settings.Count)</span></summary>")
             [void]$sb.AppendLine('    <div class="mr-body">')
             foreach ($entry in $group.Settings) {
                 $row = $entry.Row
@@ -1350,7 +1352,7 @@ table.hide-assignments .col-assign { display: none; }
                 }
                 $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
                 $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
-                [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`"><strong>$encName</strong>$pathHtml</span></div>")
+                [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`"><strong>$encName</strong>$pathHtml</span></div>")
             }
             [void]$sb.AppendLine('    </div>')
             [void]$sb.AppendLine('</details>')
@@ -1363,7 +1365,7 @@ table.hide-assignments .col-assign { display: none; }
         foreach ($group in $deprDest) {
             $encPol = [System.Net.WebUtility]::HtmlEncode($group.Policy)
             [void]$sb.AppendLine("<details class=`"manual-review-card`" open>")
-            [void]$sb.AppendLine("    <summary><strong>$encPol</strong> <span class=`"badge-deprecated`">&#x26A0; $($group.Settings.Count) deprecated</span></summary>")
+            [void]$sb.AppendLine("    <summary><strong>$encPol</strong> <span class=`"status-badge`" style=`"font-size:0.65rem`">$($group.Settings.Count)</span></summary>")
             [void]$sb.AppendLine('    <div class="mr-body">')
             foreach ($entry in $group.Settings) {
                 $row = $entry.Row
@@ -1376,7 +1378,7 @@ table.hide-assignments .col-assign { display: none; }
                 }
                 $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
                 $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
-                [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`"><strong>$encName</strong>$pathHtml</span></div>")
+                [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`"><strong>$encName</strong>$pathHtml</span></div>")
             }
             [void]$sb.AppendLine('    </div>')
             [void]$sb.AppendLine('</details>')

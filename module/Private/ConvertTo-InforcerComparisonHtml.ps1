@@ -638,7 +638,7 @@ table.hide-assignments .col-assign { display: none; }
         [void]$sb.Append("<label><input type=`"checkbox`" value=`"$encCat`" onchange=`"applyFilters()`"> $encCat</label>")
     }
     [void]$sb.AppendLine('</div></div>')
-    [void]$sb.AppendLine('    <span class="adv-filter-wrap"><button class="adv-filter-btn" onclick="toggleAdvMenu()" title="Add column filter">+ Filter</button><div class="adv-filter-menu" id="adv-filter-menu"><button onclick="addAdvFilter(''setting'',''Setting Name'',1)">Setting Name</button><button onclick="addAdvFilter(''policy'',''Policy Name'',3)">Policy Name</button><button onclick="addAdvFilter(''value'',''Value'',4)">Value</button></div></span>')
+    [void]$sb.AppendLine('    <span class="adv-filter-wrap"><button class="adv-filter-btn" onclick="toggleAdvMenu()" title="Add column filter">+ Filter</button><div class="adv-filter-menu" id="adv-filter-menu"><button onclick="addAdvFilter(''status'',''Status'',0)">Status</button><button onclick="addAdvFilter(''setting'',''Setting Name'',1)">Setting Name</button><button onclick="addAdvFilter(''category'',''Category'',2)">Category</button><button onclick="addAdvFilter(''policy'',''Policy Name'',3)">Policy Name</button><button onclick="addAdvFilter(''value'',''Value'',4)">Value</button><button onclick="addAdvFilter(''assignment'',''Assignment'',7)">Assignment</button></div></span>')
     [void]$sb.AppendLine('    <span class="adv-logic-toggle" id="adv-logic-toggle" style="display:none"><button class="active" onclick="setAdvLogic(this,''and'')">AND</button><button onclick="setAdvLogic(this,''or'')">OR</button></span>')
     [void]$sb.AppendLine('    <button id="clear-filters-btn" class="hidden" onclick="clearFilters()" style="color:var(--danger);background:none;border:none;font-size:0.75rem;font-weight:600;cursor:pointer;padding:0.25rem 0.5rem">Clear filters</button>')
     if ($inclAssignments) {
@@ -1359,6 +1359,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('                    var colsToCheck = [col];')
     [void]$sb.AppendLine('                    if (col === 3) colsToCheck.push(5);')
     [void]$sb.AppendLine('                    if (col === 4) colsToCheck.push(6);')
+    [void]$sb.AppendLine('                    if (col === 7) colsToCheck.push(8);')
     [void]$sb.AppendLine('                    colsToCheck.forEach(function(c) {')
     [void]$sb.AppendLine('                        if (cells[c] && cells[c].textContent.toLowerCase().indexOf(val) >= 0) matchesAdv = true;')
     [void]$sb.AppendLine('                    });')
@@ -1373,6 +1374,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('                    var colsToCheck = [col];')
     [void]$sb.AppendLine('                    if (col === 3) colsToCheck.push(5);')
     [void]$sb.AppendLine('                    if (col === 4) colsToCheck.push(6);')
+    [void]$sb.AppendLine('                    if (col === 7) colsToCheck.push(8);')
     [void]$sb.AppendLine('                    colsToCheck.forEach(function(c) {')
     [void]$sb.AppendLine('                        if (cells[c] && cells[c].textContent.toLowerCase().indexOf(val) >= 0) found = true;')
     [void]$sb.AppendLine('                    });')

@@ -822,6 +822,14 @@ function Compare-InforcerDocModels {
                 $entries = $settingMap[$dupeKey]
                 if ($entries.Count -lt 2) { continue }
 
+                # Require 2+ unique POLICY names — same policy across two tenants is a comparison
+                # conflict, not a duplicate. Duplicates are when the SAME setting is in MULTIPLE policies.
+                $uniquePolicies = [System.Collections.Generic.HashSet[string]]::new(
+                    [string[]]($entries | ForEach-Object { $_.PolicyName }),
+                    [System.StringComparer]::OrdinalIgnoreCase
+                )
+                if ($uniquePolicies.Count -lt 2) { continue }
+
                 # Check for 2+ unique values (case-insensitive)
                 $uniqueValues = [System.Collections.Generic.HashSet[string]]::new(
                     [string[]]($entries | ForEach-Object { $_.Value }),

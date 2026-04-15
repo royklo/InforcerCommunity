@@ -985,7 +985,12 @@ table.hide-assignments .col-assign { display: none; }
             $encProfileType = [System.Net.WebUtility]::HtmlEncode($policy.ProfileType)
 
             $hasDepr = $policy.HasDeprecated -eq $true
-            $deprBadge = if ($hasDepr) { ' <span class="badge-deprecated">&#x26A0; contains deprecated settings</span>' } else { '' }
+            # Skip policies where ALL settings are deprecated (they're in the Deprecated tab)
+            if ($hasDepr) {
+                $nonDeprCount = @($policy.Settings | Where-Object { $_.IsDeprecated -ne $true }).Count
+                if ($nonDeprCount -eq 0) { continue }
+            }
+            $deprBadge = ''
             [void]$sb.AppendLine('<details class="manual-review-card">')
             [void]$sb.AppendLine("    <summary><strong>$encPolicyName</strong>$deprBadge</summary>")
             [void]$sb.AppendLine('    <div class="mr-body">')

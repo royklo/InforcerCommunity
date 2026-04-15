@@ -488,6 +488,8 @@ table.hide-assignments .col-assign { display: none; }
 .adv-dropdown-menu label:hover { background:var(--accent-soft); }
 .adv-dropdown-menu input[type=checkbox] { width:14px; height:14px; margin:0; accent-color:var(--accent); flex-shrink:0; cursor:pointer; }
 .score-bar-fill { transition:width 0.5s cubic-bezier(0.4,0,0.2,1), background-color 0.5s ease; }
+.mr-category-section > summary::-webkit-details-marker { display:none; }
+.mr-category-section[open] .cat-chevron { display:inline-block; transform:rotate(90deg); }
 .script-collapsible summary { cursor:pointer; display:flex; align-items:center; gap:0.5rem; list-style:none; padding:0.35rem 0; }
 .script-collapsible summary::-webkit-details-marker { display:none; }
 .script-collapsible summary::after { content:''; display:inline-block; width:6px; height:6px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(-45deg); transition:transform 0.2s ease; margin-left:auto; flex-shrink:0; }
@@ -1136,7 +1138,9 @@ table.hide-assignments .col-assign { display: none; }
             foreach ($catLabel in $platformGroups[$platform].Keys) {
                 $policies = $platformGroups[$platform][$catLabel]
                 $encCatLabel = [System.Net.WebUtility]::HtmlEncode((& $simplifyCategory $catLabel))
-                [void]$sb.AppendLine("<h3 style=`"font-size:0.95rem;margin:1.5rem 0 0.75rem;color:var(--text)`">$encCatLabel</h3>")
+                $catPolicyCount = @($policies).Count
+                [void]$sb.AppendLine("<details class=`"mr-category-section`" open>")
+                [void]$sb.AppendLine("<summary style=`"font-size:0.95rem;font-weight:600;margin:1rem 0 0.5rem;color:var(--text);cursor:pointer;list-style:none;display:flex;align-items:center;gap:0.5rem`"><span style=`"font-size:0.6rem;color:var(--muted);transition:transform 0.2s`" class=`"cat-chevron`">&#x25B6;</span>$encCatLabel <span class=`"status-badge`" style=`"font-size:0.65rem`">$catPolicyCount</span></summary>")
 
                 $sourcePolicies = @($policies | Where-Object { $_.Side -eq 'Source' })
                 $destPolicies = @($policies | Where-Object { $_.Side -eq 'Destination' })
@@ -1161,6 +1165,7 @@ table.hide-assignments .col-assign { display: none; }
                 }
                 [void]$sb.AppendLine('</div>')
                 [void]$sb.AppendLine('</div>')
+                [void]$sb.AppendLine('</details>')  # end mr-category-section
             }
             [void]$sb.AppendLine('</details>')
         }

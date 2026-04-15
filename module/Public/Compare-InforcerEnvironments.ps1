@@ -112,6 +112,11 @@ if ($IncludingAssignments) {
     Write-Warning 'Assignment data is informational only and does not affect the alignment score.'
 }
 
+# ── Load Settings Catalog for friendly name resolution ────────────────────────
+$catalogParams = @{}
+if (-not [string]::IsNullOrEmpty($SettingsCatalogPath)) { $catalogParams['Path'] = $SettingsCatalogPath }
+Import-InforcerSettingsCatalog @catalogParams
+
 # ── Stage 1: Collect data from both environments ─────────────────────────────
 Write-Host 'Stage 1: Collecting environment data...' -ForegroundColor Cyan
 

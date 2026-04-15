@@ -103,12 +103,14 @@ function Get-InforcerComparisonData {
     }
 
     # ── Inject compliance rules into DocData policies (supplements Inforcer API gap) ──
+    # Only inject rulesContent for policies that DON'T have a linked script (avoid duplicate)
+    $srcLinkedPolicyIds = if ($srcGraphMaps.ComplianceScriptLinkMap) { [System.Collections.Generic.HashSet[string]]::new([string[]]$srcGraphMaps.ComplianceScriptLinkMap.Keys) } else { [System.Collections.Generic.HashSet[string]]::new() }
     if ($srcGraphMaps.ComplianceRulesMap -and $srcGraphMaps.ComplianceRulesMap.Count -gt 0) {
         $injected = 0
         foreach ($policy in @($sourceDocData.Policies)) {
             if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
             $pid = $policy.policyData.id
-            if ($srcGraphMaps.ComplianceRulesMap.ContainsKey($pid)) {
+            if ($srcGraphMaps.ComplianceRulesMap.ContainsKey($pid) -and -not $srcLinkedPolicyIds.Contains($pid)) {
                 $policy.policyData | Add-Member -NotePropertyName 'rulesContent' -NotePropertyValue $srcGraphMaps.ComplianceRulesMap[$pid] -Force
                 $injected++
             }
@@ -156,12 +158,13 @@ function Get-InforcerComparisonData {
         }
     }
 
+    $dstLinkedPolicyIds = if ($dstGraphMaps.ComplianceScriptLinkMap) { [System.Collections.Generic.HashSet[string]]::new([string[]]$dstGraphMaps.ComplianceScriptLinkMap.Keys) } else { [System.Collections.Generic.HashSet[string]]::new() }
     if ($dstGraphMaps.ComplianceRulesMap -and $dstGraphMaps.ComplianceRulesMap.Count -gt 0) {
         $injected = 0
         foreach ($policy in @($destDocData.Policies)) {
             if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
             $pid = $policy.policyData.id
-            if ($dstGraphMaps.ComplianceRulesMap.ContainsKey($pid)) {
+            if ($dstGraphMaps.ComplianceRulesMap.ContainsKey($pid) -and -not $dstLinkedPolicyIds.Contains($pid)) {
                 $policy.policyData | Add-Member -NotePropertyName 'rulesContent' -NotePropertyValue $dstGraphMaps.ComplianceRulesMap[$pid] -Force
                 $injected++
             }

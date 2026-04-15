@@ -332,6 +332,41 @@ function Compare-InforcerDocModels {
     # ── Categories that should go to manual review instead of comparison ──
     $manualReviewCategories = [ordered]@{}
 
+    # ── Build discovery script lookup (for embedding in compliance policy MR cards) ──
+    # Maps script displayName → script settings (decoded) for lookup by deviceComplianceScriptId
+    $discoveryScriptSettings = @{}
+    foreach ($model in @($SourceModel, $DestinationModel)) {
+        if ($null -eq $model -or $null -eq $model.Products) { continue }
+        foreach ($prod in $model.Products.Values) {
+            foreach ($catName in $prod.Categories.Keys) {
+                if ($catName -notmatch 'custom.*device.*compliance.*discovery|device.*compliance.*discovery.*script') { continue }
+                foreach ($policy in @($prod.Categories[$catName])) {
+                    if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
+                    # Build script data with decoded content
+                    $scriptSettings = [System.Collections.Generic.List[object]]::new()
+                    foreach ($s in @($policy.Settings)) {
+                        if ($s.IsConfigured -ne $true) { continue }
+                        $sName = "$($s.Name)"
+                        $sValue = "$($s.Value)"
+                        if ($sName -match '@odata|^hashed|Hash$') { continue }
+                        # Decode base64 script content
+                        if ($sName -match '(?i)script.*content|detection.*script|remediation.*script' -and $sValue.Length -gt 20) {
+                            try { $sValue = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($sValue)) } catch {}
+                        }
+                        [void]$scriptSettings.Add(@{ Name = $sName; Value = $sValue })
+                    }
+                    # Store by EVERY possible ID — iterate settings to find the script's own ID
+                    foreach ($s in @($policy.Settings)) {
+                        $sVal = "$($s.Value)"
+                        if ($sVal -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
+                            $discoveryScriptSettings[$sVal] = @{ ScriptName = $policy.Basics.Name; Settings = $scriptSettings }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     # ── Collect all products from both models ─────────────────────────────
     $allProducts = [System.Collections.Generic.List[string]]::new()
     if ($SourceModel.Products) {
@@ -439,6 +474,18 @@ function Compare-InforcerDocModels {
                                 }
                             }
                             [void]$settingsSummary.Add(@{ Name = $settingName; Value = $settingValue })
+                            # Embed linked discovery script when we find a Device Compliance Script ID
+                            if ($settingName -match '(?i)device\s*compliance\s*script\s*id' -and $settingValue -match '^[0-9a-f]{8}-') {
+                                if ($discoveryScriptSettings.ContainsKey($settingValue)) {
+                                    $linkedScript = $discoveryScriptSettings[$settingValue]
+                                    $scriptJson = @{ scriptName = $linkedScript.ScriptName }
+                                    foreach ($ss in $linkedScript.Settings) {
+                                        $scriptJson[$ss.Name] = $ss.Value
+                                    }
+                                    $scriptJsonStr = $scriptJson | ConvertTo-Json -Depth 5 -Compress
+                                    [void]$settingsSummary.Add(@{ Name = 'Linked Compliance Script'; Value = $scriptJsonStr })
+                                }
+                            }
                         }
                     }
                     [void]$manualReviewCategories[$categoryLabel].Add(@{

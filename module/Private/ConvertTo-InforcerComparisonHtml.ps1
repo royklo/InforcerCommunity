@@ -722,7 +722,9 @@ table.hide-assignments .col-assign { display: none; }
     # ── Collect deprecated settings for dedicated tab ──
     $deprecatedRows = [System.Collections.Generic.List[object]]::new()
     foreach ($entry in $allRows) {
-        if ($entry.Row.IsDeprecated -eq $true) { [void]$deprecatedRows.Add($entry) }
+        $r = $entry.Row
+        $isDepr = if ($r -is [hashtable]) { $r['IsDeprecated'] -eq $true } else { $r.IsDeprecated -eq $true }
+        if ($isDepr) { [void]$deprecatedRows.Add($entry) }
     }
     $deprecatedCount = $deprecatedRows.Count
     $hasDeprecated = $deprecatedCount -gt 0
@@ -882,9 +884,17 @@ table.hide-assignments .col-assign { display: none; }
                 # Setting name cell (per D-09 through D-11: bold name, deprecated badge, duplicate badge, path)
                 $deprBadge = if ($row.IsDeprecated -eq $true) { ' <span class="badge-deprecated">&#x26A0; Deprecated</span>' } else { '' }
                 $settingPath = "$($row.SettingPath)"
-                $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
-                # Show full path when it differs from the setting name (provides category context)
-                $pathHtml = if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                # Strip the setting name from the end of the path (already shown above)
+                $displayPath = $settingPath
+                if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
+                    $lastSep = $settingPath.LastIndexOf(' > ')
+                    $lastSegment = $settingPath.Substring($lastSep + 3)
+                    if ($lastSegment -eq $row.Name) {
+                        $displayPath = $settingPath.Substring(0, $lastSep)
+                    }
+                }
+                $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
+                $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
                 [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong>$deprBadge$dupeBadge$pathHtml</td>")
 
                 # Category column (already stripped of product prefix)

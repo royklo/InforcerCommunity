@@ -128,8 +128,10 @@ function Resolve-InforcerGraphEnrichment {
     Write-Host "${prefix}Fetching compliance rules..." -ForegroundColor Gray
     $complianceRulesMap = @{}
     try {
-        $compUri = 'https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies?$expand=deviceCompliancePolicyScript&$select=id,displayName,deviceCompliancePolicyScript'
-        $compPolicies = Invoke-InforcerGraphRequest -Uri $compUri
+        # Use direct Invoke-MgGraphRequest — $select can conflict with $expand on this endpoint
+        $compUri = 'https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies?$expand=deviceCompliancePolicyScript'
+        $compResponse = Invoke-MgGraphRequest -Uri $compUri -Method GET -OutputType PSObject -ErrorAction Stop
+        $compPolicies = if ($compResponse -and $compResponse.value) { $compResponse.value } else { @() }
         $compCount = if ($compPolicies) { @($compPolicies).Count } else { 0 }
         Write-Host "${prefix}Graph returned $compCount compliance policies" -ForegroundColor Gray
         if ($compPolicies) {

@@ -588,6 +588,17 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine("    <div class=`"score-bar-track`"><div class=`"score-bar-fill`" id=`"scoreBar`"></div></div>")
     [void]$sb.AppendLine('</div>')
 
+    # Helper: simplify composite category to last meaningful segment
+    # "Defender / All / Antivirus" -> "Antivirus", "Intune / Windows / Settings Catalog" -> "Settings Catalog"
+    $simplifyCategory = {
+        param([string]$Category)
+        if ([string]::IsNullOrEmpty($Category)) { return $Category }
+        $parts = $Category -split ' / '
+        $meaningful = @($parts | Where-Object { $_ -ne 'All' -and -not [string]::IsNullOrWhiteSpace($_) })
+        if ($meaningful.Count -eq 0) { return $Category }
+        return $meaningful[-1]
+    }
+
     # ── Summary tiles ──────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="summary-grid">')
     [void]$sb.AppendLine('    <div class="summary-tile matched"><div class="count" id="countMatched">0</div><div class="label">Matched</div></div>')
@@ -607,7 +618,7 @@ table.hide-assignments .col-assign { display: none; }
         foreach ($categoryName in $productData.Categories.Keys) {
             $categoryData = $productData.Categories[$categoryName]
             foreach ($r in $categoryData.ComparisonRows) {
-                $cat = "$productName / $categoryName"
+                $cat = & $simplifyCategory "$productName / $categoryName"
                 if (-not [string]::IsNullOrWhiteSpace($cat)) { [void]$allCategories.Add($cat) }
             }
         }
@@ -697,7 +708,7 @@ table.hide-assignments .col-assign { display: none; }
     foreach ($productName in $products.Keys) {
         $productData = $products[$productName]
         foreach ($categoryName in $productData.Categories.Keys) {
-            $compositeCategory = "$productName / $categoryName"
+            $compositeCategory = & $simplifyCategory "$productName / $categoryName"
             foreach ($r in $productData.Categories[$categoryName].ComparisonRows) {
                 [void]$allRows.Add([PSCustomObject]@{ Row = $r; CompositeCategory = $compositeCategory })
             }
@@ -830,9 +841,17 @@ table.hide-assignments .col-assign { display: none; }
                 # Setting name cell (per D-09 through D-11: bold name, deprecated badge, duplicate badge, path)
                 $deprBadge = if ($row.IsDeprecated -eq $true) { ' <span class="badge-deprecated">&#x26A0; Deprecated</span>' } else { '' }
                 $settingPath = "$($row.SettingPath)"
-                $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
-                # Only show path when it adds context beyond the setting name itself
-                $pathHtml = if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                # Strip the setting name from end of path to avoid redundancy
+                $displayPath = $settingPath
+                if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
+                    $lastSep = $settingPath.LastIndexOf(' > ')
+                    $lastSegment = $settingPath.Substring($lastSep + 3)
+                    if ($lastSegment -eq $row.Name) {
+                        $displayPath = $settingPath.Substring(0, $lastSep)
+                    }
+                }
+                $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
+                $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
                 [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong>$deprBadge$dupeBadge$pathHtml</td>")
 
                 # Category column (already stripped of product prefix)
@@ -908,7 +927,7 @@ table.hide-assignments .col-assign { display: none; }
             # Skip duplicates category — rendered in dedicated Duplicates tab (Phase 10)
             if ($catLabel -eq 'Duplicate Settings (Different Values)') { continue }
             $policies = $manualReview[$catLabel]
-            $encCatLabel = [System.Net.WebUtility]::HtmlEncode($catLabel)
+            $encCatLabel = [System.Net.WebUtility]::HtmlEncode((& $simplifyCategory $catLabel))
             [void]$sb.AppendLine("<h3 style=`"font-size:0.95rem;margin:1.5rem 0 0.75rem;color:var(--text)`">$encCatLabel</h3>")
 
             foreach ($policy in $policies) {
@@ -1102,9 +1121,17 @@ table.hide-assignments .col-assign { display: none; }
                                else { $dupRow.Name }
             }
             $encDisplayName = [System.Net.WebUtility]::HtmlEncode($displayName)
-            $encPath = [System.Net.WebUtility]::HtmlEncode($settingPath)
-            # Show full path below the name when it adds context
-            $pathLine = if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath -ne $displayName) {
+            # Strip the display name from end of path to show only parent path
+            $parentPath = $settingPath
+            if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
+                $lastSep2 = $settingPath.LastIndexOf(' > ')
+                $lastSeg2 = $settingPath.Substring($lastSep2 + 3)
+                if ($lastSeg2 -eq $displayName) {
+                    $parentPath = $settingPath.Substring(0, $lastSep2)
+                }
+            }
+            $encPath = [System.Net.WebUtility]::HtmlEncode($parentPath)
+            $pathLine = if (-not [string]::IsNullOrEmpty($parentPath) -and $parentPath -ne $displayName) {
                 "<span class=`"dup-setting-path`">$encPath</span>"
             } else { '' }
             [void]$sb.Append("<td class=`"dup-tab-setting`"><strong>$encDisplayName</strong>$pathLine</td>")

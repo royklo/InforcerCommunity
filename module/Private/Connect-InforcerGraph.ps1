@@ -32,7 +32,19 @@ function Connect-InforcerGraph {
         Import-Module -Name 'Microsoft.Graph.Authentication' -Force -ErrorAction Stop
     }
 
-    # Always do a fresh sign-in so the session is current
+    # Check if already connected to the correct tenant with sufficient scopes
+    $existingCtx = Get-MgContext -ErrorAction SilentlyContinue
+    if ($existingCtx -and $existingCtx.Account) {
+        $tenantMatch = [string]::IsNullOrWhiteSpace($TenantId) -or $existingCtx.TenantId -eq $TenantId
+        $scopesMissing = @($RequiredScopes | Where-Object { $existingCtx.Scopes -notcontains $_ })
+        if ($tenantMatch -and $scopesMissing.Count -eq 0) {
+            Write-Host "  Reusing existing Graph session: $($existingCtx.Account) (tenant: $($existingCtx.TenantId))" -ForegroundColor Green
+            $script:InforcerGraphConnected = $true
+            return $existingCtx
+        }
+    }
+
+    # Fresh sign-in needed (different tenant or missing scopes)
     try {
         $connectParams = @{ Scopes = $RequiredScopes; NoWelcome = $true }
         if (-not [string]::IsNullOrWhiteSpace($TenantId)) {

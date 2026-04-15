@@ -416,8 +416,10 @@ function Compare-InforcerDocModels {
                         if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
                             $settingName = "$($s.Name)"
                             $settingValue = "$($s.Value)"
-                            # Skip binary hash fields (not displayable)
+                            # Skip noise: binary hashes, @odata metadata, GUIDs-only
                             if ($settingName -match '^hashed|Hash$') { continue }
+                            if ($settingName -match '@odata') { continue }
+                            if ($settingName -match '(?i)^notification\s*template\s*id$' -and $settingValue -match '^0{8}-') { continue }
                             # Decode base64 content (script content + compliance rules)
                             if ($settingName -match '(?i)^(script\s*content|detection\s*script\s*content|remediation\s*script\s*content|rules\s*content|scriptContent|detectionScriptContent|remediationScriptContent|rulesContent)$') {
                                 try {

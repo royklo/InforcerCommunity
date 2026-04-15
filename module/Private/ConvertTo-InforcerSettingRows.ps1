@@ -236,6 +236,7 @@ function ConvertTo-FlatSettingRows {
 
     foreach ($prop in $PolicyData.PSObject.Properties) {
         if ($prop.Name -in $skip) { continue }
+        if ($prop.Name -match '@odata') { continue }
         $val = $prop.Value
         if ($val -is [PSObject] -and $val.PSObject.Properties.Count -gt 0 -and $Depth -lt 2) {
             [void]$rows.Add([PSCustomObject]@{

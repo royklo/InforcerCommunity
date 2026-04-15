@@ -129,15 +129,27 @@ function Get-InforcerComparisonData {
     foreach ($p in @($sourceDocData.Policies)) {
         if ($p.policyTypeId -eq 104 -and $p.policyData -and $p.policyData.id) {
             $srcScriptLookup[$p.policyData.id] = $p
+            Write-Host "  Found discovery script: $($p.displayName) (id=$($p.policyData.id))" -ForegroundColor Gray
         }
     }
+    Write-Host "  Discovery scripts available: $($srcScriptLookup.Count) | Checking policies for deviceComplianceScriptId..." -ForegroundColor Gray
     if ($srcScriptLookup.Count -gt 0) {
         foreach ($policy in @($sourceDocData.Policies)) {
             if ($null -eq $policy.policyData) { continue }
             $scriptId = $policy.policyData.deviceComplianceScriptId
+            # Also check nested: deviceCompliancePolicyScript.deviceComplianceScriptId
+            if ([string]::IsNullOrWhiteSpace($scriptId) -and $policy.policyData.deviceCompliancePolicyScript) {
+                $scriptId = $policy.policyData.deviceCompliancePolicyScript.deviceComplianceScriptId
+            }
             if ([string]::IsNullOrWhiteSpace($scriptId)) { continue }
-            if (-not $srcScriptLookup.ContainsKey($scriptId)) { continue }
+            $policyName = if ($policy.displayName) { $policy.displayName } elseif ($policy.name) { $policy.name } else { $policy.policyData.displayName }
+            Write-Host "  Policy '$policyName' has deviceComplianceScriptId=$scriptId" -ForegroundColor Cyan
+            if (-not $srcScriptLookup.ContainsKey($scriptId)) {
+                Write-Host "    Script NOT found in lookup (available: $($srcScriptLookup.Keys -join ', '))" -ForegroundColor Yellow
+                continue
+            }
             $scriptPolicy = $srcScriptLookup[$scriptId]
+            Write-Host "    Linking to script: $($scriptPolicy.displayName)" -ForegroundColor Green
             $scriptData = @{
                 scriptName = if ($scriptPolicy.displayName) { $scriptPolicy.displayName }
                              elseif ($scriptPolicy.name) { $scriptPolicy.name }

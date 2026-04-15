@@ -478,17 +478,20 @@ table.hide-assignments .col-assign { display: none; }
 .tag-input-wrap .tag button { border:none; background:none; color:#fff; cursor:pointer; font-size:11px; line-height:1; padding:0 1px; opacity:0.8; }
 .tag-input-wrap .tag button:hover { opacity:1; }
 .tag-input-wrap input { border:none; outline:none; font-size:11px; background:transparent; color:var(--text); flex:1; min-width:60px; padding:1px 2px; font-family:inherit; }
-.adv-dropdown-wrap { position:relative; }
-.adv-dropdown-btn { border:1px solid var(--border); border-radius:4px; padding:2px 8px; font-size:11px; background:var(--bg-card); color:var(--text); cursor:pointer; min-width:100px; text-align:left; font-family:inherit; }
+.adv-dropdown-wrap { position:relative; display:inline-block; }
+.adv-dropdown-btn { border:1px solid var(--border); border-radius:4px; padding:3px 10px; font-size:11px; background:var(--bg-card); color:var(--text); cursor:pointer; min-width:100px; text-align:left; font-family:inherit; white-space:nowrap; }
 .adv-dropdown-btn:hover { border-color:var(--accent); }
-.adv-dropdown-menu { display:none; position:absolute; top:100%; left:0; z-index:120; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:4px 0; min-width:160px; max-height:200px; overflow-y:auto; }
+.adv-dropdown-menu { display:none; position:absolute; top:calc(100% + 2px); left:0; z-index:120; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.18); padding:6px 0; min-width:180px; max-height:220px; overflow-y:auto; }
 .adv-dropdown-menu.open { display:block; }
-.adv-dropdown-menu label { display:flex; align-items:center; gap:6px; padding:4px 10px; font-size:11px; color:var(--text); cursor:pointer; }
+.adv-dropdown-menu label { display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:11px; color:var(--text); cursor:pointer; white-space:nowrap; }
 .adv-dropdown-menu label:hover { background:var(--accent-soft); }
-.script-collapsible summary { cursor:pointer; display:flex; align-items:center; gap:0.5rem; list-style:none; }
+.adv-dropdown-menu input[type=checkbox] { width:14px; height:14px; margin:0; accent-color:var(--accent); flex-shrink:0; cursor:pointer; }
+.score-bar-fill { transition:width 0.5s cubic-bezier(0.4,0,0.2,1), background-color 0.5s ease; }
+.script-collapsible summary { cursor:pointer; display:flex; align-items:center; gap:0.5rem; list-style:none; padding:0.35rem 0; }
 .script-collapsible summary::-webkit-details-marker { display:none; }
-.script-collapsible summary::before { content:'\25B6'; font-size:0.65rem; color:var(--muted); transition:transform 0.2s; }
-.script-collapsible[open] summary::before { transform:rotate(90deg); }
+.script-collapsible summary::after { content:''; display:inline-block; width:6px; height:6px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(-45deg); transition:transform 0.2s ease; margin-left:auto; flex-shrink:0; }
+.script-collapsible[open] summary::after { transform:rotate(45deg); }
+.script-collapsible[open] summary::before { display:none; }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center; user-select: none; }
@@ -1257,15 +1260,31 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    if (pct < 90) return "#16a34a";')
     [void]$sb.AppendLine('    return "#059669";')
     [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('var _scoreAnim = null;')
     [void]$sb.AppendLine('function updateScore(matched, conflicting, source, dest) {')
     [void]$sb.AppendLine('    var total = matched + conflicting + source + dest;')
-    [void]$sb.AppendLine('    var pct = total > 0 ? Math.round((matched / total) * 1000) / 10 : 0;')
+    [void]$sb.AppendLine('    var targetPct = total > 0 ? Math.round((matched / total) * 1000) / 10 : 0;')
     [void]$sb.AppendLine('    var elScore = document.getElementById(''scoreNum'');')
     [void]$sb.AppendLine('    var elBar = document.getElementById(''scoreBar'');')
     [void]$sb.AppendLine('    var elDetail = document.getElementById(''scoreDetail'');')
-    [void]$sb.AppendLine('    if (elScore) elScore.textContent = pct + ''%'';')
-    [void]$sb.AppendLine('    if (elBar) { elBar.style.width = pct + ''%''; elBar.style.backgroundColor = barColor(pct); }')
+    [void]$sb.AppendLine('    // Bar uses CSS transition (smooth via .score-bar-fill class)')
+    [void]$sb.AppendLine('    if (elBar) { elBar.style.width = targetPct + ''%''; elBar.style.backgroundColor = barColor(targetPct); }')
     [void]$sb.AppendLine('    if (elDetail) elDetail.textContent = matched + '' of '' + total + '' settings matched'';')
+    [void]$sb.AppendLine('    // Animate score number smoothly')
+    [void]$sb.AppendLine('    if (_scoreAnim) cancelAnimationFrame(_scoreAnim);')
+    [void]$sb.AppendLine('    var currentPct = parseFloat(elScore ? elScore.textContent : ''0'') || 0;')
+    [void]$sb.AppendLine('    var startTime = null;')
+    [void]$sb.AppendLine('    var duration = 400;')
+    [void]$sb.AppendLine('    function animateNum(ts) {')
+    [void]$sb.AppendLine('        if (!startTime) startTime = ts;')
+    [void]$sb.AppendLine('        var progress = Math.min((ts - startTime) / duration, 1);')
+    [void]$sb.AppendLine('        var ease = progress < 0.5 ? 2*progress*progress : -1+(4-2*progress)*progress;')
+    [void]$sb.AppendLine('        var val = currentPct + (targetPct - currentPct) * ease;')
+    [void]$sb.AppendLine('        if (elScore) elScore.textContent = (Math.round(val * 10) / 10) + ''%'';')
+    [void]$sb.AppendLine('        if (progress < 1) { _scoreAnim = requestAnimationFrame(animateNum); }')
+    [void]$sb.AppendLine('        else { if (elScore) elScore.textContent = targetPct + ''%''; _scoreAnim = null; }')
+    [void]$sb.AppendLine('    }')
+    [void]$sb.AppendLine('    _scoreAnim = requestAnimationFrame(animateNum);')
     [void]$sb.AppendLine('    var em = document.getElementById(''countMatched'');')
     [void]$sb.AppendLine('    var ec = document.getElementById(''countConflicting'');')
     [void]$sb.AppendLine('    var es = document.getElementById(''countSource'');')

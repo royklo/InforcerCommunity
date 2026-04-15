@@ -421,6 +421,12 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .manual-review-card .side-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
 .manual-review-card .side-source { background: var(--info-bg); color: var(--info); }
 .manual-review-card .side-dest { background: var(--warning-bg); color: var(--warning); }
+.mr-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.mr-split-col h4 { font-size: 0.8rem; margin: 0 0 0.5rem; padding: 0.25rem 0.5rem; border-radius: var(--radius-xs); }
+.mr-split-col.mr-col-source h4 { background: var(--info-bg); color: var(--info); }
+.mr-split-col.mr-col-dest h4 { background: var(--warning-bg); color: var(--warning); }
+.mr-platform-section { margin-bottom: 1rem; }
+.mr-platform-section > summary { font-size: 1rem; cursor: pointer; padding: 0.5rem 0; border-bottom: 1px solid var(--border-subtle); user-select: none; }
 /* Assignment display — inline text, no badge backgrounds (D-04) */
 .assign-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .assign-cell-wrap { display: flex; flex-direction: column; gap: 4px; }
@@ -922,138 +928,173 @@ table.hide-assignments .col-assign { display: none; }
         [void]$sb.AppendLine('    <button type="button" id="mr-expand-all-btn" onclick="toggleAllManualReview()" style="font-size:0.75rem;font-weight:600;padding:0.35rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:all 0.15s ease">Expand All</button>')
         [void]$sb.AppendLine('</div>')
 
-        foreach ($catLabel in $manualReview.Keys) {
-            # Skip duplicates category — rendered in dedicated Duplicates tab (Phase 10)
-            if ($catLabel -eq 'Duplicate Settings (Different Values)') { continue }
-            $policies = $manualReview[$catLabel]
-            $encCatLabel = [System.Net.WebUtility]::HtmlEncode((& $simplifyCategory $catLabel))
-            [void]$sb.AppendLine("<h3 style=`"font-size:0.95rem;margin:1.5rem 0 0.75rem;color:var(--text)`">$encCatLabel</h3>")
+        # ── Render policy card helper (reused for source/dest columns) ──
+        $renderPolicyCard = {
+            param($policy, $sb)
+            $encPolicyName = [System.Net.WebUtility]::HtmlEncode($policy.PolicyName)
+            $encProfileType = [System.Net.WebUtility]::HtmlEncode($policy.ProfileType)
 
-            foreach ($policy in $policies) {
-                $encPolicyName = [System.Net.WebUtility]::HtmlEncode($policy.PolicyName)
-                $encProfileType = [System.Net.WebUtility]::HtmlEncode($policy.ProfileType)
-                $sideCls = if ($policy.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
-                $sideLabel = [System.Net.WebUtility]::HtmlEncode($policy.Side)
+            $hasDepr = $policy.HasDeprecated -eq $true
+            $deprBadge = if ($hasDepr) { ' <span class="badge-deprecated">&#x26A0; contains deprecated settings</span>' } else { '' }
+            [void]$sb.AppendLine('<details class="manual-review-card">')
+            [void]$sb.AppendLine("    <summary><strong>$encPolicyName</strong>$deprBadge</summary>")
+            [void]$sb.AppendLine('    <div class="mr-body">')
+            if (-not [string]::IsNullOrWhiteSpace($encProfileType)) {
+                [void]$sb.AppendLine("    <div style=`"font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem`">$encProfileType</div>")
+            }
 
-                $hasDepr = $policy.HasDeprecated -eq $true
-                $deprBadge = if ($hasDepr) { ' <span class="badge-deprecated">&#x26A0; contains deprecated settings</span>' } else { '' }
-                [void]$sb.AppendLine('<details class="manual-review-card">')
-                [void]$sb.AppendLine("    <summary><strong>$encPolicyName</strong> <span class=`"side-badge $sideCls`">$sideLabel</span>$deprBadge</summary>")
-                [void]$sb.AppendLine('    <div class="mr-body">')
-                if (-not [string]::IsNullOrWhiteSpace($encProfileType)) {
-                    [void]$sb.AppendLine("    <div style=`"font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem`">$encProfileType</div>")
-                }
-
-                if ($policy.Settings.Count -gt 0) {
-                    foreach ($s in $policy.Settings) {
-                        $encSName = [System.Net.WebUtility]::HtmlEncode($s.Name)
-                        $isSettingDepr = $s.IsDeprecated -eq $true
-                        # Priority 1: Duplicate table (D-08, D-09, D-10, D-11)
-                        if ($s.Value -match '^__DUPLICATE_TABLE__') {
-                            $dupJson = $s.Value.Substring('__DUPLICATE_TABLE__'.Length)
-                            try {
-                                $dupEntries = $dupJson | ConvertFrom-Json -ErrorAction Stop
-                                # Collect all unique policies for column headers
-                                $policyColumns = [ordered]@{}
-                                foreach ($entry in $dupEntries) {
-                                    $colKey = "$($entry.Policy)|$($entry.Side)"
-                                    if (-not $policyColumns.Contains($colKey)) {
-                                        $policyColumns[$colKey] = @{ Policy = $entry.Policy; Side = $entry.Side }
-                                    }
+            if ($policy.Settings.Count -gt 0) {
+                foreach ($s in $policy.Settings) {
+                    $encSName = [System.Net.WebUtility]::HtmlEncode($s.Name)
+                    $isSettingDepr = $s.IsDeprecated -eq $true
+                    # Priority 1: Duplicate table (D-08, D-09, D-10, D-11)
+                    if ($s.Value -match '^__DUPLICATE_TABLE__') {
+                        $dupJson = $s.Value.Substring('__DUPLICATE_TABLE__'.Length)
+                        try {
+                            $dupEntries = $dupJson | ConvertFrom-Json -ErrorAction Stop
+                            $policyColumns = [ordered]@{}
+                            foreach ($entry in $dupEntries) {
+                                $colKey = "$($entry.Policy)|$($entry.Side)"
+                                if (-not $policyColumns.Contains($colKey)) {
+                                    $policyColumns[$colKey] = @{ Policy = $entry.Policy; Side = $entry.Side }
                                 }
-                                # Determine if values conflict (more than 1 unique value)
-                                $uniqueValues = @($dupEntries | ForEach-Object { $_.Value } | Select-Object -Unique)
-                                $hasConflict = $uniqueValues.Count -gt 1
-
-                                [void]$sb.AppendLine('    <div style="margin:0.5rem 0"><strong style="font-size:0.8rem">Duplicate Settings</strong></div>')
-                                [void]$sb.AppendLine('    <div class="dup-table-wrap"><table class="dup-table">')
-                                # Header row
-                                $headerCells = '<th>Setting</th>'
-                                foreach ($colKey in $policyColumns.Keys) {
-                                    $col = $policyColumns[$colKey]
-                                    $encPolicy = [System.Net.WebUtility]::HtmlEncode($col.Policy)
-                                    # Use $colSideCls (not $sideCls) to avoid shadowing the outer policy-loop variable
-                                    $colSideCls = if ($col.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
-                                    $encSide = [System.Net.WebUtility]::HtmlEncode($col.Side)
-                                    $headerCells += "<th><span class=`"side-badge $colSideCls`">$encSide</span> $encPolicy</th>"
-                                }
-                                [void]$sb.AppendLine("    <thead><tr>$headerCells</tr></thead>")
-                                # Body row — one row for this setting
-                                $bodyCells = "<td class=`"dup-setting-name`">$encSName</td>"
-                                foreach ($colKey in $policyColumns.Keys) {
-                                    $matchEntry = $dupEntries | Where-Object { "$($_.Policy)|$($_.Side)" -eq $colKey } | Select-Object -First 1
-                                    $cellValue = if ($null -ne $matchEntry) { [System.Net.WebUtility]::HtmlEncode($matchEntry.Value) } else { '&mdash;' }
-                                    $conflictCls = if ($hasConflict -and $null -ne $matchEntry) { ' class="dup-conflict"' } else { '' }
-                                    $bodyCells += "<td$conflictCls>$cellValue</td>"
-                                }
-                                [void]$sb.AppendLine("    <tbody><tr>$bodyCells</tr></tbody>")
-                                [void]$sb.AppendLine('    </table></div>')
-                            } catch {
-                                # Graceful degradation — show as default setting
-                                $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
-                                [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                             }
-                        }
-                        # Priority 2: Compliance rules table (D-05, D-06, D-07)
-                        elseif ($s.Name -eq 'rulesContent') {
-                            $rulesRendered = $false
-                            try {
-                                $parsed = $s.Value | ConvertFrom-Json -Depth 10 -ErrorAction Stop
-                                $rules = if ($null -ne $parsed.Rules) { $parsed.Rules }
-                                         elseif ($null -ne $parsed.rules) { $parsed.rules }
-                                         elseif ($parsed -is [array]) { $parsed }
-                                         else { $null }
-                                if ($null -ne $rules -and @($rules).Count -gt 0) {
-                                    [void]$sb.AppendLine('    <div style="margin:0.5rem 0"><strong style="font-size:0.8rem">Compliance Rules</strong></div>')
-                                    [void]$sb.AppendLine('    <table class="compliance-table">')
-                                    [void]$sb.AppendLine('    <thead><tr><th>Setting</th><th>Operator</th><th>Type</th><th>Expected Value</th></tr></thead>')
-                                    [void]$sb.AppendLine('    <tbody>')
-                                    foreach ($rule in @($rules)) {
-                                        $rName = [System.Net.WebUtility]::HtmlEncode(($rule.settingName, $rule.SettingName, '' | Where-Object { $_ } | Select-Object -First 1))
-                                        $rOp   = [System.Net.WebUtility]::HtmlEncode(($rule.operator, $rule.Operator, '' | Where-Object { $_ } | Select-Object -First 1))
-                                        $rType = [System.Net.WebUtility]::HtmlEncode(($rule.dataType, $rule.DataType, '' | Where-Object { $_ } | Select-Object -First 1))
-                                        $rVal  = [System.Net.WebUtility]::HtmlEncode(($rule.operand, $rule.Operand, '' | Where-Object { $_ } | Select-Object -First 1))
-                                        [void]$sb.AppendLine("    <tr><td>$rName</td><td>$rOp</td><td>$rType</td><td>$rVal</td></tr>")
-                                    }
-                                    [void]$sb.AppendLine('    </tbody></table>')
-                                    $rulesRendered = $true
-                                }
-                            } catch {
-                                Write-Verbose "Failed to parse compliance rules JSON for '$($s.Name)': $_"
+                            $uniqueValues = @($dupEntries | ForEach-Object { $_.Value } | Select-Object -Unique)
+                            $hasConflict = $uniqueValues.Count -gt 1
+
+                            [void]$sb.AppendLine('    <div style="margin:0.5rem 0"><strong style="font-size:0.8rem">Duplicate Settings</strong></div>')
+                            [void]$sb.AppendLine('    <div class="dup-table-wrap"><table class="dup-table">')
+                            $headerCells = '<th>Setting</th>'
+                            foreach ($colKey in $policyColumns.Keys) {
+                                $col = $policyColumns[$colKey]
+                                $encPolicy = [System.Net.WebUtility]::HtmlEncode($col.Policy)
+                                $colSideCls = if ($col.Side -eq 'Source') { 'side-source' } else { 'side-dest' }
+                                $encSide = [System.Net.WebUtility]::HtmlEncode($col.Side)
+                                $headerCells += "<th><span class=`"side-badge $colSideCls`">$encSide</span> $encPolicy</th>"
                             }
-                            if (-not $rulesRendered) {
-                                # Graceful degradation — fall through to default display (D-07)
-                                $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
-                                [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
+                            [void]$sb.AppendLine("    <thead><tr>$headerCells</tr></thead>")
+                            $bodyCells = "<td class=`"dup-setting-name`">$encSName</td>"
+                            foreach ($colKey in $policyColumns.Keys) {
+                                $matchEntry = $dupEntries | Where-Object { "$($_.Policy)|$($_.Side)" -eq $colKey } | Select-Object -First 1
+                                $cellValue = if ($null -ne $matchEntry) { [System.Net.WebUtility]::HtmlEncode($matchEntry.Value) } else { '&mdash;' }
+                                $conflictCls = if ($hasConflict -and $null -ne $matchEntry) { ' class="dup-conflict"' } else { '' }
+                                $bodyCells += "<td$conflictCls>$cellValue</td>"
                             }
-                        }
-                        # Priority 3 & 4: Script content — bash (shebang) vs PowerShell (D-02, D-04, D-01)
-                        elseif ($s.Name -match '(?i)script\s*content|detection\s*script\s*content|remediation\s*script\s*content|scriptContent|detectionScriptContent|remediationScriptContent' -and $s.Value.Length -gt 100) {
-                            $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
-                            $isBash = $s.Value.TrimStart() -match '^#!'
-                            $preClass = if ($isBash) { 'sh-code' } else { 'ps-code' }
-                            $langLabel = if ($isBash) { 'Bash' } else { 'PowerShell' }
-                            [void]$sb.AppendLine("    <div style=`"margin:0.5rem 0`"><strong style=`"font-size:0.8rem`">$encSName</strong></div>")
-                            [void]$sb.AppendLine("    <div class=`"ps-code-wrap`"><span class=`"code-lang-label`">$langLabel</span><pre class=`"$preClass`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;margin:0`"><code>$encSValue</code></pre></div>")
-                        }
-                        # Priority 5: Deprecated setting
-                        elseif ($isSettingDepr) {
-                            $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
-                            [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`">&#x26A0; $encSName</span><span class=`"setting-value`">$encSValue</span></div>")
-                        }
-                        # Priority 6: Default key-value display
-                        else {
+                            [void]$sb.AppendLine("    <tbody><tr>$bodyCells</tr></tbody>")
+                            [void]$sb.AppendLine('    </table></div>')
+                        } catch {
                             $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
                             [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                         }
                     }
-                } else {
-                    [void]$sb.AppendLine('    <div style="color:var(--muted);font-size:0.8rem;font-style:italic">No configured settings</div>')
+                    # Priority 2: Compliance rules table (D-05, D-06, D-07)
+                    elseif ($s.Name -eq 'rulesContent') {
+                        $rulesRendered = $false
+                        try {
+                            $parsed = $s.Value | ConvertFrom-Json -Depth 10 -ErrorAction Stop
+                            $rules = if ($null -ne $parsed.Rules) { $parsed.Rules }
+                                     elseif ($null -ne $parsed.rules) { $parsed.rules }
+                                     elseif ($parsed -is [array]) { $parsed }
+                                     else { $null }
+                            if ($null -ne $rules -and @($rules).Count -gt 0) {
+                                [void]$sb.AppendLine('    <div style="margin:0.5rem 0"><strong style="font-size:0.8rem">Compliance Rules</strong></div>')
+                                [void]$sb.AppendLine('    <table class="compliance-table">')
+                                [void]$sb.AppendLine('    <thead><tr><th>Setting</th><th>Operator</th><th>Type</th><th>Expected Value</th></tr></thead>')
+                                [void]$sb.AppendLine('    <tbody>')
+                                foreach ($rule in @($rules)) {
+                                    $rName = [System.Net.WebUtility]::HtmlEncode(($rule.settingName, $rule.SettingName, '' | Where-Object { $_ } | Select-Object -First 1))
+                                    $rOp   = [System.Net.WebUtility]::HtmlEncode(($rule.operator, $rule.Operator, '' | Where-Object { $_ } | Select-Object -First 1))
+                                    $rType = [System.Net.WebUtility]::HtmlEncode(($rule.dataType, $rule.DataType, '' | Where-Object { $_ } | Select-Object -First 1))
+                                    $rVal  = [System.Net.WebUtility]::HtmlEncode(($rule.operand, $rule.Operand, '' | Where-Object { $_ } | Select-Object -First 1))
+                                    [void]$sb.AppendLine("    <tr><td>$rName</td><td>$rOp</td><td>$rType</td><td>$rVal</td></tr>")
+                                }
+                                [void]$sb.AppendLine('    </tbody></table>')
+                                $rulesRendered = $true
+                            }
+                        } catch {
+                            Write-Verbose "Failed to parse compliance rules JSON for '$($s.Name)': $_"
+                        }
+                        if (-not $rulesRendered) {
+                            $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                            [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
+                        }
+                    }
+                    # Priority 3 & 4: Script content — bash (shebang) vs PowerShell (D-02, D-04, D-01)
+                    elseif ($s.Name -match '(?i)script\s*content|detection\s*script\s*content|remediation\s*script\s*content|scriptContent|detectionScriptContent|remediationScriptContent' -and $s.Value.Length -gt 100) {
+                        $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                        $isBash = $s.Value.TrimStart() -match '^#!'
+                        $preClass = if ($isBash) { 'sh-code' } else { 'ps-code' }
+                        $langLabel = if ($isBash) { 'Bash' } else { 'PowerShell' }
+                        [void]$sb.AppendLine("    <div style=`"margin:0.5rem 0`"><strong style=`"font-size:0.8rem`">$encSName</strong></div>")
+                        [void]$sb.AppendLine("    <div class=`"ps-code-wrap`"><span class=`"code-lang-label`">$langLabel</span><pre class=`"$preClass`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;margin:0`"><code>$encSValue</code></pre></div>")
+                    }
+                    # Priority 5: Deprecated setting
+                    elseif ($isSettingDepr) {
+                        $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                        [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`">&#x26A0; $encSName</span><span class=`"setting-value`">$encSValue</span></div>")
+                    }
+                    # Priority 6: Default key-value display
+                    else {
+                        $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                        [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
+                    }
                 }
-                [void]$sb.AppendLine('    </div>')
-
-                [void]$sb.AppendLine('</details>')
+            } else {
+                [void]$sb.AppendLine('    <div style="color:var(--muted);font-size:0.8rem;font-style:italic">No configured settings</div>')
             }
+            [void]$sb.AppendLine('    </div>')
+            [void]$sb.AppendLine('</details>')
+        }
+
+        # ── Build platform-grouped structure ──
+        $platformGroups = [ordered]@{}
+        foreach ($catLabel in $manualReview.Keys) {
+            if ($catLabel -eq 'Duplicate Settings (Different Values)') { continue }
+            $segments = $catLabel -split '\s*/\s*'
+            $platform = if ($segments.Count -ge 3) { $segments[1].Trim() } else { 'Other' }
+            if (-not $platformGroups.Contains($platform)) {
+                $platformGroups[$platform] = [ordered]@{}
+            }
+            $platformGroups[$platform][$catLabel] = $manualReview[$catLabel]
+        }
+
+        # ── Render platform sections with 50/50 source/dest split ──
+        foreach ($platform in $platformGroups.Keys) {
+            $platformPolicyCount = ($platformGroups[$platform].Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum
+            $encPlatform = [System.Net.WebUtility]::HtmlEncode($platform)
+            [void]$sb.AppendLine("<details class=`"mr-platform-section`" open>")
+            [void]$sb.AppendLine("    <summary><strong>$encPlatform</strong> <span class=`"status-badge`" style=`"font-size:0.7rem`">$platformPolicyCount</span></summary>")
+
+            foreach ($catLabel in $platformGroups[$platform].Keys) {
+                $policies = $platformGroups[$platform][$catLabel]
+                $encCatLabel = [System.Net.WebUtility]::HtmlEncode((& $simplifyCategory $catLabel))
+                [void]$sb.AppendLine("<h3 style=`"font-size:0.95rem;margin:1.5rem 0 0.75rem;color:var(--text)`">$encCatLabel</h3>")
+
+                $sourcePolicies = @($policies | Where-Object { $_.Side -eq 'Source' })
+                $destPolicies = @($policies | Where-Object { $_.Side -eq 'Destination' })
+
+                [void]$sb.AppendLine('<div class="mr-split">')
+                [void]$sb.AppendLine('<div class="mr-split-col mr-col-source">')
+                [void]$sb.AppendLine('<h4>Source</h4>')
+                foreach ($policy in $sourcePolicies) {
+                    & $renderPolicyCard $policy $sb
+                }
+                if ($sourcePolicies.Count -eq 0) {
+                    [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">No policies</div>')
+                }
+                [void]$sb.AppendLine('</div>')
+                [void]$sb.AppendLine('<div class="mr-split-col mr-col-dest">')
+                [void]$sb.AppendLine('<h4>Destination</h4>')
+                foreach ($policy in $destPolicies) {
+                    & $renderPolicyCard $policy $sb
+                }
+                if ($destPolicies.Count -eq 0) {
+                    [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">No policies</div>')
+                }
+                [void]$sb.AppendLine('</div>')
+                [void]$sb.AppendLine('</div>')
+            }
+            [void]$sb.AppendLine('</details>')
         }
 
         [void]$sb.AppendLine('</div>')  # end tab-manual-review

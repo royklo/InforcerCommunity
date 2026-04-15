@@ -128,21 +128,29 @@ function Resolve-InforcerGraphEnrichment {
     Write-Host "${prefix}Fetching compliance rules..." -ForegroundColor Gray
     $complianceRulesMap = @{}
     try {
-        $compPolicies = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies?$expand=deviceCompliancePolicyScript&$select=id,deviceCompliancePolicyScript'
+        $compUri = 'https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies?$expand=deviceCompliancePolicyScript&$select=id,displayName,deviceCompliancePolicyScript'
+        $compPolicies = Invoke-InforcerGraphRequest -Uri $compUri
+        $compCount = if ($compPolicies) { @($compPolicies).Count } else { 0 }
+        Write-Host "${prefix}Graph returned $compCount compliance policies" -ForegroundColor Gray
         if ($compPolicies) {
-            foreach ($cp in $compPolicies) {
-                if ($cp.deviceCompliancePolicyScript -and $cp.deviceCompliancePolicyScript.rulesContent) {
+            foreach ($cp in @($compPolicies)) {
+                $cpName = $cp.displayName
+                $hasScript = $null -ne $cp.deviceCompliancePolicyScript
+                if ($hasScript -and $cp.deviceCompliancePolicyScript.rulesContent) {
                     $rulesB64 = $cp.deviceCompliancePolicyScript.rulesContent
                     try {
                         $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($rulesB64))
                         $complianceRulesMap[$cp.id] = $decoded
+                        Write-Host "${prefix}  Compliance rules found: $cpName" -ForegroundColor Green
                     } catch {
-                        # If decode fails, store raw base64 — renderer can handle both
                         $complianceRulesMap[$cp.id] = $rulesB64
+                        Write-Host "${prefix}  Compliance rules (raw base64): $cpName" -ForegroundColor Yellow
                     }
+                } else {
+                    Write-Verbose "${prefix}  No compliance script on: $cpName (hasScript=$hasScript)"
                 }
             }
-            Write-Host "${prefix}Found compliance rules for $($complianceRulesMap.Count) policies" -ForegroundColor Gray
+            Write-Host "${prefix}Found compliance rules for $($complianceRulesMap.Count) of $compCount policies" -ForegroundColor Gray
         }
     } catch {
         Write-Warning "${prefix}Failed to fetch compliance rules: $($_.Exception.Message)"

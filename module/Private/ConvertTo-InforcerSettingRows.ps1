@@ -237,8 +237,8 @@ function ConvertTo-FlatSettingRows {
     foreach ($prop in $PolicyData.PSObject.Properties) {
         if ($prop.Name -in $skip) { continue }
         if ($prop.Name -match '@odata') { continue }
-        # Skip injected internal properties and string method leaks
-        if ($prop.Name -eq 'linkedComplianceScript' -or $prop.Name -eq '_claimedByCompliancePolicy') { continue }
+        # Skip internal flags (but keep linkedComplianceScript — it's rendered by MR card)
+        if ($prop.Name -eq '_claimedByCompliancePolicy') { continue }
         if ($prop.Name -eq 'Length' -and $prop.Value -is [int]) { continue }
         $val = $prop.Value
         if ($val -is [PSObject] -and $val.PSObject.Properties.Count -gt 0 -and $Depth -lt 2) {

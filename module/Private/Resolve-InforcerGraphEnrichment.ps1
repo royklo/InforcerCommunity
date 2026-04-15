@@ -128,32 +128,33 @@ function Resolve-InforcerGraphEnrichment {
     Write-Host "${prefix}Fetching compliance rules..." -ForegroundColor Gray
     $complianceRulesMap = @{}
     try {
-        # Use direct Invoke-MgGraphRequest — $select can conflict with $expand on this endpoint
-        $compUri = 'https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies?$expand=deviceCompliancePolicyScript'
-        $compResponse = Invoke-MgGraphRequest -Uri $compUri -Method GET -OutputType PSObject -ErrorAction Stop
-        $compPolicies = if ($compResponse -and $compResponse.value) { $compResponse.value } else { @() }
-        $compCount = if ($compPolicies) { @($compPolicies).Count } else { 0 }
-        Write-Host "${prefix}Graph returned $compCount compliance policies" -ForegroundColor Gray
-        if ($compPolicies) {
-            foreach ($cp in @($compPolicies)) {
-                $cpName = $cp.displayName
-                $hasScript = $null -ne $cp.deviceCompliancePolicyScript
-                if ($hasScript -and $cp.deviceCompliancePolicyScript.rulesContent) {
-                    $rulesB64 = $cp.deviceCompliancePolicyScript.rulesContent
+        # Fetch compliance policy IDs from raw DocData (matching IntuneLens approach:
+        # the list endpoint doesn't return deviceCompliancePolicyScript, so we must
+        # GET each policy individually to retrieve the custom compliance rules)
+        $compPolicyIds = @($DocData.Policies | Where-Object {
+            $_.policyData -and $_.policyData.id -and
+            $_.policyData.'@odata.type' -match 'CompliancePolicy'
+        } | ForEach-Object { @{ Id = $_.policyData.id; Name = $_.displayName } })
+        Write-Host "${prefix}Checking $($compPolicyIds.Count) compliance policies for custom rules..." -ForegroundColor Gray
+        foreach ($cpInfo in $compPolicyIds) {
+            try {
+                $cpFull = Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies('$($cpInfo.Id)')" `
+                    -Method GET -OutputType PSObject -ErrorAction Stop
+                if ($cpFull.deviceCompliancePolicyScript -and $cpFull.deviceCompliancePolicyScript.rulesContent) {
+                    $rulesB64 = $cpFull.deviceCompliancePolicyScript.rulesContent
                     try {
                         $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($rulesB64))
-                        $complianceRulesMap[$cp.id] = $decoded
-                        Write-Host "${prefix}  Compliance rules found: $cpName" -ForegroundColor Green
+                        $complianceRulesMap[$cpInfo.Id] = $decoded
+                        Write-Host "${prefix}  Compliance rules found: $($cpInfo.Name)" -ForegroundColor Green
                     } catch {
-                        $complianceRulesMap[$cp.id] = $rulesB64
-                        Write-Host "${prefix}  Compliance rules (raw base64): $cpName" -ForegroundColor Yellow
+                        $complianceRulesMap[$cpInfo.Id] = $rulesB64
                     }
-                } else {
-                    Write-Verbose "${prefix}  No compliance script on: $cpName (hasScript=$hasScript)"
                 }
+            } catch {
+                Write-Verbose "${prefix}  Failed to fetch: $($cpInfo.Name) — $($_.Exception.Message)"
             }
-            Write-Host "${prefix}Found compliance rules for $($complianceRulesMap.Count) of $compCount policies" -ForegroundColor Gray
         }
+        Write-Host "${prefix}Found compliance rules for $($complianceRulesMap.Count) of $($compPolicyIds.Count) policies" -ForegroundColor Gray
     } catch {
         Write-Warning "${prefix}Failed to fetch compliance rules: $($_.Exception.Message)"
     }

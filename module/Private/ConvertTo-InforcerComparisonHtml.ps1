@@ -719,44 +719,7 @@ table.hide-assignments .col-assign { display: none; }
     $dupCount = $dupRows.Count
     $hasDuplicates = $dupCount -gt 0
 
-    # ── Collect deprecated settings for dedicated tab ──
-    $deprecatedRows = [System.Collections.Generic.List[object]]::new()
-    $deprDebugCount = 0
-    foreach ($entry in $allRows) {
-        $r = $entry.Row
-        # Check all possible access patterns for IsDeprecated
-        $isDepr = $false
-        if ($r -is [hashtable]) {
-            if ($r.ContainsKey('IsDeprecated') -and $r['IsDeprecated'] -eq $true) { $isDepr = $true }
-        } else {
-            if ($r.PSObject.Properties['IsDeprecated'] -and $r.IsDeprecated -eq $true) { $isDepr = $true }
-        }
-        if (-not $isDepr) {
-            # Fallback: check if the name contains "deprecated" (catalog already flags these)
-            $rowName = if ($r -is [hashtable]) { $r['Name'] } else { $r.Name }
-            if ($rowName -match '(?i)deprecated') { $isDepr = $true }
-        }
-        if ($isDepr) { [void]$deprecatedRows.Add($entry); $deprDebugCount++ }
-    }
-    $deprecatedCount = $deprecatedRows.Count
-    $hasDeprecated = $deprecatedCount -gt 0
-    Write-Host "  Deprecated settings found: $deprecatedCount (of $($allRows.Count) total)" -ForegroundColor $(if ($hasDeprecated) { 'Yellow' } else { 'Gray' })
-
-    [void]$sb.AppendLine('<div class="tab-nav">')
-    [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'', event)">Comparison</button>')
-    if ($hasManualReview) {
-        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review', event)`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
-    }
-    if ($hasDuplicates) {
-        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('duplicates', event)`">Duplicates <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$dupCount</span></button>")
-    }
-    if ($hasDeprecated) {
-        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('deprecated', event)`">Deprecated <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem;background:var(--danger-bg);color:var(--danger)`">$deprecatedCount</span></button>")
-    }
-    [void]$sb.AppendLine('</div>')
-
-    # ── Comparison tab ───────────────────────────────────────────────────
-    [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
+    # ── Build allRows FIRST (needed for deprecated tab detection before tab nav) ──
 
     # Collect ALL comparison rows into a single flat list with composite category
     # D-01/D-02: composite = "$productName / $categoryName" (outer loop keys, not $row.Category)
@@ -772,7 +735,43 @@ table.hide-assignments .col-assign { display: none; }
     }
     $allRows = @($allRows | Sort-Object { $_.Row.Name })
 
-    # Deprecated policies are in ManualReview with HasDeprecated flag
+    # ── Collect deprecated settings for dedicated tab ──
+    $deprecatedRows = [System.Collections.Generic.List[object]]::new()
+    foreach ($entry in $allRows) {
+        $r = $entry.Row
+        $isDepr = $false
+        if ($r -is [hashtable]) {
+            if ($r.ContainsKey('IsDeprecated') -and $r['IsDeprecated'] -eq $true) { $isDepr = $true }
+        } else {
+            if ($r.PSObject.Properties['IsDeprecated'] -and $r.IsDeprecated -eq $true) { $isDepr = $true }
+        }
+        # Fallback: check name for "deprecated" (catalog flags these in display name)
+        if (-not $isDepr) {
+            $rowName = if ($r -is [hashtable]) { $r['Name'] } else { $r.Name }
+            if ($rowName -match '(?i)deprecated') { $isDepr = $true }
+        }
+        if ($isDepr) { [void]$deprecatedRows.Add($entry) }
+    }
+    $deprecatedCount = $deprecatedRows.Count
+    $hasDeprecated = $deprecatedCount -gt 0
+    Write-Host "  Deprecated settings: $deprecatedCount" -ForegroundColor $(if ($hasDeprecated) { 'Yellow' } else { 'Gray' })
+
+    # ── Tab navigation (rendered after allRows + deprecated collection) ──
+    [void]$sb.AppendLine('<div class="tab-nav">')
+    [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'', event)">Comparison</button>')
+    if ($hasManualReview) {
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('manual-review', event)`">Manual Review <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$mrCount</span></button>")
+    }
+    if ($hasDuplicates) {
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('duplicates', event)`">Duplicates <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem`">$dupCount</span></button>")
+    }
+    if ($hasDeprecated) {
+        [void]$sb.AppendLine("    <button class=`"tab-btn`" onclick=`"switchTab('deprecated', event)`">Deprecated <span class=`"status-badge`" style=`"margin-left:0.5rem;font-size:0.7rem;background:var(--danger-bg);color:var(--danger)`">$deprecatedCount</span></button>")
+    }
+    [void]$sb.AppendLine('</div>')
+
+    # ── Comparison tab ───────────────────────────────────────────────────
+    [void]$sb.AppendLine('<div class="tab-content active" id="tab-comparison">')
 
     if ($allRows.Count -gt 0) {
         [void]$sb.AppendLine('    <div class="table-wrap">')

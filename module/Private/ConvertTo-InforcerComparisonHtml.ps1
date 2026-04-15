@@ -470,9 +470,13 @@ table.hide-assignments .col-assign { display: none; }
 .adv-chip label { font-weight:600; color:var(--accent); }
 .adv-chip input { border:1px solid var(--border); border-radius:4px; padding:2px 6px; font-size:11px; width:140px; background:var(--bg-card); color:var(--text); font-family:inherit; }
 .adv-chip .adv-chip-remove { cursor:pointer; color:var(--danger); font-weight:bold; margin-left:2px; border:none; background:none; font-size:13px; line-height:1; }
-.adv-logic-btn { display:inline-flex; align-items:center; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:700; letter-spacing:0.05em; cursor:pointer; margin:0 4px; font-family:inherit; transition:all 0.15s; border:none; user-select:none; }
-.adv-logic-btn[data-mode="AND"] { background:var(--accent-soft); color:var(--accent); }
-.adv-logic-btn[data-mode="OR"] { background:var(--warning-bg); color:var(--warning); }
+.adv-logic-btn { position:relative; display:inline-flex; align-items:center; width:44px; height:20px; border-radius:10px; cursor:pointer; margin:0 6px; border:none; font-size:0; padding:0; transition:background 0.2s; user-select:none; flex-shrink:0; }
+.adv-logic-btn::before { content:attr(data-mode); position:absolute; width:100%; text-align:center; font-size:8px; font-weight:700; letter-spacing:0.05em; color:#fff; z-index:1; }
+.adv-logic-btn::after { content:''; position:absolute; width:16px; height:16px; border-radius:50%; background:#fff; top:2px; transition:left 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
+.adv-logic-btn[data-mode="AND"] { background:var(--accent); }
+.adv-logic-btn[data-mode="AND"]::after { left:2px; }
+.adv-logic-btn[data-mode="OR"] { background:var(--warning); }
+.adv-logic-btn[data-mode="OR"]::after { left:26px; }
 .tag-input-wrap { display:flex; flex-wrap:wrap; align-items:center; gap:3px; border:1px solid var(--border); border-radius:4px; padding:2px 4px; min-width:160px; background:var(--bg-card); cursor:text; }
 .tag-input-wrap:focus-within { border-color:var(--accent); }
 .tag-input-wrap .tag { display:inline-flex; align-items:center; gap:2px; background:var(--accent); color:#fff; border-radius:3px; padding:1px 4px; font-size:10px; white-space:nowrap; }

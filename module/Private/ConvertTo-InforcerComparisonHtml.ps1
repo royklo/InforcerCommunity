@@ -395,8 +395,8 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .fab-top { opacity: 0; pointer-events: none; transform: translateY(8px); }
 .fab-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
-.fab-theme { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
-.fab-theme:hover { background: var(--bg-card); border-color: var(--accent); color: var(--accent); box-shadow: var(--shadow-lg); }
+.theme-toggle { position:fixed; top:1rem; right:1rem; z-index:100; width:36px; height:36px; border-radius:50%; border:1px solid var(--border); background:var(--bg-card); color:var(--text); cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow); transition:var(--transition); }
+.theme-toggle:hover { border-color:var(--accent); color:var(--accent); box-shadow:var(--shadow-lg); }
 @media (max-width: 768px) {
     body { padding: 0 1rem 2rem; font-size: 0.875rem; }
     .header h1 { font-size: 1.375rem; }
@@ -472,6 +472,23 @@ table.hide-assignments .col-assign { display: none; }
 .adv-chip .adv-chip-remove { cursor:pointer; color:var(--danger); font-weight:bold; margin-left:2px; border:none; background:none; font-size:13px; line-height:1; }
 .adv-logic-btn { display:inline-flex; align-items:center; padding:2px 8px; border:1px solid var(--border); border-radius:6px; font-size:10px; font-weight:600; color:var(--accent); background:var(--bg); cursor:pointer; margin:0 2px; font-family:inherit; transition:all 0.15s; }
 .adv-logic-btn:hover { background:var(--accent); color:#fff; }
+.tag-input-wrap { display:flex; flex-wrap:wrap; align-items:center; gap:3px; border:1px solid var(--border); border-radius:4px; padding:2px 4px; min-width:160px; background:var(--bg-card); cursor:text; }
+.tag-input-wrap:focus-within { border-color:var(--accent); }
+.tag-input-wrap .tag { display:inline-flex; align-items:center; gap:2px; background:var(--accent); color:#fff; border-radius:3px; padding:1px 4px; font-size:10px; white-space:nowrap; }
+.tag-input-wrap .tag button { border:none; background:none; color:#fff; cursor:pointer; font-size:11px; line-height:1; padding:0 1px; opacity:0.8; }
+.tag-input-wrap .tag button:hover { opacity:1; }
+.tag-input-wrap input { border:none; outline:none; font-size:11px; background:transparent; color:var(--text); flex:1; min-width:60px; padding:1px 2px; font-family:inherit; }
+.adv-dropdown-wrap { position:relative; }
+.adv-dropdown-btn { border:1px solid var(--border); border-radius:4px; padding:2px 8px; font-size:11px; background:var(--bg-card); color:var(--text); cursor:pointer; min-width:100px; text-align:left; font-family:inherit; }
+.adv-dropdown-btn:hover { border-color:var(--accent); }
+.adv-dropdown-menu { display:none; position:absolute; top:100%; left:0; z-index:120; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:4px 0; min-width:160px; max-height:200px; overflow-y:auto; }
+.adv-dropdown-menu.open { display:block; }
+.adv-dropdown-menu label { display:flex; align-items:center; gap:6px; padding:4px 10px; font-size:11px; color:var(--text); cursor:pointer; }
+.adv-dropdown-menu label:hover { background:var(--accent-soft); }
+.script-collapsible summary { cursor:pointer; display:flex; align-items:center; gap:0.5rem; list-style:none; }
+.script-collapsible summary::-webkit-details-marker { display:none; }
+.script-collapsible summary::before { content:'\25B6'; font-size:0.65rem; color:var(--muted); transition:transform 0.2s; }
+.script-collapsible[open] summary::before { transform:rotate(90deg); }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center; user-select: none; }
@@ -1214,13 +1231,15 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    InforcerCommunity Module &middot; Created by Roy Klooster')
     [void]$sb.AppendLine('</div>')
 
+    # ── Theme toggle (top-right) ────────────────────────────────────────────
+    [void]$sb.AppendLine('<button class="theme-toggle" id="btn-theme" onclick="toggleTheme()" aria-label="Toggle dark/light mode">')
+    [void]$sb.AppendLine('    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>')
+    [void]$sb.AppendLine('</button>')
+
     # ── Floating buttons ───────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="fab-group">')
     [void]$sb.AppendLine('    <button class="fab fab-top" id="btn-top" onclick="scrollToTop()" aria-label="Back to top">')
     [void]$sb.AppendLine('        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>')
-    [void]$sb.AppendLine('    </button>')
-    [void]$sb.AppendLine('    <button class="fab fab-theme" id="btn-theme" onclick="toggleTheme()" aria-label="Toggle dark/light mode">')
-    [void]$sb.AppendLine('        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>')
     [void]$sb.AppendLine('    </button>')
     [void]$sb.AppendLine('</div>')
 

@@ -732,28 +732,31 @@ function Compare-InforcerDocModels {
                             }
                         }
 
+                        # Collect per settingPath, keeping only one entry per policy+side
+                        # (parent choice "Enabled" and child "Force sign-in" share the same path —
+                        # keep the last/deepest value which is the specific choice, not the generic parent)
+                        $policyPathEntries = [ordered]@{}
                         foreach ($p in $paths) {
-                            # D-08: require definitionId
                             if ([string]::IsNullOrEmpty($p.DefinitionId)) { continue }
-                            # Noise exclusion (reuse existing helper)
                             if (& $isExcludedSetting $p.Name $p.Value) { continue }
                             $defKeyLower = $p.DefinitionId.ToLowerInvariant()
-                            # D-09: skip intra-policy repeats
                             if ($defsInPolicy[$defKeyLower] -gt 1) { continue }
-
-                            # D-07: settingPath lowercased as dedup key
                             $dupeKey = $p.SettingPath.ToLowerInvariant()
-                            if (-not $settingMap.Contains($dupeKey)) {
-                                $settingMap[$dupeKey] = [System.Collections.Generic.List[object]]::new()
-                            }
-                            [void]$settingMap[$dupeKey].Add(@{
+                            # Overwrite: last entry wins (child choice overrides parent "Enabled")
+                            $policyPathEntries[$dupeKey] = @{
                                 Value       = $p.Value
                                 PolicyName  = $policy.Basics.Name
                                 SettingName = $p.Name
                                 SettingPath = $p.SettingPath
                                 Side        = $side
                                 Category    = "$prodName / $catName"
-                            })
+                            }
+                        }
+                        foreach ($dupeKey in $policyPathEntries.Keys) {
+                            if (-not $settingMap.Contains($dupeKey)) {
+                                $settingMap[$dupeKey] = [System.Collections.Generic.List[object]]::new()
+                            }
+                            [void]$settingMap[$dupeKey].Add($policyPathEntries[$dupeKey])
                         }
                     }
                 }

@@ -213,7 +213,10 @@ function Compare-InforcerDocModels {
                 while ($parentStack.Count -gt $indent) {
                     $parentStack.RemoveAt($parentStack.Count - 1)
                 }
-                [void]$parentStack.Add($name)
+                # Skip useless structural headers from path hierarchy
+                if ($name -ne 'Top Level Setting Group Collection') {
+                    [void]$parentStack.Add($name)
+                }
             } else {
                 # Configured setting — build path from parent stack + this name
                 while ($parentStack.Count -gt $indent) {

@@ -1311,37 +1311,38 @@ table.hide-assignments .col-assign { display: none; }
         [void]$sb.AppendLine('    <strong style="color:var(--danger)">&#x26A0; Deprecated Settings</strong><br>')
         [void]$sb.AppendLine('    These settings use configurations that Microsoft may remove in future updates. Plan to migrate to modern replacements.')
         [void]$sb.AppendLine('</div>')
-        [void]$sb.AppendLine('<table id="deprecated-table" style="table-layout:fixed;width:100%">')
-        [void]$sb.AppendLine('    <thead><tr>')
-        [void]$sb.AppendLine('        <th style="width:6%">Status</th><th style="width:25%">Setting</th><th style="width:14%">Category</th>')
-        [void]$sb.AppendLine("        <th style=`"width:14%`">$sourceName Policy</th><th style=`"width:14%`">$sourceName Value</th>")
-        [void]$sb.AppendLine("        <th style=`"width:14%`">$destName Policy</th><th style=`"width:14%`">$destName Value</th>")
-        [void]$sb.AppendLine('    </tr></thead>')
-        [void]$sb.AppendLine('    <tbody>')
         foreach ($entry in $deprecatedRows) {
             $row = $entry.Row
             $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
             $encCat = [System.Net.WebUtility]::HtmlEncode($entry.CompositeCategory)
-            $encPath = [System.Net.WebUtility]::HtmlEncode("$($row.SettingPath)")
-            $pathHtml = if (-not [string]::IsNullOrEmpty($row.SettingPath) -and "$($row.SettingPath)" -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+            $settingPath = "$($row.SettingPath)"
+            # Strip setting name from path end
+            $displayPath = $settingPath
+            if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
+                $lastSep = $settingPath.LastIndexOf(' > ')
+                if ($settingPath.Substring($lastSep + 3) -eq $row.Name) { $displayPath = $settingPath.Substring(0, $lastSep) }
+            }
+            $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
+            $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<div style=`"font-size:0.75rem;color:var(--muted);margin-top:0.15rem`">$encPath</div>" } else { '' }
             $status = $row.Status
             $statusClass = switch ($status) { 'Matched' { 'matched' } 'Conflicting' { 'conflicting' } 'SourceOnly' { 'source-only' } 'DestOnly' { 'dest-only' } default { 'matched' } }
             $statusLabel = switch ($status) { 'Matched' { 'Match' } 'Conflicting' { 'Conflict' } 'SourceOnly' { "$sourceName Only" } 'DestOnly' { "$destName Only" } default { $status } }
-            [void]$sb.Append("        <tr><td><span class=`"status-badge status-$statusClass`"><span class=`"status-dot`"></span>$statusLabel</span></td>")
-            [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong> <span class=`"badge-deprecated`">&#x26A0; Deprecated</span>$pathHtml</td>")
-            [void]$sb.Append("<td style=`"font-size:0.75rem;color:var(--text-secondary)`">$encCat</td>")
-            $encSrcPol = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
-            $encSrcVal = [System.Net.WebUtility]::HtmlEncode("$($row.SourceValue)")
-            $encDstPol = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
-            $encDstVal = [System.Net.WebUtility]::HtmlEncode("$($row.DestinationValue)")
-            if ($status -eq 'DestOnly') { [void]$sb.Append('<td colspan="2" style="color:var(--muted);font-style:italic">Not configured</td>') }
-            else { [void]$sb.Append("<td>$encSrcPol</td><td class=`"value-cell`">$encSrcVal</td>") }
-            if ($status -eq 'SourceOnly') { [void]$sb.Append('<td colspan="2" style="color:var(--muted);font-style:italic">Not configured</td>') }
-            else { [void]$sb.Append("<td>$encDstPol</td><td class=`"value-cell`">$encDstVal</td>") }
-            [void]$sb.AppendLine('</tr>')
+            $srcPol = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
+            $dstPol = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
+            $policyInfo = @()
+            if (-not [string]::IsNullOrWhiteSpace($srcPol)) { $policyInfo += "<span class=`"side-badge side-source`">$sourceName</span> $srcPol" }
+            if (-not [string]::IsNullOrWhiteSpace($dstPol)) { $policyInfo += "<span class=`"side-badge side-dest`">$destName</span> $dstPol" }
+            $policiesHtml = $policyInfo -join '<span style="margin:0 0.5rem;color:var(--muted)">|</span>'
+            [void]$sb.AppendLine("<div style=`"padding:0.75rem 1rem;border-bottom:1px solid var(--border-subtle);display:flex;align-items:flex-start;gap:1rem`">")
+            [void]$sb.AppendLine("  <span class=`"status-badge status-$statusClass`" style=`"flex-shrink:0;min-width:80px`"><span class=`"status-dot`"></span>$statusLabel</span>")
+            [void]$sb.AppendLine("  <div style=`"flex:1`">")
+            [void]$sb.AppendLine("    <div><strong>$encName</strong></div>")
+            [void]$sb.AppendLine("    $pathHtml")
+            [void]$sb.AppendLine("    <div style=`"font-size:0.75rem;margin-top:0.25rem`">$policiesHtml</div>")
+            [void]$sb.AppendLine("    <div style=`"font-size:0.7rem;color:var(--muted);margin-top:0.15rem`">$encCat</div>")
+            [void]$sb.AppendLine("  </div>")
+            [void]$sb.AppendLine("</div>")
         }
-        [void]$sb.AppendLine('    </tbody>')
-        [void]$sb.AppendLine('</table>')
         [void]$sb.AppendLine('</div>')  # end tab-deprecated
     }
 

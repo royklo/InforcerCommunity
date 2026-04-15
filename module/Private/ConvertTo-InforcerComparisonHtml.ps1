@@ -721,13 +721,26 @@ table.hide-assignments .col-assign { display: none; }
 
     # ── Collect deprecated settings for dedicated tab ──
     $deprecatedRows = [System.Collections.Generic.List[object]]::new()
+    $deprDebugCount = 0
     foreach ($entry in $allRows) {
         $r = $entry.Row
-        $isDepr = if ($r -is [hashtable]) { $r['IsDeprecated'] -eq $true } else { $r.IsDeprecated -eq $true }
-        if ($isDepr) { [void]$deprecatedRows.Add($entry) }
+        # Check all possible access patterns for IsDeprecated
+        $isDepr = $false
+        if ($r -is [hashtable]) {
+            if ($r.ContainsKey('IsDeprecated') -and $r['IsDeprecated'] -eq $true) { $isDepr = $true }
+        } else {
+            if ($r.PSObject.Properties['IsDeprecated'] -and $r.IsDeprecated -eq $true) { $isDepr = $true }
+        }
+        if (-not $isDepr) {
+            # Fallback: check if the name contains "deprecated" (catalog already flags these)
+            $rowName = if ($r -is [hashtable]) { $r['Name'] } else { $r.Name }
+            if ($rowName -match '(?i)deprecated') { $isDepr = $true }
+        }
+        if ($isDepr) { [void]$deprecatedRows.Add($entry); $deprDebugCount++ }
     }
     $deprecatedCount = $deprecatedRows.Count
     $hasDeprecated = $deprecatedCount -gt 0
+    Write-Host "  Deprecated settings found: $deprecatedCount (of $($allRows.Count) total)" -ForegroundColor $(if ($hasDeprecated) { 'Yellow' } else { 'Gray' })
 
     [void]$sb.AppendLine('<div class="tab-nav">')
     [void]$sb.AppendLine('    <button class="tab-btn active" onclick="switchTab(''comparison'', event)">Comparison</button>')

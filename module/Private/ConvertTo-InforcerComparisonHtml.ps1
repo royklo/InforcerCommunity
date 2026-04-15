@@ -1025,8 +1025,10 @@ table.hide-assignments .col-assign { display: none; }
                         $isBash = $s.Value.TrimStart() -match '^#!'
                         $preClass = if ($isBash) { 'sh-code' } else { 'ps-code' }
                         $langLabel = if ($isBash) { 'Bash' } else { 'PowerShell' }
-                        [void]$sb.AppendLine("    <div style=`"margin:0.5rem 0`"><strong style=`"font-size:0.8rem`">$encSName</strong></div>")
+                        [void]$sb.AppendLine("    <details class=`"script-collapsible`" style=`"margin:0.5rem 0`">")
+                        [void]$sb.AppendLine("    <summary style=`"font-size:0.8rem;font-weight:600;cursor:pointer`">$encSName ($langLabel)</summary>")
                         [void]$sb.AppendLine("    <div class=`"ps-code-wrap`"><span class=`"code-lang-label`">$langLabel</span><pre class=`"$preClass`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;margin:0`"><code>$encSValue</code></pre></div>")
+                        [void]$sb.AppendLine("    </details>")
                     }
                     # Priority 5: Deprecated setting
                     elseif ($isSettingDepr) {
@@ -1052,6 +1054,7 @@ table.hide-assignments .col-assign { display: none; }
             if ($catLabel -eq 'Duplicate Settings (Different Values)') { continue }
             $segments = $catLabel -split '\s*/\s*'
             $platform = if ($segments.Count -ge 3) { $segments[1].Trim() } else { 'Other' }
+            if ($platform -eq 'All') { $platform = 'Windows' }
             if (-not $platformGroups.Contains($platform)) {
                 $platformGroups[$platform] = [ordered]@{}
             }

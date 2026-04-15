@@ -247,35 +247,18 @@ function ConvertTo-FlatSettingRows {
             foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $val -Depth ($Depth + 1))) {
                 [void]$rows.Add($r)
             }
-        } elseif ($val -is [array] -and $val.Count -gt 0 -and $val[0] -is [PSObject] -and $Depth -lt 2) {
-            # Array of objects — show count and recurse into each item
+        } elseif ($val -is [array] -and $val.Count -gt 0 -and $val[0] -is [PSObject] -and $Depth -lt 3) {
+            # Array of objects — add group header then recurse into each item's properties
             [void]$rows.Add([PSCustomObject]@{
                 Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
-                Value       = "$($val.Count) items"
+                Value       = ''
                 Indent      = $Depth
-                IsConfigured = $true
+                IsConfigured = $false
             })
             foreach ($item in $val) {
                 if ($item -is [PSObject]) {
-                    # Extract a display name from the item (try common name fields)
-                    $itemName = $null
-                    foreach ($nameField in @('displayName', 'name', 'id', 'bundleId', 'packageId')) {
-                        $nv = $item.PSObject.Properties[$nameField]
-                        if ($nv -and $nv.Value) { $itemName = $nv.Value.ToString(); break }
-                        # Check nested mobileAppIdentifier
-                        $mai = $item.PSObject.Properties['mobileAppIdentifier']
-                        if ($mai -and $mai.Value -is [PSObject]) {
-                            $nv2 = $mai.Value.PSObject.Properties[$nameField]
-                            if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); break }
-                        }
-                    }
-                    if ($itemName) {
-                        [void]$rows.Add([PSCustomObject]@{
-                            Name        = $itemName
-                            Value       = ''
-                            Indent      = $Depth + 1
-                            IsConfigured = $true
-                        })
+                    foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $item -Depth ($Depth + 1))) {
+                        [void]$rows.Add($r)
                     }
                 }
             }

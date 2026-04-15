@@ -470,8 +470,9 @@ table.hide-assignments .col-assign { display: none; }
 .adv-chip label { font-weight:600; color:var(--accent); }
 .adv-chip input { border:1px solid var(--border); border-radius:4px; padding:2px 6px; font-size:11px; width:140px; background:var(--bg-card); color:var(--text); font-family:inherit; }
 .adv-chip .adv-chip-remove { cursor:pointer; color:var(--danger); font-weight:bold; margin-left:2px; border:none; background:none; font-size:13px; line-height:1; }
-.adv-logic-btn { display:inline-flex; align-items:center; padding:2px 8px; border:1px solid var(--border); border-radius:6px; font-size:10px; font-weight:600; color:var(--accent); background:var(--bg); cursor:pointer; margin:0 2px; font-family:inherit; transition:all 0.15s; }
-.adv-logic-btn:hover { background:var(--accent); color:#fff; }
+.adv-logic-btn { display:inline-flex; align-items:center; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:700; letter-spacing:0.05em; cursor:pointer; margin:0 4px; font-family:inherit; transition:all 0.15s; border:none; user-select:none; }
+.adv-logic-btn[data-mode="AND"] { background:var(--accent-soft); color:var(--accent); }
+.adv-logic-btn[data-mode="OR"] { background:var(--warning-bg); color:var(--warning); }
 .tag-input-wrap { display:flex; flex-wrap:wrap; align-items:center; gap:3px; border:1px solid var(--border); border-radius:4px; padding:2px 4px; min-width:160px; background:var(--bg-card); cursor:text; }
 .tag-input-wrap:focus-within { border-color:var(--accent); }
 .tag-input-wrap .tag { display:inline-flex; align-items:center; gap:2px; background:var(--accent); color:#fff; border-radius:3px; padding:1px 4px; font-size:10px; white-space:nowrap; }
@@ -1546,6 +1547,16 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    updateScore(vm, vc, vs, vd);')
     [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('function updateDropdownLabel(cb) {')
+    [void]$sb.AppendLine('    var menu = cb.closest(".adv-dropdown-menu");')
+    [void]$sb.AppendLine('    var btn = menu ? menu.previousElementSibling : null;')
+    [void]$sb.AppendLine('    if (!btn) return;')
+    [void]$sb.AppendLine('    var checked = menu.querySelectorAll("input[type=checkbox]:checked");')
+    [void]$sb.AppendLine('    if (checked.length === 0) { btn.textContent = "Select..."; return; }')
+    [void]$sb.AppendLine('    var names = [];')
+    [void]$sb.AppendLine('    checked.forEach(function(c) { names.push(c.parentElement.textContent.trim()); });')
+    [void]$sb.AppendLine('    btn.textContent = names.length <= 2 ? names.join(", ") : names.length + " selected";')
+    [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('// Expand/collapse long values via More/Less toggle buttons')
     [void]$sb.AppendLine('document.addEventListener("click", function(e) {')
     [void]$sb.AppendLine('    var btn = e.target.closest(".value-toggle-btn");')
@@ -1675,7 +1686,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('        }')
     [void]$sb.AppendLine('        var optHtml = "";')
     [void]$sb.AppendLine('        options.forEach(function(o) {')
-    [void]$sb.AppendLine('            optHtml += ''<label><input type="checkbox" value="'' + o.v + ''" onchange="applyFilters()"> '' + o.t + ''</label>'';')
+    [void]$sb.AppendLine('            optHtml += ''<label><input type="checkbox" value="'' + o.v + ''" onchange="updateDropdownLabel(this);applyFilters()"> '' + o.t + ''</label>'';')
     [void]$sb.AppendLine('        });')
     [void]$sb.AppendLine('        chip.innerHTML = ''<label>'' + label + '':</label>'' +')
     [void]$sb.AppendLine('            ''<div class="adv-dropdown-wrap"><button class="adv-dropdown-btn" type="button">Select...</button>'' +')
@@ -1717,7 +1728,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('        var logicBtn = document.createElement("button");')
     [void]$sb.AppendLine('        logicBtn.className = "adv-logic-btn";')
     [void]$sb.AppendLine('        logicBtn.textContent = "AND";')
-    [void]$sb.AppendLine('        logicBtn.onclick = function() { this.textContent = this.textContent === "AND" ? "OR" : "AND"; applyFilters(); };')
+    [void]$sb.AppendLine('        logicBtn.setAttribute("data-mode", "AND"); logicBtn.onclick = function() { var m = this.getAttribute("data-mode") === "AND" ? "OR" : "AND"; this.setAttribute("data-mode", m); this.textContent = m; applyFilters(); };')
     [void]$sb.AppendLine('        container.appendChild(logicBtn);')
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('    container.appendChild(chip);')

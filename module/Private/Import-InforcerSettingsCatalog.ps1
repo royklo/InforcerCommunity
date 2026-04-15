@@ -50,17 +50,38 @@ function Import-InforcerSettingsCatalog {
     $raw = Get-Content -Path $Path -Raw -Encoding UTF8
     $entries = $raw | ConvertFrom-Json -AsHashtable -Depth 100
 
-    # Load categories.json for setting context disambiguation
+    # Load categories.json and build full category chains (parentCategoryId walk)
     $categoryLookup = @{}
     $categoriesPath = Join-Path (Split-Path $Path -Parent) 'categories.json'
     if (Test-Path -LiteralPath $categoriesPath) {
         Write-Verbose "Loading categories from $categoriesPath..."
         $catRaw = Get-Content -Path $categoriesPath -Raw -Encoding UTF8
         $catEntries = $catRaw | ConvertFrom-Json -Depth 10
+        # First pass: build raw lookup
+        $catById = @{}
         foreach ($cat in $catEntries) {
-            if ($cat.id) { $categoryLookup[$cat.id] = $cat.displayName }
+            if ($cat.id) { $catById[$cat.id] = $cat }
         }
-        Write-Verbose "Categories loaded: $($categoryLookup.Count) entries"
+        # Second pass: build full chains by walking parentCategoryId
+        foreach ($cat in $catEntries) {
+            if (-not $cat.id) { continue }
+            $chain = [System.Collections.Generic.List[string]]::new()
+            $current = $cat
+            $visited = [System.Collections.Generic.HashSet[string]]::new()
+            while ($current) {
+                if (-not $visited.Add($current.id)) { break }  # cycle protection
+                if (-not [string]::IsNullOrWhiteSpace($current.displayName)) {
+                    $chain.Insert(0, $current.displayName)
+                }
+                if ($current.parentCategoryId -and $catById.ContainsKey($current.parentCategoryId)) {
+                    $current = $catById[$current.parentCategoryId]
+                } else {
+                    $current = $null
+                }
+            }
+            $categoryLookup[$cat.id] = ($chain -join ' > ')
+        }
+        Write-Verbose "Categories loaded: $($categoryLookup.Count) entries with full chains"
     }
 
     $catalog = @{}

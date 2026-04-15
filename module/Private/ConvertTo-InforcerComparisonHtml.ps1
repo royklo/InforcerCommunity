@@ -1311,38 +1311,79 @@ table.hide-assignments .col-assign { display: none; }
         [void]$sb.AppendLine('    <strong style="color:var(--danger)">&#x26A0; Deprecated Settings</strong><br>')
         [void]$sb.AppendLine('    These settings use configurations that Microsoft may remove in future updates. Plan to migrate to modern replacements.')
         [void]$sb.AppendLine('</div>')
+        # Group deprecated by policy+side for 50/50 layout
+        $deprByPolicy = [ordered]@{}
         foreach ($entry in $deprecatedRows) {
             $row = $entry.Row
-            $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
-            $encCat = [System.Net.WebUtility]::HtmlEncode($entry.CompositeCategory)
-            $settingPath = "$($row.SettingPath)"
-            # Strip setting name from path end
-            $displayPath = $settingPath
-            if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
-                $lastSep = $settingPath.LastIndexOf(' > ')
-                if ($settingPath.Substring($lastSep + 3) -eq $row.Name) { $displayPath = $settingPath.Substring(0, $lastSep) }
+            $srcPol = $row.SourcePolicy
+            $dstPol = $row.DestPolicy
+            if (-not [string]::IsNullOrWhiteSpace($srcPol)) {
+                $key = "Source|$srcPol"
+                if (-not $deprByPolicy.Contains($key)) { $deprByPolicy[$key] = @{ Side = 'Source'; Policy = $srcPol; Settings = [System.Collections.Generic.List[object]]::new() } }
+                [void]$deprByPolicy[$key].Settings.Add($entry)
             }
-            $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
-            $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<div style=`"font-size:0.75rem;color:var(--muted);margin-top:0.15rem`">$encPath</div>" } else { '' }
-            $status = $row.Status
-            $statusClass = switch ($status) { 'Matched' { 'matched' } 'Conflicting' { 'conflicting' } 'SourceOnly' { 'source-only' } 'DestOnly' { 'dest-only' } default { 'matched' } }
-            $statusLabel = switch ($status) { 'Matched' { 'Match' } 'Conflicting' { 'Conflict' } 'SourceOnly' { "$sourceName Only" } 'DestOnly' { "$destName Only" } default { $status } }
-            $srcPol = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
-            $dstPol = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
-            $policyInfo = @()
-            if (-not [string]::IsNullOrWhiteSpace($srcPol)) { $policyInfo += "<span class=`"side-badge side-source`">$sourceName</span> $srcPol" }
-            if (-not [string]::IsNullOrWhiteSpace($dstPol)) { $policyInfo += "<span class=`"side-badge side-dest`">$destName</span> $dstPol" }
-            $policiesHtml = $policyInfo -join '<span style="margin:0 0.5rem;color:var(--muted)">|</span>'
-            [void]$sb.AppendLine("<div style=`"padding:0.75rem 1rem;border-bottom:1px solid var(--border-subtle);display:flex;align-items:flex-start;gap:1rem`">")
-            [void]$sb.AppendLine("  <span class=`"status-badge status-$statusClass`" style=`"flex-shrink:0;min-width:80px`"><span class=`"status-dot`"></span>$statusLabel</span>")
-            [void]$sb.AppendLine("  <div style=`"flex:1`">")
-            [void]$sb.AppendLine("    <div><strong>$encName</strong></div>")
-            [void]$sb.AppendLine("    $pathHtml")
-            [void]$sb.AppendLine("    <div style=`"font-size:0.75rem;margin-top:0.25rem`">$policiesHtml</div>")
-            [void]$sb.AppendLine("    <div style=`"font-size:0.7rem;color:var(--muted);margin-top:0.15rem`">$encCat</div>")
-            [void]$sb.AppendLine("  </div>")
-            [void]$sb.AppendLine("</div>")
+            if (-not [string]::IsNullOrWhiteSpace($dstPol)) {
+                $key = "Destination|$dstPol"
+                if (-not $deprByPolicy.Contains($key)) { $deprByPolicy[$key] = @{ Side = 'Destination'; Policy = $dstPol; Settings = [System.Collections.Generic.List[object]]::new() } }
+                [void]$deprByPolicy[$key].Settings.Add($entry)
+            }
         }
+        $deprSource = @($deprByPolicy.Values | Where-Object { $_.Side -eq 'Source' })
+        $deprDest = @($deprByPolicy.Values | Where-Object { $_.Side -eq 'Destination' })
+        [void]$sb.AppendLine('<div class="mr-split">')
+        # Source column
+        [void]$sb.AppendLine('<div class="mr-split-col mr-col-source">')
+        [void]$sb.AppendLine("<h4>$sourceName</h4>")
+        foreach ($group in $deprSource) {
+            $encPol = [System.Net.WebUtility]::HtmlEncode($group.Policy)
+            [void]$sb.AppendLine("<details class=`"manual-review-card`" open>")
+            [void]$sb.AppendLine("    <summary><strong>$encPol</strong> <span class=`"badge-deprecated`">&#x26A0; $($group.Settings.Count) deprecated</span></summary>")
+            [void]$sb.AppendLine('    <div class="mr-body">')
+            foreach ($entry in $group.Settings) {
+                $row = $entry.Row
+                $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
+                $settingPath = "$($row.SettingPath)"
+                $displayPath = $settingPath
+                if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
+                    $lastSep = $settingPath.LastIndexOf(' > ')
+                    if ($settingPath.Substring($lastSep + 3) -eq $row.Name) { $displayPath = $settingPath.Substring(0, $lastSep) }
+                }
+                $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
+                $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`"><strong>$encName</strong>$pathHtml</span></div>")
+            }
+            [void]$sb.AppendLine('    </div>')
+            [void]$sb.AppendLine('</details>')
+        }
+        if ($deprSource.Count -eq 0) { [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">No deprecated settings</div>') }
+        [void]$sb.AppendLine('</div>')
+        # Destination column
+        [void]$sb.AppendLine('<div class="mr-split-col mr-col-dest">')
+        [void]$sb.AppendLine("<h4>$destName</h4>")
+        foreach ($group in $deprDest) {
+            $encPol = [System.Net.WebUtility]::HtmlEncode($group.Policy)
+            [void]$sb.AppendLine("<details class=`"manual-review-card`" open>")
+            [void]$sb.AppendLine("    <summary><strong>$encPol</strong> <span class=`"badge-deprecated`">&#x26A0; $($group.Settings.Count) deprecated</span></summary>")
+            [void]$sb.AppendLine('    <div class="mr-body">')
+            foreach ($entry in $group.Settings) {
+                $row = $entry.Row
+                $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
+                $settingPath = "$($row.SettingPath)"
+                $displayPath = $settingPath
+                if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
+                    $lastSep = $settingPath.LastIndexOf(' > ')
+                    if ($settingPath.Substring($lastSep + 3) -eq $row.Name) { $displayPath = $settingPath.Substring(0, $lastSep) }
+                }
+                $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
+                $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`"><strong>$encName</strong>$pathHtml</span></div>")
+            }
+            [void]$sb.AppendLine('    </div>')
+            [void]$sb.AppendLine('</details>')
+        }
+        if ($deprDest.Count -eq 0) { [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">No deprecated settings</div>') }
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('</div>')  # end mr-split
         [void]$sb.AppendLine('</div>')  # end tab-deprecated
     }
 

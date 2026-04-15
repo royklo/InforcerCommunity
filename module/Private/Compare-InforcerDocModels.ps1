@@ -406,10 +406,8 @@ function Compare-InforcerDocModels {
             # Route non-comparable categories to manual review
             $catLower = $categoryName.ToLowerInvariant()
             if ($catLower -match 'script|remediation|compliance|enrollment|autopilot') {
-                # Reroute compliance discovery scripts to show alongside compliance policies (IntuneLens pattern)
-                if ($catLower -match 'custom.*device.*compliance.*discovery|device.*compliance.*discovery.*script') {
-                    $categoryLabel = "$productName / Compliance Policies"
-                }
+                # Hide discovery scripts entirely — linked ones are embedded via linkedComplianceScript in parent policy
+                if ($catLower -match 'custom.*device.*compliance.*discovery|device.*compliance.*discovery.*script') { continue }
                 # Add to manual review instead of comparison
                 # Helper: collect settings with base64 decoding for script content
                 $collectMRSettings = {

@@ -45,6 +45,12 @@ function Connect-InforcerGraph {
     }
 
     # Fresh sign-in needed (different tenant or missing scopes)
+    # Disconnect existing session first to avoid double-prompt when switching tenants
+    if ($existingCtx -and $existingCtx.Account) {
+        Write-Verbose "  Disconnecting from previous Graph session ($($existingCtx.TenantId))..."
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+    }
+
     try {
         $connectParams = @{ Scopes = $RequiredScopes; NoWelcome = $true }
         if (-not [string]::IsNullOrWhiteSpace($TenantId)) {

@@ -42,7 +42,7 @@ function Resolve-InforcerGraphEnrichment {
 
     if (-not $graphCtx) {
         Write-Warning "${prefix}Microsoft Graph connection failed. Falling back to raw ObjectIDs."
-        return @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null; ComplianceRulesMap = $null }
+        return @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null; ComplianceRulesMap = $null; ComplianceScriptLinkMap = $null }
     }
 
     Write-Host "${prefix}Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
@@ -127,6 +127,7 @@ function Resolve-InforcerGraphEnrichment {
     # Fetch compliance rules (rulesContent) via Graph $expand — supplements Inforcer API gap
     Write-Host "${prefix}Fetching compliance rules..." -ForegroundColor Gray
     $complianceRulesMap = @{}
+    $complianceScriptLinkMap = @{}
     try {
         # Fetch compliance policy IDs from raw DocData (matching IntuneLens approach:
         # the list endpoint doesn't return deviceCompliancePolicyScript, so we must
@@ -150,6 +151,11 @@ function Resolve-InforcerGraphEnrichment {
                         $complianceRulesMap[$cpInfo.Id] = $rulesB64
                     }
                 }
+                # Capture linked discovery script ID for compliance-to-script linking
+                $scriptId = $cpFull.deviceCompliancePolicyScript.deviceComplianceScriptId
+                if ($scriptId) {
+                    $complianceScriptLinkMap[$cpInfo.Id] = $scriptId
+                }
             } catch {
                 Write-Verbose "${prefix}  Failed to fetch: $($cpInfo.Name) — $($_.Exception.Message)"
             }
@@ -164,5 +170,6 @@ function Resolve-InforcerGraphEnrichment {
         FilterMap          = $filterMap
         ScopeTagMap        = $scopeTagMap
         ComplianceRulesMap = $complianceRulesMap
+        ComplianceScriptLinkMap = $complianceScriptLinkMap
     }
 }

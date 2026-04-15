@@ -102,6 +102,33 @@ function Get-InforcerComparisonData {
         $dstGraphMaps = Resolve-InforcerGraphEnrichment -DocData $destDocData -Label "Destination ($dstTenantName)"
     }
 
+    # ── Inject compliance rules into DocData policies (supplements Inforcer API gap) ──
+    if ($srcGraphMaps.ComplianceRulesMap -and $srcGraphMaps.ComplianceRulesMap.Count -gt 0) {
+        $injected = 0
+        foreach ($policy in @($sourceDocData.Policies)) {
+            if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
+            $pid = $policy.policyData.id
+            if ($srcGraphMaps.ComplianceRulesMap.ContainsKey($pid)) {
+                $policy.policyData | Add-Member -NotePropertyName 'rulesContent' -NotePropertyValue $srcGraphMaps.ComplianceRulesMap[$pid] -Force
+                $injected++
+            }
+        }
+        if ($injected -gt 0) { Write-Host "  Injected compliance rules into $injected source policies" -ForegroundColor Gray }
+    }
+
+    if ($dstGraphMaps.ComplianceRulesMap -and $dstGraphMaps.ComplianceRulesMap.Count -gt 0) {
+        $injected = 0
+        foreach ($policy in @($destDocData.Policies)) {
+            if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
+            $pid = $policy.policyData.id
+            if ($dstGraphMaps.ComplianceRulesMap.ContainsKey($pid)) {
+                $policy.policyData | Add-Member -NotePropertyName 'rulesContent' -NotePropertyValue $dstGraphMaps.ComplianceRulesMap[$pid] -Force
+                $injected++
+            }
+        }
+        if ($injected -gt 0) { Write-Host "  Injected compliance rules into $injected destination policies" -ForegroundColor Gray }
+    }
+
     # ── Build DocModels ──
     $srcModelParams = @{ DocData = $sourceDocData; ComparisonMode = $true }
     if ($srcGraphMaps.GroupNameMap) { $srcModelParams['GroupNameMap'] = $srcGraphMaps.GroupNameMap }

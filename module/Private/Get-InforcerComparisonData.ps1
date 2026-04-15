@@ -124,32 +124,40 @@ function Get-InforcerComparisonData {
     }
 
     # Link compliance discovery scripts to their parent compliance policies (source)
-    # Uses deviceComplianceScriptId from Inforcer API (no Graph dependency)
-    $srcScriptLookup = @{}
+    # Strategy: match by deviceComplianceScriptId, then fallback to name similarity
+    # (Inforcer API returns deviceComplianceScriptId as empty array — API limitation)
+    $srcScriptById = @{}
+    $srcScriptByName = @{}
     foreach ($p in @($sourceDocData.Policies)) {
         if ($p.policyTypeId -eq 104 -and $p.policyData -and $p.policyData.id) {
-            $srcScriptLookup[$p.policyData.id] = $p
-            Write-Host "  Found discovery script: $($p.displayName) (id=$($p.policyData.id))" -ForegroundColor Gray
+            $srcScriptById[$p.policyData.id] = $p
+            $sName = if ($p.displayName) { $p.displayName } elseif ($p.name) { $p.name } else { $p.policyData.displayName }
+            if ($sName) { $srcScriptByName[$sName.ToLowerInvariant()] = $p }
         }
     }
-    Write-Host "  Discovery scripts available: $($srcScriptLookup.Count) | Checking policies for deviceComplianceScriptId..." -ForegroundColor Gray
-    if ($srcScriptLookup.Count -gt 0) {
+    if ($srcScriptById.Count -gt 0) {
         foreach ($policy in @($sourceDocData.Policies)) {
             if ($null -eq $policy.policyData) { continue }
-            $scriptId = $policy.policyData.deviceComplianceScriptId
-            # Also check nested: deviceCompliancePolicyScript.deviceComplianceScriptId
-            if ([string]::IsNullOrWhiteSpace($scriptId) -and $policy.policyData.deviceCompliancePolicyScript) {
-                $scriptId = $policy.policyData.deviceCompliancePolicyScript.deviceComplianceScriptId
+            # Only link compliance policies (not the scripts themselves)
+            $odataType = "$($policy.policyData.'@odata.type')"
+            if ($odataType -notmatch 'CompliancePolicy' -and $policy.policyTypeId -ne 3) { continue }
+            # Try ID match first
+            $scriptId = "$($policy.policyData.deviceComplianceScriptId)"
+            if ($scriptId -match '^[0-9a-f]{8}-') {
+                if ($srcScriptById.ContainsKey($scriptId)) {
+                    $scriptPolicy = $srcScriptById[$scriptId]
+                    Write-Host "  Linked by ID: $($policy.displayName) -> $($scriptPolicy.displayName)" -ForegroundColor Green
+                } else { $scriptPolicy = $null }
+            } else {
+                # Fallback: name similarity (strip "policy - " prefix)
+                $policyName = if ($policy.displayName) { $policy.displayName } elseif ($policy.name) { $policy.name } else { '' }
+                $cleanName = ($policyName -replace '^policy\s*-\s*', '').Trim().ToLowerInvariant()
+                if ($cleanName -and $srcScriptByName.ContainsKey($cleanName)) {
+                    $scriptPolicy = $srcScriptByName[$cleanName]
+                    Write-Host "  Linked by name: '$policyName' -> '$($scriptPolicy.displayName)'" -ForegroundColor Green
+                } else { $scriptPolicy = $null }
             }
-            if ([string]::IsNullOrWhiteSpace($scriptId)) { continue }
-            $policyName = if ($policy.displayName) { $policy.displayName } elseif ($policy.name) { $policy.name } else { $policy.policyData.displayName }
-            Write-Host "  Policy '$policyName' has deviceComplianceScriptId=$scriptId" -ForegroundColor Cyan
-            if (-not $srcScriptLookup.ContainsKey($scriptId)) {
-                Write-Host "    Script NOT found in lookup (available: $($srcScriptLookup.Keys -join ', '))" -ForegroundColor Yellow
-                continue
-            }
-            $scriptPolicy = $srcScriptLookup[$scriptId]
-            Write-Host "    Linking to script: $($scriptPolicy.displayName)" -ForegroundColor Green
+            if ($null -eq $scriptPolicy) { continue }
             $scriptData = @{
                 scriptName = if ($scriptPolicy.displayName) { $scriptPolicy.displayName }
                              elseif ($scriptPolicy.name) { $scriptPolicy.name }
@@ -191,19 +199,31 @@ function Get-InforcerComparisonData {
     }
 
     # Link compliance discovery scripts to their parent compliance policies (destination)
-    $dstScriptLookup = @{}
+    $dstScriptById = @{}
+    $dstScriptByName = @{}
     foreach ($p in @($destDocData.Policies)) {
         if ($p.policyTypeId -eq 104 -and $p.policyData -and $p.policyData.id) {
-            $dstScriptLookup[$p.policyData.id] = $p
+            $dstScriptById[$p.policyData.id] = $p
+            $sName = if ($p.displayName) { $p.displayName } elseif ($p.name) { $p.name } else { $p.policyData.displayName }
+            if ($sName) { $dstScriptByName[$sName.ToLowerInvariant()] = $p }
         }
     }
-    if ($dstScriptLookup.Count -gt 0) {
+    if ($dstScriptById.Count -gt 0) {
         foreach ($policy in @($destDocData.Policies)) {
             if ($null -eq $policy.policyData) { continue }
-            $scriptId = $policy.policyData.deviceComplianceScriptId
-            if ([string]::IsNullOrWhiteSpace($scriptId)) { continue }
-            if (-not $dstScriptLookup.ContainsKey($scriptId)) { continue }
-            $scriptPolicy = $dstScriptLookup[$scriptId]
+            $odataType = "$($policy.policyData.'@odata.type')"
+            if ($odataType -notmatch 'CompliancePolicy' -and $policy.policyTypeId -ne 3) { continue }
+            $scriptId = "$($policy.policyData.deviceComplianceScriptId)"
+            if ($scriptId -match '^[0-9a-f]{8}-') {
+                $scriptPolicy = if ($dstScriptById.ContainsKey($scriptId)) { $dstScriptById[$scriptId] } else { $null }
+                if ($scriptPolicy) { Write-Host "  Linked by ID (dst): $($policy.displayName) -> $($scriptPolicy.displayName)" -ForegroundColor Green }
+            } else {
+                $policyName = if ($policy.displayName) { $policy.displayName } elseif ($policy.name) { $policy.name } else { '' }
+                $cleanName = ($policyName -replace '^policy\s*-\s*', '').Trim().ToLowerInvariant()
+                $scriptPolicy = if ($cleanName -and $dstScriptByName.ContainsKey($cleanName)) { $dstScriptByName[$cleanName] } else { $null }
+                if ($scriptPolicy) { Write-Host "  Linked by name (dst): '$policyName' -> '$($scriptPolicy.displayName)'" -ForegroundColor Green }
+            }
+            if ($null -eq $scriptPolicy) { continue }
             $scriptData = @{
                 scriptName = if ($scriptPolicy.displayName) { $scriptPolicy.displayName }
                              elseif ($scriptPolicy.name) { $scriptPolicy.name }
@@ -221,7 +241,6 @@ function Get-InforcerComparisonData {
             $scriptJson = $scriptData | ConvertTo-Json -Depth 5 -Compress
             $policy.policyData | Add-Member -NotePropertyName 'linkedComplianceScript' -NotePropertyValue $scriptJson -Force
             $scriptPolicy | Add-Member -NotePropertyName '_claimedByCompliancePolicy' -NotePropertyValue $true -Force
-            Write-Verbose "  Linked script '$($scriptData.scriptName)' to compliance policy '$($policy.displayName)'"
         }
     }
 

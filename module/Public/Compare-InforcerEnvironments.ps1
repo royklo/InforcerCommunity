@@ -5,7 +5,9 @@
     Fetches all policies from two tenants via Get-InforcerTenantPolicies, compares Intune
     Settings Catalog settings at the settingDefinitionId level, and produces a self-contained
     HTML report showing alignment score, matches, conflicts, source-only/destination-only items,
-    and non-Settings-Catalog policies for manual review.
+    and non-Settings-Catalog policies for manual review. When -FetchGraphData is specified,
+    also fetches compliance policy detection rules (rulesContent) that the Inforcer API does
+    not return.
 
     For cross-account comparison, use Connect-Inforcer -PassThru to obtain session objects
     and pass them via -SourceSession / -DestinationSession.
@@ -24,10 +26,16 @@
     Path to the IntuneSettingsCatalogViewer settings.json file.
     Auto-discovers from sibling repo if omitted.
 .PARAMETER FetchGraphData
-    When specified, connects to Microsoft Graph to resolve assignment group ObjectIDs and
-    filter IDs to friendly display names. Requires the Microsoft.Graph.Authentication module
-    and interactive sign-in. If the source and destination tenants are in different Azure AD
-    tenants, you will be prompted to sign in for each.
+    When specified, connects to Microsoft Graph to enrich comparison data beyond what the
+    Inforcer API provides. Requires the Microsoft.Graph.Authentication module and interactive
+    sign-in. If tenants are in different Azure AD tenants, you will be prompted for each.
+    Requires DeviceManagementConfiguration.Read.All scope for compliance rules.
+
+    Graph supplementations:
+    - Assignment group name resolution (ObjectID to display name)
+    - Assignment filter resolution (filter ID to filter details)
+    - Scope tag resolution (tag ID to display name)
+    - Compliance rules for custom compliance policies (rulesContent via $expand)
 .PARAMETER ExcludeOS
     Array of OS/platform names to exclude from the comparison. Matching is case-insensitive
     and uses contains logic. Examples: 'macOS', 'iOS', 'Android', 'Windows'.

@@ -1051,12 +1051,50 @@ table.hide-assignments .col-assign { display: none; }
                         [void]$sb.AppendLine("    <div class=`"ps-code-wrap`"><span class=`"code-lang-label`">$langLabel</span><pre class=`"$preClass`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;margin:0`"><code>$encSValue</code></pre></div>")
                         [void]$sb.AppendLine("    </details>")
                     }
-                    # Priority 5: Deprecated setting
+                    # Priority 5: Linked compliance script (collapsible section with script content)
+                    elseif ($s.Name -match '(?i)^linked\s*compliance\s*script$') {
+                        try {
+                            $scriptData = $s.Value | ConvertFrom-Json -Depth 5 -ErrorAction Stop
+                            $encScriptName = [System.Net.WebUtility]::HtmlEncode($scriptData.scriptName)
+                            [void]$sb.AppendLine("    <details class=`"script-collapsible`" style=`"margin:0.75rem 0`">")
+                            [void]$sb.AppendLine("    <summary><strong style=`"font-size:0.8rem`">Linked Discovery Script: $encScriptName</strong></summary>")
+                            [void]$sb.AppendLine("    <div style=`"padding:0.5rem 0`">")
+                            # Show script metadata
+                            foreach ($key in @('runAsAccount','enforceSignatureCheck','runAs32Bit','publisher')) {
+                                $kval = $scriptData.$key
+                                if ($null -ne $kval) {
+                                    $encKey = [System.Net.WebUtility]::HtmlEncode((ConvertTo-FriendlySettingName -Name $key))
+                                    $encVal = [System.Net.WebUtility]::HtmlEncode("$kval")
+                                    [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encKey</span><span class=`"setting-value`">$encVal</span></div>")
+                                }
+                            }
+                            # Show script content if present
+                            $scriptContent = $scriptData.detectionScriptContent
+                            if (-not $scriptContent) { $scriptContent = $scriptData.scriptContent }
+                            if ($scriptContent -and $scriptContent.Length -gt 10) {
+                                $encContent = [System.Net.WebUtility]::HtmlEncode($scriptContent)
+                                $isBash = $scriptContent.TrimStart() -match '^#!'
+                                $preClass = if ($isBash) { 'sh-code' } else { 'ps-code' }
+                                $langLabel = if ($isBash) { 'Bash' } else { 'PowerShell' }
+                                [void]$sb.AppendLine("    <details class=`"script-collapsible`" style=`"margin:0.5rem 0`">")
+                                [void]$sb.AppendLine("    <summary style=`"font-size:0.8rem;font-weight:600;cursor:pointer`">Detection Script ($langLabel)</summary>")
+                                [void]$sb.AppendLine("    <div class=`"ps-code-wrap`"><span class=`"code-lang-label`">$langLabel</span><pre class=`"$preClass`" style=`"background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:0.75rem;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;margin:0`"><code>$encContent</code></pre></div>")
+                                [void]$sb.AppendLine("    </details>")
+                            }
+                            [void]$sb.AppendLine("    </div>")
+                            [void]$sb.AppendLine("    </details>")
+                        } catch {
+                            # Fallback to default display
+                            $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                            [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
+                        }
+                    }
+                    # Priority 6: Deprecated setting
                     elseif ($isSettingDepr) {
                         $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
                         [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`">&#x26A0; $encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                     }
-                    # Priority 6: Default key-value display
+                    # Priority 7: Default key-value display
                     else {
                         $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
                         [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")

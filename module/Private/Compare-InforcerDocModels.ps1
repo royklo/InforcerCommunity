@@ -408,6 +408,8 @@ function Compare-InforcerDocModels {
                 $collectMRSettings = {
                     param($Policy, [string]$Side)
                     if ($null -eq $Policy -or $null -eq $Policy.Basics) { return }
+                    # Skip discovery scripts that are claimed by a compliance policy
+                    if ($Policy._claimedByCompliancePolicy -eq $true) { return }
                     if (-not $manualReviewCategories.Contains($categoryLabel)) {
                         $manualReviewCategories[$categoryLabel] = [System.Collections.Generic.List[object]]::new()
                     }
@@ -416,6 +418,8 @@ function Compare-InforcerDocModels {
                         if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
                             $settingName = "$($s.Name)"
                             $settingValue = "$($s.Value)"
+                            # Skip internal flags
+                            if ($settingName -match '_claimed') { continue }
                             # Skip noise: binary hashes, @odata metadata, GUIDs-only
                             if ($settingName -match '^hashed|Hash$') { continue }
                             if ($settingName -match '@odata') { continue }

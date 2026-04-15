@@ -988,7 +988,7 @@ table.hide-assignments .col-assign { display: none; }
                         }
                     }
                     # Priority 2: Compliance rules table (D-05, D-06, D-07)
-                    elseif ($s.Name -eq 'rulesContent') {
+                    elseif ($s.Name -match '(?i)^rules\s*content$') {
                         $rulesRendered = $false
                         try {
                             $parsed = $s.Value | ConvertFrom-Json -Depth 10 -ErrorAction Stop
@@ -1358,8 +1358,10 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('document.addEventListener("click", function(e) { var wrap = document.getElementById("cat-multiselect"); if (wrap && !wrap.contains(e.target)) { document.getElementById("cat-ms-dropdown").classList.remove("open"); } });')
     [void]$sb.AppendLine('var activeFilters = new Set();')
     [void]$sb.AppendLine('function evaluateChip(chip, tr) {')
-    [void]$sb.AppendLine('    var val = chip.querySelector("input").value.toLowerCase().trim();')
-    [void]$sb.AppendLine('    if (!val) return true;')
+    [void]$sb.AppendLine('    var rawVal = chip.querySelector("input").value.toLowerCase().trim();')
+    [void]$sb.AppendLine('    if (!rawVal) return true;')
+    [void]$sb.AppendLine('    var vals = rawVal.split(",").map(function(v) { return v.trim(); }).filter(function(v) { return v; });')
+    [void]$sb.AppendLine('    if (vals.length === 0) return true;')
     [void]$sb.AppendLine('    var col = parseInt(chip.getAttribute("data-col"), 10);')
     [void]$sb.AppendLine('    var cells = tr.querySelectorAll("td");')
     [void]$sb.AppendLine('    var colsToCheck = [col];')
@@ -1368,7 +1370,8 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    if (col === 7) colsToCheck.push(8);')
     [void]$sb.AppendLine('    var found = false;')
     [void]$sb.AppendLine('    colsToCheck.forEach(function(c) {')
-    [void]$sb.AppendLine('        if (cells[c] && cells[c].textContent.toLowerCase().indexOf(val) >= 0) found = true;')
+    [void]$sb.AppendLine('        var cellText = cells[c] ? cells[c].textContent.toLowerCase() : "";')
+    [void]$sb.AppendLine('        vals.forEach(function(v) { if (cellText.indexOf(v) >= 0) found = true; });')
     [void]$sb.AppendLine('    });')
     [void]$sb.AppendLine('    return found;')
     [void]$sb.AppendLine('}')
@@ -1559,7 +1562,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    chip.id = "adv-chip-" + key;')
     [void]$sb.AppendLine('    chip.setAttribute("data-col", colIdx);')
     [void]$sb.AppendLine('    chip.innerHTML = ''<label>'' + label + '':</label>'' +')
-    [void]$sb.AppendLine('        ''<input type="text" placeholder="contains..." oninput="applyFilters()">'' +')
+    [void]$sb.AppendLine('        ''<input type="text" placeholder="contains... (comma for multiple)" oninput="applyFilters()">'' +')
     [void]$sb.AppendLine('        ''<button class="adv-chip-remove" onclick="removeAdvFilter(\x27'' + key + ''\x27)">&times;</button>'';')
     [void]$sb.AppendLine('    var existing = container.querySelectorAll(".adv-chip");')
     [void]$sb.AppendLine('    if (existing.length > 0) {')

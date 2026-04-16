@@ -968,11 +968,12 @@ table.hide-assignments .col-assign { display: none; }
     # ── Manual Review tab ─────────────────────────────────────────────────
     if ($hasManualReview) {
         [void]$sb.AppendLine('<div class="tab-content" id="tab-manual-review">')
-        [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
-        [void]$sb.AppendLine('    <strong>These policies require manual review.</strong><br>')
-    [void]$sb.AppendLine('    <strong>Scripts &amp; remediation:</strong> Script logic cannot be compared automatically &mdash; review the code to verify both environments run the same detection and remediation actions.<br>')
-    [void]$sb.AppendLine('    <strong>Deprecated settings:</strong> Policies flagged with <em>contains deprecated settings</em> use configurations that Microsoft may remove in future updates. Plan to migrate these to their modern replacements before they stop working.<br>')
-    [void]$sb.AppendLine('    <strong>Custom compliance:</strong> Custom discovery scripts define their own compliance rules and need human verification to confirm they match across environments.')
+        [void]$sb.AppendLine('<div class="dup-info-banner" style="border-color:var(--info);border-left-color:var(--info);background:var(--info-bg)">')
+        [void]$sb.AppendLine('    <span class="dup-banner-icon" style="color:var(--info)">&#x2139;</span>')
+        [void]$sb.AppendLine('    <div>')
+        [void]$sb.AppendLine('        <p class="dup-banner-title" style="color:var(--info)">Manual Review Required</p>')
+        [void]$sb.AppendLine('        <p class="dup-banner-body">These policies contain scripts, compliance rules, or other configurations that cannot be compared automatically. Review each policy to verify both environments are aligned.</p>')
+        [void]$sb.AppendLine('    </div>')
         [void]$sb.AppendLine('</div>')
         [void]$sb.AppendLine('<div style="display:flex;justify-content:flex-end;margin:0.25rem 0 0.5rem">')
         [void]$sb.AppendLine('    <button type="button" id="mr-expand-all-btn" onclick="toggleAllManualReview()" style="font-size:0.75rem;font-weight:600;padding:0.35rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:all 0.15s ease">Expand All</button>')
@@ -1329,9 +1330,12 @@ table.hide-assignments .col-assign { display: none; }
     # ── Deprecated tab content ────────────────────────────────────────────
     if ($hasDeprecated) {
         [void]$sb.AppendLine('<div class="tab-content" id="tab-deprecated">')
-        [void]$sb.AppendLine('<div style="padding:1rem 0 0.5rem;color:var(--text-secondary);font-size:0.85rem">')
-        [void]$sb.AppendLine('    <strong style="color:var(--danger)">&#x26A0; Deprecated Settings</strong><br>')
-        [void]$sb.AppendLine('    These settings use configurations that Microsoft may remove in future updates. Plan to migrate to modern replacements.')
+        [void]$sb.AppendLine('<div class="dup-info-banner" style="border-color:var(--danger);border-left-color:var(--danger);background:var(--danger-bg)">')
+        [void]$sb.AppendLine('    <span class="dup-banner-icon" style="color:var(--danger)">&#x26A0;</span>')
+        [void]$sb.AppendLine('    <div>')
+        [void]$sb.AppendLine('        <p class="dup-banner-title" style="color:var(--danger)">Deprecated Settings Detected</p>')
+        [void]$sb.AppendLine('        <p class="dup-banner-body">These settings are deprecated by Microsoft and may stop working in a future update, or have already been replaced by a newer alternative. Review each setting and migrate to the recommended replacement to avoid unexpected behavior or policy enforcement failures.</p>')
+        [void]$sb.AppendLine('    </div>')
         [void]$sb.AppendLine('</div>')
         # Group deprecated by policy+side for 50/50 layout
         $deprByPolicy = [ordered]@{}
@@ -1489,6 +1493,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    var elDest = document.getElementById(''countDest'');')
     [void]$sb.AppendLine('    function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }')
     [void]$sb.AppendLine('    elBar.style.backgroundColor = "#dc2626";')
+    [void]$sb.AppendLine('    elBar.style.transition = "none";')  # Disable CSS transition during initial animation
     [void]$sb.AppendLine('    setTimeout(function() {')
     [void]$sb.AppendLine('        var timer = setInterval(function() {')
     [void]$sb.AppendLine('            step++;')
@@ -1513,6 +1518,7 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('                elSource.textContent = SOURCE;')
     [void]$sb.AppendLine('                elDest.textContent = DEST;')
     [void]$sb.AppendLine('                if (TARGET === 100) { fireConfetti(); }')
+    [void]$sb.AppendLine('                elBar.style.transition = "";')  # Re-enable CSS transition for filter updates
     [void]$sb.AppendLine('            }')
     [void]$sb.AppendLine('        }, INTERVAL);')
     [void]$sb.AppendLine('    }, 300);')

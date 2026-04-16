@@ -53,12 +53,21 @@ function Get-InforcerDocData {
     if ($policiesApiErr.Count -gt 0) {
         $errMsg = $policiesApiErr[0].Exception.Message
         if ([string]::IsNullOrWhiteSpace($errMsg)) { $errMsg = $policiesApiErr[0].ToString() }
+        # Extract clean error details from the API response
+        $statusCode = $null
+        $activityId = $null
+        if ($errMsg -match '"statusCode"\s*:\s*(\d+)') { $statusCode = $Matches[1] }
+        if ($errMsg -match '"activityId"\s*:\s*"([^"]+)"') { $activityId = $Matches[1] }
         if ($errMsg -match '403|permission|forbidden') {
             Write-Error -Message "Failed to retrieve policies for tenant '$clientTenantId': access denied. Please check your Inforcer API key has permission to this tenant." `
                 -ErrorId 'AccessDenied' -Category PermissionDenied
         } elseif ($errMsg -match '404|not found') {
             Write-Error -Message "Tenant '$clientTenantId' not found. Please verify the TenantId is correct." `
                 -ErrorId 'TenantNotFound' -Category ObjectNotFound
+        } elseif ($statusCode -eq '500') {
+            $activityRef = if ($activityId) { " (Activity ID: $activityId)" } else { '' }
+            Write-Error -Message "The Inforcer API returned a server error (HTTP 500) while retrieving policies for tenant '$clientTenantId'$activityRef. This is typically a temporary issue — please try again in a few minutes. If the problem persists, contact Inforcer support with the activity ID." `
+                -ErrorId 'ServerError' -Category ResourceUnavailable
         } else {
             Write-Error -Message "Failed to retrieve policies for tenant '$clientTenantId'. Error: $errMsg" `
                 -ErrorId 'PolicyRetrievalFailed' -Category InvalidOperation

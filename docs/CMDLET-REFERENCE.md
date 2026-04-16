@@ -17,11 +17,19 @@ Establishes a secure connection to the Inforcer REST API. The API key is stored 
 | **ApiKey** | Object | Yes | API key (string or SecureString). Alias: `Key`. |
 | **Region** | String | No | `uk`, `eu`, `us`, `anz`. Default: `uk`. Ignored when `-BaseUrl` is set. |
 | **BaseUrl** | String | No | Custom base URL. When set, `-Region` is ignored. |
+| **FetchGraphData** | Switch | No | Also connect to Microsoft Graph via interactive sign-in. Enables group name resolution in `Export-InforcerTenantDocumentation`. |
+| **PassThru** | Switch | No | Returns the session hashtable to the pipeline. Use to capture sessions for cross-account comparison with `Compare-InforcerEnvironments`. |
 
-### Example
+### Examples
 
 ```powershell
+# Basic connection
 Connect-Inforcer -ApiKey "your-api-key" -Region uk
+
+# Capture sessions for cross-account comparison
+$src = Connect-Inforcer -ApiKey $key1 -Region uk -PassThru
+$dst = Connect-Inforcer -ApiKey $key2 -Region eu -PassThru
+Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -SourceSession $src -DestinationSession $dst
 ```
 
 ### Example output
@@ -553,6 +561,8 @@ Returns `FileInfo` objects for the exported file(s). HTML output auto-opens in t
 - Back-to-top floating button
 - Notch-style status bar showing tenant/baseline name and policy count
 - Collapsible long values with Expand/Collapse button
+- Collapsible code blocks for detection/remediation scripts (PowerShell syntax highlighting) and compliance rules JSON (JSON syntax highlighting)
+- Friendly setting names — camelCase property names converted to Title Case (e.g., `allowBluetooth` → "Allow Bluetooth")
 - Categories sorted alphabetically, grouped by platform
 - Policy tags shown inline as blue-bordered badges
 - "None" displayed for policies without assignments
@@ -576,6 +586,63 @@ Applied automatically (no `-FetchGraphData` required):
 - Authentication combination values are mapped to readable names (e.g., `windowsHelloForBusiness` → "Windows Hello for Business")
 - ISO 8601 durations are converted to friendly text (e.g., `PT0S` → "0 (immediate)", `P30D` → "30 days")
 - Settings Catalog is only loaded when Intune/Defender policies (policyTypeId 10) are present
+
+---
+
+## Compare-InforcerEnvironments
+
+Compares the Intune policy configuration of two tenants and generates an interactive HTML report. Uses the shared DocModel pipeline to normalize both environments, then diffs settings at the `settingDefinitionId` level. The report includes tabs for Comparison, Manual Review, Duplicates, and Deprecated settings.
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|--------------|
+| **SourceTenantId** | Object | Yes | Source tenant (numeric ID, GUID, or tenant name). |
+| **DestinationTenantId** | Object | Yes | Destination tenant (numeric ID, GUID, or tenant name). |
+| **SourceSession** | Hashtable | No | Session from `Connect-Inforcer -PassThru`. Defaults to current session. |
+| **DestinationSession** | Hashtable | No | Session from `Connect-Inforcer -PassThru`. Defaults to current session. |
+| **IncludingAssignments** | Switch | No | Include assignment data in the report (informational only, does not affect score). |
+| **FetchGraphData** | Switch | No | Connect to Microsoft Graph to resolve group names, assignment filters, scope tags, and compliance rules. Requires `Directory.Read.All` and `DeviceManagementConfiguration.Read.All` scopes. |
+| **ExcludeOS** | String[] | No | Exclude platforms from comparison (e.g., `'macOS'`, `'iOS'`). Case-insensitive contains matching. |
+| **PolicyNameFilter** | String | No | Only include policies whose name contains this string (case-insensitive). |
+| **SettingsCatalogPath** | String | No | Path to local `settings.json`. Auto-discovers if omitted. |
+| **OutputPath** | String | No | Directory for the HTML report. Defaults to current directory. |
+
+### Examples
+
+```powershell
+# Basic comparison (same Inforcer account)
+Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam'
+
+# Cross-account comparison with Graph enrichment
+$src = Connect-Inforcer -ApiKey $key1 -Region uk -PassThru
+$dst = Connect-Inforcer -ApiKey $key2 -Region eu -PassThru
+Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 `
+    -SourceSession $src -DestinationSession $dst -FetchGraphData
+
+# Exclude macOS and filter by policy name
+Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' `
+    -ExcludeOS 'macOS' -PolicyNameFilter 'Defender'
+```
+
+### Output
+
+Returns a `FileInfo` object for the exported HTML report. Auto-opens in the default browser.
+
+### HTML report features
+
+- **Comparison tab**: Flat table with all Settings Catalog settings, sortable columns, status filter pills (Matched/Conflicting/Source Only/Dest Only), category dropdown, advanced column filters with AND/OR logic, search
+- **Manual Review tab**: Non-Settings-Catalog policies (compliance, enrollment, scripts) in a 50/50 source/destination layout grouped by platform. Matching policy names aligned side-by-side. Collapsible code blocks with syntax highlighting for scripts (PowerShell/Bash) and compliance rules (JSON)
+- **Duplicates tab**: Settings configured in 2+ policies with different values, with automated analysis
+- **Deprecated tab**: Settings flagged as deprecated by Microsoft, grouped by source/destination
+- **Configuration Match score**: Animated percentage with color gradient, confetti at 100%
+- Dark/light mode toggle, responsive layout, column resize handles
+
+### Graph enrichment (`-FetchGraphData`)
+
+When specified, connects to Microsoft Graph for each tenant:
+- Group/user ObjectIDs resolved to display names
+- Assignment filter and scope tag IDs resolved to names
+- Compliance policy detection rules (`rulesContent`) fetched individually
+- Discovery scripts linked to parent compliance policies
 
 ---
 

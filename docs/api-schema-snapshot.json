@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-02T15:19:24Z",
+  "generatedAt": "2026-04-16T14:24:52Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -222,10 +222,6 @@
         "mail": "string",
         "visibility": "string",
         "groupTypes": "array"
-      },
-      "pagination": {
-        "continuationToken": "string",
-        "totalCount": "integer"
       }
     },
     "GET /beta/tenants/{tenantId}/groups/{groupId}": {
@@ -236,11 +232,11 @@
         "mail": "string",
         "mailNickname": "string",
         "visibility": "string",
-        "membershipRule": "string",
+        "membershipRule": "null",
         "groupTypes": "array",
         "createdDateTime": "datetime",
         "mailEnabled": "boolean",
-        "onPremisesSyncEnabled": "boolean",
+        "onPremisesSyncEnabled": "null",
         "members": {
           "_type": "array",
           "_itemProperties": {

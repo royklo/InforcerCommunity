@@ -48,6 +48,24 @@ foreach ($name in $exported) {
             'Get-InforcerAuditEvent' {
                 $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
             }
+            'Get-InforcerUser' {
+                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Get-InforcerGroup' {
+                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Get-InforcerRole' {
+                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Get-InforcerSupportedEventType' {
+                $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Export-InforcerTenantDocumentation' {
+                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Compare-InforcerEnvironments' {
+                $out = & $name -SourceTenantId 1 -DestinationTenantId 2 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
             default {
                 $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
             }

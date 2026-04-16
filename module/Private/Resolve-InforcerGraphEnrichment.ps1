@@ -8,7 +8,9 @@ function Resolve-InforcerGraphEnrichment {
         (rulesContent) that the Inforcer API does not return. Returns a hashtable with GroupNameMap,
         FilterMap, ScopeTagMap, and ComplianceRulesMap ready for ConvertTo-InforcerDocModel.
 
-        Always performs a fresh Graph sign-in to ensure the correct Azure AD tenant context.
+        Uses Connect-InforcerGraph to obtain a Microsoft Graph context for the target tenant and
+        required scopes. This may reuse an existing matching Graph context rather than always
+        performing a fresh sign-in.
 
         Shared by Export-InforcerTenantDocumentation and Get-InforcerComparisonData to avoid duplicating
         Graph enrichment logic.
@@ -61,7 +63,7 @@ function Resolve-InforcerGraphEnrichment {
         if ($null -eq $rawAssign) { continue }
         foreach ($a in @($rawAssign)) {
             $t = $a.target; if ($null -eq $t) { $t = $a }
-            if ($t.groupId -and $t.groupId -match '^[0-9a-f]{8}-') {
+            if ($t.groupId -and $t.groupId -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
                 [void]$objectIds.Add($t.groupId)
             }
         }

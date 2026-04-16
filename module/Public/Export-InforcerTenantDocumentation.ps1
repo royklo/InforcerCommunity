@@ -206,7 +206,7 @@ if (-not [string]::IsNullOrWhiteSpace($Baseline)) {
             })
             $matchedCount = @($docData.Policies).Count
             Write-Host "  Filtered to $matchedCount of $originalCount policies in baseline" -ForegroundColor Gray
-            if ($matchedCount -lt $baselinePolicyNames.Count) {
+            if ($matchedCount -lt $baselineTotal) {
                 $matchedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                 foreach ($pol in @($docData.Policies)) {
                     foreach ($n in @($pol.displayName, $pol.friendlyName, $pol.name)) {

@@ -173,7 +173,7 @@ body {
     color: var(--text);
     max-width: 1800px;
     margin: 0 auto;
-    padding: 0 20px 3rem;
+    padding: 0 40px 3rem;
     line-height: 1.5;
     font-size: 12px;
     -webkit-font-smoothing: antialiased;
@@ -1237,7 +1237,7 @@ table.hide-assignments .col-assign { display: none; }
         [void]$sb.AppendLine('    <span class="dup-banner-icon">&#9888;</span>')
         [void]$sb.AppendLine('    <div>')
         [void]$sb.AppendLine('        <p class="dup-banner-title">Duplicate Settings Detected</p>')
-        [void]$sb.AppendLine('        <p class="dup-banner-body">These settings appear in multiple policies with conflicting values. Review each entry to ensure your policies are aligned.</p>')
+        [void]$sb.AppendLine('        <p class="dup-banner-body">These settings are configured in multiple policies within the same tenant with different values. When a device is targeted by overlapping policies that define the same setting differently, Intune cannot determine which value to apply &mdash; resulting in a conflict that may prevent the setting from being enforced. Review each entry to determine which policy should take precedence, and remove or align the conflicting values.</p>')
         [void]$sb.AppendLine('    </div>')
         [void]$sb.AppendLine('</div>')
 

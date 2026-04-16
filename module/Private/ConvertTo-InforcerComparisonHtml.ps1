@@ -1162,15 +1162,30 @@ table.hide-assignments .col-assign { display: none; }
 
         # ── Render platform sections with 50/50 source/dest split ──
         foreach ($platform in $platformGroups.Keys) {
-            $platformPolicyCount = ($platformGroups[$platform].Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum
+            # Pre-count non-deprecated policies for this platform
+            $platformVisibleCount = 0
+            foreach ($catPols in $platformGroups[$platform].Values) {
+                $platformVisibleCount += @($catPols | Where-Object {
+                    if ($_.HasDeprecated -ne $true) { return $true }
+                    return @($_.Settings | Where-Object { $_.IsDeprecated -ne $true }).Count -gt 0
+                }).Count
+            }
+            if ($platformVisibleCount -eq 0) { continue }  # Skip empty platforms
             $encPlatform = [System.Net.WebUtility]::HtmlEncode($platform)
             [void]$sb.AppendLine("<details class=`"mr-platform-section`" open>")
-            [void]$sb.AppendLine("    <summary><strong>$encPlatform</strong> <span class=`"status-badge`" style=`"font-size:0.7rem`">$platformPolicyCount</span></summary>")
+            [void]$sb.AppendLine("    <summary><strong>$encPlatform</strong> <span class=`"status-badge`" style=`"font-size:0.7rem`">$platformVisibleCount</span></summary>")
 
             foreach ($catLabel in $platformGroups[$platform].Keys) {
-                $policies = $platformGroups[$platform][$catLabel]
+                $allPolicies = $platformGroups[$platform][$catLabel]
+                # Filter out deprecated-only policies (they have their own tab)
+                $policies = @($allPolicies | Where-Object {
+                    if ($_.HasDeprecated -ne $true) { return $true }
+                    $nonDepr = @($_.Settings | Where-Object { $_.IsDeprecated -ne $true })
+                    return $nonDepr.Count -gt 0
+                })
+                if ($policies.Count -eq 0) { continue }  # Skip empty categories
                 $encCatLabel = [System.Net.WebUtility]::HtmlEncode((& $simplifyCategory $catLabel))
-                $catPolicyCount = @($policies).Count
+                $catPolicyCount = $policies.Count
                 [void]$sb.AppendLine("<details class=`"mr-category-section`" open>")
                 [void]$sb.AppendLine("<summary style=`"font-size:0.95rem;font-weight:600;margin:1rem 0 0.5rem;color:var(--text);cursor:pointer;list-style:none;display:flex;align-items:center;gap:0.5rem`"><span style=`"font-size:0.6rem;color:var(--muted);transition:transform 0.2s`" class=`"cat-chevron`">&#x25B6;</span>$encCatLabel <span class=`"status-badge`" style=`"font-size:0.65rem`">$catPolicyCount</span></summary>")
 

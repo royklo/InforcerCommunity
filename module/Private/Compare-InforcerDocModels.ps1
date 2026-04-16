@@ -454,10 +454,13 @@ function Compare-InforcerDocModels {
                         $manualReviewCategories[$categoryLabel] = [System.Collections.Generic.List[object]]::new()
                     }
                     $settingsSummary = [System.Collections.Generic.List[object]]::new()
+                    $seenSettingNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                     foreach ($s in @($Policy.Settings)) {
                         if ($s.IsConfigured -eq $true -and -not [string]::IsNullOrWhiteSpace("$($s.Value)")) {
                             $settingName = "$($s.Name)"
                             $settingValue = "$($s.Value)"
+                            # Skip duplicate rulesContent (can come from both scheduledActions recursion and Graph injection)
+                            if ($settingName -match '(?i)^rules\s*content$' -and -not $seenSettingNames.Add('rulesContent')) { continue }
                             # Skip internal flags
                             if ($settingName -match '_claimed') { continue }
                             # Skip noise: binary hashes, @odata metadata, GUIDs-only

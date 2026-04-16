@@ -374,7 +374,7 @@ td {
     word-break: break-word;
     max-width: 500px;
 }
-.long-val { display: block; max-height: 2.6em; overflow: hidden; position: relative; word-break: break-all; }
+.long-val { display: block; max-height: 12em; overflow: hidden; position: relative; word-break: break-all; }
 .long-val.expanded { max-height: none; }
 .long-val-btn {
     display: inline-block; margin-top: 0.25rem; padding: 0.125rem 0.5rem;
@@ -383,12 +383,55 @@ td {
     cursor: pointer; transition: all var(--transition);
 }
 .long-val-btn:hover { background: var(--accent); color: #fff; }
+.script-collapsible { margin: 0.25rem 0; }
+.script-collapsible summary { cursor: pointer; font-size: 0.75rem; font-weight: 600; user-select: none; list-style: none; display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.6rem; border-radius: var(--radius-xs); transition: all var(--transition); }
+.script-collapsible summary::after { content: '\25B6'; font-size: 0.55rem; transition: transform 0.2s; }
+.script-collapsible[open] summary::after { transform: rotate(90deg); }
+.script-collapsible summary::-webkit-details-marker { display: none; }
+.script-collapsible pre { margin: 0.5rem 0 0; padding: 1rem; border-radius: var(--radius-xs); font-size: 0.75rem; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 30em; }
+.ps-code { background: #1e1e1e !important; color: #d4d4d4; }
+.ps-code-summary { color: #569cd6; border: 1px solid #569cd6; background: rgba(86,156,214,0.1); }
+.ps-code-summary:hover { background: #569cd6; color: #1e1e1e; }
+.sh-code { background: #0d1117 !important; color: #c9d1d9; }
+.sh-code-summary { color: #ff7b72; border: 1px solid #ff7b72; background: rgba(255,123,114,0.1); }
+.sh-code-summary:hover { background: #ff7b72; color: #0d1117; }
+.json-code { background: #1a1b26 !important; color: #a9b1d6; }
+.json-code-summary { color: #7aa2f7; border: 1px solid #7aa2f7; background: rgba(122,162,247,0.1); }
+.json-code-summary:hover { background: #7aa2f7; color: #1a1b26; }
+.ps-keyword { color: #569cd6; font-weight: 600; }
+.ps-string { color: #ce9178; }
+.ps-variable { color: #9cdcfe; }
+.ps-comment { color: #6a9955; font-style: italic; }
+.ps-cmdlet { color: #dcdcaa; }
+.ps-type { color: #4ec9b0; }
+.sh-keyword { color: #ff7b72; font-weight: 600; }
+.sh-string { color: #a5d6ff; }
+.sh-variable { color: #ffa657; }
+.sh-command { color: #d2a8ff; }
+.sh-comment { color: #8b949e; font-style: italic; }
+.json-key { color: #7aa2f7; }
+.json-string { color: #9ece6a; }
+.json-bool { color: #ff9e64; font-weight: 600; }
+.json-number { color: #e0af68; }
 tr:last-child td { border-bottom: none; }
 tr:nth-child(even) td { background: var(--row-alt); }
 tr:hover td { background: var(--accent-soft); }
 /* --- Metadata rows (hidden by default, shown via toggle) --- */
 .metadata-row { display: none; }
 .show-metadata .metadata-row { display: table-row; }
+/* --- Multi-value list display --- */
+.mv-list { list-style: none; margin: 0; padding: 0; }
+.mv-list li { padding: 0.125rem 0; }
+.mv-list li + li { border-top: 1px solid var(--border-subtle); }
+.mv-hidden { display: none; }
+.mv-btn {
+    display: inline-block; font-size: 0.6875rem; font-weight: 600;
+    padding: 0.125rem 0.5rem; border-radius: var(--radius-xs);
+    background: var(--badge-bg); color: var(--badge-text);
+    cursor: pointer; margin-top: 0.25rem; user-select: none;
+    border: none; transition: background var(--transition);
+}
+.mv-btn:hover { background: var(--accent); color: #fff; }
 /* --- Tooltip icon --- */
 .tooltip-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -554,11 +597,40 @@ tr:hover td { background: var(--accent-soft); }
     # Helper: encode a value for HTML output (null/empty -> muted em dash)
     # -------------------------------------------------------------------------
     function ConvertTo-SafeHtmlValue {
-        param([Parameter()][object]$Value)
+        param(
+            [Parameter()][object]$Value,
+            [Parameter()][switch]$AllowMultiValue
+        )
         if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrEmpty($Value))) {
             return '<span class="muted empty-val">&mdash;</span>'
         }
-        $str = [System.Net.WebUtility]::HtmlEncode($Value.ToString())
+        $str = $Value.ToString()
+        # Multi-value comma-separated list — render as vertical list (only for setting values, not prose)
+        if ($AllowMultiValue -and $str -match ',') {
+            $items = $str -split ',\s*' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+            if ($items.Count -ge 2) {
+                $mvId = "mv$(Get-Random)"
+                $sb2 = [System.Text.StringBuilder]::new()
+                [void]$sb2.Append('<ul class="mv-list">')
+                $i = 0
+                foreach ($item in $items) {
+                    $encItem = [System.Net.WebUtility]::HtmlEncode($item)
+                    if ($items.Count -gt 10 -and $i -ge 10) {
+                        [void]$sb2.Append("<li class=`"mv-hidden $mvId`">$encItem</li>")
+                    } else {
+                        [void]$sb2.Append("<li>$encItem</li>")
+                    }
+                    $i++
+                }
+                [void]$sb2.Append('</ul>')
+                if ($items.Count -gt 10) {
+                    $remaining = $items.Count - 10
+                    [void]$sb2.Append("<span class=`"mv-btn`" onclick=`"var h=this.closest('td').querySelectorAll('.$mvId');var show=h[0].style.display!=='list-item';h.forEach(function(e){e.style.display=show?'list-item':'none'});this.textContent=show?'Collapse':'+ $remaining more'`">+ $remaining more</span>")
+                }
+                return $sb2.ToString()
+            }
+        }
+        $str = [System.Net.WebUtility]::HtmlEncode($str)
         # Wrap long values (>200 chars) in a collapsible block with ellipsis button
         if ($str.Length -gt 200) {
             return "<span class=`"long-val`" id=`"lv$(Get-Random)`">$str</span><span class=`"long-val-btn`" onclick=`"var v=this.previousElementSibling;v.classList.toggle('expanded');this.textContent=v.classList.contains('expanded')?'Collapse':'Expand'`">Expand</span>"
@@ -604,7 +676,7 @@ tr:hover td { background: var(--accent-soft); }
     [void]$sb.AppendLine($cssBlock)
     [void]$sb.AppendLine('</style>')
     [void]$sb.AppendLine('</head>')
-    [void]$sb.AppendLine('<body>')
+    [void]$sb.AppendLine('<body class="hide-empty">')
 
     # --- Header ---
     [void]$sb.AppendLine('<div id="top"></div>')
@@ -652,7 +724,7 @@ tr:hover td { background: var(--accent-soft); }
 
     # Sidebar controls
     [void]$sb.AppendLine('<div class="sidebar-controls">')
-    [void]$sb.AppendLine('<label class="toggle-row"><span>Hide empty fields</span><span class="toggle-switch"><input type="checkbox" id="chk-empty" onchange="toggleEmpty()"><span class="toggle-slider"></span></span></label>')
+    [void]$sb.AppendLine('<label class="toggle-row"><span>Hide empty fields</span><span class="toggle-switch"><input type="checkbox" id="chk-empty" checked onchange="toggleEmpty()"><span class="toggle-slider"></span></span></label>')
     [void]$sb.AppendLine('<label class="toggle-row"><span>Expand all sections</span><span class="toggle-switch"><input type="checkbox" id="chk-expand" onchange="toggleExpand()"><span class="toggle-slider"></span></span></label>')
     [void]$sb.AppendLine('<label class="toggle-row"><span>Dark mode</span><span class="toggle-switch"><input type="checkbox" id="chk-theme" onchange="toggleTheme()"><span class="toggle-slider"></span></span></label>')
     [void]$sb.AppendLine('<label class="toggle-row"><span>Show metadata<span class="tooltip-icon" data-tip="Show @odata.type and other metadata properties in settings tables">i</span></span><span class="toggle-switch"><input type="checkbox" id="chk-meta" onchange="toggleMeta()"><span class="toggle-slider"></span></span></label>')
@@ -858,9 +930,21 @@ tr:hover td { background: var(--accent-soft); }
                     [void]$sb.AppendLine('<tr><th>Setting</th><th>Value</th></tr>')
                     foreach ($setting in @($policy.Settings)) {
                         $settingNameEsc = [System.Net.WebUtility]::HtmlEncode($setting.Name)
-                        $settingVal     = ConvertTo-SafeHtmlValue -Value $setting.Value
                         $indentLevel    = if ($null -ne $setting.Indent) { [int]$setting.Indent } else { 0 }
                         $paddingRem     = $indentLevel * 1.5
+
+                        # Script code blocks — render as collapsible <details> with syntax highlighting
+                        if ("$($setting.Value)" -match '^__SCRIPT_CODE__') {
+                            $scriptCode = "$($setting.Value)".Substring('__SCRIPT_CODE__'.Length)
+                            $encCode = [System.Net.WebUtility]::HtmlEncode($scriptCode)
+                            $trimmed = $scriptCode.TrimStart()
+                            if ($trimmed -match '^\s*[\{\[]') { $codeClass = 'json-code'; $summaryClass = 'json-code-summary'; $label = 'View JSON' }
+                            elseif ($trimmed -match '^\s*#!/') { $codeClass = 'sh-code'; $summaryClass = 'sh-code-summary'; $label = 'View script' }
+                            else { $codeClass = 'ps-code'; $summaryClass = 'ps-code-summary'; $label = 'View script' }
+                            $settingVal = "<details class=`"script-collapsible`"><summary class=`"$summaryClass`">$label</summary><pre class=`"$codeClass`">$encCode</pre></details>"
+                        } else {
+                            $settingVal = ConvertTo-SafeHtmlValue -Value $setting.Value -AllowMultiValue
+                        }
 
                         # Determine if this is a metadata row
                         $metaClass = ''
@@ -907,6 +991,7 @@ tr:hover td { background: var(--accent-soft); }
     # --- Footer ---
     [void]$sb.AppendLine('<div class="footer">')
     [void]$sb.AppendLine("<p>Generated $generatedAt UTC &middot; $tenantNameEsc &middot; $totalPolicies policies across $totalProducts products</p>")
+    [void]$sb.AppendLine('<p>Notice a bug or missing information? <a href="https://github.com/royklo/InforcerCommunity/issues" target="_blank" rel="noopener" style="color:var(--accent)">Report it on GitHub</a></p>')
     [void]$sb.AppendLine('</div>')
 
     # --- JavaScript ---
@@ -917,7 +1002,7 @@ function closeSidebar(){document.getElementById('sidebar').classList.remove('ope
 function scrollToTop(){window.scrollTo({top:0,behavior:'smooth'})}
 function toggleMeta(){document.body.classList.toggle('show-metadata')}
 var _activeTags=[];
-function searchPolicies(q){var prods=document.querySelectorAll('.product-section');q=q.toLowerCase().trim();prods.forEach(function(pr){pr.querySelectorAll('mark.search-highlight').forEach(function(h){var p=h.parentNode;p.replaceChild(document.createTextNode(h.textContent),h);p.normalize()});var vis=0;pr.querySelectorAll('.policy-section').forEach(function(p){if(p.classList.contains('tag-hidden')){return}var txt=p.textContent.toLowerCase();if(!q||txt.indexOf(q)>=0){p.classList.remove('search-hidden');vis++}else{p.classList.add('search-hidden')}});if(q){if(vis>0){pr.open=true;pr.style.display=''}else{pr.open=false;pr.style.display='none'}}else{pr.style.display='';pr.open=false}});document.querySelectorAll('h3').forEach(function(h){if(!q){h.style.display='';return}var next=h.nextElementSibling;var hasVis=false;while(next&&!next.matches('h3')){if(next.classList.contains('policy-section')&&!next.classList.contains('search-hidden')&&!next.classList.contains('tag-hidden')){hasVis=true;break}next=next.nextElementSibling}h.style.display=hasVis?'':'none'});if(!q)return;var re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');prods.forEach(function(pr){pr.querySelectorAll('.policy-section:not(.search-hidden):not(.tag-hidden) td, .policy-section:not(.search-hidden):not(.tag-hidden) h4').forEach(function(el){el.childNodes.forEach(function(n){if(n.nodeType===3&&re.test(n.textContent)){var s=document.createElement('span');s.innerHTML=n.textContent.replace(re,'<mark class="search-highlight">$1</mark>');n.parentNode.replaceChild(s,n)}})})})}
+function searchPolicies(q){var prods=document.querySelectorAll('.product-section');q=q.toLowerCase().trim();prods.forEach(function(pr){pr.querySelectorAll('mark.search-highlight').forEach(function(h){var p=h.parentNode;p.replaceChild(document.createTextNode(h.textContent),h);p.normalize()});var vis=0;pr.querySelectorAll('.policy-section').forEach(function(p){if(p.classList.contains('tag-hidden')){return}var txt=p.textContent.toLowerCase();if(!q||txt.indexOf(q)>=0){p.classList.remove('search-hidden');vis++}else{p.classList.add('search-hidden')}});if(q){if(vis>0){pr.open=true;pr.style.display=''}else{pr.open=false;pr.style.display='none'}}else{pr.style.display='';pr.open=false}});document.querySelectorAll('h3').forEach(function(h){if(!q){h.style.display='';return}var next=h.nextElementSibling;var hasVis=false;while(next&&next.tagName!=='H3'){if(next.classList&&next.classList.contains('policy-section')&&!next.classList.contains('search-hidden')&&!next.classList.contains('tag-hidden')){hasVis=true;break}next=next.nextElementSibling}h.style.display=hasVis?'':'none'});prods.forEach(function(pr){if(!q){pr.style.display='';return}var anyH3=false;pr.querySelectorAll('h3').forEach(function(h){if(h.style.display!=='none')anyH3=true});if(!anyH3){var anyPol=pr.querySelectorAll('.policy-section:not(.search-hidden):not(.tag-hidden)').length>0;if(!anyPol){pr.style.display='none';pr.open=false}}});if(!q)return;var re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');prods.forEach(function(pr){pr.querySelectorAll('.policy-section:not(.search-hidden):not(.tag-hidden) td, .policy-section:not(.search-hidden):not(.tag-hidden) h4').forEach(function(el){el.childNodes.forEach(function(n){if(n.nodeType===3&&re.test(n.textContent)){var s=document.createElement('span');s.innerHTML=n.textContent.replace(re,'<mark class="search-highlight">$1</mark>');n.parentNode.replaceChild(s,n)}})})})}
 function toggleTagFilter(el,tag){var isActive=!el.classList.contains('active');var i=_activeTags.indexOf(tag);if(isActive&&i<0)_activeTags.push(tag);else if(!isActive&&i>=0)_activeTags.splice(i,1);document.querySelectorAll('.tag-pill[data-tag="'+tag+'"]').forEach(function(p){if(isActive)p.classList.add('active');else p.classList.remove('active')});applyTagFilter()}
 function applyTagFilter(){document.querySelectorAll('.policy-section').forEach(function(p){if(_activeTags.length===0){p.classList.remove('tag-hidden');return}var t=p.getAttribute('data-tags')||'';var found=_activeTags.some(function(tag){return t.toLowerCase().indexOf(tag.toLowerCase())>=0});if(found)p.classList.remove('tag-hidden');else p.classList.add('tag-hidden')});document.querySelectorAll('.product-section').forEach(function(pr){var vis=pr.querySelectorAll('.policy-section:not(.tag-hidden)').length;if(_activeTags.length>0&&vis>0)pr.open=true});var si=document.getElementById('search-input');if(si.value)searchPolicies(si.value)}
 function navClick(e,targetId){if(e)e.preventDefault();document.getElementById('search-input').value='';searchPolicies('');closeSidebar();var el=document.getElementById(targetId);if(el){var prod=el.closest('details.product-section');if(prod)prod.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})}}
@@ -929,6 +1014,17 @@ window.addEventListener('scroll',function(){var b=document.getElementById('btn-t
 </script>
 '@
     [void]$sb.AppendLine($jsBlock)
+
+    # --- Syntax highlighting for collapsible code blocks ---
+    [void]$sb.AppendLine('<script>')
+    [void]$sb.AppendLine('function escHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}')
+    [void]$sb.AppendLine('function highlightPS(el){var t=el.textContent,tokens=[],re=/(#[^\n]*|<#[\s\S]*?#>|"[^"]*"|''[^'']*''|\$[\w:]+|\[[\w.]+\]|\b(?:if|else|elseif|foreach|for|while|do|switch|try|catch|finally|throw|return|function|param|begin|process|end|filter|class|enum|using|trap|break|continue|exit)\b|\b[A-Z][a-z]+(?:-[A-Z][a-zA-Z]+)+\b)/gi,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));var s=m[0],c="";if(s[0]==="#"||s.startsWith("<#"))c="ps-comment";else if(s[0]==="\""||s[0]==="''")c="ps-string";else if(s[0]==="$")c="ps-variable";else if(s[0]==="[")c="ps-type";else if(s.indexOf("-")>0&&s[0]===s[0].toUpperCase())c="ps-cmdlet";else c="ps-keyword";tokens.push(''<span class="''+c+''">''+escHtml(s)+''</span>'');last=m.index+s.length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
+    [void]$sb.AppendLine('function highlightBash(el){var t=el.textContent,tokens=[],re=/(#[^\n]*|"(?:[^"\\]|\\.)*"|''[^'']*''|\$\{[\w]+\}|\$[\w]+|\b(?:if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|local|export|set|trap|in)\b|\b(?:echo|curl|rm|mkdir|cp|mv|chmod|chown|grep|sed|awk|cat|ls|cd|pwd|source|eval|exec|exit)\b)/g,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));var s=m[0],c="";if(s[0]==="#")c="sh-comment";else if(s[0]==="\""||s[0]==="''")c="sh-string";else if(s[0]==="$")c="sh-variable";else if(/^(if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|local|export|set|trap|in)$/.test(s))c="sh-keyword";else c="sh-command";tokens.push(''<span class="''+c+''">''+escHtml(s)+''</span>'');last=m.index+s.length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
+    [void]$sb.AppendLine('function highlightJSON(el){var t=el.textContent,tokens=[],re=/("(?:[^"\\]|\\.)*")\s*(:)|("(?:[^"\\]|\\.)*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));if(m[1])tokens.push(''<span class="json-key">''+escHtml(m[1])+''</span>''+escHtml(m[2]));else if(m[3])tokens.push(''<span class="json-string">''+escHtml(m[3])+''</span>'');else if(m[4])tokens.push(''<span class="json-bool">''+escHtml(m[4])+''</span>'');else if(m[5])tokens.push(''<span class="json-number">''+escHtml(m[5])+''</span>'');last=m.index+m[0].length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
+    [void]$sb.AppendLine('document.querySelectorAll("pre.ps-code").forEach(highlightPS);')
+    [void]$sb.AppendLine('document.querySelectorAll("pre.sh-code").forEach(highlightBash);')
+    [void]$sb.AppendLine('document.querySelectorAll("pre.json-code").forEach(highlightJSON);')
+    [void]$sb.AppendLine('</script>')
 
     [void]$sb.AppendLine('</body>')
     [void]$sb.Append('</html>')

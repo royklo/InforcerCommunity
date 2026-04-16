@@ -213,6 +213,54 @@
           }
         }
       }
+    },
+    "GET /beta/tenants/{tenantId}/groups": {
+      "properties": {
+        "id": "string",
+        "displayName": "string",
+        "description": "string",
+        "mail": "string",
+        "visibility": "string",
+        "groupTypes": "array"
+      },
+      "pagination": {
+        "continuationToken": "string",
+        "totalCount": "integer"
+      }
+    },
+    "GET /beta/tenants/{tenantId}/groups/{groupId}": {
+      "properties": {
+        "id": "string",
+        "displayName": "string",
+        "description": "string",
+        "mail": "string",
+        "mailNickname": "string",
+        "visibility": "string",
+        "membershipRule": "string",
+        "groupTypes": "array",
+        "createdDateTime": "datetime",
+        "mailEnabled": "boolean",
+        "onPremisesSyncEnabled": "boolean",
+        "members": {
+          "_type": "array",
+          "_itemProperties": {
+            "id": "string",
+            "displayName": "string",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "GET /beta/tenants/{tenantId}/roles": {
+      "properties": {
+        "id": "string",
+        "templateId": "string",
+        "displayName": "string",
+        "description": "string",
+        "isBuiltIn": "boolean",
+        "isEnabled": "boolean",
+        "isPrivileged": "boolean"
+      }
     }
   }
 }

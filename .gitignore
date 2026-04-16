@@ -38,6 +38,7 @@ TestResults/
 # AI tooling and planning
 .claude/
 .planning/
+.superpowers/
 CLAUDE.md
 /docs/superpowers/
 
@@ -70,3 +71,4 @@ TODO.md
 # Generated documentation output
 *.xlsx
 *.md.bak
+api-feedback.md

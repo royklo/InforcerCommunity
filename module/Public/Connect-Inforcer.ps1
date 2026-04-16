@@ -26,6 +26,10 @@
     Also connect to Microsoft Graph via interactive sign-in. This enables group name resolution
     in Export-InforcerTenantDocumentation. Requires Microsoft.Graph.Authentication module
     (auto-installed if missing).
+.PARAMETER PassThru
+    When specified, returns the session hashtable to the pipeline in addition to
+    storing it in the module-scoped session variable. Use this to capture sessions
+    for cross-account comparison with Compare-InforcerEnvironments.
 .OUTPUTS
     PSObject with Status, Region, BaseUrl, ConnectedAt.
 .LINK
@@ -53,7 +57,10 @@ param(
     [string]$BaseUrl,
 
     [Parameter(Mandatory = $false)]
-    [switch]$FetchGraphData
+    [switch]$FetchGraphData,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$PassThru
 )
 
 $rawApiKey = $ApiKey
@@ -103,13 +110,12 @@ try {
         $statusCode = [int]$_.Exception.Response.StatusCode
     }
     if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-        try {
-            $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
-            if ($json) {
-                if ($json.PSObject.Properties['statusCode']) { $statusCode = [int]$json.statusCode }
-                $apiMessage = $json.PSObject.Properties['message'].Value -as [string]
-            }
-        } catch { }
+        $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if ($json) {
+            if ($json.PSObject.Properties['statusCode']) { $statusCode = [int]$json.statusCode }
+            $msgProp = $json.PSObject.Properties['message']
+            if ($msgProp) { $apiMessage = $msgProp.Value -as [string] }
+        }
     }
     $msg = switch ($true) {
         ($statusCode -eq 401) { 'Connection failed: the API key is invalid for this endpoint.' }
@@ -132,6 +138,17 @@ $script:InforcerSession = @{
 }
 
 Write-Verbose "Successfully connected to Inforcer API at $baseUrlValue"
+
+if ($PassThru) {
+    # Return a clone of the session hashtable so callers have an independent copy
+    $sessionCopy = @{
+        ApiKey      = $script:InforcerSession.ApiKey
+        BaseUrl     = $script:InforcerSession.BaseUrl
+        Region      = $script:InforcerSession.Region
+        ConnectedAt = $script:InforcerSession.ConnectedAt
+    }
+    Write-Output $sessionCopy
+}
 
 # Also connect to Microsoft Graph if requested
 if ($FetchGraphData) {

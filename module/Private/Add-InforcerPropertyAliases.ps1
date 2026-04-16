@@ -5,7 +5,7 @@ function Add-InforcerPropertyAliases {
     .DESCRIPTION
         Adds PascalCase alias properties to API response objects (Private helper).
         Adds aliases only when the source property exists and the alias does not.
-        ObjectType: Tenant, Baseline, Policy, AlignmentScore, AuditEvent.
+        See -ObjectType ValidateSet for supported types.
     .PARAMETER InputObject
         The PSObject to add aliases to (e.g. from API).
     .PARAMETER ObjectType
@@ -17,7 +17,7 @@ function Add-InforcerPropertyAliases {
         [object]$InputObject,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User')]
+        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User', 'GroupSummary', 'Group', 'Role')]
         [string]$ObjectType
     )
 
@@ -303,6 +303,37 @@ function Add-InforcerPropertyAliases {
                 AddAliasIfExists $obj 'RiskState' 'riskState'
                 AddAliasIfExists $obj 'RiskDetail' 'riskDetail'
                 AddAliasIfExists $obj 'RiskLevel' 'riskLevel'
+            }
+            'GroupSummary' {
+                AddAliasIfExists $obj 'Id' 'id'
+                AddAliasIfExists $obj 'DisplayName' 'displayName'
+                AddAliasIfExists $obj 'Description' 'description'
+                AddAliasIfExists $obj 'Mail' 'mail'
+                AddAliasIfExists $obj 'Visibility' 'visibility'
+                AddAliasIfExists $obj 'GroupTypes' 'groupTypes'
+            }
+            'Group' {
+                AddAliasIfExists $obj 'Id' 'id'
+                AddAliasIfExists $obj 'DisplayName' 'displayName'
+                AddAliasIfExists $obj 'Description' 'description'
+                AddAliasIfExists $obj 'Mail' 'mail'
+                AddAliasIfExists $obj 'MailNickname' 'mailNickname'
+                AddAliasIfExists $obj 'Visibility' 'visibility'
+                AddAliasIfExists $obj 'MembershipRule' 'membershipRule'
+                AddAliasIfExists $obj 'GroupTypes' 'groupTypes'
+                AddAliasIfExists $obj 'CreatedDateTime' 'createdDateTime'
+                AddAliasIfExists $obj 'MailEnabled' 'mailEnabled'
+                AddAliasIfExists $obj 'OnPremisesSyncEnabled' 'onPremisesSyncEnabled'
+                AddAliasIfExists $obj 'Members' 'members'
+            }
+            'Role' {
+                AddAliasIfExists $obj 'Id' 'id'
+                AddAliasIfExists $obj 'TemplateId' 'templateId'
+                AddAliasIfExists $obj 'DisplayName' 'displayName'
+                AddAliasIfExists $obj 'Description' 'description'
+                AddAliasIfExists $obj 'IsBuiltIn' 'isBuiltIn'
+                AddAliasIfExists $obj 'IsEnabled' 'isEnabled'
+                AddAliasIfExists $obj 'IsPrivileged' 'isPrivileged'
             }
         }
 

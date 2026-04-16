@@ -45,27 +45,73 @@ function Import-InforcerSettingsCatalog {
         return
     }
 
-    Write-Verbose "Loading Settings Catalog from $Path..."
+    Write-Host '  Loading Settings Catalog...' -ForegroundColor Gray
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $raw = Get-Content -Path $Path -Raw -Encoding UTF8
-    $entries = $raw | ConvertFrom-Json -Depth 100
+    $entries = $raw | ConvertFrom-Json -AsHashtable -Depth 100
+
+    # Load categories.json and build full category chains (parentCategoryId walk)
+    $categoryLookup = @{}
+    $categoriesPath = Join-Path (Split-Path $Path -Parent) 'categories.json'
+    if (Test-Path -LiteralPath $categoriesPath) {
+        Write-Verbose "Loading categories from $categoriesPath..."
+        $catRaw = Get-Content -Path $categoriesPath -Raw -Encoding UTF8
+        $catEntries = $catRaw | ConvertFrom-Json -Depth 10
+        # First pass: build raw lookup
+        $catById = @{}
+        foreach ($cat in $catEntries) {
+            if ($cat.id) { $catById[$cat.id] = $cat }
+        }
+        # Second pass: build full chains by walking parentCategoryId
+        foreach ($cat in $catEntries) {
+            if (-not $cat.id) { continue }
+            $chain = [System.Collections.Generic.List[string]]::new()
+            $current = $cat
+            $visited = [System.Collections.Generic.HashSet[string]]::new()
+            while ($current) {
+                if (-not $visited.Add($current.id)) { break }  # cycle protection
+                if (-not [string]::IsNullOrWhiteSpace($current.displayName)) {
+                    $chain.Insert(0, $current.displayName)
+                }
+                if ($current.parentCategoryId -and $catById.ContainsKey($current.parentCategoryId)) {
+                    $current = $catById[$current.parentCategoryId]
+                } else {
+                    $current = $null
+                }
+            }
+            $categoryLookup[$cat.id] = ($chain -join ' > ')
+        }
+        Write-Verbose "Categories loaded: $($categoryLookup.Count) entries with full chains"
+    }
 
     $catalog = @{}
     foreach ($entry in $entries) {
-        $id = $entry.id
+        $id = $entry['id']
         if ([string]::IsNullOrEmpty($id)) { continue }
 
         $options = @{}
-        foreach ($opt in @($entry.options)) {
-            if ($opt -and $opt.itemId) { $options[$opt.itemId] = $opt.displayName }
+        $entryOptions = $entry['options']
+        if ($null -ne $entryOptions) {
+            foreach ($opt in @($entryOptions)) {
+                if ($opt -and $opt['itemId']) { $options[$opt['itemId']] = $opt['displayName'] }
+            }
+        }
+
+        # Resolve category name for disambiguation (e.g., "Trusted Sites Zone", "Domain Profile")
+        $catName = ''
+        if ($entry.categoryId -and $categoryLookup.ContainsKey($entry.categoryId)) {
+            $catName = $categoryLookup[$entry.categoryId]
         }
 
         $catalog[$id] = @{
-            DisplayName = $entry.displayName
-            Description = $entry.description
-            Options     = $options
+            DisplayName  = $entry['displayName']
+            Description  = $entry['description']
+            Options      = $options
+            CategoryName = $catName
         }
     }
 
+    $sw.Stop()
     $script:InforcerSettingsCatalog = $catalog
-    Write-Verbose "Settings Catalog loaded: $($catalog.Count) entries"
+    Write-Host "  Settings Catalog loaded: $($catalog.Count) entries ($([math]::Round($sw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Gray
 }

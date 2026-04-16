@@ -109,9 +109,11 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
         $script:HtmlOutput | Should -Match '</style>'
     }
 
-    It 'has no external resource references' {
-        $script:HtmlOutput | Should -Not -Match 'href="http'
-        $script:HtmlOutput | Should -Not -Match 'src="http'
+    It 'has no external resource dependencies (CDN links, external scripts/styles)' {
+        # Allow the GitHub issues link (user-facing action link, not a resource dependency)
+        $htmlWithoutFooter = $script:HtmlOutput -replace 'href="https://github\.com/royklo/InforcerCommunity/issues"', ''
+        $htmlWithoutFooter | Should -Not -Match 'href="http'
+        $htmlWithoutFooter | Should -Not -Match 'src="http'
     }
 
     It 'has toolbar JavaScript for theme toggle and empty field filter' {
@@ -366,5 +368,1293 @@ Describe 'ConvertTo-InforcerMarkdown' -Tag 'Markdown' {
         $nextPolicyIdx = if ($null -ne $nextPolicyMatch) { $nextPolicyMatch.LineNumber - 1 } else { $lines.Count }
         $sectionLines = $lines[$policyIdx..($nextPolicyIdx - 1)] -join "`n"
         $sectionLines | Should -Not -Match '\| Setting \| Value \|'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - ENG-03 deprecated badge
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - ENG-03 deprecated badge' -Tag 'ENG-03' {
+
+    BeforeAll {
+        # Minimal comparison model with one deprecated and one non-deprecated row
+        $script:CompModelDepr = @{
+            SourceName      = 'Source Tenant'
+            DestinationName = 'Dest Tenant'
+            Products        = [ordered]@{
+                Windows = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Deprecated WiFi Setting'
+                                    SettingPath  = 'WiFi > Config'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = 'WPA2'
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = 'WPA2'
+                                    IsDeprecated = $true
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Normal Setting'
+                                    SettingPath  = ''
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = 'Enabled'
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = 'Enabled'
+                                    IsDeprecated = $false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview     = [ordered]@{}
+            GeneratedAt      = [datetime]::UtcNow
+        }
+    }
+
+    It 'renders badge-deprecated span for deprecated rows' {
+        $html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelDepr } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+        $html | Should -Match 'Deprecated WiFi Setting.*badge-deprecated'
+    }
+
+    It 'does not render badge-deprecated span for non-deprecated rows' {
+        $html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelDepr } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+        # The normal setting row should NOT have a badge-deprecated span immediately after its name
+        # Plan 08-02 wraps names in <strong>, so the non-deprecated row closes with </strong> (no badge)
+        $html | Should -Match '<strong>Normal Setting</strong></td>'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Value Display
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Value Display' -Tag 'VAL', 'Phase5' {
+
+    BeforeAll {
+        # Build a comparison model with: one long value (>= 100 chars), one short value (< 100 chars), one Conflicting row
+        $longValue = 'A' * 120   # 120 chars — triggers truncation
+        $shortValue = 'ShortVal'  # < 100 chars — no truncation
+        $script:CompModelVal = @{
+            SourceName      = 'Source Tenant'
+            DestinationName = 'Dest Tenant'
+            Products        = [ordered]@{
+                Windows = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Long Value Setting'
+                                    SettingPath  = 'Config > Detail'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = $longValue
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = $longValue
+                                    IsDeprecated = $false
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Short Value Setting'
+                                    SettingPath  = ''
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy B'
+                                    SourceValue  = $shortValue
+                                    DestPolicy   = 'Policy B'
+                                    DestValue    = $shortValue
+                                    IsDeprecated = $false
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Conflict Setting'
+                                    SettingPath  = 'Security > Auth'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Conflicting'
+                                    SourcePolicy = 'Policy C'
+                                    SourceValue  = 'ValueA'
+                                    DestPolicy   = 'Policy C'
+                                    DestValue    = 'ValueB'
+                                    IsDeprecated = $false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview     = [ordered]@{}
+            GeneratedAt      = [datetime]::UtcNow
+        }
+
+        $script:ValHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelVal } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    It 'renders value-toggle-btn with More text for long values' -Tag 'VAL-01' {
+        $script:ValHtml | Should -Match 'value-toggle-btn.*More'
+    }
+
+    It 'does not render value-toggle-btn for short values row' -Tag 'VAL-01' {
+        # Short Value Setting row should not contain value-toggle-btn
+        # Extract the row by finding Short Value Setting and checking the surrounding context
+        # The short value "ShortVal" should appear without a value-toggle-btn nearby
+        $shortRowPattern = 'Short Value Setting.*?</tr>'
+        $shortRowMatch = [regex]::Match($script:ValHtml, $shortRowPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+        $shortRowMatch.Value | Should -Not -Match 'value-toggle-btn'
+    }
+
+    It 'CSS expanded state has white-space pre-wrap' -Tag 'VAL-02' {
+        $script:ValHtml | Should -Match '\.value-truncate\.expanded\s*\{[^}]*white-space:\s*pre-wrap'
+    }
+
+    It 'CSS base truncate state does not have pre-wrap' -Tag 'VAL-02' {
+        # Match the base .value-truncate rule (not .expanded) and verify no pre-wrap
+        $baseTruncateMatch = [regex]::Match($script:ValHtml, '\.value-truncate\s*\{[^}]+\}')
+        $baseTruncateMatch.Value | Should -Not -Match 'pre-wrap'
+    }
+
+    It 'renders value-copy-btn with data-value on all value cells' -Tag 'VAL-03' {
+        $script:ValHtml | Should -Match 'value-copy-btn.*data-value'
+    }
+
+    It 'JS contains clipboard writeText handler for value-copy-btn' -Tag 'VAL-03' {
+        $script:ValHtml | Should -Match 'value-copy-btn'
+        $script:ValHtml | Should -Match 'navigator\.clipboard\.writeText'
+    }
+
+    It 'value-diff class is on inner element not td for conflicting dest' -Tag 'VAL-04' {
+        # For the Conflict Setting row, the dest value td should have class="value-cell" only
+        # and the inner div/span should have value-diff
+        # Pattern: <td class="value-cell"><div class="value-wrap"><span class="value-text value-diff">ValueB
+        $script:ValHtml | Should -Match '<td class="value-cell"><div class="value-wrap"><span class="value-text value-diff">'
+    }
+
+    It 'source column does not have value-diff class for conflicting row' -Tag 'VAL-04' {
+        # The source value for Conflict Setting ("ValueA") should not have value-diff anywhere
+        # Find "ValueA" in value-text or value-truncate and confirm no value-diff
+        $script:ValHtml | Should -Match 'class="value-text">ValueA</span>'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Assignments Display
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Assignments Display' -Tag 'ASG', 'Phase6' {
+
+    BeforeAll {
+        # Minimal comparison model with IncludingAssignments = $true and rows covering all assignment types:
+        # Row 1: include group (no prefix), Row 2: exclude group (red), Row 3: All Devices/All Users (blue),
+        # Row 4: include with filter suffix (filter line) + empty dest (em dash)
+        $script:CompModelAsg = @{
+            SourceName           = 'Source Tenant'
+            DestinationName      = 'Dest Tenant'
+            IncludingAssignments = $true
+            Products             = [ordered]@{
+                Windows = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType          = 'Setting'
+                                    Name              = 'Include Row'
+                                    SettingPath       = ''
+                                    Category          = 'Windows / Settings Catalog'
+                                    Status            = 'Matched'
+                                    SourcePolicy      = 'Policy A'
+                                    SourceValue       = 'Val1'
+                                    DestPolicy        = 'Policy A'
+                                    DestValue         = 'Val1'
+                                    IsDeprecated      = $false
+                                    SourceAssignment  = 'Marketing Team'
+                                    DestAssignment    = 'Marketing Team'
+                                },
+                                @{
+                                    ItemType          = 'Setting'
+                                    Name              = 'Exclude Row'
+                                    SettingPath       = ''
+                                    Category          = 'Windows / Settings Catalog'
+                                    Status            = 'Matched'
+                                    SourcePolicy      = 'Policy B'
+                                    SourceValue       = 'Val2'
+                                    DestPolicy        = 'Policy B'
+                                    DestValue         = 'Val2'
+                                    IsDeprecated      = $false
+                                    SourceAssignment  = 'Exclude: Finance Team'
+                                    DestAssignment    = 'Exclude: Finance Team'
+                                },
+                                @{
+                                    ItemType          = 'Setting'
+                                    Name              = 'All Assignment Row'
+                                    SettingPath       = ''
+                                    Category          = 'Windows / Settings Catalog'
+                                    Status            = 'Matched'
+                                    SourcePolicy      = 'Policy C'
+                                    SourceValue       = 'Val3'
+                                    DestPolicy        = 'Policy C'
+                                    DestValue         = 'Val3'
+                                    IsDeprecated      = $false
+                                    SourceAssignment  = 'All Devices'
+                                    DestAssignment    = 'All Users'
+                                },
+                                @{
+                                    ItemType          = 'Setting'
+                                    Name              = 'Filter Row'
+                                    SettingPath       = ''
+                                    Category          = 'Windows / Settings Catalog'
+                                    Status            = 'Matched'
+                                    SourcePolicy      = 'Policy D'
+                                    SourceValue       = 'Val4'
+                                    DestPolicy        = 'Policy D'
+                                    DestValue         = 'Val4'
+                                    IsDeprecated      = $false
+                                    SourceAssignment  = 'Marketing Team (include: Department = IT)'
+                                    DestAssignment    = ''
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview  = [ordered]@{}
+            GeneratedAt   = [datetime]::UtcNow
+        }
+
+        $script:AsgHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelAsg } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # ASG-01: Include-type group renders as plain text in default foreground, no "Include:" prefix, no badge class
+    It 'include-type assignment does NOT contain assign-tag class' -Tag 'ASG-01' {
+        $script:AsgHtml | Should -Not -Match 'class="assign-tag'
+    }
+
+    It 'include-type assignment does NOT prefix group name with "Include:"' -Tag 'ASG-01' {
+        # "Marketing Team" should appear without "Include:" prefix in HTML
+        $script:AsgHtml | Should -Not -Match '>Include:\s*Marketing Team'
+    }
+
+    It 'include-type assignment renders group name with assign-include class' -Tag 'ASG-01' {
+        $script:AsgHtml | Should -Match 'class="assign-include"'
+    }
+
+    # ASG-02: Exclude-type group renders in red with "Exclude:" prefix
+    It 'exclude-type assignment contains assign-exclude class' -Tag 'ASG-02' {
+        $script:AsgHtml | Should -Match 'class="assign-exclude"'
+    }
+
+    It 'exclude-type assignment text starts with Exclude:' -Tag 'ASG-02' {
+        $script:AsgHtml | Should -Match 'assign-exclude[^>]*>Exclude:'
+    }
+
+    # ASG-03: All Devices and All Users render with assign-all class (blue)
+    It 'All Devices assignment contains assign-all class' -Tag 'ASG-03' {
+        $script:AsgHtml | Should -Match 'class="assign-all"'
+    }
+
+    It 'All Users assignment also has assign-all class' -Tag 'ASG-03' {
+        # Both All Devices and All Users rows should produce assign-all spans
+        $allSpanMatches = ([regex]::Matches($script:AsgHtml, 'class="assign-all"')).Count
+        $allSpanMatches | Should -BeGreaterThan 1
+    }
+
+    # ASG-04: Filter info on a separate muted line below the assignment
+    It 'assignment with filter renders assign-filter span' -Tag 'ASG-04' {
+        $script:AsgHtml | Should -Match 'class="assign-filter"'
+    }
+
+    It 'assign-filter span contains filter parenthetical text' -Tag 'ASG-04' {
+        $script:AsgHtml | Should -Match 'assign-filter[^>]*>\s*\(include:'
+    }
+
+    # ASG-EMPTY: Empty assignment string displays as em dash in muted color
+    It 'empty assignment string renders em dash' -Tag 'ASG-04' {
+        $script:AsgHtml | Should -Match '&mdash;'
+    }
+
+    # CSS: assign-tag removed, assign-filter added
+    It 'CSS does NOT contain .assign-tag class definition' {
+        $script:AsgHtml | Should -Not -Match '\.assign-tag\s*\{'
+    }
+
+    It 'CSS contains .assign-filter class definition' {
+        $script:AsgHtml | Should -Match '\.assign-filter\s*\{'
+    }
+
+    # Format-InforcerAssignmentString: filter suffix appended when Filter and FilterMode present
+    It 'Format-InforcerAssignmentString appends filter parenthetical suffix when Filter and FilterMode are set' -Tag 'ASG-04' {
+        $result = InModuleScope InforcerCommunity {
+            $mockAssignment = [PSCustomObject]@{
+                Type       = 'Group (Include)'
+                Target     = 'Marketing Team'
+                Filter     = 'Department = IT'
+                FilterMode = 'Include'
+            }
+            Format-InforcerAssignmentString -Assignments @($mockAssignment)
+        }
+        $result | Should -Match '\(include: Department = IT\)'
+    }
+
+    It 'Format-InforcerAssignmentString Group (Include) emits just target without Include: prefix' -Tag 'ASG-01' {
+        $result = InModuleScope InforcerCommunity {
+            $mockAssignment = [PSCustomObject]@{
+                Type       = 'Group (Include)'
+                Target     = 'Sales Group'
+                Filter     = ''
+                FilterMode = ''
+            }
+            Format-InforcerAssignmentString -Assignments @($mockAssignment)
+        }
+        $result | Should -Be 'Sales Group'
+        $result | Should -Not -Match 'Include:'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Manual Review Rendering
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Manual Review Rendering' -Tag 'MAN', 'Phase7' {
+
+    BeforeAll {
+        # Build a long PowerShell script (>100 chars, no shebang) for PS code block fixture
+        $psScript = 'function Get-Something { param([string]$Name) Write-Host "Name: $Name" -ForegroundColor Green; return $Name }' + ' ' * 10
+
+        # Build a bash script (>100 chars, starts with shebang) for bash code block fixture
+        $bashScript = "#!/bin/bash`necho 'Starting deployment'`nif [ -z `"`$1`" ]; then echo 'No arg provided'; exit 1; fi`ncurl -s https://example.com/api?name=`$1`necho 'Done'"
+
+        # Compliance rules JSON (valid, with Rules array)
+        $rulesJson = '{"Rules":[{"settingName":"BitLocker","operator":"IsEquals","dataType":"Boolean","operand":"true"},{"settingName":"Firewall","operator":"IsEquals","dataType":"Boolean","operand":"true"}]}'
+
+        # Duplicate table JSON (two policies with different values)
+        $dupJson = '__DUPLICATE_TABLE__[{"Policy":"Policy X","Value":"true","Side":"Source"},{"Policy":"Policy Y","Value":"false","Side":"Destination"}]'
+
+        # Invalid JSON for graceful degradation test
+        $invalidJson = 'not-valid-json'
+
+        $script:CompModelMan = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = '2026-01-01'
+            AlignmentScore  = 85
+            TotalItems      = 10
+            Counters        = @{ Matched = 8; Conflicting = 1; SourceOnly = 1; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 8; Conflicting = 1; SourceOnly = 1; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{
+                'Scripts' = [System.Collections.Generic.List[object]]@(
+                    # Policy 1: PowerShell script (no shebang) — for MAN-01 and MAN-02 PS fallback
+                    @{
+                        PolicyName    = 'PS Script Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'Detection Script'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'scriptContent'; Value = $psScript; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 2: Bash script (shebang) — for MAN-02 bash detection
+                    @{
+                        PolicyName    = 'Bash Script Policy'
+                        Side          = 'Destination'
+                        ProfileType   = 'Detection Script'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'detectionScriptContent'; Value = $bashScript; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 3: Compliance rules (valid JSON) — for MAN-03
+                    @{
+                        PolicyName    = 'Compliance Rules Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'Custom Compliance'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'rulesContent'; Value = $rulesJson; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 4: Duplicate table — for MAN-04
+                    @{
+                        PolicyName    = 'Duplicate Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'someSettingDefId'; Value = $dupJson; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 5: HasDeprecated=$true, Side=Source — for MAN-05 deprecated badge
+                    @{
+                        PolicyName    = 'Deprecated Source Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'Configuration'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'someSetting'; Value = 'someValue'; IsDeprecated = $true }
+                        )
+                        HasDeprecated = $true
+                    },
+                    # Policy 6: HasDeprecated=$false, Side=Destination — for MAN-05 no deprecated badge
+                    @{
+                        PolicyName    = 'Clean Dest Policy'
+                        Side          = 'Destination'
+                        ProfileType   = 'Configuration'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'cleanSetting'; Value = 'cleanValue'; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    # Policy 7: rulesContent with invalid JSON — for MAN-03 graceful degradation
+                    @{
+                        PolicyName    = 'Invalid Rules Policy'
+                        Side          = 'Destination'
+                        ProfileType   = 'Custom Compliance'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'rulesContent'; Value = $invalidJson; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    }
+                )
+            }
+        }
+
+        $script:ManHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelMan } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-01: PowerShell highlighting — highlightPS() and .ps-keyword CSS class
+    # -------------------------------------------------------------------------
+    It 'HTML output contains highlightPS function in JS block' -Tag 'MAN-01' {
+        $script:ManHtml | Should -Match 'function highlightPS'
+    }
+
+    It 'CSS contains .ps-keyword class definition' -Tag 'MAN-01' {
+        $script:ManHtml | Should -Match '\.ps-keyword'
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-02: Bash highlighting — highlightBash() function and sh- CSS classes
+    # -------------------------------------------------------------------------
+    It 'HTML output contains highlightBash function in JS block' -Tag 'MAN-02' {
+        $script:ManHtml | Should -Match 'function highlightBash'
+    }
+
+    It 'CSS contains .sh-keyword class definition' -Tag 'MAN-02' {
+        $script:ManHtml | Should -Match '\.sh-keyword'
+    }
+
+    It 'bash script (shebang) renders with sh-code class on pre element, not ps-code' -Tag 'MAN-02' {
+        # The bash script policy should produce <pre class="sh-code">, not <pre class="ps-code">
+        $script:ManHtml | Should -Match '<pre class="sh-code"'
+    }
+
+    It 'non-shebang script renders with ps-code class (existing behavior)' -Tag 'MAN-02' {
+        # The PowerShell script policy should produce <pre class="ps-code">
+        $script:ManHtml | Should -Match '<pre class="ps-code"'
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-03: Compliance rules table rendering
+    # -------------------------------------------------------------------------
+    It 'rulesContent with valid JSON Rules array renders as compliance-table' -Tag 'MAN-03' {
+        $script:ManHtml | Should -Match '<table class="compliance-table"'
+    }
+
+    It 'compliance-table has four th column headers: Setting, Operator, Type, Expected Value' -Tag 'MAN-03' {
+        $script:ManHtml | Should -Match '<th>Setting</th>'
+        $script:ManHtml | Should -Match '<th>Operator</th>'
+        $script:ManHtml | Should -Match '<th>Type</th>'
+        $script:ManHtml | Should -Match '<th>Expected Value</th>'
+    }
+
+    It 'rulesContent with invalid JSON falls through to default manual-review-setting display' -Tag 'MAN-03' {
+        # "not-valid-json" should appear as a setting value, not break rendering
+        # The output for Invalid Rules Policy should contain manual-review-setting
+        $script:ManHtml | Should -Match 'manual-review-setting'
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-04: Duplicate table rendering
+    # -------------------------------------------------------------------------
+    It '__DUPLICATE_TABLE__ prefixed setting renders as dup-table, not as raw prefix text' -Tag 'MAN-04' {
+        $script:ManHtml | Should -Match '<table class="dup-table"'
+        $script:ManHtml | Should -Not -Match '__DUPLICATE_TABLE__'
+    }
+
+    It 'dup-table has policy names from JSON as th column headers inside dup-table' -Tag 'MAN-04' {
+        # Policy X and Policy Y should appear as <th> elements inside a dup-table
+        # Match: dup-table ... <th>...Policy X...</th>
+        $script:ManHtml | Should -Match '(?s)dup-table.*<th>.*Policy X.*</th>'
+        $script:ManHtml | Should -Match '(?s)dup-table.*<th>.*Policy Y.*</th>'
+    }
+
+    It 'dup-table conflict cell has dup-conflict class when values differ across policies' -Tag 'MAN-04' {
+        # Policy X has "true", Policy Y has "false" — values differ, so at least one td should have dup-conflict class
+        $script:ManHtml | Should -Match 'class="[^"]*dup-conflict[^"]*"'
+    }
+
+    # -------------------------------------------------------------------------
+    # MAN-05: Side badges and deprecated badge — already implemented, should PASS
+    # -------------------------------------------------------------------------
+    It 'policy with Side=Source has side-source class in its summary' -Tag 'MAN-05' {
+        $script:ManHtml | Should -Match 'side-badge side-source'
+    }
+
+    It 'policy with Side=Destination has side-dest class in its summary' -Tag 'MAN-05' {
+        $script:ManHtml | Should -Match 'side-badge side-dest'
+    }
+
+    It 'policy with all settings deprecated is excluded from MR tab (routed to Deprecated tab)' -Tag 'MAN-05' {
+        # "Deprecated Source Policy" has HasDeprecated=$true and ALL settings are IsDeprecated=$true
+        # It should NOT appear in MR tab — it belongs in the Deprecated tab instead
+        $script:ManHtml | Should -Not -Match 'Deprecated Source Policy'
+    }
+
+    It 'policy with HasDeprecated=$false does NOT have badge-deprecated near its policy name' -Tag 'MAN-05' {
+        # "Clean Dest Policy" has HasDeprecated=$false — should not have badge-deprecated after its name
+        $cleanPolicyPattern = 'Clean Dest Policy.*?</summary>'
+        $cleanMatch = [regex]::Match($script:ManHtml, $cleanPolicyPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+        $cleanMatch.Value | Should -Not -Match 'badge-deprecated'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Table Enhancements
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Table Enhancements' -Tag 'TBL', 'Phase8' {
+
+    BeforeAll {
+        # Fixture: three ComparisonRows covering TBL-01/02/03 scenarios
+        # Row 1: deprecated + duplicate + path-with->  (all three features at once)
+        # Row 2: non-deprecated, non-duplicate, path WITHOUT ' > ' separator (TBL-03 always-render path)
+        # Row 3: non-deprecated, non-duplicate, EMPTY path (TBL-03 omit path)
+
+        # ManualReview entry that makes Row 1 appear in the duplicate lookup.
+        # Duplicate lookup key = SettingPath.ToLowerInvariant() = 'security > firewall'
+        $dupValue = '__DUPLICATE_TABLE__[{"Policy":"Policy A","Value":"Block","Side":"Source"},{"Policy":"Policy X","Value":"Allow","Side":"Destination"}]'
+
+        $script:CompModelTbl = @{
+            SourceName      = 'Source Tenant'
+            DestinationName = 'Dest Tenant'
+            Products        = [ordered]@{
+                Windows = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Firewall Mode'
+                                    SettingPath  = 'Security > Firewall'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Conflicting'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = 'Block'
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = 'Allow'
+                                    IsDeprecated = $true
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'WiFi Standard'
+                                    SettingPath  = 'SimpleWiFiPath'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy B'
+                                    SourceValue  = 'WPA3'
+                                    DestPolicy   = 'Policy B'
+                                    DestValue    = 'WPA3'
+                                    IsDeprecated = $false
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Bluetooth Enabled'
+                                    SettingPath  = ''
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy C'
+                                    SourceValue  = 'True'
+                                    DestPolicy   = 'Policy C'
+                                    DestValue    = 'True'
+                                    IsDeprecated = $false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview = [ordered]@{
+                'Duplicate Settings (Different Values)' = [System.Collections.Generic.List[object]]@(
+                    @{
+                        PolicyName    = 'Policy A'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        HasDeprecated = $false
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{
+                                Name         = 'security > firewall'
+                                Value        = $dupValue
+                                IsDeprecated = $false
+                            }
+                        )
+                    }
+                )
+            }
+            GeneratedAt = [datetime]::UtcNow
+        }
+
+        $script:TblHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelTbl } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # TBL-01: Column resize handle CSS and JS
+    # -------------------------------------------------------------------------
+    Context 'TBL-01: Column resize' {
+        It 'renders col-resize-handle CSS class in style block' -Tag 'TBL-01' {
+            $script:TblHtml | Should -Match 'col-resize-handle'
+        }
+
+        It 'adds position:relative to th rule' -Tag 'TBL-01' {
+            $script:TblHtml | Should -Match 'th\s*\{[^}]*position:\s*relative'
+        }
+
+        It 'includes defaultWidths array in JS block' -Tag 'TBL-01' {
+            $script:TblHtml | Should -Match 'defaultWidths'
+        }
+
+        It 'includes dblclick event for column reset' -Tag 'TBL-01' {
+            $script:TblHtml | Should -Match 'dblclick'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # TBL-02: Duplicate badge
+    # -------------------------------------------------------------------------
+    Context 'TBL-02: Duplicate badge' {
+        It 'renders badge-duplicate for rows matching duplicate lookup' -Tag 'TBL-02' {
+            # Row 1 (Firewall Mode, SettingPath='Security > Firewall') should have badge-duplicate
+            $script:TblHtml | Should -Match 'Firewall Mode.*badge-duplicate'
+        }
+
+        It 'badge-duplicate has title with Also configured in' -Tag 'TBL-02' {
+            $script:TblHtml | Should -Match 'badge-duplicate[^>]*title="Also configured in:'
+        }
+
+        It 'does NOT render badge-duplicate for non-duplicate rows' -Tag 'TBL-02' {
+            # Row 2 (WiFi Standard) should NOT have badge-duplicate immediately after its strong name
+            $script:TblHtml | Should -Not -Match 'WiFi Standard</strong>\s*<span class="badge-duplicate'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # TBL-03: Setting name cell layout
+    # -------------------------------------------------------------------------
+    Context 'TBL-03: Setting name cell layout' {
+        It 'wraps setting name in strong tag' -Tag 'TBL-03' {
+            $script:TblHtml | Should -Match '<strong>Firewall Mode</strong>'
+        }
+
+        It 'renders setting-path for non-empty path without > separator' -Tag 'TBL-03' {
+            # WiFi Standard has SettingPath='SimpleWiFiPath' (no > separator)
+            $script:TblHtml | Should -Match 'SimpleWiFiPath</span>'
+        }
+
+        It 'does not render setting-path span for empty SettingPath' -Tag 'TBL-03' {
+            # Bluetooth Enabled has SettingPath='' — td should close right after </strong>
+            $script:TblHtml | Should -Match '<strong>Bluetooth Enabled</strong></td>'
+        }
+
+        It 'renders cell elements in order: strong name, deprecated badge, duplicate badge, setting-path' -Tag 'TBL-03' {
+            # Row 1 (Firewall Mode) is deprecated AND a duplicate AND has a path
+            # Expected order: <strong>Firewall Mode</strong> ... badge-deprecated ... badge-duplicate ... setting-path
+            $script:TblHtml | Should -Match '(?s)<strong>Firewall Mode</strong>\s*<span class="badge-deprecated.*?<span class="badge-duplicate.*?<span class="setting-path'
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Filtering and Navigation
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT', 'Phase9' {
+
+    BeforeAll {
+        # Fixture: two-product ComparisonModel (Intune + Entra) for multi-product category testing.
+        #
+        # D-01 requires the category dropdown and data-category attributes to use the
+        # "ProductKey / CategoryKey" composite built from the outer loop variables
+        # ($productName and $categoryName), NOT from $row.Category directly.
+        #
+        # Fixture uses:
+        #   Products["Intune"].Categories["Settings Catalog"]  -> expected composite: "Intune / Settings Catalog"
+        #   Products["Entra"].Categories["Conditional Access"] -> expected composite: "Entra / Conditional Access"
+        #
+        # $row.Category contains the raw engine value ("Intune / Windows / Settings Catalog")
+        # which is a DIFFERENT string than the required composite. FLT-01 tests FAIL (RED) because
+        # the current code uses $row.Category directly instead of building the composite.
+
+        $script:CompModelFlt = @{
+            SourceName      = 'Source Tenant'
+            DestinationName = 'Dest Tenant'
+            Products        = [ordered]@{
+                Intune = @{
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Firewall Enabled'
+                                    SettingPath  = 'Security > Firewall'
+                                    Category     = 'Intune / Windows / Settings Catalog'
+                                    Status       = 'Conflicting'
+                                    SourcePolicy = 'Policy A'
+                                    SourceValue  = 'Block'
+                                    DestPolicy   = 'Policy A'
+                                    DestValue    = 'Allow'
+                                    IsDeprecated = $false
+                                }
+                            )
+                        }
+                    }
+                }
+                Entra  = @{
+                    Categories = [ordered]@{
+                        'Conditional Access' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'MFA Required'
+                                    SettingPath  = ''
+                                    Category     = 'Entra / Conditional Access / Policies'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Policy B'
+                                    SourceValue  = 'Enabled'
+                                    DestPolicy   = 'Policy B'
+                                    DestValue    = 'Enabled'
+                                    IsDeprecated = $false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview = [ordered]@{}
+            GeneratedAt  = [datetime]::UtcNow
+        }
+
+        $script:FltHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:CompModelFlt } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # FLT-01: Category dropdown — Product / Category composite (D-01, D-02)
+    # These tests assert that data-category and dropdown options use the
+    # "$productName / $categoryName" composite from the outer loop, not $row.Category.
+    # RED: current code uses $row.Category directly, producing "Intune / Windows / Settings Catalog"
+    # instead of the required "Intune / Settings Catalog".
+    # -------------------------------------------------------------------------
+    Context 'FLT-01: Category dropdown' {
+        It 'data-category attribute on Intune row uses simplified category' -Tag 'FLT-01' {
+            # simplifyCategory strips product prefix: "Intune / Settings Catalog" -> "Settings Catalog"
+            $script:FltHtml | Should -Match 'data-category="Settings Catalog"'
+        }
+
+        It 'category dropdown has option with simplified Intune category value' -Tag 'FLT-01' {
+            $script:FltHtml | Should -Match 'value="Settings Catalog"'
+        }
+
+        It 'data-category attribute on Entra row uses simplified category' -Tag 'FLT-01' {
+            # simplifyCategory strips product prefix: "Entra / Conditional Access" -> "Conditional Access"
+            $script:FltHtml | Should -Match 'data-category="Conditional Access"'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # FLT-02: Filter summary font size (D-03)
+    # -------------------------------------------------------------------------
+    Context 'FLT-02: Filter summary' {
+        It 'filter-summary div uses font-size:0.75rem' -Tag 'FLT-02' {
+            # D-03: UI-SPEC requires 0.75rem
+            $script:FltHtml | Should -Match 'filter-summary.*font-size:0\.75rem'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # FLT-03: Status pills — no All pill, per-status CSS classes (D-04, D-05, D-06)
+    # -------------------------------------------------------------------------
+    Context 'FLT-03: Status pills' {
+        It 'does NOT render the All filter pill' -Tag 'FLT-03' {
+            # D-06: All pill removed — filtering is toggle-based, not reset-to-all
+            $script:FltHtml | Should -Not -Match "filterByStatus\(this,'All'\)"
+        }
+
+        It 'Matched pill has filter-pill-matched CSS class' -Tag 'FLT-03' {
+            # D-05: per-status CSS class enables unique active color per status
+            $script:FltHtml | Should -Match 'class="filter-pill filter-pill-matched"'
+        }
+
+        It 'Conflicting pill has filter-pill-conflicting CSS class' -Tag 'FLT-03' {
+            $script:FltHtml | Should -Match 'class="filter-pill filter-pill-conflicting"'
+        }
+
+        It 'Source Only pill has filter-pill-source-only CSS class' -Tag 'FLT-03' {
+            $script:FltHtml | Should -Match 'class="filter-pill filter-pill-source-only"'
+        }
+
+        It 'Dest Only pill has filter-pill-dest-only CSS class' -Tag 'FLT-03' {
+            $script:FltHtml | Should -Match 'class="filter-pill filter-pill-dest-only"'
+        }
+
+        It 'CSS block contains filter-pill-matched.active rule with var(--success)' -Tag 'FLT-03' {
+            # D-04: each status pill has its own active colour using status-specific CSS variables
+            $script:FltHtml | Should -Match '\.filter-pill-matched\.active'
+        }
+
+        It 'CSS block contains filter-pill-conflicting.active rule with var(--danger)' -Tag 'FLT-03' {
+            $script:FltHtml | Should -Match '\.filter-pill-conflicting\.active'
+        }
+
+        It 'CSS block contains .hidden rule with display: none !important' -Tag 'FLT-03' {
+            # D-06: clear-filters button visibility managed via .hidden class
+            $script:FltHtml | Should -Match '\.hidden\s*\{[^}]*display:\s*none\s*!important'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # FLT-04: Search placeholder (D-07, D-08)
+    # -------------------------------------------------------------------------
+    Context 'FLT-04: Search' {
+        It 'search input has placeholder text' -Tag 'FLT-04' {
+            $script:FltHtml | Should -Match 'placeholder="Quick search\.\.\."'
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - Duplicates Tab
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab' {
+
+    BeforeAll {
+        # ---------------------------------------------------------------------------
+        # Fixture 1: $script:DupModel — ComparisonModel WITH duplicate settings
+        # ManualReview key: 'Duplicate Settings (Different Values)'
+        # Three duplicate setting items using __DUPLICATE_TABLE__ JSON payload.
+        # ---------------------------------------------------------------------------
+
+        # Item 1: same-tenant scenario — two Source policies conflict on deviceLock_maxMinutesOfInactivity
+        $item1Value = '__DUPLICATE_TABLE__[{"Policy":"Baseline Security","Value":"5","Side":"Source"},{"Policy":"Strict Policy","Value":"15","Side":"Source"}]'
+        # Item 2: cross-tenant scenario — same setting in both Source and Destination, plus extra Source
+        $item2Value = '__DUPLICATE_TABLE__[{"Policy":"Corp Firewall","Value":"true","Side":"Source"},{"Policy":"Corp Firewall","Value":"true","Side":"Destination"},{"Policy":"Legacy FW","Value":"false","Side":"Source"}]'
+        # Item 3: all-unique scenario — three policies with entirely different values
+        $item3Value = '__DUPLICATE_TABLE__[{"Policy":"Policy A","Value":"xtsAes128","Side":"Source"},{"Policy":"Policy B","Value":"xtsAes256","Side":"Destination"},{"Policy":"Policy C","Value":"aesCbc128","Side":"Source"}]'
+
+        $script:DupModel = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = '2026-01-01'
+            AlignmentScore  = 75
+            TotalItems      = 5
+            Counters        = @{ Matched = 3; Conflicting = 1; SourceOnly = 1; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 3; Conflicting = 1; SourceOnly = 1; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{
+                'Duplicate Settings (Different Values)' = [System.Collections.Generic.List[object]]@(
+                    @{
+                        PolicyName    = 'Baseline Security'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'deviceLock_maxMinutesOfInactivity'; Value = $item1Value; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    @{
+                        PolicyName    = 'Corp Firewall'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'firewall_enableFirewall'; Value = $item2Value; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    },
+                    @{
+                        PolicyName    = 'Policy A'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'bitlocker_encryptionMethod'; Value = $item3Value; IsDeprecated = $false }
+                        )
+                        HasDeprecated = $false
+                    }
+                )
+            }
+        }
+
+        $script:DupHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:DupModel } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+
+        # ---------------------------------------------------------------------------
+        # Fixture 2: $script:NoDupModel — ComparisonModel WITHOUT any duplicates
+        # ManualReview is empty — tab should be hidden entirely.
+        # ---------------------------------------------------------------------------
+        $script:NoDupModel = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = '2026-01-01'
+            AlignmentScore  = 90
+            TotalItems      = 5
+            Counters        = @{ Matched = 5; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 5; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{}
+        }
+
+        $script:NoDupHtml = InModuleScope InforcerCommunity -Parameters @{ Model = $script:NoDupModel } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-01: Tab button and content div
+    # -------------------------------------------------------------------------
+    Context 'DUP-01: Tab button and content' {
+        It 'renders Duplicates tab button when duplicates exist' -Tag 'DUP-01' {
+            # D-01: Duplicates tab button calls switchTab('duplicates', event)
+            $script:DupHtml | Should -Match "switchTab\('duplicates',\s*event\)"
+        }
+
+        It 'Duplicates tab button shows count badge with 3' -Tag 'DUP-01' {
+            # D-01: count badge shows number of unique duplicate settings (3 in fixture)
+            $script:DupHtml | Should -Match 'Duplicates.*<span[^>]*status-badge[^>]*>3</span>'
+        }
+
+        It 'does NOT render Duplicates tab button when no duplicates' -Tag 'DUP-01' {
+            # D-02: when no duplicates exist, tab button must not appear
+            $script:NoDupHtml | Should -Not -Match "switchTab\('duplicates'\)"
+        }
+
+        It 'renders tab-duplicates content div when duplicates exist' -Tag 'DUP-01' {
+            # D-01: content div with id="tab-duplicates" must be present
+            $script:DupHtml | Should -Match 'id="tab-duplicates"'
+        }
+
+        It 'does NOT render tab-duplicates div when no duplicates' -Tag 'DUP-01' {
+            # D-02: when no duplicates, content div must not appear
+            $script:NoDupHtml | Should -Not -Match 'tab-duplicates'
+        }
+
+        It 'renders amber info banner with warning text' -Tag 'DUP-01' {
+            # D-03: informational amber banner at top of tab explaining duplicate settings
+            $script:DupHtml | Should -Match 'dup-info-banner'
+            $script:DupHtml | Should -Match 'Duplicate Settings Detected'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-02: Three-column table with policy entries
+    # -------------------------------------------------------------------------
+    Context 'DUP-02: Three-column table with policy entries' {
+        It 'renders dup-tab-table with three column headers' -Tag 'DUP-02' {
+            # D-04: three-column table: Setting | Policies & Values | Analysis
+            $script:DupHtml | Should -Match 'dup-tab-table'
+            $script:DupHtml | Should -Match '>Setting<'
+            $script:DupHtml | Should -Match '>Policies &amp; Values<'
+            $script:DupHtml | Should -Match '>Analysis<'
+        }
+
+        It 'renders setting name deviceLock_maxMinutesOfInactivity in table row' -Tag 'DUP-02' {
+            # D-04: setting names from the fixture must appear as row data
+            $script:DupHtml | Should -Match 'deviceLock_maxMinutesOfInactivity'
+        }
+
+        It 'renders Source side badge for source policy' -Tag 'DUP-02' {
+            # D-05, D-06: Source badge reuses .side-badge .side-source CSS classes
+            $script:DupHtml | Should -Match 'side-badge side-source.*Source'
+        }
+
+        It 'renders Destination side badge for destination policy' -Tag 'DUP-02' {
+            # D-05, D-06: Destination badge reuses .side-badge .side-dest CSS classes
+            $script:DupHtml | Should -Match 'side-badge side-dest.*Destination'
+        }
+
+        It 'renders policy values in dup-policy-value class' -Tag 'DUP-02' {
+            # D-05: value displayed in monospace amber text below policy name
+            $script:DupHtml | Should -Match 'dup-policy-value'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-03: Analysis messaging via analyzeDuplicate JS
+    # -------------------------------------------------------------------------
+    Context 'DUP-03: Analysis messaging via analyzeDuplicate JS' {
+        It 'HTML contains analyzeDuplicate JavaScript function' -Tag 'DUP-03' {
+            # D-07: analyzeDuplicate() function ported from IntuneLens DuplicateSettingsTab.tsx
+            $script:DupHtml | Should -Match 'function analyzeDuplicate\('
+        }
+
+        It 'table rows contain data-policies-json attribute with valid JSON' -Tag 'DUP-03' {
+            # D-09: each row carries the policies JSON for analyzeDuplicate() to consume
+            $script:DupHtml | Should -Match 'data-policies-json="'
+        }
+
+        It 'analysis cells have dup-analysis-text class' -Tag 'DUP-03' {
+            # D-08: analysis text rendered in small muted text with relaxed line-height
+            $script:DupHtml | Should -Match 'dup-analysis-text'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-04: Duplicate tab search
+    # -------------------------------------------------------------------------
+    Context 'DUP-04: Duplicate tab search' {
+        It 'renders search input with correct placeholder' -Tag 'DUP-04' {
+            # D-10: independent search input inside the Duplicates tab content area
+            $script:DupHtml | Should -Match 'placeholder="Search settings or policies\.\.\."'
+        }
+
+        It 'HTML contains dupTabSearch JavaScript function' -Tag 'DUP-04' {
+            # D-11: real-time search function for filtering duplicate table rows
+            $script:DupHtml | Should -Match 'function dupTabSearch\('
+        }
+
+        It 'renders summary line with dup-summary id' -Tag 'DUP-04' {
+            # D-12: summary line "Showing X of Y duplicate settings across Z policies"
+            $script:DupHtml | Should -Match 'id="dup-summary"'
+        }
+
+        It 'table rows contain data-setting and data-policies attributes for JS filtering' -Tag 'DUP-04' {
+            # D-11: data attributes for case-insensitive substring matching in JS
+            $script:DupHtml | Should -Match 'data-setting="'
+            $script:DupHtml | Should -Match 'data-policies="'
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # DUP-01: CSS classes for Duplicates tab
+    # -------------------------------------------------------------------------
+    Context 'DUP-01: CSS classes' {
+        It 'CSS block contains dup-tab-table class' -Tag 'DUP-01' {
+            # UI-SPEC: .dup-tab-table — three-column duplicate table
+            $script:DupHtml | Should -Match '\.dup-tab-table\s*\{'
+        }
+
+        It 'CSS block contains dup-info-banner class' -Tag 'DUP-01' {
+            # UI-SPEC: .dup-info-banner — amber informational banner
+            $script:DupHtml | Should -Match '\.dup-info-banner\s*\{'
+        }
+
+        It 'CSS block contains dup-policy-value class with monospace font' -Tag 'DUP-02' {
+            # UI-SPEC: .dup-policy-value — monospace amber value text
+            $script:DupHtml | Should -Match '\.dup-policy-value\s*\{[^}]*monospace'
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - BUG-01 deprecated badge rendering
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - BUG-01 deprecated badge rendering' -Tag 'BUG-01', 'Phase11' {
+
+    BeforeAll {
+        $script:Bug01Model = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = [datetime]::UtcNow
+            AlignmentScore  = 75
+            TotalItems      = 3
+            Counters        = @{ Matched = 2; Conflicting = 1; SourceOnly = 0; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 2; Conflicting = 1; SourceOnly = 0; DestOnly = 0 }
+            Products        = [ordered]@{
+                'Windows' = @{
+                    Counters   = @{ Matched = 2; Conflicting = 1; SourceOnly = 0; DestOnly = 0 }
+                    Categories = [ordered]@{
+                        'Settings Catalog' = @{
+                            ComparisonRows = [System.Collections.Generic.List[object]]@(
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Deprecated BitLocker'
+                                    SettingPath  = 'deprecated_bitlocker'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Baseline Policy'
+                                    SourceValue  = 'Enabled'
+                                    DestPolicy   = 'Baseline Policy'
+                                    DestValue    = 'Enabled'
+                                    IsDeprecated = $true
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Normal Firewall'
+                                    SettingPath  = 'firewall_enable'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Matched'
+                                    SourcePolicy = 'Baseline Policy'
+                                    SourceValue  = 'true'
+                                    DestPolicy   = 'Baseline Policy'
+                                    DestValue    = 'true'
+                                    IsDeprecated = $false
+                                },
+                                @{
+                                    ItemType     = 'Setting'
+                                    Name         = 'Missing Flag Setting'
+                                    SettingPath  = 'missing_flag'
+                                    Category     = 'Windows / Settings Catalog'
+                                    Status       = 'Conflicting'
+                                    SourcePolicy = 'Baseline Policy'
+                                    SourceValue  = 'val1'
+                                    DestPolicy   = 'Baseline Policy'
+                                    DestValue    = 'val2'
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            ManualReview = [ordered]@{}
+        }
+
+        $script:Bug01Html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:Bug01Model } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    It 'renders badge-deprecated for IsDeprecated=$true row' {
+        $script:Bug01Html | Should -Match 'Deprecated BitLocker.*badge-deprecated'
+    }
+
+    It 'does NOT render badge-deprecated for IsDeprecated=$false row' {
+        # Normal Firewall row should close with </strong> and NOT have badge-deprecated before next </td>
+        $script:Bug01Html | Should -Match '<strong>Normal Firewall</strong>(?!.*badge-deprecated.*</td>)'
+    }
+
+    It 'does NOT render badge-deprecated when IsDeprecated key is absent' {
+        # Missing Flag Setting has no IsDeprecated key — should not render badge-deprecated
+        $script:Bug01Html | Should -Match '<strong>Missing Flag Setting</strong>(?!.*badge-deprecated.*</td>)'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - BUG-02 manual review content
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - BUG-02 manual review content' -Tag 'BUG-02', 'Phase11' {
+
+    BeforeAll {
+        $script:Bug02Model = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = [datetime]::UtcNow
+            AlignmentScore  = 50
+            TotalItems      = 0
+            Counters        = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{
+                'Proactive Remediations' = [System.Collections.Generic.List[object]]@(
+                    @{
+                        PolicyName    = 'Detection Script Policy'
+                        Side          = 'Source'
+                        ProfileType   = 'deviceHealthScript'
+                        HasDeprecated = $false
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{ Name = 'DetectionScript';    Value = 'Get-Process | Where-Object { $_.CPU -gt 80 }'; IsDeprecated = $false },
+                            @{ Name = 'RemediationScript';  Value = 'Stop-Process -Name bloatware -Force';          IsDeprecated = $false }
+                        )
+                    }
+                )
+            }
+        }
+
+        $script:Bug02Html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:Bug02Model } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    It 'renders manual-review-card details element' {
+        $script:Bug02Html | Should -Match 'manual-review-card'
+    }
+
+    It 'renders setting names inside manual review body' {
+        $script:Bug02Html | Should -Match 'DetectionScript'
+        $script:Bug02Html | Should -Match 'RemediationScript'
+    }
+
+    It 'renders policy profile type in manual review card' {
+        $script:Bug02Html | Should -Match 'deviceHealthScript'
+    }
+
+    It 'renders manual-review-setting div for each setting' {
+        # Count occurrences of manual-review-setting class — expect at least 2
+        $matches = [regex]::Matches($script:Bug02Html, 'manual-review-setting')
+        $matches.Count | Should -BeGreaterOrEqual 2
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Describe: ConvertTo-InforcerComparisonHtml - BUG-03 duplicate tab values
+# ---------------------------------------------------------------------------
+Describe 'ConvertTo-InforcerComparisonHtml - BUG-03 duplicate tab values' -Tag 'BUG-03', 'Phase11' {
+
+    BeforeAll {
+        $script:Bug03Model = @{
+            SourceName      = 'Tenant A'
+            DestinationName = 'Tenant B'
+            GeneratedAt     = [datetime]::UtcNow
+            AlignmentScore  = 50
+            TotalItems      = 0
+            Counters        = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            StatusCounts    = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+            Products        = [ordered]@{}
+            ManualReview    = [ordered]@{
+                'Duplicate Settings (Different Values)' = [System.Collections.Generic.List[object]]@(
+                    @{
+                        PolicyName    = 'Security Baseline'
+                        Side          = 'Source'
+                        ProfileType   = 'Settings Catalog'
+                        HasDeprecated = $false
+                        Settings      = [System.Collections.Generic.List[object]]@(
+                            @{
+                                Name         = 'deviceLock_maxInactivity'
+                                Value        = '__DUPLICATE_TABLE__[{"Policy":"Security Baseline","Value":"5","Side":"Source","SettingName":"deviceLock_maxInactivity","SettingPath":"deviceLock_maxInactivity","Category":"Windows / Settings Catalog"},{"Policy":"Strict Policy","Value":"15","Side":"Source","SettingName":"deviceLock_maxInactivity","SettingPath":"deviceLock_maxInactivity","Category":"Windows / Settings Catalog"}]'
+                                IsDeprecated = $false
+                            }
+                        )
+                    }
+                )
+            }
+        }
+
+        $script:Bug03Html = InModuleScope InforcerCommunity -Parameters @{ Model = $script:Bug03Model } {
+            ConvertTo-InforcerComparisonHtml -ComparisonModel $Model
+        }
+    }
+
+    It 'renders value "5" in duplicate tab policy entry' {
+        $script:Bug03Html | Should -Match 'dup-policy-value[^<]*>5<'
+    }
+
+    It 'renders value "15" in duplicate tab policy entry' {
+        $script:Bug03Html | Should -Match 'dup-policy-value[^<]*>15<'
+    }
+
+    It 'renders both policy names in duplicate tab' {
+        $script:Bug03Html | Should -Match 'Security Baseline'
+        $script:Bug03Html | Should -Match 'Strict Policy'
     }
 }

@@ -113,7 +113,8 @@ try {
         $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
         if ($json) {
             if ($json.PSObject.Properties['statusCode']) { $statusCode = [int]$json.statusCode }
-            $apiMessage = $json.PSObject.Properties['message'].Value -as [string]
+            $msgProp = $json.PSObject.Properties['message']
+            if ($msgProp) { $apiMessage = $msgProp.Value -as [string] }
         }
     }
     $msg = switch ($true) {

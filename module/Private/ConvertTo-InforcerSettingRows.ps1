@@ -283,10 +283,15 @@ function ConvertTo-FlatSettingRows {
                         foreach ($nameField in @('displayName', 'name', 'id', 'bundleId', 'packageId')) {
                             $nv = $item.PSObject.Properties[$nameField]
                             if ($nv -and $nv.Value) { $itemName = $nv.Value.ToString(); break }
+                        }
+                        # Fallback: check nested mobileAppIdentifier (MAM app protection policies)
+                        if (-not $itemName) {
                             $mai = $item.PSObject.Properties['mobileAppIdentifier']
                             if ($mai -and $mai.Value -is [PSObject]) {
-                                $nv2 = $mai.Value.PSObject.Properties[$nameField]
-                                if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); break }
+                                foreach ($nameField in @('bundleId', 'packageId')) {
+                                    $nv2 = $mai.Value.PSObject.Properties[$nameField]
+                                    if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); break }
+                                }
                             }
                         }
                         if ($itemName) {
@@ -306,6 +311,14 @@ function ConvertTo-FlatSettingRows {
                           $joined = @($val | ForEach-Object { if ($_ -is [string] -or $_ -is [ValueType]) { $_.ToString() } }) -join ', '
                           if ([string]::IsNullOrWhiteSpace($joined) -and $val.Count -gt 0) { "$($val.Count) items" } else { $joined }
                       } else { $val.ToString() }
+            # Decode base64-encoded content (scripts and rulesContent JSON)
+            if ($prop.Name -match '(?i)scriptContent|detectionScriptContent|remediationScriptContent|rulesContent' -and
+                $strVal -is [string] -and $strVal.Length -gt 20 -and $strVal -notmatch '\s') {
+                try {
+                    $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($strVal))
+                    $strVal = "__SCRIPT_CODE__$decoded"
+                } catch { <# not valid base64, keep original #> }
+            }
             [void]$rows.Add([PSCustomObject]@{
                 Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
                 Value       = $strVal

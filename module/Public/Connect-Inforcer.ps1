@@ -110,13 +110,11 @@ try {
         $statusCode = [int]$_.Exception.Response.StatusCode
     }
     if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-        try {
-            $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
-            if ($json) {
-                if ($json.PSObject.Properties['statusCode']) { $statusCode = [int]$json.statusCode }
-                $apiMessage = $json.PSObject.Properties['message'].Value -as [string]
-            }
-        } catch { }
+        $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if ($json) {
+            if ($json.PSObject.Properties['statusCode']) { $statusCode = [int]$json.statusCode }
+            $apiMessage = $json.PSObject.Properties['message'].Value -as [string]
+        }
     }
     $msg = switch ($true) {
         ($statusCode -eq 401) { 'Connection failed: the API key is invalid for this endpoint.' }

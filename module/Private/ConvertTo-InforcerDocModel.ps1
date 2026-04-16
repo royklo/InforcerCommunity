@@ -292,57 +292,44 @@ function ConvertTo-InforcerDocModel {
             }
         }
 
-        # Resolve GUIDs in CA policy settings (groups, roles, named locations)
-        if ($settings.Count -gt 0 -and ($GroupNameMap -or $RoleNameMap -or $LocationNameMap)) {
-            $guidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        # Resolve GUIDs in CA policy settings (groups, roles, named locations, apps)
+        # Builds a single ordered list of resolution maps to try for each GUID
+        $guidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        $resolutionMaps = @($GroupNameMap, $RoleNameMap, $LocationNameMap, $AppNameMap) | Where-Object { $_ }
+        if ($settings.Count -gt 0 -and $resolutionMaps.Count -gt 0) {
+            $resolveGuid = {
+                param([string]$Id)
+                foreach ($map in $resolutionMaps) {
+                    if ($map.ContainsKey($Id)) { return $map[$Id] }
+                }
+                return $null
+            }
             foreach ($row in $settings) {
                 $val = $row.Value
                 if ([string]::IsNullOrWhiteSpace($val)) { continue }
-                # Single GUID value
                 if ($val -match $guidPattern) {
-                    if ($GroupNameMap -and $GroupNameMap.ContainsKey($val)) { $row.Value = $GroupNameMap[$val] }
-                    elseif ($RoleNameMap -and $RoleNameMap.ContainsKey($val)) { $row.Value = $RoleNameMap[$val] }
-                    elseif ($LocationNameMap -and $LocationNameMap.ContainsKey($val)) { $row.Value = $LocationNameMap[$val] }
-                }
-                # Comma-separated list of GUIDs (from array joins)
-                elseif ($val -match '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}') {
+                    $resolved = & $resolveGuid $val
+                    if ($resolved) { $row.Value = $resolved }
+                } elseif ($val -match '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}') {
                     $parts = $val -split ',\s*'
-                    $resolved = $false
+                    $changed = $false
                     $newParts = foreach ($part in $parts) {
                         $p = $part.Trim()
                         if ($p -match $guidPattern) {
-                            if ($GroupNameMap -and $GroupNameMap.ContainsKey($p)) { $resolved = $true; $GroupNameMap[$p] }
-                            elseif ($RoleNameMap -and $RoleNameMap.ContainsKey($p)) { $resolved = $true; $RoleNameMap[$p] }
-                            elseif ($LocationNameMap -and $LocationNameMap.ContainsKey($p)) { $resolved = $true; $LocationNameMap[$p] }
-                            else { $p }
+                            $r = & $resolveGuid $p
+                            if ($r) { $changed = $true; $r } else { $p }
                         } else { $p }
                     }
-                    if ($resolved) { $row.Value = $newParts -join ', ' }
+                    if ($changed) { $row.Value = $newParts -join ', ' }
                 }
             }
         }
 
-        # Friendly CA property names, app ID resolution, and value labels
+        # Friendly CA property names and value labels
         if ($settings.Count -gt 0) {
-            $guidPat = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
             foreach ($row in @($settings)) {
                 $name = $row.Name
                 $val  = $row.Value
-                # Resolve application IDs in Value (single or comma-separated)
-                if ($AppNameMap -and -not [string]::IsNullOrWhiteSpace($val)) {
-                    if ($val -match $guidPat -and $AppNameMap.ContainsKey($val)) {
-                        $row.Value = $AppNameMap[$val]
-                    } elseif ($val -match '[0-9a-f]{8}-') {
-                        $parts = $val -split ',\s*'
-                        $changed = $false
-                        $newParts = foreach ($p in $parts) {
-                            $pt = $p.Trim()
-                            if ($pt -match $guidPat -and $AppNameMap.ContainsKey($pt)) { $changed = $true; $AppNameMap[$pt] }
-                            else { $pt }
-                        }
-                        if ($changed) { $row.Value = $newParts -join ', ' }
-                    }
-                }
                 # Resolve camelCase values (e.g. allowedCombinations like "password,softwareOath")
                 $val = $row.Value
                 if (-not [string]::IsNullOrWhiteSpace($val) -and $val -is [string]) {

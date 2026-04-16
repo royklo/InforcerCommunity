@@ -240,15 +240,6 @@ body {
 .filter-pill-source-only.active { background: #3b82f6; border-color: #3b82f6; }
 .filter-pill-dest-only.active { background: #d97706; border-color: #d97706; }
 .hidden { display: none !important; }
-.status-hidden { display: none !important; }
-/* Toggle CSS removed — deprecated settings now in their own tab */
-.manual-item {
-    background: var(--bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    padding: 1rem;
-    margin-bottom: 0.75rem;
-}
 .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; }
 .tab {
     padding: 0.75rem 1.5rem; font-size: 0.875rem; font-weight: 600; color: var(--muted);
@@ -363,14 +354,20 @@ tr:hover td { background: var(--accent-soft); }
 .value-copy-btn.copied { color: var(--success); opacity: 1; }
 td.value-cell:hover .value-copy-btn { opacity: 1; }
 .ps-code { background: #1e1e1e !important; color: #d4d4d4; }
+.ps-code-summary { color: #569cd6; border: 1px solid #569cd6; background: rgba(86,156,214,0.1); }
+.ps-code-summary:hover { background: #569cd6; color: #1e1e1e; }
+.sh-code { background: #0d1117 !important; color: #c9d1d9; }
+.sh-code-summary { color: #ff7b72; border: 1px solid #ff7b72; background: rgba(255,123,114,0.1); }
+.sh-code-summary:hover { background: #ff7b72; color: #0d1117; }
+.json-code { background: #1a1b26 !important; color: #a9b1d6; }
+.json-code-summary { color: #7aa2f7; border: 1px solid #7aa2f7; background: rgba(122,162,247,0.1); }
+.json-code-summary:hover { background: #7aa2f7; color: #1a1b26; }
+.json-key { color: #7aa2f7; }
+.json-string { color: #9ece6a; }
+.json-bool { color: #ff9e64; font-weight: 600; }
+.json-number { color: #e0af68; }
 .value-diff { color: var(--danger); font-weight: 600; }
 .manual-table td { vertical-align: middle; }
-.policy-detail-row td { padding: 0.25rem 0.75rem; border-bottom: 1px solid var(--border-subtle); }
-.policy-detail-row:hover td { background: transparent; }
-.policy-detail-row .settings-table { font-size: 0.8rem; margin: 0.5rem 0; }
-.policy-detail-row .settings-table th { font-size: 0.7rem; }
-.policy-detail-row .settings-table td { font-size: 0.8rem; }
-.policy-detail-row .settings-table .value-diff { color: var(--danger); font-weight: 600; }
 .env-label {
     font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
     padding: 0.125rem 0.5rem; border-radius: 4px; display: inline-block; text-align: center; min-width: 3.25rem;
@@ -426,6 +423,11 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .mr-split-col h4 { font-size: 0.8rem; margin: 0 0 0.5rem; padding: 0.25rem 0.5rem; border-radius: var(--radius-xs); }
 .mr-split-col.mr-col-source h4 { background: var(--info-bg); color: var(--info); }
 .mr-split-col.mr-col-dest h4 { background: var(--warning-bg); color: var(--warning); }
+.mr-split-header { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.mr-split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.mr-split-row .mr-split-cell { min-height: 0; min-width: 0; overflow: hidden; }
+.mr-split-cell .script-collapsible pre, .mr-split-col .script-collapsible pre, .mr-body .script-collapsible pre { max-width: 100%; overflow-x: auto; }
+.mr-body { overflow: hidden; }
 .mr-platform-section { margin-bottom: 1rem; }
 .mr-platform-section > summary { font-size: 1rem; cursor: pointer; padding: 0.5rem 0; border-bottom: 1px solid var(--border-subtle); user-select: none; }
 /* Assignment display — inline text, no badge backgrounds (D-04) */
@@ -495,6 +497,7 @@ table.hide-assignments .col-assign { display: none; }
 .script-collapsible summary::-webkit-details-marker { display:none; }
 .script-collapsible summary::after { content:''; display:inline-block; width:6px; height:6px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(-45deg); transition:transform 0.2s ease; margin-left:auto; flex-shrink:0; }
 .script-collapsible[open] summary::after { transform:rotate(45deg); }
+.script-collapsible pre { max-height: 25em; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: 0.75rem; line-height: 1.5; padding: 0.75rem; border-radius: var(--radius-xs); margin: 0.5rem 0 0; }
 .badge-deprecated { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: var(--danger-bg); color: var(--danger); animation: pulse-deprecated 1.5s ease-in-out infinite; }
 @keyframes pulse-deprecated { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 .col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 10; display: flex; align-items: center; justify-content: center; user-select: none; }
@@ -502,14 +505,12 @@ table.hide-assignments .col-assign { display: none; }
 .col-resize-handle:hover::after { background: var(--accent); height: 100%; }
 .col-resize-handle.resizing::after { background: var(--warning); height: 100%; width: 3px; }
 .badge-duplicate { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; background: var(--warning-bg); color: var(--warning); cursor: help; }
-/* .setting-deprecated defined below with manual-review-setting styles */
 .manual-review-setting { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.8rem; }
 .ps-keyword { color: #569cd6; font-weight: 600; }
 .ps-string { color: #ce9178; }
 .ps-variable { color: #9cdcfe; }
 .ps-comment { color: #6a9955; font-style: italic; }
 .ps-cmdlet { color: #dcdcaa; }
-.ps-operator { color: #d4d4d4; }
 .ps-type { color: #4ec9b0; }
 .ps-code-wrap { position: relative; }
 .copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.7rem; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-xs); cursor: pointer; opacity: 0.7; transition: opacity var(--transition); z-index: 1; }
@@ -579,7 +580,30 @@ table.hide-assignments .col-assign { display: none; }
     $products        = $ComparisonModel.Products
     $inclAssignments = $ComparisonModel.IncludingAssignments
 
-    # Bar color is set dynamically by JS based on current animated percentage
+    # ── Helper: strip setting name from end of path, return parent path + HTML ──
+    $getSettingPathHtml = {
+        param([string]$SettingPath, [string]$SettingName, [string]$CssClass)
+        if (-not $CssClass) { $CssClass = 'setting-path' }
+        $displayPath = $SettingPath
+        if (-not [string]::IsNullOrEmpty($SettingPath) -and $SettingPath.Contains(' > ')) {
+            $lastSep = $SettingPath.LastIndexOf(' > ')
+            if ($SettingPath.Substring($lastSep + 3) -eq $SettingName) {
+                $displayPath = $SettingPath.Substring(0, $lastSep)
+            }
+        }
+        $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
+        if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $SettingName) {
+            return "<span class=`"$CssClass`">$encPath</span>"
+        }
+        return ''
+    }
+
+    # ── Helper: strip __SCRIPT_CODE__ prefix from a raw value ──
+    $stripScriptMarker = {
+        param([string]$Val)
+        if ($Val -match '^__SCRIPT_CODE__') { return $Val.Substring('__SCRIPT_CODE__'.Length) }
+        return $Val
+    }
 
     # ── StringBuilder ──────────────────────────────────────────────────────
     $sb = [System.Text.StringBuilder]::new(65536)
@@ -614,7 +638,7 @@ table.hide-assignments .col-assign { display: none; }
     # ── Score card ─────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="score-card">')
     [void]$sb.AppendLine('    <div class="score-value" id="scoreNum">0%</div>')
-    [void]$sb.AppendLine("    <div class=`"score-label`">Overall Alignment &mdash; <span id=`"scoreDetail`">0 of $totalItems settings matched</span></div>")
+    [void]$sb.AppendLine("    <div class=`"score-label`">Configuration Match &mdash; <span id=`"scoreDetail`">0 of $totalItems settings matched</span></div>")
     [void]$sb.AppendLine("    <div class=`"score-bar-track`"><div class=`"score-bar-fill`" id=`"scoreBar`"></div></div>")
     [void]$sb.AppendLine('</div>')
 
@@ -895,18 +919,7 @@ table.hide-assignments .col-assign { display: none; }
 
                 # Setting name cell (per D-09 through D-11: bold name, deprecated badge, duplicate badge, path)
                 $deprBadge = if ($row.IsDeprecated -eq $true) { ' <span class="badge-deprecated">&#x26A0; Deprecated</span>' } else { '' }
-                $settingPath = "$($row.SettingPath)"
-                # Strip the setting name from the end of the path (already shown above)
-                $displayPath = $settingPath
-                if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
-                    $lastSep = $settingPath.LastIndexOf(' > ')
-                    $lastSegment = $settingPath.Substring($lastSep + 3)
-                    if ($lastSegment -eq $row.Name) {
-                        $displayPath = $settingPath.Substring(0, $lastSep)
-                    }
-                }
-                $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
-                $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                $pathHtml = & $getSettingPathHtml "$($row.SettingPath)" $row.Name 'setting-path'
                 [void]$sb.Append("<td class=`"setting-name`"><strong>$encName</strong>$deprBadge$dupeBadge$pathHtml</td>")
 
                 # Category column (already stripped of product prefix)
@@ -917,7 +930,7 @@ table.hide-assignments .col-assign { display: none; }
                     [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
                 } else {
                     $encSrcPolicy = [System.Net.WebUtility]::HtmlEncode($row.SourcePolicy)
-                    $rawSrcValue  = if ($null -ne $row.SourceValue) { "$($row.SourceValue)" } else { '' }
+                    $rawSrcValue  = if ($null -ne $row.SourceValue) { & $stripScriptMarker "$($row.SourceValue)" } else { '' }
                     $encSrcValue  = [System.Net.WebUtility]::HtmlEncode($rawSrcValue)
                     $encSrcValueAttr = [System.Net.WebUtility]::HtmlEncode($rawSrcValue)
                     [void]$sb.Append("<td>$encSrcPolicy</td>")
@@ -933,7 +946,7 @@ table.hide-assignments .col-assign { display: none; }
                     [void]$sb.Append('<td colspan="2" style="color: var(--muted); font-style: italic;">Not configured</td>')
                 } else {
                     $encDstPolicy    = [System.Net.WebUtility]::HtmlEncode($row.DestPolicy)
-                    $rawDstValue     = if ($null -ne $row.DestValue) { "$($row.DestValue)" } else { '' }
+                    $rawDstValue     = if ($null -ne $row.DestValue) { & $stripScriptMarker "$($row.DestValue)" } else { '' }
                     $encDstValue     = [System.Net.WebUtility]::HtmlEncode($rawDstValue)
                     $encDstValueAttr = [System.Net.WebUtility]::HtmlEncode($rawDstValue)
                     $innerCls = if ($status -eq 'Conflicting') { ' value-diff' } else { '' }
@@ -1002,12 +1015,14 @@ table.hide-assignments .col-assign { display: none; }
             if ($policy.Settings.Count -gt 0) {
                 foreach ($s in $policy.Settings) {
                     $encSName = [System.Net.WebUtility]::HtmlEncode($s.Name)
+                    # Strip __SCRIPT_CODE__ marker — store cleaned value for all rendering paths
+                    $sValue = "$($s.Value)"
                     $isSettingDepr = $s.IsDeprecated -eq $true
                     # Skip deprecated settings — they have their own dedicated tab
                     if ($isSettingDepr) { continue }
                     # Priority 1: Duplicate table (D-08, D-09, D-10, D-11)
-                    if ($s.Value -match '^__DUPLICATE_TABLE__') {
-                        $dupJson = $s.Value.Substring('__DUPLICATE_TABLE__'.Length)
+                    if ($sValue -match '^__DUPLICATE_TABLE__') {
+                        $dupJson = $sValue.Substring('__DUPLICATE_TABLE__'.Length)
                         try {
                             $dupEntries = $dupJson | ConvertFrom-Json -ErrorAction Stop
                             $policyColumns = [ordered]@{}
@@ -1041,7 +1056,7 @@ table.hide-assignments .col-assign { display: none; }
                             [void]$sb.AppendLine("    <tbody><tr>$bodyCells</tr></tbody>")
                             [void]$sb.AppendLine('    </table></div>')
                         } catch {
-                            $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                            $encSValue = [System.Net.WebUtility]::HtmlEncode($sValue)
                             [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                         }
                     }
@@ -1049,7 +1064,7 @@ table.hide-assignments .col-assign { display: none; }
                     elseif ($s.Name -match '(?i)^rules\s*content$') {
                         $rulesRendered = $false
                         try {
-                            $parsed = $s.Value | ConvertFrom-Json -Depth 10 -ErrorAction Stop
+                            $parsed = (& $stripScriptMarker $sValue) | ConvertFrom-Json -Depth 10 -ErrorAction Stop
                             $rules = if ($null -ne $parsed.Rules) { $parsed.Rules }
                                      elseif ($null -ne $parsed.rules) { $parsed.rules }
                                      elseif ($parsed -is [array]) { $parsed }
@@ -1073,14 +1088,15 @@ table.hide-assignments .col-assign { display: none; }
                             Write-Verbose "Failed to parse compliance rules JSON for '$($s.Name)': $_"
                         }
                         if (-not $rulesRendered) {
-                            $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                            $encSValue = [System.Net.WebUtility]::HtmlEncode((& $stripScriptMarker $sValue))
                             [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                         }
                     }
                     # Priority 3 & 4: Script content — bash (shebang) vs PowerShell (D-02, D-04, D-01)
-                    elseif ($s.Name -match '(?i)script\s*content|detection\s*script\s*content|remediation\s*script\s*content|scriptContent|detectionScriptContent|remediationScriptContent' -and $s.Value.Length -gt 100) {
-                        $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
-                        $isBash = $s.Value.TrimStart() -match '^#!'
+                    elseif ($s.Name -match '(?i)script\s*content|detection\s*script\s*content|remediation\s*script\s*content|scriptContent|detectionScriptContent|remediationScriptContent' -and $sValue.Length -gt 100) {
+                        $cleanVal = & $stripScriptMarker $sValue
+                        $encSValue = [System.Net.WebUtility]::HtmlEncode($cleanVal)
+                        $isBash = $cleanVal.TrimStart() -match '^#!'
                         $preClass = if ($isBash) { 'sh-code' } else { 'ps-code' }
                         $langLabel = if ($isBash) { 'Bash' } else { 'PowerShell' }
                         [void]$sb.AppendLine("    <details class=`"script-collapsible`" style=`"margin:0.5rem 0`">")
@@ -1091,7 +1107,7 @@ table.hide-assignments .col-assign { display: none; }
                     # Priority 5: Linked compliance script (collapsible section with script content)
                     elseif ($s.Name -match '(?i)^linked\s*compliance\s*script$') {
                         try {
-                            $scriptData = $s.Value | ConvertFrom-Json -Depth 5 -ErrorAction Stop
+                            $scriptData = $sValue | ConvertFrom-Json -Depth 5 -ErrorAction Stop
                             $encScriptName = [System.Net.WebUtility]::HtmlEncode($scriptData.scriptName)
                             [void]$sb.AppendLine("    <details class=`"script-collapsible`" style=`"margin:0.75rem 0`">")
                             [void]$sb.AppendLine("    <summary><strong style=`"font-size:0.8rem`">Linked Discovery Script: $encScriptName</strong></summary>")
@@ -1122,20 +1138,31 @@ table.hide-assignments .col-assign { display: none; }
                             [void]$sb.AppendLine("    </details>")
                         } catch {
                             # Fallback to default display
-                            $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                            $encSValue = [System.Net.WebUtility]::HtmlEncode($sValue)
                             [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                         }
                     }
                     # Priority 6: Deprecated setting
                     elseif ($isSettingDepr) {
-                        $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                        $encSValue = [System.Net.WebUtility]::HtmlEncode((& $stripScriptMarker $sValue))
                         [void]$sb.AppendLine("    <div class=`"manual-review-setting setting-deprecated`"><span class=`"setting-name`">&#x26A0; $encSName</span><span class=`"setting-value`">$encSValue</span></div>")
                     }
-                    # Priority 7: Default key-value display (with boolean styling)
+                    # Priority 7: Decoded script content — collapsible code block
+                    elseif ($sValue -match '^__SCRIPT_CODE__') {
+                        $scriptCode = $sValue.Substring('__SCRIPT_CODE__'.Length)
+                        $encCode = [System.Net.WebUtility]::HtmlEncode($scriptCode)
+                        $trimmedCode = $scriptCode.TrimStart()
+                        if ($trimmedCode -match '^\s*[\{\[]') { $codeClass = 'json-code'; $summaryClass = 'json-code-summary'; $codeLabel = 'View JSON' }
+                        elseif ($trimmedCode -match '^\s*#!/') { $codeClass = 'sh-code'; $summaryClass = 'sh-code-summary'; $codeLabel = 'View script' }
+                        else { $codeClass = 'ps-code'; $summaryClass = 'ps-code-summary'; $codeLabel = 'View script' }
+                        [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span></div>")
+                        [void]$sb.AppendLine("    <details class=`"script-collapsible`"><summary class=`"$summaryClass`">$codeLabel</summary><pre class=`"$codeClass`">$encCode</pre></details>")
+                    }
+                    # Priority 8: Default key-value display (with boolean styling)
                     else {
-                        $encSValue = [System.Net.WebUtility]::HtmlEncode($s.Value)
+                        $encSValue = [System.Net.WebUtility]::HtmlEncode($sValue)
                         $valClass = 'setting-value'
-                        $rawVal = "$($s.Value)".Trim()
+                        $rawVal = $sValue.Trim()
                         if ($rawVal -eq 'True' -or $rawVal -eq 'true') { $valClass = 'setting-value val-true' }
                         elseif ($rawVal -eq 'False' -or $rawVal -eq 'false') { $valClass = 'setting-value val-false' }
                         [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span><span class=`"$valClass`">$encSValue</span></div>")
@@ -1193,26 +1220,70 @@ table.hide-assignments .col-assign { display: none; }
                 $sourcePolicies = @($policies | Where-Object { $_.Side -eq 'Source' })
                 $destPolicies = @($policies | Where-Object { $_.Side -eq 'Destination' })
 
-                [void]$sb.AppendLine('<div class="mr-split">')
-                [void]$sb.AppendLine('<div class="mr-split-col mr-col-source">')
-                [void]$sb.AppendLine('<h4>Source</h4>')
-                foreach ($policy in $sourcePolicies) {
-                    & $renderPolicyCard $policy $sb
+                # Build lookup of destination policies by name for pairing
+                $destByName = @{}
+                foreach ($dp in $destPolicies) { $destByName[$dp.PolicyName] = $dp }
+                $matchedDestNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+                # Partition source into matched and unmatched
+                $matchedPairs = [System.Collections.Generic.List[object]]::new()
+                $unmatchedSource = [System.Collections.Generic.List[object]]::new()
+                foreach ($sp in $sourcePolicies) {
+                    if ($destByName.ContainsKey($sp.PolicyName)) {
+                        $matchedPairs.Add(@{ Source = $sp; Destination = $destByName[$sp.PolicyName] })
+                        [void]$matchedDestNames.Add($sp.PolicyName)
+                    } else {
+                        $unmatchedSource.Add($sp)
+                    }
                 }
-                if ($sourcePolicies.Count -eq 0) {
+                $unmatchedDest = @($destPolicies | Where-Object { -not $matchedDestNames.Contains($_.PolicyName) })
+
+                # Sort matched pairs and unmatched alphabetically
+                $matchedPairs = @($matchedPairs | Sort-Object { $_.Source.PolicyName })
+                $unmatchedSource = @($unmatchedSource | Sort-Object PolicyName)
+                $unmatchedDest = @($unmatchedDest | Sort-Object PolicyName)
+
+                # Column headers
+                [void]$sb.AppendLine('<div class="mr-split-header">')
+                [void]$sb.AppendLine('<div class="mr-split-col mr-col-source"><h4>Source</h4></div>')
+                [void]$sb.AppendLine('<div class="mr-split-col mr-col-dest"><h4>Destination</h4></div>')
+                [void]$sb.AppendLine('</div>')
+
+                # Matched pairs — side by side
+                foreach ($pair in $matchedPairs) {
+                    [void]$sb.AppendLine('<div class="mr-split-row">')
+                    [void]$sb.AppendLine('<div class="mr-split-cell">')
+                    & $renderPolicyCard $pair.Source $sb
+                    [void]$sb.AppendLine('</div>')
+                    [void]$sb.AppendLine('<div class="mr-split-cell">')
+                    & $renderPolicyCard $pair.Destination $sb
+                    [void]$sb.AppendLine('</div>')
+                    [void]$sb.AppendLine('</div>')
+                }
+
+                # Unmatched source-only (alphabetical)
+                foreach ($sp in $unmatchedSource) {
+                    [void]$sb.AppendLine('<div class="mr-split-row">')
+                    [void]$sb.AppendLine('<div class="mr-split-cell">')
+                    & $renderPolicyCard $sp $sb
+                    [void]$sb.AppendLine('</div>')
+                    [void]$sb.AppendLine('<div class="mr-split-cell"></div>')
+                    [void]$sb.AppendLine('</div>')
+                }
+
+                # Unmatched dest-only (alphabetical)
+                foreach ($dp in $unmatchedDest) {
+                    [void]$sb.AppendLine('<div class="mr-split-row">')
+                    [void]$sb.AppendLine('<div class="mr-split-cell"></div>')
+                    [void]$sb.AppendLine('<div class="mr-split-cell">')
+                    & $renderPolicyCard $dp $sb
+                    [void]$sb.AppendLine('</div>')
+                    [void]$sb.AppendLine('</div>')
+                }
+
+                if ($sourcePolicies.Count -eq 0 -and $destPolicies.Count -eq 0) {
                     [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">No policies</div>')
                 }
-                [void]$sb.AppendLine('</div>')
-                [void]$sb.AppendLine('<div class="mr-split-col mr-col-dest">')
-                [void]$sb.AppendLine('<h4>Destination</h4>')
-                foreach ($policy in $destPolicies) {
-                    & $renderPolicyCard $policy $sb
-                }
-                if ($destPolicies.Count -eq 0) {
-                    [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">No policies</div>')
-                }
-                [void]$sb.AppendLine('</div>')
-                [void]$sb.AppendLine('</div>')
                 [void]$sb.AppendLine('</details>')  # end mr-category-section
             }
             [void]$sb.AppendLine('</details>')
@@ -1282,19 +1353,7 @@ table.hide-assignments .col-assign { display: none; }
                                else { $dupRow.Name }
             }
             $encDisplayName = [System.Net.WebUtility]::HtmlEncode($displayName)
-            # Strip the display name from end of path to show only parent path
-            $parentPath = $settingPath
-            if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
-                $lastSep2 = $settingPath.LastIndexOf(' > ')
-                $lastSeg2 = $settingPath.Substring($lastSep2 + 3)
-                if ($lastSeg2 -eq $displayName) {
-                    $parentPath = $settingPath.Substring(0, $lastSep2)
-                }
-            }
-            $encPath = [System.Net.WebUtility]::HtmlEncode($parentPath)
-            $pathLine = if (-not [string]::IsNullOrEmpty($parentPath) -and $parentPath -ne $displayName) {
-                "<span class=`"dup-setting-path`">$encPath</span>"
-            } else { '' }
+            $pathLine = & $getSettingPathHtml $settingPath $displayName 'dup-setting-path'
             [void]$sb.Append("<td class=`"dup-tab-setting`"><strong>$encDisplayName</strong>$pathLine</td>")
 
             # Column 2: Policies & Values (per D-05)
@@ -1368,14 +1427,7 @@ table.hide-assignments .col-assign { display: none; }
             foreach ($entry in $group.Settings) {
                 $row = $entry.Row
                 $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
-                $settingPath = "$($row.SettingPath)"
-                $displayPath = $settingPath
-                if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
-                    $lastSep = $settingPath.LastIndexOf(' > ')
-                    if ($settingPath.Substring($lastSep + 3) -eq $row.Name) { $displayPath = $settingPath.Substring(0, $lastSep) }
-                }
-                $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
-                $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                $pathHtml = & $getSettingPathHtml "$($row.SettingPath)" $row.Name 'setting-path'
                 [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`"><strong>$encName</strong>$pathHtml</span></div>")
             }
             [void]$sb.AppendLine('    </div>')
@@ -1394,14 +1446,7 @@ table.hide-assignments .col-assign { display: none; }
             foreach ($entry in $group.Settings) {
                 $row = $entry.Row
                 $encName = [System.Net.WebUtility]::HtmlEncode($row.Name)
-                $settingPath = "$($row.SettingPath)"
-                $displayPath = $settingPath
-                if (-not [string]::IsNullOrEmpty($settingPath) -and $settingPath.Contains(' > ')) {
-                    $lastSep = $settingPath.LastIndexOf(' > ')
-                    if ($settingPath.Substring($lastSep + 3) -eq $row.Name) { $displayPath = $settingPath.Substring(0, $lastSep) }
-                }
-                $encPath = [System.Net.WebUtility]::HtmlEncode($displayPath)
-                $pathHtml = if (-not [string]::IsNullOrEmpty($displayPath) -and $displayPath -ne $row.Name) { "<span class=`"setting-path`">$encPath</span>" } else { '' }
+                $pathHtml = & $getSettingPathHtml "$($row.SettingPath)" $row.Name 'setting-path'
                 [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`"><strong>$encName</strong>$pathHtml</span></div>")
             }
             [void]$sb.AppendLine('    </div>')
@@ -1416,6 +1461,7 @@ table.hide-assignments .col-assign { display: none; }
     # ── Footer ─────────────────────────────────────────────────────────────
     [void]$sb.AppendLine('<div class="footer">')
     [void]$sb.AppendLine('    InforcerCommunity Module &middot; Created by Roy Klooster')
+    [void]$sb.AppendLine('    <br>Notice a bug or missing information? <a href="https://github.com/royklo/InforcerCommunity/issues" target="_blank" rel="noopener" style="color:var(--accent)">Report it on GitHub</a>')
     [void]$sb.AppendLine('</div>')
 
     # ── Theme toggle (top-right) ────────────────────────────────────────────
@@ -2048,6 +2094,22 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('    if (lastIdx < text.length) tokens.push(escHtml(text.substring(lastIdx)));')
     [void]$sb.AppendLine('    code.innerHTML = tokens.join("");')
     [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('function highlightJSON(el) {')
+    [void]$sb.AppendLine('    var text = el.textContent;')
+    [void]$sb.AppendLine('    var tokens = [];')
+    [void]$sb.AppendLine('    var re = /("(?:[^"\\]|\\.)*")\s*(:)|("(?:[^"\\]|\\.)*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;')
+    [void]$sb.AppendLine('    var lastIdx = 0, m;')
+    [void]$sb.AppendLine('    while ((m = re.exec(text)) !== null) {')
+    [void]$sb.AppendLine('        if (m.index > lastIdx) tokens.push(escHtml(text.substring(lastIdx, m.index)));')
+    [void]$sb.AppendLine('        if (m[1]) { tokens.push(''<span class="json-key">''+escHtml(m[1])+''</span>''+escHtml(m[2])); }')
+    [void]$sb.AppendLine('        else if (m[3]) { tokens.push(''<span class="json-string">''+escHtml(m[3])+''</span>''); }')
+    [void]$sb.AppendLine('        else if (m[4]) { tokens.push(''<span class="json-bool">''+escHtml(m[4])+''</span>''); }')
+    [void]$sb.AppendLine('        else if (m[5]) { tokens.push(''<span class="json-number">''+escHtml(m[5])+''</span>''); }')
+    [void]$sb.AppendLine('        lastIdx = m.index + m[0].length;')
+    [void]$sb.AppendLine('    }')
+    [void]$sb.AppendLine('    if (lastIdx < text.length) tokens.push(escHtml(text.substring(lastIdx)));')
+    [void]$sb.AppendLine('    el.innerHTML = tokens.join("");')
+    [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('// Apply filters FIRST to hide deprecated rows (must run before any cosmetic JS)')
     [void]$sb.AppendLine('applyFilters();')
     if ($hasDuplicates) {
@@ -2067,6 +2129,9 @@ table.hide-assignments .col-assign { display: none; }
     [void]$sb.AppendLine('try {')
     [void]$sb.AppendLine('    document.querySelectorAll(".ps-code code").forEach(highlightPS);')
     [void]$sb.AppendLine('    document.querySelectorAll(".sh-code code").forEach(highlightBash);')
+    [void]$sb.AppendLine('    document.querySelectorAll("pre.ps-code").forEach(function(el) { if (!el.querySelector("code")) highlightPS(el); });')
+    [void]$sb.AppendLine('    document.querySelectorAll("pre.sh-code").forEach(function(el) { if (!el.querySelector("code")) highlightBash(el); });')
+    [void]$sb.AppendLine('    document.querySelectorAll("pre.json-code").forEach(highlightJSON);')
     [void]$sb.AppendLine('    document.querySelectorAll(".ps-code-wrap").forEach(function(wrap) {')
     [void]$sb.AppendLine('        var btn = document.createElement("button");')
     [void]$sb.AppendLine('        btn.textContent = "Copy";')

@@ -30,6 +30,15 @@ CorrelationId, ClientId, RelType, RelId, EventType, Message, Code, User, Timesta
 ### User
 All UserSummary aliases plus ~40 detail aliases (GivenName, Surname, Mail, AccountEnabled, OnPremises*, Manager, Groups, Devices, Roles, AppRoleAssignments, IsCloudOnly, IsHybrid, Risk*, etc.) — nested objects left as-is.
 
+### GroupSummary
+PascalCase aliases for list endpoint fields (Id, DisplayName, GroupType, MembershipType, etc.).
+
+### Group
+GroupSummary aliases plus detail fields (Members array, Description, etc.).
+
+### Role
+PascalCase aliases for directory role definition fields (Id, DisplayName, Description, IsBuiltIn, IsEnabled, IsPrivileged, etc.).
+
 ## Module Structure
 
 ```
@@ -68,9 +77,11 @@ module/
 │   ├── Compare-InforcerDocModels.ps1         # Stage 2: diff two DocModels → ComparisonModel
 │   ├── ConvertTo-InforcerComparisonHtml.ps1  # Stage 3: ComparisonModel → HTML report
 │   ├── Format-InforcerAssignmentString.ps1   # DocModel assignments → display string
-│   ├── # Graph enrichment (optional)
-│   ├── Connect-InforcerGraph.ps1             # Graph auth for assignment resolution
-│   └── Invoke-InforcerGraphRequest.ps1       # Graph API client
+│   ├── Resolve-InforcerGroupId.ps1            # Group GUID/name → GUID resolution
+│   ├── # Graph enrichment (optional, via -FetchGraphData)
+│   ├── Connect-InforcerGraph.ps1             # Graph auth (session reuse, disconnect before tenant switch)
+│   ├── Invoke-InforcerGraphRequest.ps1       # Graph API client (paged collection support)
+│   └── Resolve-InforcerGraphEnrichment.ps1   # Batch Graph enrichment (groups, filters, scope tags, compliance rules)
 ├── Public/
 │   ├── Connect-Inforcer.ps1                  # -PassThru for cross-session comparison
 │   ├── Disconnect-Inforcer.ps1
@@ -81,6 +92,8 @@ module/
 │   ├── Get-InforcerAlignmentDetails.ps1
 │   ├── Get-InforcerAuditEvent.ps1
 │   ├── Get-InforcerUser.ps1
+│   ├── Get-InforcerGroup.ps1                   # List/ById with pagination, -Search, -Filter
+│   ├── Get-InforcerRole.ps1                    # Directory role definitions
 │   ├── Get-InforcerSupportedEventType.ps1
 │   ├── Export-InforcerTenantDocumentation.ps1  # Utility: multi-format tenant docs
 │   └── Compare-InforcerEnvironments.ps1        # Utility: cross-tenant comparison report
@@ -90,7 +103,7 @@ module/
 ```
 
 - `InforcerCommunity.psm1` dot-sources Private then Public.
-- Manifest `FunctionsToExport` lists all 12 exported functions.
+- Manifest `FunctionsToExport` lists all 14 exported functions.
 - Every Public function has comment-based help.
 - `Invoke-InforcerApiRequest` uses `Invoke-RestMethod` (not `Invoke-WebRequest`) and `ConvertTo-Json -Depth 100`. Supports `-PreserveStructure` (unwraps .data but keeps inner structure) and `-PreserveFullResponse` (returns raw parsed response, no unwrapping — use when pagination metadata is at response root level alongside .data). Validates response type: string/non-PSObject triggers NonJsonResponse error.
 - `Filter-InforcerResponse` must use `ConvertTo-Json -Depth 100`.
@@ -110,15 +123,40 @@ Get-InforcerDocData → ConvertTo-InforcerDocModel → [renderer]
 
 **Settings** come from `ConvertTo-InforcerSettingRows` (SC, policyTypeId 10) or `ConvertTo-FlatSettingRows` (non-SC). Each row: `Name`, `Value`, `Indent`, `IsConfigured`, `DefinitionId`.
 
-**-ComparisonMode** on `ConvertTo-InforcerDocModel` filters to Intune-relevant products (`intune`, `windows`, `macos`, `ios`, `android`, `defender`) and excludes compliance, enrollment, autopilot, exchange categories. Used only by the comparison pipeline.
+**ConvertTo-FlatSettingRows** applies `ConvertTo-FriendlySettingName` to convert camelCase property names to Title Case (e.g., `allowBluetooth` → `Allow Bluetooth`). It also decodes base64-encoded script/rules content (detectionScriptContent, remediationScriptContent, scriptContent, rulesContent) and prefixes with `__SCRIPT_CODE__` marker for renderers to detect.
 
-**Compare pipeline:** `Get-InforcerComparisonData` calls `Get-InforcerDocData` twice with session swapping, then `Compare-InforcerDocModels` diffs the two DocModels. Disambiguation uses `categories.json` CategoryName (e.g., "Trusted Sites Zone > setting name") with defId parsing fallback for firewall profiles.
+**-ComparisonMode** on `ConvertTo-InforcerDocModel` filters to Intune-relevant products (`intune`, `windows`, `macos`, `ios`, `android`, `defender`) and excludes exchange categories. Also resolves GUIDs in CA policy settings using a unified `$resolveGuid` helper across GroupNameMap, RoleNameMap, LocationNameMap, AppNameMap.
+
+**Compare pipeline:** `Get-InforcerComparisonData` calls `Get-InforcerDocData` twice with session swapping, enriches via `$enrichComplianceData` helper (shared for src/dst), then `Compare-InforcerDocModels` diffs the two DocModels. Disambiguation uses `categories.json` CategoryName (e.g., "Trusted Sites Zone > setting name") with defId parsing fallback for firewall profiles.
+
+**HTML renderers** detect `__SCRIPT_CODE__` prefix and render collapsible code blocks with syntax highlighting (PowerShell blue, Bash red, JSON indigo). Both Export and Compare renderers include a GitHub issues link in the footer.
 
 **CRITICAL rules:**
 - Never re-implement setting extraction — reuse `ConvertTo-InforcerSettingRows` / `ConvertTo-FlatSettingRows`.
 - Never build custom comparison logic — reuse `Compare-InforcerDocModels`.
+- Never duplicate src/dst logic — use shared scriptblocks with a `$Label` parameter.
 - `Import-InforcerSettingsCatalog` loads both `settings.json` AND `categories.json` for disambiguation.
 - The API returns the Defender product as `"Defender"` (not `"Microsoft Defender for Endpoint"`).
+
+## Graph API Enrichment Endpoints
+
+When `-FetchGraphData` is specified, the module supplements Inforcer API data with Microsoft Graph calls. Required scopes: `Directory.Read.All`, `DeviceManagementConfiguration.Read.All`.
+
+### Shared (via Resolve-InforcerGraphEnrichment)
+| Endpoint | Version | Purpose |
+|----------|---------|---------|
+| `POST /v1.0/directoryObjects/getByIds` | v1.0 | Batch resolve group/user ObjectIDs → display names |
+| `GET /v1.0/directoryObjects/{oid}` | v1.0 | Fallback individual lookup when batch fails |
+| `GET /beta/deviceManagement/assignmentFilters` | beta | Fetch Intune assignment filters (ID → name/rule) |
+| `GET /beta/deviceManagement/roleScopeTags` | beta | Fetch scope tags (ID → display name) |
+| `GET /beta/deviceManagement/deviceCompliancePolicies('{id}')` | beta | Fetch compliance rules (rulesContent) + script link |
+
+### Export-only (in Export-InforcerTenantDocumentation)
+| Endpoint | Version | Purpose |
+|----------|---------|---------|
+| `GET /v1.0/directoryRoleTemplates` | v1.0 | Resolve CA role GUIDs → role names |
+| `GET /v1.0/identity/conditionalAccess/namedLocations` | v1.0 | Resolve CA location GUIDs → location names |
+| `GET /v1.0/servicePrincipals(appId='{id}')` | v1.0 | Resolve CA application IDs → app names |
 
 ## Pipeline Binding Pattern
 

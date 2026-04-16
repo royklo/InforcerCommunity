@@ -259,14 +259,17 @@ if ($hasCatalogPolicies) {
 }
 
 # Build Graph enrichment maps before DocModel (so assignments resolve during normalization)
-$graphMaps = @{ GroupNameMap = $null; FilterMap = $null; ScopeTagMap = $null }
 if ($FetchGraphData) {
-    Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
-    # Extract Azure AD tenant GUID from the Inforcer tenant data so Graph targets the correct tenant
+    # Extract Azure AD tenant GUID and friendly name for Graph sign-in
     $msTenantId = $null
-    if ($docData.Tenant -and $docData.Tenant.PSObject.Properties['msTenantId']) {
-        $msTenantId = $docData.Tenant.msTenantId
+    $tenantLabel = ''
+    if ($docData.Tenant) {
+        if ($docData.Tenant.PSObject.Properties['msTenantId']) { $msTenantId = $docData.Tenant.msTenantId }
+        if ($docData.Tenant.PSObject.Properties['tenantFriendlyName'] -and $docData.Tenant.tenantFriendlyName) {
+            $tenantLabel = " for $($docData.Tenant.tenantFriendlyName)"
+        }
     }
+    Write-Host "Connecting to Microsoft Graph$tenantLabel..." -ForegroundColor Cyan
     $graphConnectParams = @{ RequiredScopes = @('Directory.Read.All') }
     if ($msTenantId) { $graphConnectParams['TenantId'] = $msTenantId }
     $graphCtx = Connect-InforcerGraph @graphConnectParams
@@ -432,12 +435,12 @@ if ($FetchGraphData) {
 
 Write-Host 'Building documentation model...' -ForegroundColor Cyan
 $docModelParams = @{ DocData = $docData }
-if ($groupNameMap)                   { $docModelParams['GroupNameMap'] = $groupNameMap }
-if ($filterMap)                      { $docModelParams['FilterMap'] = $filterMap }
-if ($roleNameMap -and $roleNameMap.Count -gt 0) { $docModelParams['RoleNameMap'] = $roleNameMap }
-if ($locationNameMap -and $locationNameMap.Count -gt 0) { $docModelParams['LocationNameMap'] = $locationNameMap }
-if ($appNameMap -and $appNameMap.Count -gt 0) { $docModelParams['AppNameMap'] = $appNameMap }
-if ($script:InforcerScopeTagMap)     { $docModelParams['ScopeTagMap'] = $script:InforcerScopeTagMap }
+if ($groupNameMap)              { $docModelParams['GroupNameMap']  = $groupNameMap }
+if ($filterMap)                 { $docModelParams['FilterMap']     = $filterMap }
+if ($roleNameMap)               { $docModelParams['RoleNameMap']   = $roleNameMap }
+if ($locationNameMap)           { $docModelParams['LocationNameMap'] = $locationNameMap }
+if ($appNameMap)                { $docModelParams['AppNameMap']    = $appNameMap }
+if ($script:InforcerScopeTagMap) { $docModelParams['ScopeTagMap'] = $script:InforcerScopeTagMap }
 $docModel = ConvertTo-InforcerDocModel @docModelParams
 if ($null -eq $docModel) { return }
 
@@ -454,6 +457,7 @@ Write-Host "  Found $policyCount policies across $($docModel.Products.Count) pro
 # Render each requested format and write to disk
 $extensionMap = @{ Html = 'html'; Markdown = 'md'; Excel = 'xlsx' }
 $formatIndex = 0
+$safeName = $docModel.TenantName -replace '[^\w\-]', '-'
 
 foreach ($fmt in $Format) {
     $formatIndex++
@@ -462,7 +466,6 @@ foreach ($fmt in $Format) {
     if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) {
         $filePath = $OutputPath
     } else {
-        $safeName = $docModel.TenantName -replace '[^\w\-]', '-'
         $filePath = Join-Path $OutputPath "$safeName-Documentation.$ext"
     }
 
@@ -493,7 +496,6 @@ foreach ($fmt in $Format) {
 
 # Auto-open HTML output in the default browser (cross-platform)
 $htmlFile = $Format | Where-Object { $_ -eq 'Html' } | ForEach-Object {
-    $safeName = $docModel.TenantName -replace '[^\w\-]', '-'
     if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) { $OutputPath }
     else { Join-Path $OutputPath "$safeName-Documentation.html" }
 }

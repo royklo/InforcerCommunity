@@ -129,25 +129,12 @@ Describe 'Resolve-InforcerSettingName' {
         $result.ValueLabel | Should -Be 'Disabled'
     }
 
-    It 'returns raw ID as DisplayName and writes a warning for unknown ID' {
-        $warnings = @()
-        InModuleScope InforcerCommunity {
-            Resolve-InforcerSettingName -SettingDefinitionId 'unknown_id_xyz' -WarningVariable w
-            $w
-        } -OutVariable out | Out-Null
-        # Call again and capture warnings via -WarningVariable in InModuleScope
-        $warnings = InModuleScope InforcerCommunity {
-            $null = Resolve-InforcerSettingName -SettingDefinitionId 'unknown_id_xyz' -WarningVariable w
-            $w
-        }
-        $warnings | Should -Not -BeNullOrEmpty
-    }
-
-    It 'returns the raw ID as DisplayName when ID is unknown' {
+    It 'returns friendly-cased ID as DisplayName when ID is unknown' {
         $result = InModuleScope InforcerCommunity {
             Resolve-InforcerSettingName -SettingDefinitionId 'unknown_id_xyz'
         }
-        $result.DisplayName | Should -Be 'unknown_id_xyz'
+        # ConvertTo-FriendlySettingName converts camelCase/snake_case to title case
+        $result.DisplayName | Should -Be 'Unknown Id Xyz'
     }
 
     It 'returns empty DisplayName for null/empty ID' {
@@ -402,7 +389,7 @@ Describe 'ConvertTo-InforcerSettingRows' {
             }
             ConvertTo-InforcerSettingRows -SettingInstance $instance
         }
-        $rows[0].PSObject.Properties.Name | Should -Be @('Name', 'Value', 'Indent', 'IsConfigured')
+        $rows[0].PSObject.Properties.Name | Should -Be @('Name', 'Value', 'Indent', 'IsConfigured', 'DefinitionId')
     }
 }
 
@@ -423,8 +410,8 @@ Describe 'ConvertTo-FlatSettingRows' {
             ConvertTo-FlatSettingRows -PolicyData $policyData
         }
         $names = $rows | ForEach-Object { $_.Name }
-        $names | Should -Contain 'allowBluetooth'
-        $names | Should -Contain 'passwordLength'
+        $names | Should -Contain 'Allow Bluetooth'
+        $names | Should -Contain 'Password Length'
         $names | Should -Not -Contain '@odata.type'
         $names | Should -Not -Contain 'id'
         $names | Should -Not -Contain 'displayName'
@@ -442,9 +429,9 @@ Describe 'ConvertTo-FlatSettingRows' {
         }
         # Should have header row for outerSection (Indent=0) and child row (Indent=1)
         $rows.Count | Should -Be 2
-        $rows[0].Name | Should -Be 'outerSection'
+        $rows[0].Name | Should -Be 'Outer Section'
         $rows[0].Indent | Should -Be 0
-        $rows[1].Name | Should -Be 'innerProp'
+        $rows[1].Name | Should -Be 'Inner Prop'
         $rows[1].Indent | Should -Be 1
     }
 

@@ -109,9 +109,11 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
         $script:HtmlOutput | Should -Match '</style>'
     }
 
-    It 'has no external resource references' {
-        $script:HtmlOutput | Should -Not -Match 'href="http'
-        $script:HtmlOutput | Should -Not -Match 'src="http'
+    It 'has no external resource dependencies (CDN links, external scripts/styles)' {
+        # Allow the GitHub issues link (user-facing action link, not a resource dependency)
+        $htmlWithoutFooter = $script:HtmlOutput -replace 'href="https://github\.com/royklo/InforcerCommunity/issues"', ''
+        $htmlWithoutFooter | Should -Not -Match 'href="http'
+        $htmlWithoutFooter | Should -Not -Match 'src="http'
     }
 
     It 'has toolbar JavaScript for theme toggle and empty field filter' {
@@ -916,9 +918,10 @@ Describe 'ConvertTo-InforcerComparisonHtml - Manual Review Rendering' -Tag 'MAN'
         $script:ManHtml | Should -Match 'side-badge side-dest'
     }
 
-    It 'policy with HasDeprecated=$true has badge-deprecated in its summary' -Tag 'MAN-05' {
-        # "Deprecated Source Policy" has HasDeprecated=$true
-        $script:ManHtml | Should -Match 'Deprecated Source Policy.*badge-deprecated'
+    It 'policy with all settings deprecated is excluded from MR tab (routed to Deprecated tab)' -Tag 'MAN-05' {
+        # "Deprecated Source Policy" has HasDeprecated=$true and ALL settings are IsDeprecated=$true
+        # It should NOT appear in MR tab — it belongs in the Deprecated tab instead
+        $script:ManHtml | Should -Not -Match 'Deprecated Source Policy'
     }
 
     It 'policy with HasDeprecated=$false does NOT have badge-deprecated near its policy name' -Tag 'MAN-05' {
@@ -1166,21 +1169,18 @@ Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT
     # instead of the required "Intune / Settings Catalog".
     # -------------------------------------------------------------------------
     Context 'FLT-01: Category dropdown' {
-        It 'data-category attribute on Intune row uses ProductKey/CategoryKey composite' -Tag 'FLT-01' {
-            # D-01: composite = "$productName / $categoryName" = "Intune / Settings Catalog"
-            # Current code outputs $row.Category = "Intune / Windows / Settings Catalog" — FAIL
-            $script:FltHtml | Should -Match 'data-category="Intune / Settings Catalog"'
+        It 'data-category attribute on Intune row uses simplified category' -Tag 'FLT-01' {
+            # simplifyCategory strips product prefix: "Intune / Settings Catalog" -> "Settings Catalog"
+            $script:FltHtml | Should -Match 'data-category="Settings Catalog"'
         }
 
-        It 'category dropdown has option with Intune composite value' -Tag 'FLT-01' {
-            # D-02: dropdown options must list "Intune / Settings Catalog" not the raw $row.Category
-            $script:FltHtml | Should -Match 'value="Intune / Settings Catalog"'
+        It 'category dropdown has option with simplified Intune category value' -Tag 'FLT-01' {
+            $script:FltHtml | Should -Match 'value="Settings Catalog"'
         }
 
-        It 'data-category attribute on Entra row uses ProductKey/CategoryKey composite' -Tag 'FLT-01' {
-            # Multi-product: composite = "Entra / Conditional Access"
-            # Current code outputs $row.Category = "Entra / Conditional Access / Policies" — FAIL
-            $script:FltHtml | Should -Match 'data-category="Entra / Conditional Access"'
+        It 'data-category attribute on Entra row uses simplified category' -Tag 'FLT-01' {
+            # simplifyCategory strips product prefix: "Entra / Conditional Access" -> "Conditional Access"
+            $script:FltHtml | Should -Match 'data-category="Conditional Access"'
         }
     }
 

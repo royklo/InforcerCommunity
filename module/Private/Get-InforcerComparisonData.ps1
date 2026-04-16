@@ -102,150 +102,92 @@ function Get-InforcerComparisonData {
         $dstGraphMaps = Resolve-InforcerGraphEnrichment -DocData $destDocData -Label "Destination ($dstTenantName)"
     }
 
-    # ── Inject compliance rules into DocData policies (supplements Inforcer API gap) ──
-    # Only inject rulesContent for policies that DON'T have a linked script (avoid duplicate with linkedComplianceScript)
-    $srcLinkedPolicyIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($p in @($sourceDocData.Policies)) {
-        if ($p.policyData -and -not [string]::IsNullOrWhiteSpace($p.policyData.deviceComplianceScriptId)) {
-            [void]$srcLinkedPolicyIds.Add($p.policyData.id)
-        }
-    }
-    if ($srcGraphMaps.ComplianceRulesMap -and $srcGraphMaps.ComplianceRulesMap.Count -gt 0) {
-        $injected = 0
-        foreach ($policy in @($sourceDocData.Policies)) {
-            if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
-            $pid = $policy.policyData.id
-            if ($srcGraphMaps.ComplianceRulesMap.ContainsKey($pid) -and -not $srcLinkedPolicyIds.Contains($pid)) {
-                $policy.policyData | Add-Member -NotePropertyName 'rulesContent' -NotePropertyValue $srcGraphMaps.ComplianceRulesMap[$pid] -Force
-                $injected++
-            }
-        }
-        if ($injected -gt 0) { Write-Host "  Injected compliance rules into $injected source policies" -ForegroundColor Gray }
-    }
+    # ── Helper: inject compliance rules and link discovery scripts ──
+    # Shared by both source and destination pipelines
+    $enrichComplianceData = {
+        param([object[]]$Policies, [hashtable]$GraphMaps, [string]$Label)
 
-    # Link compliance discovery scripts to their parent compliance policies (source)
-    # Priority: 1) Graph ComplianceScriptLinkMap (policyId→scriptId), 2) Inforcer deviceComplianceScriptId
-    $srcScriptById = @{}
-    foreach ($p in @($sourceDocData.Policies)) {
-        if ($p.policyTypeId -eq 104 -and $p.policyData -and $p.policyData.id) {
-            $srcScriptById[$p.policyData.id] = $p
+        # Inject rulesContent for policies that DON'T have a linked script
+        $linkedPolicyIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($p in $Policies) {
+            if ($p.policyData -and -not [string]::IsNullOrWhiteSpace($p.policyData.deviceComplianceScriptId)) {
+                [void]$linkedPolicyIds.Add($p.policyData.id)
+            }
         }
-    }
-    if ($srcScriptById.Count -gt 0) {
-        foreach ($policy in @($sourceDocData.Policies)) {
-            if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
-            if ($policy.policyTypeId -eq 104) { continue }
-            $policyId = $policy.policyData.id
-            # Priority 1: Graph-based link (from Resolve-InforcerGraphEnrichment)
-            $scriptId = $null
-            if ($srcGraphMaps.ComplianceScriptLinkMap -and $srcGraphMaps.ComplianceScriptLinkMap.ContainsKey($policyId)) {
-                $scriptId = $srcGraphMaps.ComplianceScriptLinkMap[$policyId]
-            }
-            # Priority 2: Inforcer API deviceComplianceScriptId (often empty — API limitation)
-            if (-not $scriptId) {
-                $infoScriptId = "$($policy.policyData.deviceComplianceScriptId)"
-                if ($infoScriptId -match '^[0-9a-f]{8}-') { $scriptId = $infoScriptId }
-            }
-            if (-not $scriptId -or -not $srcScriptById.ContainsKey($scriptId)) { continue }
-            $scriptPolicy = $srcScriptById[$scriptId]
-            $policyName = if ($policy.displayName) { $policy.displayName } else { $policy.name }
-            Write-Host "  Linked script: '$policyName' -> '$($scriptPolicy.displayName)' (scriptId=$scriptId)" -ForegroundColor Green
-            $scriptData = @{
-                scriptName = if ($scriptPolicy.displayName) { $scriptPolicy.displayName }
-                             elseif ($scriptPolicy.name) { $scriptPolicy.name }
-                             else { $scriptPolicy.policyData.displayName }
-            }
-            foreach ($prop in $scriptPolicy.policyData.PSObject.Properties) {
-                $propName = $prop.Name
-                if ($propName -match '@odata|^id$|^createdDateTime|^lastModifiedDateTime|^version|^displayName|^description|^roleScopeTagIds') { continue }
-                $val = $prop.Value
-                if ($propName -match '(?i)scriptContent|detectionScriptContent|remediationScriptContent' -and $val -is [string] -and $val.Length -gt 20) {
-                    try { $val = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($val)) } catch {}
+        if ($GraphMaps.ComplianceRulesMap -and $GraphMaps.ComplianceRulesMap.Count -gt 0) {
+            $injected = 0
+            foreach ($policy in $Policies) {
+                if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
+                $pid = $policy.policyData.id
+                if ($GraphMaps.ComplianceRulesMap.ContainsKey($pid) -and -not $linkedPolicyIds.Contains($pid)) {
+                    $policy.policyData | Add-Member -NotePropertyName 'rulesContent' -NotePropertyValue $GraphMaps.ComplianceRulesMap[$pid] -Force
+                    $injected++
                 }
-                $scriptData[$propName] = $val
             }
-            $scriptJson = $scriptData | ConvertTo-Json -Depth 5 -Compress
-            $policy.policyData | Add-Member -NotePropertyName 'linkedComplianceScript' -NotePropertyValue $scriptJson -Force
-            $scriptPolicy | Add-Member -NotePropertyName '_claimedByCompliancePolicy' -NotePropertyValue $true -Force
-            Write-Verbose "  Linked script '$($scriptData.scriptName)' to compliance policy '$($policy.displayName)'"
+            if ($injected -gt 0) { Write-Host "  Injected compliance rules into $injected $Label policies" -ForegroundColor Gray }
         }
-    }
 
-    $dstLinkedPolicyIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($p in @($destDocData.Policies)) {
-        if ($p.policyData -and -not [string]::IsNullOrWhiteSpace($p.policyData.deviceComplianceScriptId)) {
-            [void]$dstLinkedPolicyIds.Add($p.policyData.id)
-        }
-    }
-    if ($dstGraphMaps.ComplianceRulesMap -and $dstGraphMaps.ComplianceRulesMap.Count -gt 0) {
-        $injected = 0
-        foreach ($policy in @($destDocData.Policies)) {
-            if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
-            $pid = $policy.policyData.id
-            if ($dstGraphMaps.ComplianceRulesMap.ContainsKey($pid) -and -not $dstLinkedPolicyIds.Contains($pid)) {
-                $policy.policyData | Add-Member -NotePropertyName 'rulesContent' -NotePropertyValue $dstGraphMaps.ComplianceRulesMap[$pid] -Force
-                $injected++
+        # Link compliance discovery scripts to their parent compliance policies
+        $scriptById = @{}
+        foreach ($p in $Policies) {
+            if ($p.policyTypeId -eq 104 -and $p.policyData -and $p.policyData.id) {
+                $scriptById[$p.policyData.id] = $p
             }
         }
-        if ($injected -gt 0) { Write-Host "  Injected compliance rules into $injected destination policies" -ForegroundColor Gray }
-    }
-
-    # Link compliance discovery scripts to their parent compliance policies (destination)
-    $dstScriptById = @{}
-    foreach ($p in @($destDocData.Policies)) {
-        if ($p.policyTypeId -eq 104 -and $p.policyData -and $p.policyData.id) {
-            $dstScriptById[$p.policyData.id] = $p
-        }
-    }
-    if ($dstScriptById.Count -gt 0) {
-        foreach ($policy in @($destDocData.Policies)) {
-            if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
-            if ($policy.policyTypeId -eq 104) { continue }
-            $policyId = $policy.policyData.id
-            $scriptId = $null
-            if ($dstGraphMaps.ComplianceScriptLinkMap -and $dstGraphMaps.ComplianceScriptLinkMap.ContainsKey($policyId)) {
-                $scriptId = $dstGraphMaps.ComplianceScriptLinkMap[$policyId]
-            }
-            if (-not $scriptId) {
-                $infoScriptId = "$($policy.policyData.deviceComplianceScriptId)"
-                if ($infoScriptId -match '^[0-9a-f]{8}-') { $scriptId = $infoScriptId }
-            }
-            if (-not $scriptId -or -not $dstScriptById.ContainsKey($scriptId)) { continue }
-            $scriptPolicy = $dstScriptById[$scriptId]
-            $policyName = if ($policy.displayName) { $policy.displayName } else { $policy.name }
-            Write-Host "  Linked script (dst): '$policyName' -> '$($scriptPolicy.displayName)'" -ForegroundColor Green
-            $scriptData = @{
-                scriptName = if ($scriptPolicy.displayName) { $scriptPolicy.displayName }
-                             elseif ($scriptPolicy.name) { $scriptPolicy.name }
-                             else { $scriptPolicy.policyData.displayName }
-            }
-            foreach ($prop in $scriptPolicy.policyData.PSObject.Properties) {
-                $propName = $prop.Name
-                if ($propName -match '@odata|^id$|^createdDateTime|^lastModifiedDateTime|^version|^displayName|^description|^roleScopeTagIds') { continue }
-                $val = $prop.Value
-                if ($propName -match '(?i)scriptContent|detectionScriptContent|remediationScriptContent' -and $val -is [string] -and $val.Length -gt 20) {
-                    try { $val = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($val)) } catch {}
+        if ($scriptById.Count -gt 0) {
+            foreach ($policy in $Policies) {
+                if ($null -eq $policy.policyData -or $null -eq $policy.policyData.id) { continue }
+                if ($policy.policyTypeId -eq 104) { continue }
+                $policyId = $policy.policyData.id
+                # Priority 1: Graph-based link
+                $scriptId = $null
+                if ($GraphMaps.ComplianceScriptLinkMap -and $GraphMaps.ComplianceScriptLinkMap.ContainsKey($policyId)) {
+                    $scriptId = $GraphMaps.ComplianceScriptLinkMap[$policyId]
                 }
-                $scriptData[$propName] = $val
+                # Priority 2: Inforcer API deviceComplianceScriptId (often empty — API limitation)
+                if (-not $scriptId) {
+                    $infoScriptId = "$($policy.policyData.deviceComplianceScriptId)"
+                    if ($infoScriptId -match '^[0-9a-f]{8}-') { $scriptId = $infoScriptId }
+                }
+                if (-not $scriptId -or -not $scriptById.ContainsKey($scriptId)) { continue }
+                $scriptPolicy = $scriptById[$scriptId]
+                $policyName = if ($policy.displayName) { $policy.displayName } else { $policy.name }
+                Write-Host "  Linked script ($Label): '$policyName' -> '$($scriptPolicy.displayName)'" -ForegroundColor Green
+                $scriptData = @{
+                    scriptName = if ($scriptPolicy.displayName) { $scriptPolicy.displayName }
+                                 elseif ($scriptPolicy.name) { $scriptPolicy.name }
+                                 else { $scriptPolicy.policyData.displayName }
+                }
+                foreach ($prop in $scriptPolicy.policyData.PSObject.Properties) {
+                    $propName = $prop.Name
+                    if ($propName -match '@odata|^id$|^createdDateTime|^lastModifiedDateTime|^version|^displayName|^description|^roleScopeTagIds') { continue }
+                    $val = $prop.Value
+                    if ($propName -match '(?i)scriptContent|detectionScriptContent|remediationScriptContent' -and $val -is [string] -and $val.Length -gt 20) {
+                        try { $val = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($val)) } catch {}
+                    }
+                    $scriptData[$propName] = $val
+                }
+                $scriptJson = $scriptData | ConvertTo-Json -Depth 5 -Compress
+                $policy.policyData | Add-Member -NotePropertyName 'linkedComplianceScript' -NotePropertyValue $scriptJson -Force
+                $scriptPolicy | Add-Member -NotePropertyName '_claimedByCompliancePolicy' -NotePropertyValue $true -Force
             }
-            $scriptJson = $scriptData | ConvertTo-Json -Depth 5 -Compress
-            $policy.policyData | Add-Member -NotePropertyName 'linkedComplianceScript' -NotePropertyValue $scriptJson -Force
-            $scriptPolicy | Add-Member -NotePropertyName '_claimedByCompliancePolicy' -NotePropertyValue $true -Force
         }
     }
+
+    & $enrichComplianceData @($sourceDocData.Policies) $srcGraphMaps 'source'
+    & $enrichComplianceData @($destDocData.Policies) $dstGraphMaps 'destination'
 
     # ── Build DocModels ──
-    $srcModelParams = @{ DocData = $sourceDocData; ComparisonMode = $true }
-    if ($srcGraphMaps.GroupNameMap) { $srcModelParams['GroupNameMap'] = $srcGraphMaps.GroupNameMap }
-    if ($srcGraphMaps.FilterMap)    { $srcModelParams['FilterMap']    = $srcGraphMaps.FilterMap }
-    if ($srcGraphMaps.ScopeTagMap)  { $srcModelParams['ScopeTagMap']  = $srcGraphMaps.ScopeTagMap }
-    $sourceModel = ConvertTo-InforcerDocModel @srcModelParams
-
-    $dstModelParams = @{ DocData = $destDocData; ComparisonMode = $true }
-    if ($dstGraphMaps.GroupNameMap) { $dstModelParams['GroupNameMap'] = $dstGraphMaps.GroupNameMap }
-    if ($dstGraphMaps.FilterMap)    { $dstModelParams['FilterMap']    = $dstGraphMaps.FilterMap }
-    if ($dstGraphMaps.ScopeTagMap)  { $dstModelParams['ScopeTagMap']  = $dstGraphMaps.ScopeTagMap }
-    $destModel = ConvertTo-InforcerDocModel @dstModelParams
+    foreach ($entry in @(
+        @{ DocData = $sourceDocData; Maps = $srcGraphMaps; Var = 'sourceModel' },
+        @{ DocData = $destDocData;   Maps = $dstGraphMaps; Var = 'destModel' }
+    )) {
+        $params = @{ DocData = $entry.DocData; ComparisonMode = $true }
+        foreach ($key in @('GroupNameMap', 'FilterMap', 'ScopeTagMap')) {
+            if ($entry.Maps[$key]) { $params[$key] = $entry.Maps[$key] }
+        }
+        Set-Variable -Name $entry.Var -Value (ConvertTo-InforcerDocModel @params)
+    }
 
     @{
         SourceModel          = $sourceModel

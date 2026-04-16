@@ -383,6 +383,36 @@ td {
     cursor: pointer; transition: all var(--transition);
 }
 .long-val-btn:hover { background: var(--accent); color: #fff; }
+.script-collapsible { margin: 0.25rem 0; }
+.script-collapsible summary { cursor: pointer; font-size: 0.75rem; font-weight: 600; user-select: none; list-style: none; display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.6rem; border-radius: var(--radius-xs); transition: all var(--transition); }
+.script-collapsible summary::after { content: '\25B6'; font-size: 0.55rem; transition: transform 0.2s; }
+.script-collapsible[open] summary::after { transform: rotate(90deg); }
+.script-collapsible summary::-webkit-details-marker { display: none; }
+.script-collapsible pre { margin: 0.5rem 0 0; padding: 1rem; border-radius: var(--radius-xs); font-size: 0.75rem; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 30em; }
+.ps-code { background: #1e1e1e !important; color: #d4d4d4; }
+.ps-code-summary { color: #569cd6; border: 1px solid #569cd6; background: rgba(86,156,214,0.1); }
+.ps-code-summary:hover { background: #569cd6; color: #1e1e1e; }
+.sh-code { background: #0d1117 !important; color: #c9d1d9; }
+.sh-code-summary { color: #ff7b72; border: 1px solid #ff7b72; background: rgba(255,123,114,0.1); }
+.sh-code-summary:hover { background: #ff7b72; color: #0d1117; }
+.json-code { background: #1a1b26 !important; color: #a9b1d6; }
+.json-code-summary { color: #7aa2f7; border: 1px solid #7aa2f7; background: rgba(122,162,247,0.1); }
+.json-code-summary:hover { background: #7aa2f7; color: #1a1b26; }
+.ps-keyword { color: #569cd6; font-weight: 600; }
+.ps-string { color: #ce9178; }
+.ps-variable { color: #9cdcfe; }
+.ps-comment { color: #6a9955; font-style: italic; }
+.ps-cmdlet { color: #dcdcaa; }
+.ps-type { color: #4ec9b0; }
+.sh-keyword { color: #ff7b72; font-weight: 600; }
+.sh-string { color: #a5d6ff; }
+.sh-variable { color: #ffa657; }
+.sh-command { color: #d2a8ff; }
+.sh-comment { color: #8b949e; font-style: italic; }
+.json-key { color: #7aa2f7; }
+.json-string { color: #9ece6a; }
+.json-bool { color: #ff9e64; font-weight: 600; }
+.json-number { color: #e0af68; }
 tr:last-child td { border-bottom: none; }
 tr:nth-child(even) td { background: var(--row-alt); }
 tr:hover td { background: var(--accent-soft); }
@@ -900,9 +930,21 @@ tr:hover td { background: var(--accent-soft); }
                     [void]$sb.AppendLine('<tr><th>Setting</th><th>Value</th></tr>')
                     foreach ($setting in @($policy.Settings)) {
                         $settingNameEsc = [System.Net.WebUtility]::HtmlEncode($setting.Name)
-                        $settingVal     = ConvertTo-SafeHtmlValue -Value $setting.Value -AllowMultiValue
                         $indentLevel    = if ($null -ne $setting.Indent) { [int]$setting.Indent } else { 0 }
                         $paddingRem     = $indentLevel * 1.5
+
+                        # Script code blocks — render as collapsible <details> with syntax highlighting
+                        if ("$($setting.Value)" -match '^__SCRIPT_CODE__') {
+                            $scriptCode = "$($setting.Value)".Substring('__SCRIPT_CODE__'.Length)
+                            $encCode = [System.Net.WebUtility]::HtmlEncode($scriptCode)
+                            $trimmed = $scriptCode.TrimStart()
+                            if ($trimmed -match '^\s*[\{\[]') { $codeClass = 'json-code'; $summaryClass = 'json-code-summary'; $label = 'View JSON' }
+                            elseif ($trimmed -match '^\s*#!/') { $codeClass = 'sh-code'; $summaryClass = 'sh-code-summary'; $label = 'View script' }
+                            else { $codeClass = 'ps-code'; $summaryClass = 'ps-code-summary'; $label = 'View script' }
+                            $settingVal = "<details class=`"script-collapsible`"><summary class=`"$summaryClass`">$label</summary><pre class=`"$codeClass`">$encCode</pre></details>"
+                        } else {
+                            $settingVal = ConvertTo-SafeHtmlValue -Value $setting.Value -AllowMultiValue
+                        }
 
                         # Determine if this is a metadata row
                         $metaClass = ''
@@ -949,6 +991,7 @@ tr:hover td { background: var(--accent-soft); }
     # --- Footer ---
     [void]$sb.AppendLine('<div class="footer">')
     [void]$sb.AppendLine("<p>Generated $generatedAt UTC &middot; $tenantNameEsc &middot; $totalPolicies policies across $totalProducts products</p>")
+    [void]$sb.AppendLine('<p>Notice a bug or missing information? <a href="https://github.com/royklo/InforcerCommunity/issues" target="_blank" rel="noopener" style="color:var(--accent)">Report it on GitHub</a></p>')
     [void]$sb.AppendLine('</div>')
 
     # --- JavaScript ---
@@ -971,6 +1014,17 @@ window.addEventListener('scroll',function(){var b=document.getElementById('btn-t
 </script>
 '@
     [void]$sb.AppendLine($jsBlock)
+
+    # --- Syntax highlighting for collapsible code blocks ---
+    [void]$sb.AppendLine('<script>')
+    [void]$sb.AppendLine('function escHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}')
+    [void]$sb.AppendLine('function highlightPS(el){var t=el.textContent,tokens=[],re=/(#[^\n]*|<#[\s\S]*?#>|"[^"]*"|''[^'']*''|\$[\w:]+|\[[\w.]+\]|\b(?:if|else|elseif|foreach|for|while|do|switch|try|catch|finally|throw|return|function|param|begin|process|end|filter|class|enum|using|trap|break|continue|exit)\b|\b[A-Z][a-z]+(?:-[A-Z][a-zA-Z]+)+\b)/gi,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));var s=m[0],c="";if(s[0]==="#"||s.startsWith("<#"))c="ps-comment";else if(s[0]==="\""||s[0]==="''")c="ps-string";else if(s[0]==="$")c="ps-variable";else if(s[0]==="[")c="ps-type";else if(s.indexOf("-")>0&&s[0]===s[0].toUpperCase())c="ps-cmdlet";else c="ps-keyword";tokens.push(''<span class="''+c+''">''+escHtml(s)+''</span>'');last=m.index+s.length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
+    [void]$sb.AppendLine('function highlightBash(el){var t=el.textContent,tokens=[],re=/(#[^\n]*|"(?:[^"\\]|\\.)*"|''[^'']*''|\$\{[\w]+\}|\$[\w]+|\b(?:if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|local|export|set|trap|in)\b|\b(?:echo|curl|rm|mkdir|cp|mv|chmod|chown|grep|sed|awk|cat|ls|cd|pwd|source|eval|exec|exit)\b)/g,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));var s=m[0],c="";if(s[0]==="#")c="sh-comment";else if(s[0]==="\""||s[0]==="''")c="sh-string";else if(s[0]==="$")c="sh-variable";else if(/^(if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|local|export|set|trap|in)$/.test(s))c="sh-keyword";else c="sh-command";tokens.push(''<span class="''+c+''">''+escHtml(s)+''</span>'');last=m.index+s.length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
+    [void]$sb.AppendLine('function highlightJSON(el){var t=el.textContent,tokens=[],re=/("(?:[^"\\]|\\.)*")\s*(:)|("(?:[^"\\]|\\.)*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));if(m[1])tokens.push(''<span class="json-key">''+escHtml(m[1])+''</span>''+escHtml(m[2]));else if(m[3])tokens.push(''<span class="json-string">''+escHtml(m[3])+''</span>'');else if(m[4])tokens.push(''<span class="json-bool">''+escHtml(m[4])+''</span>'');else if(m[5])tokens.push(''<span class="json-number">''+escHtml(m[5])+''</span>'');last=m.index+m[0].length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
+    [void]$sb.AppendLine('document.querySelectorAll("pre.ps-code").forEach(highlightPS);')
+    [void]$sb.AppendLine('document.querySelectorAll("pre.sh-code").forEach(highlightBash);')
+    [void]$sb.AppendLine('document.querySelectorAll("pre.json-code").forEach(highlightJSON);')
+    [void]$sb.AppendLine('</script>')
 
     [void]$sb.AppendLine('</body>')
     [void]$sb.Append('</html>')

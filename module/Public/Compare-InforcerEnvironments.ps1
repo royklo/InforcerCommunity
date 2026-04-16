@@ -84,9 +84,6 @@ param(
     [string]$SettingsCatalogPath,
 
     [Parameter(Mandatory = $false)]
-    [switch]$IgnoreUnassignedPolicies,
-
-    [Parameter(Mandatory = $false)]
     [switch]$FetchGraphData,
 
     [Parameter(Mandatory = $false)]
@@ -152,16 +149,18 @@ Write-Host "  Destination: $($compData.DestinationName)" -ForegroundColor Gray
 Write-Host 'Stage 2: Building comparison model...' -ForegroundColor Cyan
 
 $compareParams = @{
-    SourceModel              = $compData.SourceModel
-    DestinationModel         = $compData.DestinationModel
-    IncludingAssignments     = $compData.IncludingAssignments
-    IgnoreUnassignedPolicies = $IgnoreUnassignedPolicies.IsPresent
+    SourceModel          = $compData.SourceModel
+    DestinationModel     = $compData.DestinationModel
+    IncludingAssignments = $compData.IncludingAssignments
 }
-if ($ExcludeOS)   { $compareParams['ExcludeOS']   = $ExcludeOS }
-if ($PolicyNameFilter) { $compareParams['PolicyNameFilter'] = $PolicyNameFilter }
-
-if ($ExcludeOS) { Write-Host "  Excluding products: $($ExcludeOS -join ', ')" -ForegroundColor Gray }
-if ($PolicyNameFilter) { Write-Host "  Policy name filter: '$PolicyNameFilter'" -ForegroundColor Gray }
+if ($ExcludeOS) {
+    $compareParams['ExcludeOS'] = $ExcludeOS
+    Write-Host "  Excluding products: $($ExcludeOS -join ', ')" -ForegroundColor Gray
+}
+if ($PolicyNameFilter) {
+    $compareParams['PolicyNameFilter'] = $PolicyNameFilter
+    Write-Host "  Policy name filter: '$PolicyNameFilter'" -ForegroundColor Gray
+}
 
 $model = Compare-InforcerDocModels @compareParams
 

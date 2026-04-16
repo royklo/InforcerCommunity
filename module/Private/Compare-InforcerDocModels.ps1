@@ -208,20 +208,17 @@ function Compare-InforcerDocModels {
                 }
             }
 
+            # Trim parent stack to current indent level
+            while ($parentStack.Count -gt $indent) {
+                $parentStack.RemoveAt($parentStack.Count - 1)
+            }
+
             if (-not $isConfigured) {
-                # Group header — update parent stack at this indent level
-                while ($parentStack.Count -gt $indent) {
-                    $parentStack.RemoveAt($parentStack.Count - 1)
-                }
-                # Skip useless structural headers from path hierarchy
+                # Group header — add to path hierarchy (skip structural noise)
                 if ($name -ne 'Top Level Setting Group Collection') {
                     [void]$parentStack.Add($name)
                 }
             } else {
-                # Configured setting — build path from parent stack + this name
-                while ($parentStack.Count -gt $indent) {
-                    $parentStack.RemoveAt($parentStack.Count - 1)
-                }
 
                 # Build the full path from parent stack + catalog category
                 if ($parentStack.Count -gt 0) {
@@ -688,7 +685,7 @@ function Compare-InforcerDocModels {
             foreach ($catName in $prodData.Categories.Keys) {
                 foreach ($policy in @($prodData.Categories[$catName])) {
                     if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
-                    # Check if ANY setting in this policy is deprecated
+                    # Check if ANY setting in this policy is deprecated (reuses $isSettingDeprecated helper)
                     $hasDeprecated = $false
                     $settingsSummary = [System.Collections.Generic.List[object]]::new()
                     foreach ($s in @($policy.Settings)) {
@@ -697,18 +694,15 @@ function Compare-InforcerDocModels {
                         $settingValue = "$($s.Value)"
                         $defId = "$($s.DefinitionId)"
                         if ([string]::IsNullOrWhiteSpace($settingValue)) { continue }
-                        # Check deprecated via name, catalog, or value
-                        $isDepr = $settingName -match 'deprecated' -or $settingValue -match 'deprecated'
-                        if (-not $isDepr -and -not [string]::IsNullOrEmpty($defId) -and
-                            $null -ne $script:InforcerSettingsCatalog -and
-                            $script:InforcerSettingsCatalog.ContainsKey($defId)) {
-                            $catEntry = $script:InforcerSettingsCatalog[$defId]
-                            if ($catEntry.DisplayName -match 'deprecated') {
-                                $isDepr = $true
-                                $settingName = $catEntry.DisplayName
-                            }
-                        }
+                        $isDepr = & $isSettingDeprecated $settingName $settingValue $defId
                         if ($isDepr) {
+                            # Use catalog display name when it's the one that matched
+                            if (-not [string]::IsNullOrEmpty($defId) -and
+                                $null -ne $script:InforcerSettingsCatalog -and
+                                $script:InforcerSettingsCatalog.ContainsKey($defId) -and
+                                $script:InforcerSettingsCatalog[$defId].DisplayName -match 'deprecated') {
+                                $settingName = $script:InforcerSettingsCatalog[$defId].DisplayName
+                            }
                             $hasDeprecated = $true
                             [void]$settingsSummary.Add(@{
                                 Name         = $settingName

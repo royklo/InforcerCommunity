@@ -1007,7 +1007,7 @@ Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
         $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
     }
 
-    It 'excludes policies in Compliance category from duplicate detection (D-05)' {
+    It 'detects duplicates in non-Settings-Catalog categories like Compliance' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
             $src = & $buildModel 'SourceTenant' 'src-id' @(
@@ -1017,7 +1017,7 @@ Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
             $dest = & $buildModel 'DestTenant' 'dest-id' @() -Category 'Compliance'
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $buildDuplicateModel }
-        $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
+        $result.ManualReview.Keys | Should -Contain 'Duplicate Settings (Different Values)'
     }
 
     It 'does NOT cross-match same settingPath under different products (D-06)' {

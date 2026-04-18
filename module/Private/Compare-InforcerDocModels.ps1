@@ -759,8 +759,6 @@ function Compare-InforcerDocModels {
                 foreach ($catName in $model.Products[$prodName].Categories.Keys) {
                     # Exclude Custom Indicators category entirely (noise — per-tenant unique data)
                     if ($catName -match 'Custom Indicators') { continue }
-                    # D-05: only settings catalog and administrative templates
-                    if ($catName -notmatch 'settings catalog|administrative templates') { continue }
 
                     foreach ($policy in @($model.Products[$prodName].Categories[$catName])) {
                         if ($null -eq $policy -or $null -eq $policy.Basics) { continue }

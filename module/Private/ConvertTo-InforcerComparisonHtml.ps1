@@ -425,11 +425,11 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .mr-split-col.mr-col-dest h4 { background: var(--warning-bg); color: var(--warning); }
 .mr-split-header { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .mr-split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
-.mr-split-row .mr-split-cell { min-height: 0; min-width: 0; overflow: visible; }
+.mr-split-row .mr-split-cell { min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: visible; }
 .mr-independent-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
 .mr-col-flow { display: flex; flex-direction: column; gap: 0; }
 .mr-split-cell .script-collapsible pre, .mr-split-col .script-collapsible pre, .mr-body .script-collapsible pre { max-width: 100%; overflow-x: auto; }
-.mr-body { overflow: visible; }
+.mr-body { overflow-x: hidden; overflow-y: visible; }
 .mr-platform-section { margin-bottom: 1rem; }
 .mr-platform-section > summary { font-size: 1rem; cursor: pointer; padding: 0.5rem 0; border-bottom: 1px solid var(--border-subtle); user-select: none; }
 /* Assignment display — inline text, no badge backgrounds (D-04) */

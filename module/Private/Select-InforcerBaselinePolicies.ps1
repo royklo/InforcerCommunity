@@ -78,8 +78,7 @@ function Select-InforcerBaselinePolicies {
     if ($baselinePolicyGuids.Count -gt $baselineTotal) { $baselineTotal = $baselinePolicyGuids.Count }
 
     if ($baselineTotal -eq 0) {
-        Write-Error -Message "Baseline '$baselineFilterName' contains no policies in alignment data. Cannot filter." `
-            -ErrorId 'EmptyBaselineAlignment' -Category InvalidResult
+        Write-Warning "Baseline '$baselineFilterName' contains no policies in alignment data."
         return $null
     }
 

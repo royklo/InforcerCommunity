@@ -19,6 +19,12 @@
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
 .PARAMETER DestinationSession
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
+.PARAMETER SourceBaselineId
+    Optional baseline GUID or friendly name for the source tenant. When specified, the comparison
+    is scoped to only policies belonging to this baseline instead of all tenant policies.
+.PARAMETER DestinationBaselineId
+    Optional baseline GUID or friendly name for the destination tenant. When specified, the comparison
+    is scoped to only policies belonging to this baseline instead of all tenant policies.
 .PARAMETER IncludingAssignments
     When specified, fetches and displays Graph assignment data in the report.
     Assignments are informational only and do not affect the alignment score.
@@ -56,6 +62,12 @@
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -SourceSession $src -DestinationSession $dst
 .EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 -IncludingAssignments
+.EXAMPLE
+    Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' -DestinationTenantId 'Fabrikam'
+    # Compares only policies in the 'Tier 1 Foundations' baseline from Contoso against all Fabrikam policies.
+.EXAMPLE
+    Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1' -DestinationTenantId 'Fabrikam' -DestinationBaselineId 'Tier 2'
+    # Compares two baselines from different tenants.
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#compare-inforcerenvironments
 .LINK
@@ -76,6 +88,12 @@ param(
 
     [Parameter(Mandatory = $false)]
     [hashtable]$DestinationSession,
+
+    [Parameter(Mandatory = $false)]
+    [string]$SourceBaselineId,
+
+    [Parameter(Mandatory = $false)]
+    [string]$DestinationBaselineId,
 
     [Parameter(Mandatory = $false)]
     [switch]$IncludingAssignments,
@@ -126,6 +144,8 @@ if ($null -ne $DestinationSession)  { $compDataParams['DestinationSession'] = $D
 if (-not [string]::IsNullOrWhiteSpace($SettingsCatalogPath)) { $compDataParams['SettingsCatalogPath'] = $SettingsCatalogPath }
 if ($IncludingAssignments) { $compDataParams['IncludingAssignments'] = $true }
 if ($FetchGraphData) { $compDataParams['FetchGraphData'] = $true }
+if (-not [string]::IsNullOrWhiteSpace($SourceBaselineId))      { $compDataParams['SourceBaselineId']      = $SourceBaselineId }
+if (-not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) { $compDataParams['DestinationBaselineId'] = $DestinationBaselineId }
 
 $compData = $null
 try {
@@ -142,8 +162,12 @@ if ($null -eq $compData) {
     return
 }
 
-Write-Host "  Source:      $($compData.SourceName)" -ForegroundColor Gray
-Write-Host "  Destination: $($compData.DestinationName)" -ForegroundColor Gray
+$sourceDisplay = $compData.SourceName
+if ($compData.SourceBaselineName) { $sourceDisplay += " ($($compData.SourceBaselineName))" }
+$destDisplay = $compData.DestinationName
+if ($compData.DestinationBaselineName) { $destDisplay += " ($($compData.DestinationBaselineName))" }
+Write-Host "  Source:      $sourceDisplay" -ForegroundColor Gray
+Write-Host "  Destination: $destDisplay" -ForegroundColor Gray
 
 # ── Stage 2: Build comparison model ──────────────────────────────────────────
 Write-Host 'Stage 2: Building comparison model...' -ForegroundColor Cyan
@@ -161,6 +185,9 @@ if ($PolicyNameFilter) {
     $compareParams['PolicyNameFilter'] = $PolicyNameFilter
     Write-Host "  Policy name filter: '$PolicyNameFilter'" -ForegroundColor Gray
 }
+
+if ($compData.SourceBaselineName)      { $compareParams['SourceBaselineName']      = $compData.SourceBaselineName }
+if ($compData.DestinationBaselineName) { $compareParams['DestinationBaselineName'] = $compData.DestinationBaselineName }
 
 $model = Compare-InforcerDocModels @compareParams
 
@@ -190,9 +217,19 @@ if (-not (Test-Path -LiteralPath $OutputPath)) {
 }
 
 $timestamp  = (Get-Date).ToString('yyyy-MM-dd-HHmm')
-$safeSrc    = ($compData.SourceName      -replace '[^\w\-]', '-') -replace '-{2,}', '-'
-$safeDst    = ($compData.DestinationName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
-$fileName   = "comparison-$safeSrc-vs-$safeDst-$timestamp.html"
+$safeSrc = ($compData.SourceName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
+if ($compData.SourceBaselineName) {
+    $safeBaseline = ($compData.SourceBaselineName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
+    if ($safeBaseline.Length -gt 30) { $safeBaseline = $safeBaseline.Substring(0, 30).TrimEnd('-') }
+    $safeSrc = "$safeSrc-$safeBaseline"
+}
+$safeDst = ($compData.DestinationName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
+if ($compData.DestinationBaselineName) {
+    $safeBaseline = ($compData.DestinationBaselineName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
+    if ($safeBaseline.Length -gt 30) { $safeBaseline = $safeBaseline.Substring(0, 30).TrimEnd('-') }
+    $safeDst = "$safeDst-$safeBaseline"
+}
+$fileName = "comparison-$safeSrc-vs-$safeDst-$timestamp.html"
 $filePath   = Join-Path $OutputPath $fileName
 
 Set-Content -Path $filePath -Value $htmlContent -Encoding UTF8

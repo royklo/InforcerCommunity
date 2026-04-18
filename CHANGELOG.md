@@ -4,17 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
-## [Unreleased]
+## [0.3.1] - 2026-04-19
 
 ### Features
 
-- **Baseline comparison support for `Compare-InforcerEnvironments`** — added `-SourceBaselineId` and `-DestinationBaselineId` parameters to scope comparisons to specific baselines instead of entire tenants. Supports all four modes: tenant vs tenant, baseline vs tenant, tenant vs baseline, baseline vs baseline. Report header and filename reflect active baselines.
-- **Shared baseline filtering helper** — extracted `Select-InforcerBaselinePolicies` from `Export-InforcerTenantDocumentation` into a reusable private function used by both Export and Compare cmdlets.
+- **Baseline-scoped comparison** — `Compare-InforcerEnvironments` now supports `-SourceBaselineId` and `-DestinationBaselineId` parameters. Compare only the policies that belong to a specific baseline instead of the entire tenant. All four modes work: tenant vs tenant, baseline vs tenant, tenant vs baseline, and baseline vs baseline. The report header and filename automatically reflect which baselines are active.
+- **Shared baseline filtering** — extracted the baseline policy filtering logic from `Export-InforcerTenantDocumentation` into a reusable `Select-InforcerBaselinePolicies` private helper. Both Export and Compare now share the same filtering pipeline, reducing code duplication by ~95 lines.
 
-### Improvements
+### Bug Fixes
 
-- **Manual Review tab layout** — changed from shared grid rows to independent columns so expanding a policy card on one side no longer pushes down cards on the other side.
-- **Manual Review expandability fix** — changed `overflow: hidden` to `overflow-x: hidden; overflow-y: visible` on split cells and body, fixing `<details>` elements that could not expand.
+- **Manual Review cards not expanding** — `overflow: hidden` on `.mr-split-cell` and `.mr-body` prevented `<details>` elements from opening. Changed to `overflow-x: hidden; overflow-y: visible`.
+- **Manual Review layout push-down** — expanding a policy card on one side pushed all cards on the other side down because matched pairs shared a CSS grid row. Replaced with independent column layout so each side flows vertically on its own.
 
 ## [0.3.0] - 2026-04-16
 

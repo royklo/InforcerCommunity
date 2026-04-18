@@ -128,105 +128,10 @@ if ($null -eq $docData) { return }
 $baselineFilterName = $null
 if (-not [string]::IsNullOrWhiteSpace($Baseline)) {
     Write-Host "Filtering to baseline: $Baseline" -ForegroundColor Cyan
-
-    # Resolve baseline name to GUID
-    $baselineGuid = $null
-    $guidTest = [guid]::Empty
-    if ([guid]::TryParse($Baseline.Trim(), [ref]$guidTest)) {
-        $baselineGuid = $Baseline.Trim()
-    } else {
-        # Fetch baselines and resolve by name
-        $allBaselines = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
-        $baselineGuid = Resolve-InforcerBaselineId -BaselineId $Baseline -BaselineData $allBaselines
-        # Find the baseline name for display
-        foreach ($bl in $allBaselines) {
-            if ($bl.id -eq $baselineGuid) { $baselineFilterName = $bl.name; break }
-        }
-    }
-    if (-not $baselineFilterName) { $baselineFilterName = $Baseline }
-
-    # Get alignment details to find which policies are in the baseline
-    Write-Host '  Retrieving alignment details...' -ForegroundColor Gray
-    $alignEndpoint = "/beta/tenants/$clientTenantId/alignmentDetails?customBaselineId=$baselineGuid"
-    $alignResponse = Invoke-InforcerApiRequest -Endpoint $alignEndpoint -Method GET -OutputType PowerShellObject -ErrorAction SilentlyContinue
-
-    if ($null -eq $alignResponse) {
-        Write-Warning "Could not retrieve alignment details for baseline. Exporting all policies."
-    } else {
-        # Collect policy names AND GUIDs from baseline alignment status arrays
-        # Note: additionalInSubjectUnaccepted = tenant-only policies NOT in baseline, so excluded
-        $baselinePolicyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $baselinePolicyGuids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $alignment = $alignResponse.alignment
-        if ($null -ne $alignment) {
-            $baselineArrays = @('matchedPolicies', 'matchedWithAcceptedDeviations', 'deviatedUnaccepted', 'missingFromSubjectUnaccepted')
-            foreach ($arrayName in $baselineArrays) {
-                $arr = $alignment.PSObject.Properties[$arrayName]
-                if ($arr -and $null -ne $arr.Value) {
-                    foreach ($p in @($arr.Value)) {
-                        if ($p -is [PSObject]) {
-                            if ($p.PSObject.Properties['policyName'] -and $p.policyName) {
-                                [void]$baselinePolicyNames.Add($p.policyName)
-                            }
-                            if ($p.PSObject.Properties['policyGuid'] -and $p.policyGuid) {
-                                [void]$baselinePolicyGuids.Add($p.policyGuid)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        $baselineTotal = $baselinePolicyNames.Count
-        if ($baselinePolicyGuids.Count -gt $baselineTotal) { $baselineTotal = $baselinePolicyGuids.Count }
-
-        if ($baselineTotal -gt 0) {
-            # Filter docData.Policies to only those in the baseline (match by name OR GUID)
-            $originalCount = @($docData.Policies).Count
-            $docData.Policies = @($docData.Policies | Where-Object {
-                # Try ALL name fields independently (alignment may use friendly names
-                # while tenant policies use internal names in different fields)
-                foreach ($n in @($_.displayName, $_.friendlyName, $_.name, $_.inforcerPolicyTypeName)) {
-                    if (-not [string]::IsNullOrWhiteSpace($n) -and $baselinePolicyNames.Contains($n)) { return $true }
-                }
-                # Try policyData name fields
-                if ($_.policyData) {
-                    foreach ($n in @($_.policyData.displayName, $_.policyData.name)) {
-                        if (-not [string]::IsNullOrWhiteSpace($n) -and $baselinePolicyNames.Contains($n)) { return $true }
-                    }
-                }
-                # Try GUID matching
-                foreach ($g in @($_.policyGuid, $_.id)) {
-                    if (-not [string]::IsNullOrWhiteSpace($g) -and $baselinePolicyGuids.Contains($g)) { return $true }
-                }
-                if ($_.policyData -and $_.policyData.id) {
-                    if ($baselinePolicyGuids.Contains($_.policyData.id)) { return $true }
-                }
-                return $false
-            })
-            $matchedCount = @($docData.Policies).Count
-            Write-Host "  Filtered to $matchedCount of $originalCount policies in baseline" -ForegroundColor Gray
-            if ($matchedCount -lt $baselineTotal) {
-                $matchedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-                foreach ($pol in @($docData.Policies)) {
-                    foreach ($n in @($pol.displayName, $pol.friendlyName, $pol.name)) {
-                        if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$matchedNames.Add($n) }
-                    }
-                    if ($pol.policyData) {
-                        foreach ($n in @($pol.policyData.displayName, $pol.policyData.name)) {
-                            if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$matchedNames.Add($n) }
-                        }
-                    }
-                }
-                $unmatched = @($baselinePolicyNames | Where-Object { -not $matchedNames.Contains($_) })
-                if ($unmatched.Count -gt 0) {
-                    Write-Warning "$($unmatched.Count) baseline policies not found in tenant:"
-                    foreach ($u in $unmatched | Sort-Object) { Write-Warning "  - $u" }
-                }
-            }
-        } else {
-            Write-Warning 'No policies found in baseline alignment data. Exporting all policies.'
-        }
+    $baselineFilterName = Select-InforcerBaselinePolicies -DocData $docData -BaselineId $Baseline
+    if ($null -eq $baselineFilterName) {
+        Write-Warning 'Exporting all policies.'
+        $baselineFilterName = $Baseline
     }
 }
 

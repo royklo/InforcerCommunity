@@ -743,22 +743,32 @@ function Compare-InforcerDocModels {
     # Per D-05: only scans settings catalog and administrative templates categories
     # Per D-06: scopes per product (platform) — no cross-product matching
     $scanForDuplicates = {
-        # Phase 1: Build per-product setting index
-        $productSettingMaps = [ordered]@{}
+        # Phase 1: Build per-product-per-platform setting index
+        # Scoped by product AND platform to prevent cross-OS matching (e.g., Win Edge vs Mac Edge)
+        # Keyed by DefinitionId (not SettingPath) to prevent false matches on same display name
+        $scopedSettingMaps = [ordered]@{}
 
         foreach ($side in @('Source', 'Destination')) {
             $model = if ($side -eq 'Source') { $SourceModel } else { $DestinationModel }
             if ($null -eq $model -or $null -eq $model.Products) { continue }
 
             foreach ($prodName in $model.Products.Keys) {
-                if (-not $productSettingMaps.Contains($prodName)) {
-                    $productSettingMaps[$prodName] = [ordered]@{}
-                }
-                $settingMap = $productSettingMaps[$prodName]
-
                 foreach ($catName in $model.Products[$prodName].Categories.Keys) {
                     # Exclude Custom Indicators category entirely (noise — per-tenant unique data)
                     if ($catName -match 'Custom Indicators') { continue }
+
+                    # Extract platform from category path for OS-level scoping
+                    # Category format: "Product / Platform / Category" or just "Category"
+                    $catSegments = $catName -split '\s*/\s*'
+                    $platform = if ($catSegments.Count -ge 2) { $catSegments[0].Trim() } else { 'All' }
+                    if ($platform -eq 'All') { $platform = 'Windows' }
+
+                    # Composite scope key: product + platform
+                    $scopeKey = "$prodName`0$platform"
+                    if (-not $scopedSettingMaps.Contains($scopeKey)) {
+                        $scopedSettingMaps[$scopeKey] = [ordered]@{}
+                    }
+                    $settingMap = $scopedSettingMaps[$scopeKey]
 
                     foreach ($policy in @($model.Products[$prodName].Categories[$catName])) {
                         if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
@@ -780,18 +790,18 @@ function Compare-InforcerDocModels {
                             }
                         }
 
-                        # Collect per settingPath, keeping only one entry per policy+side
-                        # (parent choice "Enabled" and child "Force sign-in" share the same path —
-                        # keep the last/deepest value which is the specific choice, not the generic parent)
-                        $policyPathEntries = [ordered]@{}
+                        # Collect per DefinitionId, keeping only one entry per policy+side
+                        # Uses DefinitionId as key (not SettingPath) so same-named settings
+                        # with different IDs (e.g., "Allowed System Extensions" in OneDrive vs Antivirus)
+                        # are correctly treated as different settings
+                        $policyDefEntries = [ordered]@{}
                         foreach ($p in $paths) {
                             if ([string]::IsNullOrEmpty($p.DefinitionId)) { continue }
                             if (& $isExcludedSetting $p.Name $p.Value) { continue }
                             $defKeyLower = $p.DefinitionId.ToLowerInvariant()
                             if ($defsInPolicy[$defKeyLower] -gt 1) { continue }
-                            $dupeKey = $p.SettingPath.ToLowerInvariant()
                             # Overwrite: last entry wins (child choice overrides parent "Enabled")
-                            $policyPathEntries[$dupeKey] = @{
+                            $policyDefEntries[$defKeyLower] = @{
                                 Value       = $p.Value
                                 PolicyName  = $policy.Basics.Name
                                 SettingName = $p.Name
@@ -800,11 +810,11 @@ function Compare-InforcerDocModels {
                                 Category    = "$prodName / $catName"
                             }
                         }
-                        foreach ($dupeKey in $policyPathEntries.Keys) {
+                        foreach ($dupeKey in $policyDefEntries.Keys) {
                             if (-not $settingMap.Contains($dupeKey)) {
                                 $settingMap[$dupeKey] = [System.Collections.Generic.List[object]]::new()
                             }
-                            [void]$settingMap[$dupeKey].Add($policyPathEntries[$dupeKey])
+                            [void]$settingMap[$dupeKey].Add($policyDefEntries[$dupeKey])
                         }
                     }
                 }
@@ -817,8 +827,8 @@ function Compare-InforcerDocModels {
         # O(1) lookup for existing items by policyKey (avoids Where-Object O(n) per Pitfall 4)
         $itemLookup = @{}
 
-        foreach ($prodName in $productSettingMaps.Keys) {
-            $settingMap = $productSettingMaps[$prodName]
+        foreach ($scopeKey in $scopedSettingMaps.Keys) {
+            $settingMap = $scopedSettingMaps[$scopeKey]
             foreach ($dupeKey in $settingMap.Keys) {
                 $entries = $settingMap[$dupeKey]
                 if ($entries.Count -lt 2) { continue }

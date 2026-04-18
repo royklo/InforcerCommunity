@@ -426,6 +426,8 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .mr-split-header { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .mr-split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
 .mr-split-row .mr-split-cell { min-height: 0; min-width: 0; overflow: visible; }
+.mr-independent-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.mr-col-flow { display: flex; flex-direction: column; gap: 0; }
 .mr-split-cell .script-collapsible pre, .mr-split-col .script-collapsible pre, .mr-body .script-collapsible pre { max-width: 100%; overflow-x: auto; }
 .mr-body { overflow: visible; }
 .mr-platform-section { margin-bottom: 1rem; }
@@ -1253,47 +1255,43 @@ table.hide-assignments .col-assign { display: none; }
                 $unmatchedSource = @($unmatchedSource | Sort-Object PolicyName)
                 $unmatchedDest = @($unmatchedDest | Sort-Object PolicyName)
 
-                # Column headers
+                # Two independent columns — expanding a card on one side does not affect the other
                 [void]$sb.AppendLine('<div class="mr-split-header">')
                 [void]$sb.AppendLine('<div class="mr-split-col mr-col-source"><h4>Source</h4></div>')
                 [void]$sb.AppendLine('<div class="mr-split-col mr-col-dest"><h4>Destination</h4></div>')
                 [void]$sb.AppendLine('</div>')
 
-                # Matched pairs — side by side
+                # Build ordered source and dest lists (matched first, then unmatched)
+                $orderedSource = [System.Collections.Generic.List[object]]::new()
+                $orderedDest   = [System.Collections.Generic.List[object]]::new()
                 foreach ($pair in $matchedPairs) {
-                    [void]$sb.AppendLine('<div class="mr-split-row">')
-                    [void]$sb.AppendLine('<div class="mr-split-cell">')
-                    & $renderPolicyCard $pair.Source $sb
-                    [void]$sb.AppendLine('</div>')
-                    [void]$sb.AppendLine('<div class="mr-split-cell">')
-                    & $renderPolicyCard $pair.Destination $sb
-                    [void]$sb.AppendLine('</div>')
-                    [void]$sb.AppendLine('</div>')
+                    [void]$orderedSource.Add($pair.Source)
+                    [void]$orderedDest.Add($pair.Destination)
                 }
+                foreach ($sp in $unmatchedSource) { [void]$orderedSource.Add($sp) }
+                foreach ($dp in $unmatchedDest)   { [void]$orderedDest.Add($dp) }
 
-                # Unmatched source-only (alphabetical)
-                foreach ($sp in $unmatchedSource) {
-                    [void]$sb.AppendLine('<div class="mr-split-row">')
-                    [void]$sb.AppendLine('<div class="mr-split-cell">')
-                    & $renderPolicyCard $sp $sb
-                    [void]$sb.AppendLine('</div>')
-                    [void]$sb.AppendLine('<div class="mr-split-cell"></div>')
-                    [void]$sb.AppendLine('</div>')
-                }
+                [void]$sb.AppendLine('<div class="mr-independent-cols">')
 
-                # Unmatched dest-only (alphabetical)
-                foreach ($dp in $unmatchedDest) {
-                    [void]$sb.AppendLine('<div class="mr-split-row">')
-                    [void]$sb.AppendLine('<div class="mr-split-cell"></div>')
-                    [void]$sb.AppendLine('<div class="mr-split-cell">')
-                    & $renderPolicyCard $dp $sb
-                    [void]$sb.AppendLine('</div>')
-                    [void]$sb.AppendLine('</div>')
+                # Source column
+                [void]$sb.AppendLine('<div class="mr-col-flow">')
+                if ($orderedSource.Count -eq 0) {
+                    [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;font-style:italic;padding:0.5rem">No source policies</div>')
+                } else {
+                    foreach ($sp in $orderedSource) { & $renderPolicyCard $sp $sb }
                 }
+                [void]$sb.AppendLine('</div>')
 
-                if ($sourcePolicies.Count -eq 0 -and $destPolicies.Count -eq 0) {
-                    [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">No policies</div>')
+                # Destination column
+                [void]$sb.AppendLine('<div class="mr-col-flow">')
+                if ($orderedDest.Count -eq 0) {
+                    [void]$sb.AppendLine('<div style="color:var(--muted);font-size:0.8rem;font-style:italic;padding:0.5rem">No destination policies</div>')
+                } else {
+                    foreach ($dp in $orderedDest) { & $renderPolicyCard $dp $sb }
                 }
+                [void]$sb.AppendLine('</div>')
+
+                [void]$sb.AppendLine('</div>')
                 [void]$sb.AppendLine('</details>')  # end mr-category-section
             }
             [void]$sb.AppendLine('</details>')

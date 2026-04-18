@@ -570,6 +570,16 @@ table.hide-assignments .col-assign { display: none; }
     # ── Extract model values ───────────────────────────────────────────────
     $sourceName      = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.SourceName)
     $destName        = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.DestinationName)
+
+    # Append baseline name if present
+    $sourceBaselineName = $ComparisonModel.SourceBaselineName
+    $destBaselineName   = $ComparisonModel.DestinationBaselineName
+    if (-not [string]::IsNullOrEmpty($sourceBaselineName)) {
+        $sourceName = "$sourceName ($([System.Net.WebUtility]::HtmlEncode($sourceBaselineName)))"
+    }
+    if (-not [string]::IsNullOrEmpty($destBaselineName)) {
+        $destName = "$destName ($([System.Net.WebUtility]::HtmlEncode($destBaselineName)))"
+    }
     $generatedAt     = [System.Net.WebUtility]::HtmlEncode($ComparisonModel.GeneratedAt)
     $alignmentScore  = if ($null -ne $ComparisonModel.AlignmentScore) { $ComparisonModel.AlignmentScore } else { 0 }
     $totalItems      = if ($null -ne $ComparisonModel.TotalItems) { $ComparisonModel.TotalItems } else { 0 }

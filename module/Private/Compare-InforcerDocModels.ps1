@@ -42,7 +42,13 @@ function Compare-InforcerDocModels {
         [string[]]$ExcludeOS,
 
         [Parameter()]
-        [string]$PolicyNameFilter
+        [string]$PolicyNameFilter,
+
+        [Parameter()]
+        [string]$SourceBaselineName,
+
+        [Parameter()]
+        [string]$DestinationBaselineName
     )
 
     # ── Result containers ─────────────────────────────────────────────────
@@ -955,8 +961,10 @@ function Compare-InforcerDocModels {
 
     # ── Return ComparisonModel ────────────────────────────────────────────
     @{
-        SourceName           = $SourceModel.TenantName
-        DestinationName      = $DestinationModel.TenantName
+        SourceName               = $SourceModel.TenantName
+        DestinationName          = $DestinationModel.TenantName
+        SourceBaselineName       = $SourceBaselineName
+        DestinationBaselineName  = $DestinationBaselineName
         GeneratedAt          = [datetime]::UtcNow
         AlignmentScore       = $alignmentScore
         TotalItems           = $totalItems

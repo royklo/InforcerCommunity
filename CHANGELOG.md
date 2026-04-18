@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
+## [Unreleased]
+
+### Features
+
+- **Baseline comparison support for `Compare-InforcerEnvironments`** — added `-SourceBaselineId` and `-DestinationBaselineId` parameters to scope comparisons to specific baselines instead of entire tenants. Supports all four modes: tenant vs tenant, baseline vs tenant, tenant vs baseline, baseline vs baseline. Report header and filename reflect active baselines.
+- **Shared baseline filtering helper** — extracted `Select-InforcerBaselinePolicies` from `Export-InforcerTenantDocumentation` into a reusable private function used by both Export and Compare cmdlets.
+
+### Improvements
+
+- **Manual Review tab layout** — changed from shared grid rows to independent columns so expanding a policy card on one side no longer pushes down cards on the other side.
+- **Manual Review expandability fix** — changed `overflow: hidden` to `overflow-x: hidden; overflow-y: visible` on split cells and body, fixing `<details>` elements that could not expand.
+
 ## [0.3.0] - 2026-04-16
 
 ### Features

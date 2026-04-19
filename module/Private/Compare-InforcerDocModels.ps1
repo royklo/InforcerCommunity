@@ -998,25 +998,24 @@ function Compare-InforcerDocModels {
             }
         }
 
-        # Add ambiguous comparison rows to Manual Review
+        # Add ambiguous comparison rows to Manual Review — grouped by original category
+        # so they appear under the correct OS/platform section (not under "Other")
         if ($ambiguousItems.Count -gt 0) {
-            $ambiguousCategory = 'Ambiguous Comparison (Duplicate Policies)'
-            $mrItems = [System.Collections.Generic.List[object]]::new()
             foreach ($item in $ambiguousItems) {
-                [void]$mrItems.Add(@{
-                    PolicyName    = "Ambiguous: $($item.SettingName)"
-                    Side          = 'Both'
+                $mrCatKey = $item.Category
+                $mrEntry = @{
+                    PolicyName    = "`u{26A0} Ambiguous: $($item.SettingName)"
+                    Side          = $item.DupSides -replace ' and .*', ''  # Use the first duplicate side
                     ProfileType   = "This setting has conflicting values within the $($item.DupSides) tenant. The comparison showed '$($item.Status)' but this may be unreliable. Check the Duplicates tab and resolve the within-tenant conflict first."
                     Settings      = [System.Collections.Generic.List[object]]::new(@(
                         @{ Name = "$($item.SettingPath) (comparison: $($item.Status))"; Value = "Source: $($item.SourcePolicy) = $($item.SourceValue) | Dest: $($item.DestPolicy) = $($item.DestValue)" }
                     ))
                     HasDeprecated = $false
-                })
-            }
-            if ($manualReview.Contains($ambiguousCategory)) {
-                foreach ($item in $mrItems) { [void]$manualReview[$ambiguousCategory].Add($item) }
-            } else {
-                $manualReview[$ambiguousCategory] = $mrItems
+                }
+                if (-not $manualReview.Contains($mrCatKey)) {
+                    $manualReview[$mrCatKey] = [System.Collections.Generic.List[object]]::new()
+                }
+                [void]$manualReview[$mrCatKey].Add($mrEntry)
             }
         }
     }

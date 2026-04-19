@@ -1378,7 +1378,13 @@ Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG
         }
         $foundInComparison | Should -Be $false
 
-        # Should appear in Manual Review under 'Ambiguous Comparison (Duplicate Policies)'
-        $result.ManualReview.Keys | Should -Contain 'Ambiguous Comparison (Duplicate Policies)'
+        # Should appear in Manual Review under the original category with ambiguous prefix
+        $ambiguousFound = $false
+        foreach ($catKey in $result.ManualReview.Keys) {
+            foreach ($item in $result.ManualReview[$catKey]) {
+                if ($item.PolicyName -match 'Ambiguous.*Screen Lock Timeout') { $ambiguousFound = $true }
+            }
+        }
+        $ambiguousFound | Should -Be $true
     }
 }

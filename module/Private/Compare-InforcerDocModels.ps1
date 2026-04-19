@@ -763,12 +763,13 @@ function Compare-InforcerDocModels {
                     $platform = if ($catSegments.Count -ge 2) { $catSegments[0].Trim() } else { 'All' }
                     if ($platform -eq 'All') { $platform = 'Windows' }
 
-                    # Composite scope key: product + platform + category
-                    # Scoping by category prevents false matches across different policy
-                    # templates that reuse generic DefinitionIds (e.g., macOS system extensions,
-                    # app rules "Comment"/"Rule Type" used by both Office and Edge configs)
-                    # Note: further scoping by ProfileType happens at the policy level below
-                    $scopeKey = "$prodName`0$platform`0$catName"
+                    # Composite scope key: product + platform (no category)
+                    # Category is intentionally excluded so cross-category true duplicates
+                    # are detected (e.g., same ASR setting in "Attack Surface Reduction"
+                    # Endpoint Security template AND "Settings Catalog" profile).
+                    # ProfileType scoping at the policy level (compositeKey below) prevents
+                    # false matches from different templates reusing generic DefinitionIds.
+                    $scopeKey = "$prodName`0$platform"
                     if (-not $scopedSettingMaps.Contains($scopeKey)) {
                         $scopedSettingMaps[$scopeKey] = [ordered]@{}
                     }

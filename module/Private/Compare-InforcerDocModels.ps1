@@ -1003,13 +1003,19 @@ function Compare-InforcerDocModels {
         if ($ambiguousItems.Count -gt 0) {
             foreach ($item in $ambiguousItems) {
                 $mrCatKey = $item.Category
+                $settingsList = [System.Collections.Generic.List[object]]::new()
+                [void]$settingsList.Add(@{ Name = 'Setting';             Value = $item.SettingName })
+                [void]$settingsList.Add(@{ Name = 'Setting Path';        Value = $item.SettingPath })
+                [void]$settingsList.Add(@{ Name = 'Source Policy';       Value = $item.SourcePolicy })
+                [void]$settingsList.Add(@{ Name = 'Source Value';        Value = $item.SourceValue })
+                [void]$settingsList.Add(@{ Name = 'Destination Policy';  Value = $item.DestPolicy })
+                [void]$settingsList.Add(@{ Name = 'Destination Value';   Value = $item.DestValue })
+                [void]$settingsList.Add(@{ Name = 'Comparison Result';   Value = $item.Status })
                 $mrEntry = @{
                     PolicyName    = "`u{26A0} Ambiguous: $($item.SettingName)"
-                    Side          = $item.DupSides -replace ' and .*', ''  # Use the first duplicate side
-                    ProfileType   = "This setting has conflicting values within the $($item.DupSides) tenant. The comparison showed '$($item.Status)' but this may be unreliable. Check the Duplicates tab and resolve the within-tenant conflict first."
-                    Settings      = [System.Collections.Generic.List[object]]::new(@(
-                        @{ Name = "$($item.SettingPath) (comparison: $($item.Status))"; Value = "Source: $($item.SourcePolicy) = $($item.SourceValue) | Dest: $($item.DestPolicy) = $($item.DestValue)" }
-                    ))
+                    Side          = $item.DupSides -replace ' and .*', ''
+                    ProfileType   = "Conflicting values within the $($item.DupSides) tenant `u{2014} check the Duplicates tab to resolve."
+                    Settings      = $settingsList
                     HasDeprecated = $false
                 }
                 if (-not $manualReview.Contains($mrCatKey)) {

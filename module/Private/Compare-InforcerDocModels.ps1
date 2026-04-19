@@ -767,6 +767,7 @@ function Compare-InforcerDocModels {
                     # Scoping by category prevents false matches across different policy
                     # templates that reuse generic DefinitionIds (e.g., macOS system extensions,
                     # app rules "Comment"/"Rule Type" used by both Office and Edge configs)
+                    # Note: further scoping by ProfileType happens at the policy level below
                     $scopeKey = "$prodName`0$platform`0$catName"
                     if (-not $scopedSettingMaps.Contains($scopeKey)) {
                         $scopedSettingMaps[$scopeKey] = [ordered]@{}
@@ -796,7 +797,11 @@ function Compare-InforcerDocModels {
                         # Collect per DefinitionId, keeping only one entry per policy+side
                         # Uses DefinitionId as key (not SettingPath) so same-named settings
                         # with different IDs (e.g., "Allowed System Extensions" in OneDrive vs Antivirus)
-                        # are correctly treated as different settings
+                        # are correctly treated as different settings.
+                        # The ProfileType is included in entries so Phase 2 can further scope
+                        # by template — different profile types reusing the same generic schema
+                        # (e.g., macOS plist "Rules > Comment" for Edge vs Office) are not duplicates.
+                        $profileType = if ($policy.Basics.ProfileType) { $policy.Basics.ProfileType } else { '' }
                         $policyDefEntries = [ordered]@{}
                         foreach ($p in $paths) {
                             if ([string]::IsNullOrEmpty($p.DefinitionId)) { continue }
@@ -814,10 +819,14 @@ function Compare-InforcerDocModels {
                             }
                         }
                         foreach ($dupeKey in $policyDefEntries.Keys) {
-                            if (-not $settingMap.Contains($dupeKey)) {
-                                $settingMap[$dupeKey] = [System.Collections.Generic.List[object]]::new()
+                            # Composite key: DefinitionId + ProfileType
+                            # Different profile types reusing the same generic DefinitionId
+                            # (e.g., macOS plist "Rules > Comment" for Edge vs Office) are not duplicates
+                            $compositeKey = "$dupeKey`0$profileType"
+                            if (-not $settingMap.Contains($compositeKey)) {
+                                $settingMap[$compositeKey] = [System.Collections.Generic.List[object]]::new()
                             }
-                            [void]$settingMap[$dupeKey].Add($policyDefEntries[$dupeKey])
+                            [void]$settingMap[$compositeKey].Add($policyDefEntries[$dupeKey])
                         }
                     }
                 }

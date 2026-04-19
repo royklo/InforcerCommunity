@@ -936,9 +936,10 @@ function Compare-InforcerDocModels {
             foreach ($compositeKey in $settingMap.Keys) {
                 foreach ($entry in $settingMap[$compositeKey]) {
                     # Extract the raw DefinitionId (first part of composite key before the null char)
-                    $rawDefId = $compositeKey -replace '`0.*', ''
+                    $nullIdx = $compositeKey.IndexOf([char]0)
+                    $rawDefId = if ($nullIdx -ge 0) { $compositeKey.Substring(0, $nullIdx) } else { $compositeKey }
                     # Build a cross-scope key: product + platform + side + defId (no category, no profileType)
-                    $scopeParts = $scopeKey -split "`0"
+                    $scopeParts = $scopeKey.Split([char]0)
                     $crossKey = "$($scopeParts[0])`0$($scopeParts[1])`0$($entry.Side)`0$rawDefId"
                     if (-not $globalDefIndex.ContainsKey($crossKey)) {
                         $globalDefIndex[$crossKey] = [System.Collections.Generic.List[object]]::new()

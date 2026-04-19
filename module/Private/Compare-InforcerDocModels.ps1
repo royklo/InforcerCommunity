@@ -928,30 +928,57 @@ function Compare-InforcerDocModels {
     }
     & $scanForDuplicates
 
-    # ── BUG-04: Remove duplicate-only settings from ComparisonRows ──────
-    # Settings that exist ONLY as duplicates (SourceOnly/DestOnly with no
-    # cross-tenant comparison) should appear exclusively in the Duplicates
-    # tab, not pollute the comparison table.
+    # ── BUG-04: Remove duplicate settings from ComparisonRows ──────────
+    # Settings with within-side duplicates (same setting in 2+ policies with
+    # different values on the same side) cannot be reliably compared.
+    # - SourceOnly/DestOnly: shown only in Duplicates tab
+    # - Matched/Conflicting: comparison is ambiguous (which value was compared?),
+    #   so these are also removed and noted in Manual Review
     $dupeCategory = 'Duplicate Settings (Different Values)'
     if ($manualReview.Contains($dupeCategory)) {
+        # Collect duplicate setting paths AND which sides they affect
         $dupSettingPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $dupSides = @{}  # settingPath -> HashSet of sides ('Source', 'Destination')
         foreach ($item in $manualReview[$dupeCategory]) {
             foreach ($s in $item.Settings) {
                 $settingPath = $s.Name
                 [void]$dupSettingPaths.Add($settingPath)
+                if (-not $dupSides.ContainsKey($settingPath)) {
+                    $dupSides[$settingPath] = [System.Collections.Generic.HashSet[string]]::new()
+                }
+                [void]$dupSides[$settingPath].Add($item.Side)
             }
         }
 
+        $ambiguousItems = [System.Collections.Generic.List[object]]::new()
         foreach ($prodName in @($products.Keys)) {
             foreach ($catName in @($products[$prodName].Categories.Keys)) {
                 $rows = $products[$prodName].Categories[$catName].ComparisonRows
                 $toRemove = [System.Collections.Generic.List[object]]::new()
                 foreach ($row in $rows) {
                     $rowPath = if ($row.SettingPath) { $row.SettingPath } else { $row.Name }
-                    if ($dupSettingPaths.Contains($rowPath)) {
-                        if ($row.Status -eq 'SourceOnly' -or $row.Status -eq 'DestOnly') {
-                            [void]$toRemove.Add($row)
-                        }
+                    if (-not $dupSettingPaths.Contains($rowPath)) { continue }
+
+                    if ($row.Status -eq 'SourceOnly' -or $row.Status -eq 'DestOnly') {
+                        # Pure single-side: just remove (shown in Duplicates tab)
+                        [void]$toRemove.Add($row)
+                    } elseif ($row.Status -eq 'Matched' -or $row.Status -eq 'Conflicting') {
+                        # Cross-tenant comparison exists but one/both sides have duplicates —
+                        # the comparison result is unreliable. Route to Manual Review.
+                        $sides = $dupSides[$rowPath]
+                        $sideList = ($sides | Sort-Object) -join ' and '
+                        [void]$toRemove.Add($row)
+                        [void]$ambiguousItems.Add(@{
+                            SettingName  = $row.Name
+                            SettingPath  = $rowPath
+                            Status       = $row.Status
+                            SourceValue  = $row.SourceValue
+                            DestValue    = $row.DestValue
+                            SourcePolicy = $row.SourcePolicy
+                            DestPolicy   = $row.DestPolicy
+                            Category     = "$prodName / $catName"
+                            DupSides     = $sideList
+                        })
                     }
                 }
                 foreach ($row in $toRemove) {
@@ -961,9 +988,31 @@ function Compare-InforcerDocModels {
                 }
             }
         }
+
+        # Add ambiguous comparison rows to Manual Review
+        if ($ambiguousItems.Count -gt 0) {
+            $ambiguousCategory = 'Ambiguous Comparison (Duplicate Policies)'
+            $mrItems = [System.Collections.Generic.List[object]]::new()
+            foreach ($item in $ambiguousItems) {
+                [void]$mrItems.Add(@{
+                    PolicyName    = "Ambiguous: $($item.SettingName)"
+                    Side          = 'Both'
+                    ProfileType   = "This setting has conflicting values within the $($item.DupSides) tenant. The comparison showed '$($item.Status)' but this may be unreliable. Check the Duplicates tab and resolve the within-tenant conflict first."
+                    Settings      = [System.Collections.Generic.List[object]]::new(@(
+                        @{ Name = "$($item.SettingPath) (comparison: $($item.Status))"; Value = "Source: $($item.SourcePolicy) = $($item.SourceValue) | Dest: $($item.DestPolicy) = $($item.DestValue)" }
+                    ))
+                    HasDeprecated = $false
+                })
+            }
+            if ($manualReview.Contains($ambiguousCategory)) {
+                foreach ($item in $mrItems) { [void]$manualReview[$ambiguousCategory].Add($item) }
+            } else {
+                $manualReview[$ambiguousCategory] = $mrItems
+            }
+        }
     }
 
-    # manualReview now contains: script/remediation/custom compliance + deprecated policies + duplicate settings
+    # manualReview now contains: script/remediation/custom compliance + deprecated policies + duplicate settings + ambiguous comparisons
 
     # ── Alignment score ───────────────────────────────────────────────────
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly

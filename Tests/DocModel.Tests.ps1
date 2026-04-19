@@ -1364,7 +1364,8 @@ Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $script:BuildBug04Model }
 
-        # Screen Lock Timeout has a cross-tenant match (Matched/Conflicting) so it should stay in ComparisonRows
+        # Screen Lock Timeout has conflicting values in source (5 vs 15) AND exists in dest (10).
+        # Comparison is ambiguous — should be removed from ComparisonRows and routed to Manual Review.
         $foundInComparison = $false
         foreach ($prodKey in $result.Products.Keys) {
             foreach ($catKey in $result.Products[$prodKey].Categories.Keys) {
@@ -1375,6 +1376,9 @@ Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG
                 }
             }
         }
-        $foundInComparison | Should -Be $true
+        $foundInComparison | Should -Be $false
+
+        # Should appear in Manual Review under 'Ambiguous Comparison (Duplicate Policies)'
+        $result.ManualReview.Keys | Should -Contain 'Ambiguous Comparison (Duplicate Policies)'
     }
 }

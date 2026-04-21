@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-20T06:59:19Z",
+  "generatedAt": "2026-04-21T06:50:25Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {

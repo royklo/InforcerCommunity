@@ -183,12 +183,12 @@ function ConvertTo-InforcerDocModel {
     }
 
     # Collect all baseline names for this tenant
-    $baselineNames = @()
+    $baselineNames = [System.Collections.Generic.List[string]]::new()
     if ($null -ne $baselines -and $baselines.Count -gt 0) {
         foreach ($bl in @($baselines)) {
             $blName = $bl.name
             if ([string]::IsNullOrWhiteSpace($blName)) { $blName = $bl.baselineGroupName }
-            if (-not [string]::IsNullOrWhiteSpace($blName)) { $baselineNames += $blName }
+            if (-not [string]::IsNullOrWhiteSpace($blName)) { [void]$baselineNames.Add($blName) }
         }
     }
 
@@ -250,6 +250,7 @@ function ConvertTo-InforcerDocModel {
         # Basics section (per NORM-04)
         $basics = @{
             Name        = $policyName
+            Id          = if ($policy.id) { "$($policy.id)" } else { '' }
             Description = if ($policy.policyData -and $policy.policyData.description) { $policy.policyData.description } else { '' }
             ProfileType = if ($policy.inforcerPolicyTypeName) { $policy.inforcerPolicyTypeName } else { '' }
             Platform    = if ($policy.platform) { $policy.platform } else { '' }  # null ~96% per D-14
@@ -378,8 +379,25 @@ function ConvertTo-InforcerDocModel {
         }
 
         # Assignments section (per NORM-03) -- uses Resolve-InforcerAssignments
+        # Check multiple locations: some policy types store assignments differently
+        # policyData.assignments may be null (API doesn't expand); inforcerAssignments
+        # is a JSON string from the Inforcer API that needs parsing
         $rawAssignments = $policy.policyData.assignments
-        if ($null -eq $rawAssignments) { $rawAssignments = $policy.assignments }
+        if ($null -eq $rawAssignments -or @($rawAssignments).Count -eq 0) {
+            $rawAssignments = $policy.assignments
+        }
+        if ($null -eq $rawAssignments -or @($rawAssignments).Count -eq 0) {
+            $infAssign = $policy.policyData.inforcerAssignments
+            if ($null -eq $infAssign) { $infAssign = $policy.inforcerAssignments }
+            if ($null -ne $infAssign) {
+                # inforcerAssignments may be a JSON string — parse it
+                if ($infAssign -is [string] -and $infAssign.TrimStart().StartsWith('[')) {
+                    try { $rawAssignments = $infAssign | ConvertFrom-Json -Depth 100 } catch { $rawAssignments = $null }
+                } else {
+                    $rawAssignments = $infAssign
+                }
+            }
+        }
         $resolveParams = @{ RawAssignments = $rawAssignments }
         if ($null -ne $GroupNameMap)  { $resolveParams['GroupNameMap'] = $GroupNameMap }
         if ($null -ne $FilterMap)     { $resolveParams['FilterMap'] = $FilterMap }

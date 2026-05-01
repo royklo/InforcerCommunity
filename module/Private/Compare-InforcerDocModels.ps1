@@ -42,12 +42,19 @@ function Compare-InforcerDocModels {
         [string[]]$ExcludeOS,
 
         [Parameter()]
-        [string]$PolicyNameFilter
+        [string]$PolicyNameFilter,
+
+        [Parameter()]
+        [string]$SourceBaselineName,
+
+        [Parameter()]
+        [string]$DestinationBaselineName
     )
 
     # ── Result containers ─────────────────────────────────────────────────
     $products = [ordered]@{}
     $counters = @{ Matched = 0; Conflicting = 0; SourceOnly = 0; DestOnly = 0 }
+    $duplicatePolicies = [System.Collections.Generic.List[object]]::new()
 
     # ── Noise exclusion patterns ──────────────────────────────────────────
     $excludedSettingNames = @(
@@ -501,7 +508,7 @@ function Compare-InforcerDocModels {
             # Build lookup: lowered name -> list of policies (handle duplicates)
             $srcPolicyIndex = [ordered]@{}
             foreach ($p in $srcPolicies) {
-                if ($null -eq $p -or $null -eq $p.Basics) { continue }
+                if ($null -eq $p -or $null -eq $p.Basics -or $null -eq $p.Basics.Name) { continue }
                 $key = $p.Basics.Name.ToLowerInvariant()
                 if (-not $srcPolicyIndex.Contains($key)) {
                     $srcPolicyIndex[$key] = [System.Collections.Generic.List[object]]::new()
@@ -510,7 +517,7 @@ function Compare-InforcerDocModels {
             }
             $dstPolicyIndex = [ordered]@{}
             foreach ($p in $dstPolicies) {
-                if ($null -eq $p -or $null -eq $p.Basics) { continue }
+                if ($null -eq $p -or $null -eq $p.Basics -or $null -eq $p.Basics.Name) { continue }
                 $key = $p.Basics.Name.ToLowerInvariant()
                 if (-not $dstPolicyIndex.Contains($key)) {
                     $dstPolicyIndex[$key] = [System.Collections.Generic.List[object]]::new()
@@ -532,72 +539,172 @@ function Compare-InforcerDocModels {
                 $hasDst = $dstPolicyIndex.Contains($policyKey)
 
                 if ($hasSrc -and $hasDst) {
-                    # ── Matched policy pair — compare settings ────────────
-                    # Take first policy from each side (index 0)
-                    $srcPolicy = $srcPolicyIndex[$policyKey][0]
-                    $dstPolicy = $dstPolicyIndex[$policyKey][0]
+                    # ── Matched policy pairs — pair by ID first, then positionally ──
+                    $srcList = $srcPolicyIndex[$policyKey]
+                    $dstList = $dstPolicyIndex[$policyKey]
+                    $hasDuplicates = ($srcList.Count -gt 1) -or ($dstList.Count -gt 1)
 
-                    # Ensure category structure exists even when all settings are filtered
-                    & $ensureProductCategory $productName $categoryName
+                    # Build paired list: match by Basics.Id when available, then positionally
+                    $pairs = [System.Collections.Generic.List[object]]::new()
+                    $usedSrc = [System.Collections.Generic.HashSet[int]]::new()
+                    $usedDst = [System.Collections.Generic.HashSet[int]]::new()
 
-                    $srcPolicyName = $srcPolicy.Basics.Name
-                    $dstPolicyName = $dstPolicy.Basics.Name
-                    $srcAssignStr  = if ($IncludingAssignments) { & $formatAssignment $srcPolicy.Assignments } else { '' }
-                    $dstAssignStr  = if ($IncludingAssignments) { & $formatAssignment $dstPolicy.Assignments } else { '' }
-
-                    $srcLookup = & $buildSettingLookup $srcPolicy.Settings
-                    $dstLookup = & $buildSettingLookup $dstPolicy.Settings
-
-                    # Collect all setting keys (definitionId or settingPath depending on policy type)
-                    $allSettingKeys = [System.Collections.Generic.List[string]]::new()
-                    foreach ($k in $srcLookup.Keys) {
-                        if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
+                    # Pass 1: pair by matching policy ID
+                    for ($si = 0; $si -lt $srcList.Count; $si++) {
+                        $srcId = $srcList[$si].Basics.Id
+                        if ([string]::IsNullOrWhiteSpace($srcId)) { continue }
+                        for ($di = 0; $di -lt $dstList.Count; $di++) {
+                            if ($usedDst.Contains($di)) { continue }
+                            if ($srcId -eq $dstList[$di].Basics.Id) {
+                                [void]$pairs.Add(@{ Src = $srcList[$si]; Dst = $dstList[$di] })
+                                [void]$usedSrc.Add($si)
+                                [void]$usedDst.Add($di)
+                                break
+                            }
+                        }
                     }
-                    foreach ($k in $dstLookup.Keys) {
-                        if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
+
+                    # Pass 2: pair remaining by setting similarity (most matching values)
+                    $remainingSrc = [System.Collections.Generic.List[object]]::new()
+                    $remainingDst = [System.Collections.Generic.List[object]]::new()
+                    for ($si = 0; $si -lt $srcList.Count; $si++) {
+                        if (-not $usedSrc.Contains($si)) { [void]$remainingSrc.Add($srcList[$si]) }
+                    }
+                    for ($di = 0; $di -lt $dstList.Count; $di++) {
+                        if (-not $usedDst.Contains($di)) { [void]$remainingDst.Add($dstList[$di]) }
+                    }
+                    $usedRemSrc = [System.Collections.Generic.HashSet[int]]::new()
+                    $usedRemDst = [System.Collections.Generic.HashSet[int]]::new()
+                    # Greedy: pick the pair with highest overlap first, repeat until exhausted
+                    $pairCandidates = [System.Collections.Generic.List[object]]::new()
+                    for ($si = 0; $si -lt $remainingSrc.Count; $si++) {
+                        $sLookup = & $buildSettingLookup $remainingSrc[$si].Settings
+                        for ($di = 0; $di -lt $remainingDst.Count; $di++) {
+                            $dLookup = & $buildSettingLookup $remainingDst[$di].Settings
+                            $matchCount = 0
+                            foreach ($k in $sLookup.Keys) {
+                                if ($dLookup.Contains($k) -and $sLookup[$k].Value -eq $dLookup[$k].Value) { $matchCount++ }
+                            }
+                            [void]$pairCandidates.Add([PSCustomObject]@{ Si = $si; Di = $di; Score = $matchCount })
+                            Write-Verbose "Similarity: src[$si] '$($remainingSrc[$si].Basics.Name)' ($($remainingSrc[$si].Basics.Id)) vs dst[$di] '$($remainingDst[$di].Basics.Name)' ($($remainingDst[$di].Basics.Id)) = $matchCount matches"
+                        }
+                    }
+                    # Sort descending by score and greedily assign
+                    $pairCandidates = @($pairCandidates | Sort-Object -Property Score -Descending)
+                    foreach ($candidate in $pairCandidates) {
+                        if ($usedRemSrc.Contains($candidate.Si) -or $usedRemDst.Contains($candidate.Di)) { continue }
+                        Write-Verbose "Paired: src[$($candidate.Si)] with dst[$($candidate.Di)] (score=$($candidate.Score))"
+                        [void]$pairs.Add(@{ Src = $remainingSrc[$candidate.Si]; Dst = $remainingDst[$candidate.Di] })
+                        [void]$usedRemSrc.Add($candidate.Si)
+                        [void]$usedRemDst.Add($candidate.Di)
+                    }
+                    # Leftover unmatched
+                    $extraSrc = [System.Collections.Generic.List[object]]::new()
+                    $extraDst = [System.Collections.Generic.List[object]]::new()
+                    for ($si = 0; $si -lt $remainingSrc.Count; $si++) {
+                        if (-not $usedRemSrc.Contains($si)) { [void]$extraSrc.Add($remainingSrc[$si]) }
+                    }
+                    for ($di = 0; $di -lt $remainingDst.Count; $di++) {
+                        if (-not $usedRemDst.Contains($di)) { [void]$extraDst.Add($remainingDst[$di]) }
                     }
 
-                    foreach ($settingKey in $allSettingKeys) {
-                        $inSrc = $srcLookup.Contains($settingKey)
-                        $inDst = $dstLookup.Contains($settingKey)
-                        $srcVal = if ($inSrc) { $srcLookup[$settingKey].Value } else { '' }
-                        $dstVal = if ($inDst) { $dstLookup[$settingKey].Value } else { '' }
-                        $displayName = if ($inSrc) { $srcLookup[$settingKey].Name } else { $dstLookup[$settingKey].Name }
+                    # Helper: disambiguate policy name when duplicates exist (append short ID)
+                    $disambiguateName = {
+                        param($Policy, [bool]$NeedsDisambiguation)
+                        $name = $Policy.Basics.Name
+                        if ($NeedsDisambiguation -and $Policy.Basics.Id) {
+                            $shortId = $Policy.Basics.Id
+                            if ($shortId.Length -gt 8) { $shortId = $shortId.Substring(0, 8) }
+                            $name = "$name ($shortId)"
+                        }
+                        $name
+                    }
 
-                        # Skip if both values are empty/not-configured
-                        if ((& $isEmptyValue $srcVal) -and (& $isEmptyValue $dstVal)) { continue }
+                    # Compare each matched pair
+                    foreach ($pair in $pairs) {
+                        $srcPolicy = $pair.Src
+                        $dstPolicy = $pair.Dst
 
-                        # Determine status
-                        if ($inSrc -and $inDst) {
-                            $status = if ($srcVal -eq $dstVal) { 'Matched' } else { 'Conflicting' }
-                        } elseif ($inSrc) {
-                            # Source-only: skip if value is empty
-                            if (& $isEmptyValue $srcVal) { continue }
-                            $status = 'SourceOnly'
-                        } else {
-                            # Dest-only: skip if value is empty
-                            if (& $isEmptyValue $dstVal) { continue }
-                            $status = 'DestOnly'
+                        & $ensureProductCategory $productName $categoryName
+
+                        $srcPolicyName = & $disambiguateName $srcPolicy $hasDuplicates
+                        $dstPolicyName = & $disambiguateName $dstPolicy $hasDuplicates
+                        $srcAssignStr  = if ($IncludingAssignments) { & $formatAssignment $srcPolicy.Assignments } else { '' }
+                        $dstAssignStr  = if ($IncludingAssignments) { & $formatAssignment $dstPolicy.Assignments } else { '' }
+
+                        $srcLookup = & $buildSettingLookup $srcPolicy.Settings
+                        $dstLookup = & $buildSettingLookup $dstPolicy.Settings
+
+                        $allSettingKeys = [System.Collections.Generic.List[string]]::new()
+                        foreach ($k in $srcLookup.Keys) {
+                            if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
+                        }
+                        foreach ($k in $dstLookup.Keys) {
+                            if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
                         }
 
-                        $row = @{
-                            ItemType     = 'Setting'
-                            Name         = $displayName
-                            SettingPath  = if ($inSrc) { $srcLookup[$settingKey].SettingPath } else { $dstLookup[$settingKey].SettingPath }
-                            Category     = $categoryLabel
-                            Status       = $status
-                            SourcePolicy = $srcPolicyName
-                            SourceValue  = $srcVal
-                            DestPolicy   = $dstPolicyName
-                            DestValue    = $dstVal
-                            IsDeprecated = if ($inSrc) { $srcLookup[$settingKey].IsDeprecated -eq $true } else { $dstLookup[$settingKey].IsDeprecated -eq $true }
-                        }
-                        if ($IncludingAssignments) {
-                            $row.SourceAssignment = $srcAssignStr
-                            $row.DestAssignment   = $dstAssignStr
-                        }
+                        foreach ($settingKey in $allSettingKeys) {
+                            $inSrc = $srcLookup.Contains($settingKey)
+                            $inDst = $dstLookup.Contains($settingKey)
+                            $srcVal = if ($inSrc) { $srcLookup[$settingKey].Value } else { '' }
+                            $dstVal = if ($inDst) { $dstLookup[$settingKey].Value } else { '' }
+                            $displayName = if ($inSrc) { $srcLookup[$settingKey].Name } else { $dstLookup[$settingKey].Name }
 
-                        & $addRow $productName $categoryName $row
+                            if ((& $isEmptyValue $srcVal) -and (& $isEmptyValue $dstVal)) { continue }
+
+                            if ($inSrc -and $inDst) {
+                                $status = if ($srcVal -eq $dstVal) { 'Matched' } else { 'Conflicting' }
+                            } elseif ($inSrc) {
+                                if (& $isEmptyValue $srcVal) { continue }
+                                $status = 'SourceOnly'
+                            } else {
+                                if (& $isEmptyValue $dstVal) { continue }
+                                $status = 'DestOnly'
+                            }
+
+                            $row = @{
+                                ItemType     = 'Setting'
+                                Name         = $displayName
+                                SettingPath  = if ($inSrc) { $srcLookup[$settingKey].SettingPath } else { $dstLookup[$settingKey].SettingPath }
+                                LookupKey    = $settingKey
+                                Category     = $categoryLabel
+                                Status       = $status
+                                SourcePolicy = $srcPolicyName
+                                SourceValue  = $srcVal
+                                DestPolicy   = $dstPolicyName
+                                DestValue    = $dstVal
+                                IsDeprecated = if ($inSrc) { $srcLookup[$settingKey].IsDeprecated -eq $true } else { $dstLookup[$settingKey].IsDeprecated -eq $true }
+                            }
+                            if ($IncludingAssignments) {
+                                $row.SourceAssignment = $srcAssignStr
+                                $row.DestAssignment   = $dstAssignStr
+                            }
+
+                            & $addRow $productName $categoryName $row
+                        }
+                    }
+
+                    # Extra same-named policies are NOT emitted to the main comparison.
+                    # Their overlapping settings are already detected by Phase 2/3 duplicate
+                    # scanning (which reads the raw doc model) and surfaced in the Duplicates tab.
+                    # Collect duplicate policy group info for the Duplicates tab summary.
+                    if ($hasDuplicates) {
+                        $groupPolicies = [System.Collections.Generic.List[object]]::new()
+                        foreach ($p in $srcList) {
+                            $pName = & $disambiguateName $p $true
+                            $settingCount = @($p.Settings | Where-Object { $_.IsConfigured -eq $true }).Count
+                            [void]$groupPolicies.Add(@{ Name = $pName; Side = 'Source'; SettingCount = $settingCount; Id = $p.Basics.Id })
+                        }
+                        foreach ($p in $dstList) {
+                            $pName = & $disambiguateName $p $true
+                            $settingCount = @($p.Settings | Where-Object { $_.IsConfigured -eq $true }).Count
+                            [void]$groupPolicies.Add(@{ Name = $pName; Side = 'Destination'; SettingCount = $settingCount; Id = $p.Basics.Id })
+                        }
+                        [void]$duplicatePolicies.Add(@{
+                            PolicyName = $srcList[0].Basics.Name
+                            Category   = $categoryLabel
+                            Policies   = $groupPolicies
+                        })
                     }
 
                 } elseif ($hasSrc) {
@@ -616,6 +723,7 @@ function Compare-InforcerDocModels {
                                 ItemType     = 'Setting'
                                 Name         = $srcLookup[$settingKey].Name
                                 SettingPath  = $srcLookup[$settingKey].SettingPath
+                                LookupKey    = $settingKey
                                 Category     = $categoryLabel
                                 Status       = 'SourceOnly'
                                 SourcePolicy = $srcPolicyName
@@ -649,6 +757,7 @@ function Compare-InforcerDocModels {
                                 ItemType     = 'Setting'
                                 Name         = $dstLookup[$settingKey].Name
                                 SettingPath  = $dstLookup[$settingKey].SettingPath
+                                LookupKey    = $settingKey
                                 Category     = $categoryLabel
                                 Status       = 'DestOnly'
                                 SourcePolicy = ''
@@ -731,30 +840,43 @@ function Compare-InforcerDocModels {
     & $scanForDeprecated $SourceModel 'Source'
     & $scanForDeprecated $DestinationModel 'Destination'
 
-    # ── Duplicate Settings scan (cross-policy, cross-tenant) ──────────────
-    # Finds settings appearing in 2+ policies with different values.
+    # ── Duplicate Settings scan (within-tenant, cross-policy) ────────────
+    # Finds settings appearing in 2+ policies with different values within the same side.
     # Per D-01: adds entries to $manualReview under 'Duplicate Settings (Different Values)'
-    # Per D-05: only scans settings catalog and administrative templates categories
     # Per D-06: scopes per product (platform) — no cross-product matching
     $scanForDuplicates = {
-        # Phase 1: Build per-product setting index
-        $productSettingMaps = [ordered]@{}
+        # Phase 1: Build per-product-per-platform setting index
+        # Scoped by product AND platform to prevent cross-OS matching (e.g., Win Edge vs Mac Edge)
+        # Keyed by DefinitionId (not SettingPath) to prevent false matches on same display name
+        $scopedSettingMaps = [ordered]@{}
 
         foreach ($side in @('Source', 'Destination')) {
             $model = if ($side -eq 'Source') { $SourceModel } else { $DestinationModel }
             if ($null -eq $model -or $null -eq $model.Products) { continue }
 
             foreach ($prodName in $model.Products.Keys) {
-                if (-not $productSettingMaps.Contains($prodName)) {
-                    $productSettingMaps[$prodName] = [ordered]@{}
-                }
-                $settingMap = $productSettingMaps[$prodName]
-
                 foreach ($catName in $model.Products[$prodName].Categories.Keys) {
                     # Exclude Custom Indicators category entirely (noise — per-tenant unique data)
                     if ($catName -match 'Custom Indicators') { continue }
-                    # D-05: only settings catalog and administrative templates
-                    if ($catName -notmatch 'settings catalog|administrative templates') { continue }
+
+                    # Extract platform from category path for OS-level scoping
+                    # Category format: "Product / Platform / Category" or just "Category"
+                    $catSegments = $catName -split '\s*/\s*'
+                    $platform = if ($catSegments.Count -ge 2) { $catSegments[0].Trim() } else { 'All' }
+                    if ($platform -eq 'All') { $platform = 'Windows' }
+
+                    # Composite scope key: product + platform + category
+                    # Category scoping prevents false matches from different policy templates
+                    # within the same category that reuse generic DefinitionIds (e.g., macOS
+                    # plist "Rules > Comment" for Office Updates vs Office Experience).
+                    # A cross-category pass after Phase 2 detects true duplicates where the
+                    # same DefinitionId appears in different categories (e.g., ASR settings
+                    # delivered via Endpoint Security AND Settings Catalog profiles).
+                    $scopeKey = "$prodName`0$platform`0$catName`0$side"
+                    if (-not $scopedSettingMaps.Contains($scopeKey)) {
+                        $scopedSettingMaps[$scopeKey] = [ordered]@{}
+                    }
+                    $settingMap = $scopedSettingMaps[$scopeKey]
 
                     foreach ($policy in @($model.Products[$prodName].Categories[$catName])) {
                         if ($null -eq $policy -or $null -eq $policy.Basics) { continue }
@@ -776,53 +898,90 @@ function Compare-InforcerDocModels {
                             }
                         }
 
-                        # Collect per settingPath, keeping only one entry per policy+side
-                        # (parent choice "Enabled" and child "Force sign-in" share the same path —
-                        # keep the last/deepest value which is the specific choice, not the generic parent)
-                        $policyPathEntries = [ordered]@{}
+                        # Collect per DefinitionId, keeping only one entry per policy+side
+                        # Uses DefinitionId as key (not SettingPath) so same-named settings
+                        # with different IDs (e.g., "Allowed System Extensions" in OneDrive vs Antivirus)
+                        # are correctly treated as different settings.
+                        # The ProfileType is included in entries so Phase 2 can further scope
+                        # by template — different profile types reusing the same generic schema
+                        # (e.g., macOS plist "Rules > Comment" for Edge vs Office) are not duplicates.
+                        $profileType = if ($policy.Basics.ProfileType) { $policy.Basics.ProfileType } else { '' }
+                        $policyDefEntries = [ordered]@{}
                         foreach ($p in $paths) {
                             if ([string]::IsNullOrEmpty($p.DefinitionId)) { continue }
                             if (& $isExcludedSetting $p.Name $p.Value) { continue }
                             $defKeyLower = $p.DefinitionId.ToLowerInvariant()
                             if ($defsInPolicy[$defKeyLower] -gt 1) { continue }
-                            $dupeKey = $p.SettingPath.ToLowerInvariant()
                             # Overwrite: last entry wins (child choice overrides parent "Enabled")
-                            $policyPathEntries[$dupeKey] = @{
+                            $policyDefEntries[$defKeyLower] = @{
                                 Value       = $p.Value
                                 PolicyName  = $policy.Basics.Name
+                                PolicyId    = if ($policy.Basics.Id) { $policy.Basics.Id } else { '' }
                                 SettingName = $p.Name
                                 SettingPath = $p.SettingPath
                                 Side        = $side
                                 Category    = "$prodName / $catName"
                             }
                         }
-                        foreach ($dupeKey in $policyPathEntries.Keys) {
-                            if (-not $settingMap.Contains($dupeKey)) {
-                                $settingMap[$dupeKey] = [System.Collections.Generic.List[object]]::new()
+                        foreach ($dupeKey in $policyDefEntries.Keys) {
+                            # Composite key: DefinitionId + ProfileType (+ PolicyId for macOS)
+                            # Different profile types reusing the same generic DefinitionId
+                            # (e.g., macOS plist "Rules > Comment" for Edge vs Office) are not duplicates.
+                            # macOS custom profiles share generic plist schema DefinitionIds across
+                            # unrelated policies (e.g., "Comment" in Edge Updater vs Office Licensing).
+                            # Since each profile targets a different PayloadType, they don't conflict
+                            # on the device — include PolicyId to prevent false duplicate matches.
+                            $policyDiscriminator = ''
+                            if ($platform -match 'macOS|iOS|iPadOS') {
+                                $policyDiscriminator = if ($policy.Basics.Id) { "`0$($policy.Basics.Id)" } else { "`0$($policy.Basics.Name)" }
                             }
-                            [void]$settingMap[$dupeKey].Add($policyPathEntries[$dupeKey])
+                            $compositeKey = "$dupeKey`0$profileType$policyDiscriminator"
+                            if (-not $settingMap.Contains($compositeKey)) {
+                                $settingMap[$compositeKey] = [System.Collections.Generic.List[object]]::new()
+                            }
+                            [void]$settingMap[$compositeKey].Add($policyDefEntries[$dupeKey])
                         }
                     }
                 }
             }
         }
 
+        # Build per-side DefinitionId index for opposite-side context in duplicate tables
+        $sideDefIndex = @{ Source = @{}; Destination = @{} }
+        foreach ($sk in $scopedSettingMaps.Keys) {
+            $skSide = ($sk.Split([char]0))[3]
+            foreach ($ck in $scopedSettingMaps[$sk].Keys) {
+                $ni = $ck.IndexOf([char]0)
+                $rd = if ($ni -ge 0) { $ck.Substring(0, $ni) } else { $ck }
+                if (-not $sideDefIndex[$skSide].ContainsKey($rd)) {
+                    $sideDefIndex[$skSide][$rd] = [System.Collections.Generic.List[object]]::new()
+                }
+                foreach ($e in $scopedSettingMaps[$sk][$ck]) {
+                    [void]$sideDefIndex[$skSide][$rd].Add($e)
+                }
+            }
+        }
+
         # Phase 2: Detect duplicates and build ManualReview entries
+        $duplicateDefIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $duplicateItems = [System.Collections.Generic.List[object]]::new()
         $processedPolicySides = [System.Collections.Generic.HashSet[string]]::new()
         # O(1) lookup for existing items by policyKey (avoids Where-Object O(n) per Pitfall 4)
         $itemLookup = @{}
 
-        foreach ($prodName in $productSettingMaps.Keys) {
-            $settingMap = $productSettingMaps[$prodName]
+        foreach ($scopeKey in $scopedSettingMaps.Keys) {
+            $settingMap = $scopedSettingMaps[$scopeKey]
             foreach ($dupeKey in $settingMap.Keys) {
                 $entries = $settingMap[$dupeKey]
                 if ($entries.Count -lt 2) { continue }
 
-                # Require 2+ unique POLICY names — same policy across two tenants is a comparison
-                # conflict, not a duplicate. Duplicates are when the SAME setting is in MULTIPLE policies.
+                # Require 2+ distinct policies — use name+id to distinguish same-named policies
+                # (e.g., two "ASR rules" policies with different IDs: one Block, one Audit)
                 $uniquePolicies = [System.Collections.Generic.HashSet[string]]::new(
-                    [string[]]($entries | ForEach-Object { $_.PolicyName }),
+                    [string[]]($entries | ForEach-Object {
+                        $id = if ($_.PolicyId) { $_.PolicyId } else { '' }
+                        "$($_.PolicyName)`0$id"
+                    }),
                     [System.StringComparer]::OrdinalIgnoreCase
                 )
                 if ($uniquePolicies.Count -lt 2) { continue }
@@ -834,14 +993,45 @@ function Compare-InforcerDocModels {
                 )
                 if ($uniqueValues.Count -lt 2) { continue }
 
+                # Enrich with opposite-side entries for context display
+                $scopeParts2 = $scopeKey.Split([char]0)
+                $oppSide = if ($scopeParts2[3] -eq 'Source') { 'Destination' } else { 'Source' }
+                $dupeNullIdx = $dupeKey.IndexOf([char]0)
+                $rawDefId2 = if ($dupeNullIdx -ge 0) { $dupeKey.Substring(0, $dupeNullIdx) } else { $dupeKey }
+                $oppositeEntries = if ($sideDefIndex[$oppSide].ContainsKey($rawDefId2)) {
+                    $sideDefIndex[$oppSide][$rawDefId2]
+                } else { @() }
+                $allEntries = [System.Collections.Generic.List[object]]::new()
+                foreach ($e in $entries) { [void]$allEntries.Add($e) }
+                foreach ($e in $oppositeEntries) { [void]$allEntries.Add($e) }
+                [void]$duplicateDefIds.Add($rawDefId2)
+
                 # D-02: Build __DUPLICATE_TABLE__ encoded value
-                $policyValues = $entries | ForEach-Object {
-                    @{ Policy = $_.PolicyName; Value = $_.Value; Side = $_.Side; SettingName = $_.SettingName; SettingPath = $_.SettingPath; Category = $_.Category }
+                # Pre-build policy name counts to avoid O(n^2) Where-Object lookups
+                $polNameCounts = @{}
+                foreach ($e in $allEntries) {
+                    if ($polNameCounts.ContainsKey($e.PolicyName)) { $polNameCounts[$e.PolicyName]++ }
+                    else { $polNameCounts[$e.PolicyName] = 1 }
+                }
+                # Disambiguate policy names when same-named policies exist (append short ID)
+                $policyValues = $allEntries | ForEach-Object {
+                    $dispName = $_.PolicyName
+                    if ($_.PolicyId -and $polNameCounts[$dispName] -gt 1) {
+                        $shortId = $_.PolicyId; if ($shortId.Length -gt 8) { $shortId = $shortId.Substring(0, 8) }
+                        $dispName = "$dispName ($shortId)"
+                    }
+                    @{ Policy = $dispName; Value = $_.Value; Side = $_.Side; SettingName = $_.SettingName; SettingPath = $_.SettingPath; Category = $_.Category }
                 }
                 $tableJson = '__DUPLICATE_TABLE__' + ($policyValues | ConvertTo-Json -Depth 100 -Compress)
 
                 foreach ($entry in $entries) {
-                    $policyKey = "$($entry.Side)`0$($entry.PolicyName)"
+                    # Use name+id for grouping so same-named policies get separate cards
+                    $entryDispName = $entry.PolicyName
+                    if ($entry.PolicyId -and $polNameCounts[$entry.PolicyName] -gt 1) {
+                        $shortId = $entry.PolicyId; if ($shortId.Length -gt 8) { $shortId = $shortId.Substring(0, 8) }
+                        $entryDispName = "$($entry.PolicyName) ($shortId)"
+                    }
+                    $policyKey = "$($entry.Side)`0$entryDispName"
                     $settingKey = if ($entry.SettingPath) { $entry.SettingPath } else { $entry.SettingName }
 
                     if ($processedPolicySides.Contains($policyKey)) {
@@ -861,7 +1051,7 @@ function Compare-InforcerDocModels {
                                     try {
                                         $pairs = $jsonPart | ConvertFrom-Json -Depth 10
                                         foreach ($pair in $pairs) {
-                                            if ($pair.Policy -ne $entry.PolicyName -or $pair.Side -ne $entry.Side) {
+                                            if ($pair.Policy -ne $entryDispName -or $pair.Side -ne $entry.Side) {
                                                 [void]$otherPolicies.Add("$($pair.Policy) ($($pair.Side))")
                                             }
                                         }
@@ -876,7 +1066,7 @@ function Compare-InforcerDocModels {
 
                     # D-03: Build "also in" list excluding current policy
                     $otherPolicies = $policyValues |
-                        Where-Object { $_.Policy -ne $entry.PolicyName -or $_.Side -ne $entry.Side } |
+                        Where-Object { $_.Policy -ne $entryDispName -or $_.Side -ne $entry.Side } |
                         ForEach-Object { "$($_.Policy) ($($_.Side))" } |
                         Select-Object -Unique
 
@@ -885,7 +1075,7 @@ function Compare-InforcerDocModels {
 
                     # D-01: ManualReview entry shape
                     $item = @{
-                        PolicyName    = $entry.PolicyName
+                        PolicyName    = $entryDispName
                         Side          = $entry.Side
                         ProfileType   = "1 duplicate settings `u{2014} also in: $($otherPolicies -join ', ')"
                         Settings      = $settingsList
@@ -894,6 +1084,150 @@ function Compare-InforcerDocModels {
                     [void]$duplicateItems.Add($item)
                     $itemLookup[$policyKey] = $item
                 }
+            }
+        }
+
+        # Phase 3: Cross-category duplicate detection
+        # Same DefinitionId appearing in different categories (same product+platform)
+        # with different values indicates the same Intune setting delivered through
+        # different policy types (e.g., Endpoint Security template vs Settings Catalog).
+        # This is a real conflict — the device receives conflicting instructions.
+        $globalDefIndex = @{}  # DefinitionId -> List of entries from ALL scopes
+        foreach ($scopeKey in $scopedSettingMaps.Keys) {
+            $settingMap = $scopedSettingMaps[$scopeKey]
+            foreach ($compositeKey in $settingMap.Keys) {
+                foreach ($entry in $settingMap[$compositeKey]) {
+                    # Extract the raw DefinitionId (first part of composite key before the null char)
+                    $nullIdx = $compositeKey.IndexOf([char]0)
+                    $rawDefId = if ($nullIdx -ge 0) { $compositeKey.Substring(0, $nullIdx) } else { $compositeKey }
+                    # Build a cross-scope key: product + platform + side + defId (no category, no profileType)
+                    # For Apple platforms, include PolicyId to prevent false cross-category matches
+                    # between unrelated custom profiles sharing generic plist DefinitionIds
+                    $scopeParts = $scopeKey.Split([char]0)
+                    $applePlatformDisc = ''
+                    if ($scopeParts[1] -match 'macOS|iOS|iPadOS') {
+                        $polId = if ($entry.PolicyId) { $entry.PolicyId } else { $entry.PolicyName }
+                        $applePlatformDisc = "`0$polId"
+                    }
+                    $crossKey = "$($scopeParts[0])`0$($scopeParts[1])`0$($entry.Side)`0$rawDefId$applePlatformDisc"
+                    if (-not $globalDefIndex.ContainsKey($crossKey)) {
+                        $globalDefIndex[$crossKey] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    [void]$globalDefIndex[$crossKey].Add($entry)
+                }
+            }
+        }
+
+        foreach ($crossKey in $globalDefIndex.Keys) {
+            $entries = $globalDefIndex[$crossKey]
+            if ($entries.Count -lt 2) { continue }
+
+            # Only flag if entries come from 2+ different categories
+            $uniqueCategories = [System.Collections.Generic.HashSet[string]]::new(
+                [string[]]($entries | ForEach-Object { $_.Category }),
+                [System.StringComparer]::OrdinalIgnoreCase
+            )
+            if ($uniqueCategories.Count -lt 2) { continue }
+
+            # Require 2+ distinct policies (name+id) and 2+ unique values
+            $uniquePolicies = [System.Collections.Generic.HashSet[string]]::new(
+                [string[]]($entries | ForEach-Object {
+                    $id = if ($_.PolicyId) { $_.PolicyId } else { '' }
+                    "$($_.PolicyName)`0$id"
+                }),
+                [System.StringComparer]::OrdinalIgnoreCase
+            )
+            if ($uniquePolicies.Count -lt 2) { continue }
+
+            $uniqueValues = [System.Collections.Generic.HashSet[string]]::new(
+                [string[]]($entries | ForEach-Object { $_.Value }),
+                [System.StringComparer]::OrdinalIgnoreCase
+            )
+            if ($uniqueValues.Count -lt 2) { continue }
+
+            # Enrich with opposite-side entries for context display
+            $crossKeyParts = $crossKey.Split([char]0)
+            $oppSide3 = if ($crossKeyParts[2] -eq 'Source') { 'Destination' } else { 'Source' }
+            $rawDefId3 = $crossKeyParts[3]
+            $oppositeEntries3 = if ($sideDefIndex[$oppSide3].ContainsKey($rawDefId3)) {
+                $sideDefIndex[$oppSide3][$rawDefId3]
+            } else { @() }
+            $allEntries3 = [System.Collections.Generic.List[object]]::new()
+            foreach ($e in $entries) { [void]$allEntries3.Add($e) }
+            foreach ($e in $oppositeEntries3) { [void]$allEntries3.Add($e) }
+            [void]$duplicateDefIds.Add($rawDefId3)
+
+            # Pre-build policy name counts to avoid O(n^2) Where-Object lookups
+            $polNameCounts3 = @{}
+            foreach ($e in $allEntries3) {
+                if ($polNameCounts3.ContainsKey($e.PolicyName)) { $polNameCounts3[$e.PolicyName]++ }
+                else { $polNameCounts3[$e.PolicyName] = 1 }
+            }
+            # Build duplicate entries (same shape as Phase 2) with disambiguated names
+            $policyValues = $allEntries3 | ForEach-Object {
+                $dispName = $_.PolicyName
+                if ($_.PolicyId -and $polNameCounts3[$dispName] -gt 1) {
+                    $shortId = $_.PolicyId; if ($shortId.Length -gt 8) { $shortId = $shortId.Substring(0, 8) }
+                    $dispName = "$dispName ($shortId)"
+                }
+                @{ Policy = $dispName; Value = $_.Value; Side = $_.Side; SettingName = $_.SettingName; SettingPath = $_.SettingPath; Category = $_.Category }
+            }
+            $tableJson = '__DUPLICATE_TABLE__' + ($policyValues | ConvertTo-Json -Depth 100 -Compress)
+
+            foreach ($entry in $entries) {
+                $entryDispName = $entry.PolicyName
+                if ($entry.PolicyId -and $polNameCounts3[$entry.PolicyName] -gt 1) {
+                    $shortId = $entry.PolicyId; if ($shortId.Length -gt 8) { $shortId = $shortId.Substring(0, 8) }
+                    $entryDispName = "$($entry.PolicyName) ($shortId)"
+                }
+                $policyKey = "$($entry.Side)`0$entryDispName"
+                $settingKey = if ($entry.SettingPath) { $entry.SettingPath } else { $entry.SettingName }
+
+                if ($processedPolicySides.Contains($policyKey)) {
+                    $existing = $itemLookup[$policyKey]
+                    if ($null -ne $existing) {
+                        $alreadyHas = $false
+                        foreach ($s in $existing.Settings) {
+                            if ($s.Name -eq $settingKey) { $alreadyHas = $true; break }
+                        }
+                        if (-not $alreadyHas) {
+                            [void]$existing.Settings.Add(@{ Name = $settingKey; Value = $tableJson })
+                            $otherPolicies = [System.Collections.Generic.HashSet[string]]::new()
+                            foreach ($s in $existing.Settings) {
+                                $jsonPart = $s.Value -replace '^__DUPLICATE_TABLE__', ''
+                                try {
+                                    $pairs = $jsonPart | ConvertFrom-Json -Depth 10
+                                    foreach ($pair in $pairs) {
+                                        if ($pair.Policy -ne $entryDispName -or $pair.Side -ne $entry.Side) {
+                                            [void]$otherPolicies.Add("$($pair.Policy) ($($pair.Side))")
+                                        }
+                                    }
+                                } catch { }
+                            }
+                            $existing.ProfileType = "$($existing.Settings.Count) duplicate settings `u{2014} also in: $($otherPolicies -join ', ')"
+                        }
+                    }
+                    continue
+                }
+                [void]$processedPolicySides.Add($policyKey)
+
+                $otherPolicies = $policyValues |
+                    Where-Object { $_.Policy -ne $entryDispName -or $_.Side -ne $entry.Side } |
+                    ForEach-Object { "$($_.Policy) ($($_.Side))" } |
+                    Select-Object -Unique
+
+                $settingsList = [System.Collections.Generic.List[object]]::new()
+                [void]$settingsList.Add(@{ Name = $settingKey; Value = $tableJson })
+
+                $item = @{
+                    PolicyName    = $entryDispName
+                    Side          = $entry.Side
+                    ProfileType   = "1 duplicate settings `u{2014} also in: $($otherPolicies -join ', ')"
+                    Settings      = $settingsList
+                    HasDeprecated = $false
+                }
+                [void]$duplicateItems.Add($item)
+                $itemLookup[$policyKey] = $item
             }
         }
 
@@ -911,30 +1245,19 @@ function Compare-InforcerDocModels {
     }
     & $scanForDuplicates
 
-    # ── BUG-04: Remove duplicate-only settings from ComparisonRows ──────
-    # Settings that exist ONLY as duplicates (SourceOnly/DestOnly with no
-    # cross-tenant comparison) should appear exclusively in the Duplicates
-    # tab, not pollute the comparison table.
-    $dupeCategory = 'Duplicate Settings (Different Values)'
-    if ($manualReview.Contains($dupeCategory)) {
-        $dupSettingPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($item in $manualReview[$dupeCategory]) {
-            foreach ($s in $item.Settings) {
-                $settingPath = $s.Name
-                [void]$dupSettingPaths.Add($settingPath)
-            }
-        }
-
+    # ── BUG-04: Remove duplicate settings from ComparisonRows ──────────
+    # Settings with within-side duplicates (same setting in 2+ policies with
+    # different values on the same side) cannot be reliably compared cross-tenant.
+    # They belong exclusively in the Duplicates tab. Match by DefinitionId
+    # (stored as LookupKey on each row) for reliable identification.
+    if ($duplicateDefIds.Count -gt 0) {
         foreach ($prodName in @($products.Keys)) {
             foreach ($catName in @($products[$prodName].Categories.Keys)) {
                 $rows = $products[$prodName].Categories[$catName].ComparisonRows
                 $toRemove = [System.Collections.Generic.List[object]]::new()
                 foreach ($row in $rows) {
-                    $rowPath = if ($row.SettingPath) { $row.SettingPath } else { $row.Name }
-                    if ($dupSettingPaths.Contains($rowPath)) {
-                        if ($row.Status -eq 'SourceOnly' -or $row.Status -eq 'DestOnly') {
-                            [void]$toRemove.Add($row)
-                        }
+                    if ($row.LookupKey -and $duplicateDefIds.Contains($row.LookupKey)) {
+                        [void]$toRemove.Add($row)
                     }
                 }
                 foreach ($row in $toRemove) {
@@ -946,7 +1269,7 @@ function Compare-InforcerDocModels {
         }
     }
 
-    # manualReview now contains: script/remediation/custom compliance + deprecated policies + duplicate settings
+    # manualReview now contains: script/remediation/custom compliance + deprecated policies + duplicate settings + ambiguous comparisons
 
     # ── Alignment score ───────────────────────────────────────────────────
     $totalItems = $counters.Matched + $counters.Conflicting + $counters.SourceOnly + $counters.DestOnly
@@ -955,8 +1278,10 @@ function Compare-InforcerDocModels {
 
     # ── Return ComparisonModel ────────────────────────────────────────────
     @{
-        SourceName           = $SourceModel.TenantName
-        DestinationName      = $DestinationModel.TenantName
+        SourceName               = $SourceModel.TenantName
+        DestinationName          = $DestinationModel.TenantName
+        SourceBaselineName       = $SourceBaselineName
+        DestinationBaselineName  = $DestinationBaselineName
         GeneratedAt          = [datetime]::UtcNow
         AlignmentScore       = $alignmentScore
         TotalItems           = $totalItems
@@ -964,6 +1289,7 @@ function Compare-InforcerDocModels {
         DeprecatedSettings   = @()  # deprecated policies are now in ManualReview with HasDeprecated flag
         Products             = $products
         ManualReview         = $manualReview
+        DuplicatePolicies    = $duplicatePolicies
         IncludingAssignments = [bool]$IncludingAssignments
     }
 }

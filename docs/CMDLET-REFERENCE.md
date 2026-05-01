@@ -591,14 +591,16 @@ Applied automatically (no `-FetchGraphData` required):
 
 ## Compare-InforcerEnvironments
 
-Compares the Intune policy configuration of two tenants and generates an interactive HTML report. Uses the shared DocModel pipeline to normalize both environments, then diffs settings at the `settingDefinitionId` level. The report includes tabs for Comparison, Manual Review, Duplicates, and Deprecated settings.
+Compares the Intune policy configuration of two tenants and generates an interactive HTML report. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` to compare only policies belonging to a specific baseline. Uses the shared DocModel pipeline to normalize both environments, then diffs settings at the `settingDefinitionId` level. The report includes tabs for Comparison, Manual Review, Duplicates, and Deprecated settings.
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
-| **SourceTenantId** | Object | Yes | Source tenant (numeric ID, GUID, or tenant name). |
-| **DestinationTenantId** | Object | Yes | Destination tenant (numeric ID, GUID, or tenant name). |
+| **SourceTenantId** | Object | No | Source tenant (numeric ID, GUID, or tenant name). Can be omitted when `-SourceBaselineId` is specified — the baseline owner tenant is auto-resolved. |
+| **DestinationTenantId** | Object | No | Destination tenant (numeric ID, GUID, or tenant name). Can be omitted when `-DestinationBaselineId` is specified — the baseline owner tenant is auto-resolved. |
 | **SourceSession** | Hashtable | No | Session from `Connect-Inforcer -PassThru`. Defaults to current session. |
 | **DestinationSession** | Hashtable | No | Session from `Connect-Inforcer -PassThru`. Defaults to current session. |
+| **SourceBaselineId** | String | No | Baseline GUID or friendly name for the source tenant. Scopes comparison to only policies in this baseline. |
+| **DestinationBaselineId** | String | No | Baseline GUID or friendly name for the destination tenant. Scopes comparison to only policies in this baseline. |
 | **IncludingAssignments** | Switch | No | Include assignment data in the report (informational only, does not affect score). |
 | **FetchGraphData** | Switch | No | Connect to Microsoft Graph to resolve group names, assignment filters, scope tags, and compliance rules. Requires `Directory.Read.All` and `DeviceManagementConfiguration.Read.All` scopes. |
 | **ExcludeOS** | String[] | No | Exclude platforms from comparison (e.g., `'macOS'`, `'iOS'`). Case-insensitive contains matching. |
@@ -621,6 +623,18 @@ Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 `
 # Exclude macOS and filter by policy name
 Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' `
     -ExcludeOS 'macOS' -PolicyNameFilter 'Defender'
+
+# Compare a baseline against another tenant
+Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' `
+    -DestinationTenantId 'Fabrikam'
+
+# Compare a baseline without specifying the owner tenant (auto-resolved)
+Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' `
+    -DestinationTenantId 14506
+
+# Compare two baselines from different tenants
+Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1' `
+    -DestinationTenantId 'Fabrikam' -DestinationBaselineId 'Tier 2'
 ```
 
 ### Output
@@ -630,7 +644,7 @@ Returns a `FileInfo` object for the exported HTML report. Auto-opens in the defa
 ### HTML report features
 
 - **Comparison tab**: Flat table with all Settings Catalog settings, sortable columns, status filter pills (Matched/Conflicting/Source Only/Dest Only), category dropdown, advanced column filters with AND/OR logic, search
-- **Manual Review tab**: Non-Settings-Catalog policies (compliance, enrollment, scripts) in a 50/50 source/destination layout grouped by platform. Matching policy names aligned side-by-side. Collapsible code blocks with syntax highlighting for scripts (PowerShell/Bash) and compliance rules (JSON)
+- **Manual Review tab**: Non-Settings-Catalog policies (compliance, enrollment, scripts) in a 50/50 source/destination layout grouped by platform. Matching policy names aligned side-by-side. Independent column layout — expanding a policy on one side does not affect the other. Collapsible code blocks with syntax highlighting for scripts (PowerShell/Bash) and compliance rules (JSON)
 - **Duplicates tab**: Settings configured in 2+ policies with different values, with automated analysis
 - **Deprecated tab**: Settings flagged as deprecated by Microsoft, grouped by source/destination
 - **Configuration Match score**: Animated percentage with color gradient, confetti at 100%

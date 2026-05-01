@@ -6,6 +6,8 @@ function Get-InforcerComparisonData {
         Stage 1 of the Compare-InforcerEnvironments pipeline. Collects data from both
         environments via Get-InforcerDocData and normalizes through ConvertTo-InforcerDocModel
         with -ComparisonMode, producing two DocModels ready for diffing.
+        When baseline IDs are specified, filters each tenant's policies to only those
+        belonging to the specified baseline before building DocModels.
     .PARAMETER SourceTenantId
         Source tenant identifier. Accepts numeric ID, GUID, or tenant name.
     .PARAMETER DestinationTenantId
@@ -22,6 +24,10 @@ function Get-InforcerComparisonData {
         When specified, connects to Microsoft Graph to resolve group ObjectIDs and assignment
         filter IDs to friendly display names. Requires Microsoft.Graph.Authentication module
         and interactive sign-in for each tenant.
+    .PARAMETER SourceBaselineId
+        Optional baseline GUID or friendly name. Filters source tenant policies to the baseline.
+    .PARAMETER DestinationBaselineId
+        Optional baseline GUID or friendly name. Filters destination tenant policies to the baseline.
     .OUTPUTS
         Hashtable with keys: SourceModel, DestinationModel, SourceName, DestinationName,
         IncludingAssignments, CollectedAt
@@ -47,13 +53,22 @@ function Get-InforcerComparisonData {
         [switch]$IncludingAssignments,
 
         [Parameter()]
-        [switch]$FetchGraphData
+        [switch]$FetchGraphData,
+
+        [Parameter()]
+        [string]$SourceBaselineId,
+
+        [Parameter()]
+        [string]$DestinationBaselineId
     )
 
     if ($null -eq $SourceSession) { $SourceSession = $script:InforcerSession }
     if ($null -eq $DestinationSession) { $DestinationSession = $script:InforcerSession }
 
     $originalSession = $script:InforcerSession
+
+    $sourceBaselineName = $null
+    $destBaselineName = $null
 
     $docDataParams = @{}
     if (-not [string]::IsNullOrEmpty($SettingsCatalogPath)) {
@@ -71,6 +86,17 @@ function Get-InforcerComparisonData {
             return $null
         }
 
+        # ── Source baseline filtering (while source session is active) ──
+        if (-not [string]::IsNullOrWhiteSpace($SourceBaselineId)) {
+            Write-Host "  Filtering source to baseline: $SourceBaselineId" -ForegroundColor Gray
+            $sourceBaselineName = Select-InforcerBaselinePolicies -DocData $sourceDocData -BaselineId $SourceBaselineId
+            if ($null -eq $sourceBaselineName) {
+                Write-Error -Message "Failed to filter source tenant to baseline '$SourceBaselineId'." `
+                    -ErrorId 'SourceBaselineFilterFailed' -Category InvalidResult
+                return $null
+            }
+        }
+
         # ── Destination ──
         Write-Host 'Collecting destination tenant data...' -ForegroundColor Gray
         $script:InforcerSession = $DestinationSession
@@ -79,6 +105,17 @@ function Get-InforcerComparisonData {
             Write-Error -Message "Failed to collect data for destination tenant '$DestinationTenantId'. The API may be unavailable — try again later." `
                 -ErrorId 'DestDataCollectionFailed' -Category ConnectionError
             return $null
+        }
+
+        # ── Destination baseline filtering (while dest session is active) ──
+        if (-not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) {
+            Write-Host "  Filtering destination to baseline: $DestinationBaselineId" -ForegroundColor Gray
+            $destBaselineName = Select-InforcerBaselinePolicies -DocData $destDocData -BaselineId $DestinationBaselineId
+            if ($null -eq $destBaselineName) {
+                Write-Error -Message "Failed to filter destination tenant to baseline '$DestinationBaselineId'." `
+                    -ErrorId 'DestBaselineFilterFailed' -Category InvalidResult
+                return $null
+            }
         }
     } finally {
         $script:InforcerSession = $originalSession
@@ -194,7 +231,9 @@ function Get-InforcerComparisonData {
         DestinationModel     = $destModel
         SourceName           = $sourceModel.TenantName
         DestinationName      = $destModel.TenantName
-        IncludingAssignments = $IncludingAssignments.IsPresent
-        CollectedAt          = [datetime]::UtcNow
+        IncludingAssignments     = $IncludingAssignments.IsPresent
+        SourceBaselineName       = $sourceBaselineName
+        DestinationBaselineName  = $destBaselineName
+        CollectedAt              = [datetime]::UtcNow
     }
 }

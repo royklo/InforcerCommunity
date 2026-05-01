@@ -110,7 +110,7 @@ Disconnect-Inforcer
 | **Get-InforcerGroup**          | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
 | **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. |
-| **Compare-InforcerEnvironments** | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. |
+| **Compare-InforcerEnvironments** | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` with automatic baseline owner resolution. |
 
 
 For full parameter details and example output, see **[Cmdlet Reference](docs/CMDLET-REFERENCE.md)**. For detailed API schemas and response structures, see **[API Reference](docs/API-REFERENCE.md)**.

@@ -1007,7 +1007,7 @@ Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
         $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
     }
 
-    It 'excludes policies in Compliance category from duplicate detection (D-05)' {
+    It 'detects duplicates in non-Settings-Catalog categories like Compliance' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
             $src = & $buildModel 'SourceTenant' 'src-id' @(
@@ -1017,7 +1017,7 @@ Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
             $dest = & $buildModel 'DestTenant' 'dest-id' @() -Category 'Compliance'
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $buildDuplicateModel }
-        $result.ManualReview.Keys | Should -Not -Contain 'Duplicate Settings (Different Values)'
+        $result.ManualReview.Keys | Should -Contain 'Duplicate Settings (Different Values)'
     }
 
     It 'does NOT cross-match same settingPath under different products (D-06)' {
@@ -1364,7 +1364,8 @@ Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $script:BuildBug04Model }
 
-        # Screen Lock Timeout has a cross-tenant match (Matched/Conflicting) so it should stay in ComparisonRows
+        # Screen Lock Timeout has conflicting values in source (5 vs 15) AND exists in dest (10).
+        # Comparison is ambiguous — should be removed from ComparisonRows and routed to Manual Review.
         $foundInComparison = $false
         foreach ($prodKey in $result.Products.Keys) {
             foreach ($catKey in $result.Products[$prodKey].Categories.Keys) {
@@ -1375,6 +1376,15 @@ Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG
                 }
             }
         }
-        $foundInComparison | Should -Be $true
+        $foundInComparison | Should -Be $false
+
+        # Should appear in Manual Review under the original category with ambiguous prefix
+        $ambiguousFound = $false
+        foreach ($catKey in $result.ManualReview.Keys) {
+            foreach ($item in $result.ManualReview[$catKey]) {
+                if ($item.PolicyName -match 'Ambiguous.*Screen Lock Timeout') { $ambiguousFound = $true }
+            }
+        }
+        $ambiguousFound | Should -Be $true
     }
 }

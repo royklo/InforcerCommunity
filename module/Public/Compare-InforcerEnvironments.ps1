@@ -13,12 +13,20 @@
     and pass them via -SourceSession / -DestinationSession.
 .PARAMETER SourceTenantId
     Source tenant identifier: numeric ID, Microsoft Tenant ID GUID, or friendly name.
+    Can be omitted when -SourceBaselineId is specified — the baseline owner tenant is used automatically.
 .PARAMETER DestinationTenantId
     Destination tenant identifier: numeric ID, Microsoft Tenant ID GUID, or friendly name.
+    Can be omitted when -DestinationBaselineId is specified — the baseline owner tenant is used automatically.
 .PARAMETER SourceSession
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
 .PARAMETER DestinationSession
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
+.PARAMETER SourceBaselineId
+    Optional baseline GUID or friendly name for the source tenant. When specified, the comparison
+    is scoped to only policies belonging to this baseline instead of all tenant policies.
+.PARAMETER DestinationBaselineId
+    Optional baseline GUID or friendly name for the destination tenant. When specified, the comparison
+    is scoped to only policies belonging to this baseline instead of all tenant policies.
 .PARAMETER IncludingAssignments
     When specified, fetches and displays Graph assignment data in the report.
     Assignments are informational only and do not affect the alignment score.
@@ -56,6 +64,15 @@
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -SourceSession $src -DestinationSession $dst
 .EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 -IncludingAssignments
+.EXAMPLE
+    Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' -DestinationTenantId 'Fabrikam'
+    # Compares only policies in the 'Tier 1 Foundations' baseline from Contoso against all Fabrikam policies.
+.EXAMPLE
+    Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' -DestinationTenantId 14506
+    # Compares the baseline (auto-resolves owner tenant) against a specific tenant.
+.EXAMPLE
+    Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1' -DestinationTenantId 'Fabrikam' -DestinationBaselineId 'Tier 2'
+    # Compares two baselines from different tenants.
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#compare-inforcerenvironments
 .LINK
@@ -65,10 +82,10 @@ function Compare-InforcerEnvironments {
 [CmdletBinding()]
 [OutputType([System.IO.FileInfo])]
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Position = 0)]
     [object]$SourceTenantId,
 
-    [Parameter(Mandatory = $true, Position = 1)]
+    [Parameter(Position = 1)]
     [object]$DestinationTenantId,
 
     [Parameter(Mandatory = $false)]
@@ -76,6 +93,12 @@ param(
 
     [Parameter(Mandatory = $false)]
     [hashtable]$DestinationSession,
+
+    [Parameter(Mandatory = $false)]
+    [string]$SourceBaselineId,
+
+    [Parameter(Mandatory = $false)]
+    [string]$DestinationBaselineId,
 
     [Parameter(Mandatory = $false)]
     [switch]$IncludingAssignments,
@@ -104,6 +127,70 @@ if (-not $hasExplicitSessions -and -not (Test-InforcerSession)) {
     return
 }
 
+# ── Resolve baseline owner when tenant ID is omitted ─────────────────────────
+# When -SourceBaselineId is given without -SourceTenantId, resolve the baseline
+# owner tenant automatically. Same for destination.
+$baselineCache = $null  # fetch once, reuse
+if ([string]::IsNullOrWhiteSpace($SourceTenantId) -and -not [string]::IsNullOrWhiteSpace($SourceBaselineId)) {
+    # Temporarily activate source session for API call when explicit sessions are used
+    $savedSession = $script:InforcerSession
+    if ($null -ne $SourceSession) { $script:InforcerSession = $SourceSession }
+    try {
+        $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+    } finally {
+        $script:InforcerSession = $savedSession
+    }
+    $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $SourceBaselineId -BaselineData $baselineCache
+    foreach ($bl in $baselineCache) {
+        if ($bl.id -eq $resolvedGuid) {
+            $SourceTenantId = $bl.baselineClientTenantId
+            Write-Verbose "Resolved source baseline owner tenant: $SourceTenantId"
+            break
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($SourceTenantId)) {
+        Write-Error -Message "Could not resolve owner tenant for baseline '$SourceBaselineId'." `
+            -ErrorId 'BaselineOwnerNotFound' -Category InvalidArgument
+        return
+    }
+}
+if ([string]::IsNullOrWhiteSpace($DestinationTenantId) -and -not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) {
+    if ($null -eq $baselineCache) {
+        $savedSession = $script:InforcerSession
+        if ($null -ne $DestinationSession) { $script:InforcerSession = $DestinationSession }
+        try {
+            $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+        } finally {
+            $script:InforcerSession = $savedSession
+        }
+    }
+    $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $DestinationBaselineId -BaselineData $baselineCache
+    foreach ($bl in $baselineCache) {
+        if ($bl.id -eq $resolvedGuid) {
+            $DestinationTenantId = $bl.baselineClientTenantId
+            Write-Verbose "Resolved destination baseline owner tenant: $DestinationTenantId"
+            break
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($DestinationTenantId)) {
+        Write-Error -Message "Could not resolve owner tenant for baseline '$DestinationBaselineId'." `
+            -ErrorId 'BaselineOwnerNotFound' -Category InvalidArgument
+        return
+    }
+}
+
+# Validate we have both tenant identifiers
+if ([string]::IsNullOrWhiteSpace($SourceTenantId)) {
+    Write-Error -Message 'SourceTenantId is required. Provide -SourceTenantId or -SourceBaselineId to auto-resolve.' `
+        -ErrorId 'MissingSourceTenant' -Category InvalidArgument
+    return
+}
+if ([string]::IsNullOrWhiteSpace($DestinationTenantId)) {
+    Write-Error -Message 'DestinationTenantId is required. Provide -DestinationTenantId or -DestinationBaselineId to auto-resolve.' `
+        -ErrorId 'MissingDestTenant' -Category InvalidArgument
+    return
+}
+
 # Warn that assignments are informational only
 if ($IncludingAssignments) {
     Write-Warning 'Assignment data is informational only and does not affect the alignment score.'
@@ -126,6 +213,8 @@ if ($null -ne $DestinationSession)  { $compDataParams['DestinationSession'] = $D
 if (-not [string]::IsNullOrWhiteSpace($SettingsCatalogPath)) { $compDataParams['SettingsCatalogPath'] = $SettingsCatalogPath }
 if ($IncludingAssignments) { $compDataParams['IncludingAssignments'] = $true }
 if ($FetchGraphData) { $compDataParams['FetchGraphData'] = $true }
+if (-not [string]::IsNullOrWhiteSpace($SourceBaselineId))      { $compDataParams['SourceBaselineId']      = $SourceBaselineId }
+if (-not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) { $compDataParams['DestinationBaselineId'] = $DestinationBaselineId }
 
 $compData = $null
 try {
@@ -142,8 +231,12 @@ if ($null -eq $compData) {
     return
 }
 
-Write-Host "  Source:      $($compData.SourceName)" -ForegroundColor Gray
-Write-Host "  Destination: $($compData.DestinationName)" -ForegroundColor Gray
+$sourceDisplay = $compData.SourceName
+if ($compData.SourceBaselineName) { $sourceDisplay += " ($($compData.SourceBaselineName))" }
+$destDisplay = $compData.DestinationName
+if ($compData.DestinationBaselineName) { $destDisplay += " ($($compData.DestinationBaselineName))" }
+Write-Host "  Source:      $sourceDisplay" -ForegroundColor Gray
+Write-Host "  Destination: $destDisplay" -ForegroundColor Gray
 
 # ── Stage 2: Build comparison model ──────────────────────────────────────────
 Write-Host 'Stage 2: Building comparison model...' -ForegroundColor Cyan
@@ -161,6 +254,9 @@ if ($PolicyNameFilter) {
     $compareParams['PolicyNameFilter'] = $PolicyNameFilter
     Write-Host "  Policy name filter: '$PolicyNameFilter'" -ForegroundColor Gray
 }
+
+if ($compData.SourceBaselineName)      { $compareParams['SourceBaselineName']      = $compData.SourceBaselineName }
+if ($compData.DestinationBaselineName) { $compareParams['DestinationBaselineName'] = $compData.DestinationBaselineName }
 
 $model = Compare-InforcerDocModels @compareParams
 
@@ -190,9 +286,19 @@ if (-not (Test-Path -LiteralPath $OutputPath)) {
 }
 
 $timestamp  = (Get-Date).ToString('yyyy-MM-dd-HHmm')
-$safeSrc    = ($compData.SourceName      -replace '[^\w\-]', '-') -replace '-{2,}', '-'
-$safeDst    = ($compData.DestinationName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
-$fileName   = "comparison-$safeSrc-vs-$safeDst-$timestamp.html"
+$safeSrc = ($compData.SourceName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
+if ($compData.SourceBaselineName) {
+    $safeBaseline = ($compData.SourceBaselineName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
+    if ($safeBaseline.Length -gt 30) { $safeBaseline = $safeBaseline.Substring(0, 30).TrimEnd('-') }
+    $safeSrc = "$safeSrc-$safeBaseline"
+}
+$safeDst = ($compData.DestinationName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
+if ($compData.DestinationBaselineName) {
+    $safeBaseline = ($compData.DestinationBaselineName -replace '[^\w\-]', '-') -replace '-{2,}', '-'
+    if ($safeBaseline.Length -gt 30) { $safeBaseline = $safeBaseline.Substring(0, 30).TrimEnd('-') }
+    $safeDst = "$safeDst-$safeBaseline"
+}
+$fileName = "comparison-$safeSrc-vs-$safeDst-$timestamp.html"
 $filePath   = Join-Path $OutputPath $fileName
 
 Set-Content -Path $filePath -Value $htmlContent -Encoding UTF8

@@ -150,9 +150,21 @@ function Invoke-InforcerApiRequest {
         return
     }
 
-    # Invoke-RestMethod auto-parses JSON to PSObject. If the response is a string or other
-    # non-object type, the endpoint likely returned non-JSON (e.g. HTML from a misconfigured BaseUrl).
-    if ($rawResponse -is [string] -or ($rawResponse -isnot [PSObject] -and $rawResponse -isnot [array])) {
+    # Invoke-RestMethod auto-parses JSON to PSObject. If the response is a string, the
+    # API may have returned a non-JSON Content-Type (e.g. text/plain) despite the body
+    # being valid JSON. Try to parse it before reporting as non-JSON.
+    if ($rawResponse -is [string]) {
+        try {
+            $rawResponse = $rawResponse | ConvertFrom-Json -Depth 100 -ErrorAction Stop
+        } catch {
+            $preview = $rawResponse
+            if ($preview.Length -gt 200) { $preview = $preview.Substring(0, 200) + '...' }
+            Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $preview" `
+                -ErrorId 'NonJsonResponse' -Category InvalidData
+            return
+        }
+    }
+    if ($rawResponse -isnot [PSObject] -and $rawResponse -isnot [array]) {
         $preview = $rawResponse.ToString()
         if ($preview.Length -gt 200) { $preview = $preview.Substring(0, 200) + '...' }
         Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $preview" `

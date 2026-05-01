@@ -40,6 +40,14 @@ function Resolve-InforcerAssignments {
 
         $odataType  = $target.'@odata.type'
         $groupId    = $target.groupId
+        # Fallback: extract groupId from the assignment id (format: "policyId:groupId")
+        if ([string]::IsNullOrWhiteSpace($groupId) -and $assignment.id -match ':(.+)$') {
+            $candidateId = $Matches[1]
+            # Only use if it looks like a GUID and the type is a group assignment
+            if ($candidateId -match '^[0-9a-f]{8}-' -and $odataType -match 'group') {
+                $groupId = $candidateId
+            }
+        }
         # Filter properties may live on target (Graph standard) or assignment level (some API wrappers)
         $filterId   = $target.deviceAndAppManagementAssignmentFilterId
         if ([string]::IsNullOrWhiteSpace($filterId)) {
@@ -51,23 +59,25 @@ function Resolve-InforcerAssignments {
         }
 
         # Resolve assignment type to friendly name
-        $typeName = if ($typeMap.ContainsKey($odataType)) { $typeMap[$odataType] }
+        $typeName = if ($null -ne $odataType -and $typeMap.ContainsKey($odataType)) { $typeMap[$odataType] }
                     elseif ($odataType) { $odataType -replace '#microsoft\.graph\.', '' -replace 'AssignmentTarget$', '' }
                     else { '' }
 
-        # Resolve target name
+        # Resolve target name (specific patterns first to avoid double-match)
         $targetName = switch -Wildcard ($odataType) {
-            '*allDevicesAssignmentTarget'       { 'All Devices' }
-            '*allLicensedUsersAssignmentTarget'  { 'All Users' }
-            '*groupAssignmentTarget'             {
-                if ($GroupNameMap -and $GroupNameMap.ContainsKey($groupId)) { $GroupNameMap[$groupId] }
-                elseif ($groupId) { $groupId }
-                else { '' }
-            }
+            '*allDevicesAssignmentTarget'       { 'All Devices'; break }
+            '*allLicensedUsersAssignmentTarget'  { 'All Users'; break }
             '*exclusionGroupAssignmentTarget'    {
-                if ($GroupNameMap -and $GroupNameMap.ContainsKey($groupId)) { $GroupNameMap[$groupId] }
+                if ($GroupNameMap -and $groupId -and $GroupNameMap.ContainsKey($groupId)) { $GroupNameMap[$groupId] }
                 elseif ($groupId) { $groupId }
                 else { '' }
+                break
+            }
+            '*groupAssignmentTarget'             {
+                if ($GroupNameMap -and $groupId -and $GroupNameMap.ContainsKey($groupId)) { $GroupNameMap[$groupId] }
+                elseif ($groupId) { $groupId }
+                else { '' }
+                break
             }
             default { $groupId }
         }

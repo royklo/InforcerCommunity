@@ -162,6 +162,18 @@ function ConvertTo-FriendlySettingName {
         return $Name
     }
 
+    # Dotted paths are handled by ConvertTo-FlatSettingRows (folder structure)
+    # If called directly with a dotted name, convert each segment individually
+    if ($Name.Contains('.')) {
+        $segments = $Name -split '\.'
+        $friendlySegments = foreach ($seg in $segments) {
+            if (-not [string]::IsNullOrWhiteSpace($seg)) {
+                ConvertTo-FriendlySettingName -Name $seg
+            }
+        }
+        return ($friendlySegments -join ' > ')
+    }
+
     # Known acronyms to preserve as uppercase
     $acronyms = @('MAM','MDM','VPN','DNS','URL','OMA','URI','SSID','WIFI','UUID','PIN','USB','DMA','TPM','VBA','MFA','AAD','DLP','OS','IP','ID','IT','UI','HTTP','HTTPS','API','SSO','SMS','OTP','TCP','UDP','SSL','TLS','LDAP','SCEP','PKCS','EAP','PEAP','WPA','WEP','NAT','DHCP','FQDN','IOS','MACOS','P2P')
 
@@ -227,10 +239,15 @@ function ConvertTo-FlatSettingRows {
     $rows = [System.Collections.Generic.List[object]]::new()
     if ($null -eq $PolicyData) { return $rows }
 
+    # Track emitted dotted-path parent rows to avoid duplicates (only init at top level)
+    if ($Depth -eq 0) {
+        $script:_emittedDotParents = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    }
+
     $skip = @(
         '@odata.type', '@odata.context', 'id', 'createdDateTime', 'lastModifiedDateTime',
         'roleScopeTagIds', 'version', 'templateId', 'displayName',
-        'description', 'assignments', 'settings', 'name', 'deletedDateTime',
+        'description', 'assignments', 'inforcerAssignments', 'settings', 'name', 'deletedDateTime',
         'policyGuid'
     )
 
@@ -319,12 +336,38 @@ function ConvertTo-FlatSettingRows {
                     $strVal = "__SCRIPT_CODE__$decoded"
                 } catch { <# not valid base64, keep original #> }
             }
-            [void]$rows.Add([PSCustomObject]@{
-                Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
-                Value       = $strVal
-                Indent      = $Depth
-                IsConfigured = $true
-            })
+            # Dotted property names (e.g. Entra settings): emit parent folder rows with indentation
+            if ($prop.Name.Contains('.')) {
+                $segments = $prop.Name -split '\.'
+                for ($i = 0; $i -lt $segments.Count - 1; $i++) {
+                    $parentName = ConvertTo-FriendlySettingName -Name $segments[$i]
+                    # Only emit parent row if it hasn't been emitted yet (track via a script-scoped set)
+                    $parentKey = ($segments[0..$i] -join '.').ToLowerInvariant()
+                    if (-not $script:_emittedDotParents.Contains($parentKey)) {
+                        [void]$script:_emittedDotParents.Add($parentKey)
+                        [void]$rows.Add([PSCustomObject]@{
+                            Name        = $parentName
+                            Value       = ''
+                            Indent      = $Depth + $i
+                            IsConfigured = $false
+                        })
+                    }
+                }
+                $leafName = ConvertTo-FriendlySettingName -Name $segments[-1]
+                [void]$rows.Add([PSCustomObject]@{
+                    Name        = $leafName
+                    Value       = $strVal
+                    Indent      = $Depth + $segments.Count - 1
+                    IsConfigured = $true
+                })
+            } else {
+                [void]$rows.Add([PSCustomObject]@{
+                    Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
+                    Value       = $strVal
+                    Indent      = $Depth
+                    IsConfigured = $true
+                })
+            }
         }
     }
 

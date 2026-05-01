@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
-## [0.3.1] - 2026-04-19
+## [0.3.1] - 2026-05-01
 
 ### Features
 

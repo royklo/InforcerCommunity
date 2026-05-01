@@ -840,10 +840,9 @@ function Compare-InforcerDocModels {
     & $scanForDeprecated $SourceModel 'Source'
     & $scanForDeprecated $DestinationModel 'Destination'
 
-    # ── Duplicate Settings scan (cross-policy, cross-tenant) ──────────────
-    # Finds settings appearing in 2+ policies with different values.
+    # ── Duplicate Settings scan (within-tenant, cross-policy) ────────────
+    # Finds settings appearing in 2+ policies with different values within the same side.
     # Per D-01: adds entries to $manualReview under 'Duplicate Settings (Different Values)'
-    # Per D-05: only scans settings catalog and administrative templates categories
     # Per D-06: scopes per product (platform) — no cross-product matching
     $scanForDuplicates = {
         # Phase 1: Build per-product-per-platform setting index

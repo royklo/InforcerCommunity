@@ -132,7 +132,14 @@ if (-not $hasExplicitSessions -and -not (Test-InforcerSession)) {
 # owner tenant automatically. Same for destination.
 $baselineCache = $null  # fetch once, reuse
 if ([string]::IsNullOrWhiteSpace($SourceTenantId) -and -not [string]::IsNullOrWhiteSpace($SourceBaselineId)) {
-    $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+    # Temporarily activate source session for API call when explicit sessions are used
+    $savedSession = $script:InforcerSession
+    if ($null -ne $SourceSession) { $script:InforcerSession = $SourceSession }
+    try {
+        $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+    } finally {
+        $script:InforcerSession = $savedSession
+    }
     $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $SourceBaselineId -BaselineData $baselineCache
     foreach ($bl in $baselineCache) {
         if ($bl.id -eq $resolvedGuid) {
@@ -149,7 +156,13 @@ if ([string]::IsNullOrWhiteSpace($SourceTenantId) -and -not [string]::IsNullOrWh
 }
 if ([string]::IsNullOrWhiteSpace($DestinationTenantId) -and -not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) {
     if ($null -eq $baselineCache) {
-        $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+        $savedSession = $script:InforcerSession
+        if ($null -ne $DestinationSession) { $script:InforcerSession = $DestinationSession }
+        try {
+            $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+        } finally {
+            $script:InforcerSession = $savedSession
+        }
     }
     $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $DestinationBaselineId -BaselineData $baselineCache
     foreach ($bl in $baselineCache) {

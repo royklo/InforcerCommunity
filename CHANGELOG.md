@@ -9,12 +9,26 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 ### Features
 
 - **Baseline-scoped comparison** — `Compare-InforcerEnvironments` now supports `-SourceBaselineId` and `-DestinationBaselineId` parameters. Compare only the policies that belong to a specific baseline instead of the entire tenant. All four modes work: tenant vs tenant, baseline vs tenant, tenant vs baseline, and baseline vs baseline. The report header and filename automatically reflect which baselines are active.
+- **Auto-resolve baseline owner tenant** — `-SourceTenantId` and `-DestinationTenantId` are no longer mandatory. When a baseline ID is provided without a tenant ID, the baseline owner tenant is resolved automatically from the API. Example: `Compare-InforcerEnvironments -SourceBaselineId "Tier 1 - Foundations" -DestinationTenantId 14506`.
 - **Shared baseline filtering** — extracted the baseline policy filtering logic from `Export-InforcerTenantDocumentation` into a reusable `Select-InforcerBaselinePolicies` private helper. Both Export and Compare now share the same filtering pipeline, reducing code duplication by ~95 lines.
 
 ### Bug Fixes
 
+- **Duplicate detection was cross-tenant** — Phase 2 duplicate scan mixed Source and Destination entries into the same bucket, falsely flagging normal cross-tenant value differences (e.g., ASR "Block" vs "Audit") as duplicates. Fixed by scoping detection per-side so only true within-tenant duplicates are detected.
+- **Duplicate settings no longer appear in Comparison tab** — settings shown in the Duplicates tab are now fully removed from the Comparison tab (all statuses), using DefinitionId-based matching for reliable identification.
+- **Opposite-side context in Duplicates tab** — duplicate entries now show what the other tenant has configured for the same setting, giving full cross-tenant context without leaving the tab.
+- **Duplicate detection scoped by platform** — prevents cross-OS false matches (e.g., Windows Edge vs macOS Edge settings).
+- **Duplicate detection scoped by DefinitionId** — uses DefinitionId as grouping key instead of display name, preventing false matches on same-named settings from different templates.
+- **Duplicate detection scoped by ProfileType and category** — prevents cross-template false matches (e.g., macOS plist "Rules > Comment" for Edge vs Office).
+- **Cross-category duplicate detection** — Phase 3 detects the same DefinitionId appearing in different categories (e.g., ASR settings delivered via Endpoint Security AND Settings Catalog profiles).
+- **Ambiguous comparisons routed to Manual Review** — when within-side duplicates exist, affected comparisons are sent to Manual Review with structured setting fields instead of showing unreliable results.
 - **Manual Review cards not expanding** — `overflow: hidden` on `.mr-split-cell` and `.mr-body` prevented `<details>` elements from opening. Changed to `overflow-x: hidden; overflow-y: visible`.
 - **Manual Review layout push-down** — expanding a policy card on one side pushed all cards on the other side down because matched pairs shared a CSS grid row. Replaced with independent column layout so each side flows vertically on its own.
+- **API response handling** — improved null/empty response handling and `[char]0` null char splitting in single-quoted strings.
+
+### Improvements
+
+- **Duplicates summary bar** — stats display inline with separators instead of stacking vertically.
 
 ## [0.3.0] - 2026-04-16
 

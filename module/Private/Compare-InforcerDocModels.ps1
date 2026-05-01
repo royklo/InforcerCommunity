@@ -666,6 +666,7 @@ function Compare-InforcerDocModels {
                                 ItemType     = 'Setting'
                                 Name         = $displayName
                                 SettingPath  = if ($inSrc) { $srcLookup[$settingKey].SettingPath } else { $dstLookup[$settingKey].SettingPath }
+                                LookupKey    = $settingKey
                                 Category     = $categoryLabel
                                 Status       = $status
                                 SourcePolicy = $srcPolicyName
@@ -722,6 +723,7 @@ function Compare-InforcerDocModels {
                                 ItemType     = 'Setting'
                                 Name         = $srcLookup[$settingKey].Name
                                 SettingPath  = $srcLookup[$settingKey].SettingPath
+                                LookupKey    = $settingKey
                                 Category     = $categoryLabel
                                 Status       = 'SourceOnly'
                                 SourcePolicy = $srcPolicyName
@@ -755,6 +757,7 @@ function Compare-InforcerDocModels {
                                 ItemType     = 'Setting'
                                 Name         = $dstLookup[$settingKey].Name
                                 SettingPath  = $dstLookup[$settingKey].SettingPath
+                                LookupKey    = $settingKey
                                 Category     = $categoryLabel
                                 Status       = 'DestOnly'
                                 SourcePolicy = ''
@@ -870,7 +873,7 @@ function Compare-InforcerDocModels {
                     # A cross-category pass after Phase 2 detects true duplicates where the
                     # same DefinitionId appears in different categories (e.g., ASR settings
                     # delivered via Endpoint Security AND Settings Catalog profiles).
-                    $scopeKey = "$prodName`0$platform`0$catName"
+                    $scopeKey = "$prodName`0$platform`0$catName`0$side"
                     if (-not $scopedSettingMaps.Contains($scopeKey)) {
                         $scopedSettingMaps[$scopeKey] = [ordered]@{}
                     }
@@ -944,7 +947,24 @@ function Compare-InforcerDocModels {
             }
         }
 
+        # Build per-side DefinitionId index for opposite-side context in duplicate tables
+        $sideDefIndex = @{ Source = @{}; Destination = @{} }
+        foreach ($sk in $scopedSettingMaps.Keys) {
+            $skSide = ($sk.Split([char]0))[3]
+            foreach ($ck in $scopedSettingMaps[$sk].Keys) {
+                $ni = $ck.IndexOf([char]0)
+                $rd = if ($ni -ge 0) { $ck.Substring(0, $ni) } else { $ck }
+                if (-not $sideDefIndex[$skSide].ContainsKey($rd)) {
+                    $sideDefIndex[$skSide][$rd] = [System.Collections.Generic.List[object]]::new()
+                }
+                foreach ($e in $scopedSettingMaps[$sk][$ck]) {
+                    [void]$sideDefIndex[$skSide][$rd].Add($e)
+                }
+            }
+        }
+
         # Phase 2: Detect duplicates and build ManualReview entries
+        $duplicateDefIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $duplicateItems = [System.Collections.Generic.List[object]]::new()
         $processedPolicySides = [System.Collections.Generic.HashSet[string]]::new()
         # O(1) lookup for existing items by policyKey (avoids Where-Object O(n) per Pitfall 4)
@@ -974,15 +994,28 @@ function Compare-InforcerDocModels {
                 )
                 if ($uniqueValues.Count -lt 2) { continue }
 
+                # Enrich with opposite-side entries for context display
+                $scopeParts2 = $scopeKey.Split([char]0)
+                $oppSide = if ($scopeParts2[3] -eq 'Source') { 'Destination' } else { 'Source' }
+                $dupeNullIdx = $dupeKey.IndexOf([char]0)
+                $rawDefId2 = if ($dupeNullIdx -ge 0) { $dupeKey.Substring(0, $dupeNullIdx) } else { $dupeKey }
+                $oppositeEntries = if ($sideDefIndex[$oppSide].ContainsKey($rawDefId2)) {
+                    $sideDefIndex[$oppSide][$rawDefId2]
+                } else { @() }
+                $allEntries = [System.Collections.Generic.List[object]]::new()
+                foreach ($e in $entries) { [void]$allEntries.Add($e) }
+                foreach ($e in $oppositeEntries) { [void]$allEntries.Add($e) }
+                [void]$duplicateDefIds.Add($rawDefId2)
+
                 # D-02: Build __DUPLICATE_TABLE__ encoded value
                 # Pre-build policy name counts to avoid O(n^2) Where-Object lookups
                 $polNameCounts = @{}
-                foreach ($e in $entries) {
+                foreach ($e in $allEntries) {
                     if ($polNameCounts.ContainsKey($e.PolicyName)) { $polNameCounts[$e.PolicyName]++ }
                     else { $polNameCounts[$e.PolicyName] = 1 }
                 }
                 # Disambiguate policy names when same-named policies exist (append short ID)
-                $policyValues = $entries | ForEach-Object {
+                $policyValues = $allEntries | ForEach-Object {
                     $dispName = $_.PolicyName
                     if ($_.PolicyId -and $polNameCounts[$dispName] -gt 1) {
                         $shortId = $_.PolicyId; if ($shortId.Length -gt 8) { $shortId = $shortId.Substring(0, 8) }
@@ -1113,14 +1146,26 @@ function Compare-InforcerDocModels {
             )
             if ($uniqueValues.Count -lt 2) { continue }
 
+            # Enrich with opposite-side entries for context display
+            $crossKeyParts = $crossKey.Split([char]0)
+            $oppSide3 = if ($crossKeyParts[2] -eq 'Source') { 'Destination' } else { 'Source' }
+            $rawDefId3 = $crossKeyParts[3]
+            $oppositeEntries3 = if ($sideDefIndex[$oppSide3].ContainsKey($rawDefId3)) {
+                $sideDefIndex[$oppSide3][$rawDefId3]
+            } else { @() }
+            $allEntries3 = [System.Collections.Generic.List[object]]::new()
+            foreach ($e in $entries) { [void]$allEntries3.Add($e) }
+            foreach ($e in $oppositeEntries3) { [void]$allEntries3.Add($e) }
+            [void]$duplicateDefIds.Add($rawDefId3)
+
             # Pre-build policy name counts to avoid O(n^2) Where-Object lookups
             $polNameCounts3 = @{}
-            foreach ($e in $entries) {
+            foreach ($e in $allEntries3) {
                 if ($polNameCounts3.ContainsKey($e.PolicyName)) { $polNameCounts3[$e.PolicyName]++ }
                 else { $polNameCounts3[$e.PolicyName] = 1 }
             }
             # Build duplicate entries (same shape as Phase 2) with disambiguated names
-            $policyValues = $entries | ForEach-Object {
+            $policyValues = $allEntries3 | ForEach-Object {
                 $dispName = $_.PolicyName
                 if ($_.PolicyId -and $polNameCounts3[$dispName] -gt 1) {
                     $shortId = $_.PolicyId; if ($shortId.Length -gt 8) { $shortId = $shortId.Substring(0, 8) }
@@ -1203,33 +1248,16 @@ function Compare-InforcerDocModels {
 
     # ── BUG-04: Remove duplicate settings from ComparisonRows ──────────
     # Settings with within-side duplicates (same setting in 2+ policies with
-    # different values on the same side) cannot be reliably compared.
-    # - SourceOnly/DestOnly: shown only in Duplicates tab
-    # - Matched/Conflicting: only remove if the compared policy is itself a
-    #   duplicate policy. If similarity-based pairing chose the correct policy,
-    #   the comparison is reliable and should stay in the main tab.
-    $dupeCategory = 'Duplicate Settings (Different Values)'
-    if ($manualReview.Contains($dupeCategory)) {
-        # Collect duplicate setting paths for SourceOnly/DestOnly cleanup
-        $dupSettingPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($item in $manualReview[$dupeCategory]) {
-            foreach ($s in $item.Settings) {
-                [void]$dupSettingPaths.Add($s.Name)
-            }
-        }
-
-        # Only remove SourceOnly/DestOnly rows that are already shown in the Duplicates tab.
-        # Matched/Conflicting rows are kept in the main comparison — similarity-based pairing
-        # ensures the correct policy was compared, so the result is reliable even when
-        # duplicate policies exist on the same side.
+    # different values on the same side) cannot be reliably compared cross-tenant.
+    # They belong exclusively in the Duplicates tab. Match by DefinitionId
+    # (stored as LookupKey on each row) for reliable identification.
+    if ($duplicateDefIds.Count -gt 0) {
         foreach ($prodName in @($products.Keys)) {
             foreach ($catName in @($products[$prodName].Categories.Keys)) {
                 $rows = $products[$prodName].Categories[$catName].ComparisonRows
                 $toRemove = [System.Collections.Generic.List[object]]::new()
                 foreach ($row in $rows) {
-                    if ($row.Status -ne 'SourceOnly' -and $row.Status -ne 'DestOnly') { continue }
-                    $rowPath = if ($row.SettingPath) { $row.SettingPath } else { $row.Name }
-                    if ($dupSettingPaths.Contains($rowPath)) {
+                    if ($row.LookupKey -and $duplicateDefIds.Contains($row.LookupKey)) {
                         [void]$toRemove.Add($row)
                     }
                 }
@@ -1240,10 +1268,6 @@ function Compare-InforcerDocModels {
                 }
             }
         }
-
-        # Note: ambiguous rows are no longer generated. Similarity-based pairing ensures
-        # the correct policy is compared, so Matched/Conflicting rows stay in the main tab.
-        # Duplicate conflicts are surfaced in the Duplicates tab via Phase 2/3.
     }
 
     # manualReview now contains: script/remediation/custom compliance + deprecated policies + duplicate settings + ambiguous comparisons

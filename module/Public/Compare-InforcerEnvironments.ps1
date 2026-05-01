@@ -13,8 +13,10 @@
     and pass them via -SourceSession / -DestinationSession.
 .PARAMETER SourceTenantId
     Source tenant identifier: numeric ID, Microsoft Tenant ID GUID, or friendly name.
+    Can be omitted when -SourceBaselineId is specified — the baseline owner tenant is used automatically.
 .PARAMETER DestinationTenantId
     Destination tenant identifier: numeric ID, Microsoft Tenant ID GUID, or friendly name.
+    Can be omitted when -DestinationBaselineId is specified — the baseline owner tenant is used automatically.
 .PARAMETER SourceSession
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
 .PARAMETER DestinationSession
@@ -66,6 +68,9 @@
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' -DestinationTenantId 'Fabrikam'
     # Compares only policies in the 'Tier 1 Foundations' baseline from Contoso against all Fabrikam policies.
 .EXAMPLE
+    Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' -DestinationTenantId 14506
+    # Compares the baseline (auto-resolves owner tenant) against a specific tenant.
+.EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1' -DestinationTenantId 'Fabrikam' -DestinationBaselineId 'Tier 2'
     # Compares two baselines from different tenants.
 .LINK
@@ -77,10 +82,10 @@ function Compare-InforcerEnvironments {
 [CmdletBinding()]
 [OutputType([System.IO.FileInfo])]
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Position = 0)]
     [object]$SourceTenantId,
 
-    [Parameter(Mandatory = $true, Position = 1)]
+    [Parameter(Position = 1)]
     [object]$DestinationTenantId,
 
     [Parameter(Mandatory = $false)]
@@ -119,6 +124,57 @@ $hasExplicitSessions = ($null -ne $SourceSession) -and ($null -ne $DestinationSe
 if (-not $hasExplicitSessions -and -not (Test-InforcerSession)) {
     Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' `
         -ErrorId 'NotConnected' -Category ConnectionError
+    return
+}
+
+# ── Resolve baseline owner when tenant ID is omitted ─────────────────────────
+# When -SourceBaselineId is given without -SourceTenantId, resolve the baseline
+# owner tenant automatically. Same for destination.
+$baselineCache = $null  # fetch once, reuse
+if ([string]::IsNullOrWhiteSpace($SourceTenantId) -and -not [string]::IsNullOrWhiteSpace($SourceBaselineId)) {
+    $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+    $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $SourceBaselineId -BaselineData $baselineCache
+    foreach ($bl in $baselineCache) {
+        if ($bl.id -eq $resolvedGuid) {
+            $SourceTenantId = $bl.baselineClientTenantId
+            Write-Verbose "Resolved source baseline owner tenant: $SourceTenantId"
+            break
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($SourceTenantId)) {
+        Write-Error -Message "Could not resolve owner tenant for baseline '$SourceBaselineId'." `
+            -ErrorId 'BaselineOwnerNotFound' -Category InvalidArgument
+        return
+    }
+}
+if ([string]::IsNullOrWhiteSpace($DestinationTenantId) -and -not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) {
+    if ($null -eq $baselineCache) {
+        $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+    }
+    $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $DestinationBaselineId -BaselineData $baselineCache
+    foreach ($bl in $baselineCache) {
+        if ($bl.id -eq $resolvedGuid) {
+            $DestinationTenantId = $bl.baselineClientTenantId
+            Write-Verbose "Resolved destination baseline owner tenant: $DestinationTenantId"
+            break
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($DestinationTenantId)) {
+        Write-Error -Message "Could not resolve owner tenant for baseline '$DestinationBaselineId'." `
+            -ErrorId 'BaselineOwnerNotFound' -Category InvalidArgument
+        return
+    }
+}
+
+# Validate we have both tenant identifiers
+if ([string]::IsNullOrWhiteSpace($SourceTenantId)) {
+    Write-Error -Message 'SourceTenantId is required. Provide -SourceTenantId or -SourceBaselineId to auto-resolve.' `
+        -ErrorId 'MissingSourceTenant' -Category InvalidArgument
+    return
+}
+if ([string]::IsNullOrWhiteSpace($DestinationTenantId)) {
+    Write-Error -Message 'DestinationTenantId is required. Provide -DestinationTenantId or -DestinationBaselineId to auto-resolve.' `
+        -ErrorId 'MissingDestTenant' -Category InvalidArgument
     return
 }
 

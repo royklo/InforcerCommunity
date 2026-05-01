@@ -657,11 +657,12 @@ h3:first-child { margin-top: var(--sp-4); }
 .dup-banner-body { font-size:var(--text-sm); color:var(--text-secondary); margin:0 0 var(--sp-4); }
 .dup-banner-note { font-size:var(--text-xs); color:var(--text-muted); font-style:italic; margin:0; }
 /* ── Duplicates tab: policy-group layout ── */
-.dup-summary-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; }
-.dup-summary-bar .dup-stats { display:flex; gap:var(--sp-16); align-items:center; }
-.dup-stat-item { display:flex; align-items:baseline; gap:var(--sp-4); }
-.dup-stat-item .dup-stat-num { font-size:var(--text-lg); font-weight:700; letter-spacing:-0.02em; }
-.dup-stat-item .dup-stat-label { font-size:var(--text-xs); color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; }
+.dup-summary-bar { display:flex; align-items:center; gap:var(--sp-16); margin-bottom:0.75rem; }
+.dup-summary-bar .dup-stats { display:flex; align-items:center; gap:0; }
+.dup-stat-item { display:inline-flex; align-items:baseline; gap:var(--sp-4); padding:var(--sp-4) var(--sp-12); }
+.dup-stat-item + .dup-stat-item { border-left:1px solid var(--border); }
+.dup-stat-item .dup-stat-num { font-size:var(--text-md); font-weight:700; }
+.dup-stat-item .dup-stat-label { font-size:var(--text-xs); color:var(--text-muted); }
 .dup-stat-item.dup-stat-conflicts .dup-stat-num { color:var(--warn); }
 .dup-stat-item.dup-stat-groups .dup-stat-num { color:var(--text-secondary); }
 .dup-stat-item.dup-stat-policies .dup-stat-num { color:var(--text-secondary); }
@@ -1560,9 +1561,11 @@ h3:first-child { margin-top: var(--sp-4); }
             if ($drVals.Count -gt 1) { $totalDupConflicts++ }
         }
         [void]$sb.AppendLine('<div class="dup-summary-bar">')
-        [void]$sb.AppendLine("    <div class=`"dup-stat-item dup-stat-conflicts`"><span class=`"dup-stat-num`">$totalDupConflicts</span><span class=`"dup-stat-label`">conflicts</span></div>")
-        [void]$sb.AppendLine("    <div class=`"dup-stat-item dup-stat-groups`"><span class=`"dup-stat-num`">$dupCount</span><span class=`"dup-stat-label`">duplicate settings</span></div>")
-        [void]$sb.AppendLine("    <div class=`"dup-stat-item dup-stat-policies`"><span class=`"dup-stat-num`">$totalPoliciesAffected</span><span class=`"dup-stat-label`">policies affected</span></div>")
+        [void]$sb.AppendLine('    <div class="dup-stats">')
+        [void]$sb.AppendLine("        <div class=`"dup-stat-item dup-stat-conflicts`"><span class=`"dup-stat-num`">$totalDupConflicts</span> <span class=`"dup-stat-label`">conflicts</span></div>")
+        [void]$sb.AppendLine("        <div class=`"dup-stat-item dup-stat-groups`"><span class=`"dup-stat-num`">$dupCount</span> <span class=`"dup-stat-label`">duplicate settings</span></div>")
+        [void]$sb.AppendLine("        <div class=`"dup-stat-item dup-stat-policies`"><span class=`"dup-stat-num`">$totalPoliciesAffected</span> <span class=`"dup-stat-label`">policies affected</span></div>")
+        [void]$sb.AppendLine('    </div>')
         [void]$sb.AppendLine('    <input class="search" type="text" placeholder="Search duplicates..." oninput="dupTabSearch(this.value)" style="margin-left:auto">')
         [void]$sb.AppendLine('</div>')
         [void]$sb.AppendLine('<div id="dup-no-results" class="dup-no-results">No duplicate settings match your search.</div>')

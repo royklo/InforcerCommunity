@@ -595,8 +595,8 @@ Compares the Intune policy configuration of two tenants and generates an interac
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
-| **SourceTenantId** | Object | Yes | Source tenant (numeric ID, GUID, or tenant name). |
-| **DestinationTenantId** | Object | Yes | Destination tenant (numeric ID, GUID, or tenant name). |
+| **SourceTenantId** | Object | No | Source tenant (numeric ID, GUID, or tenant name). Can be omitted when `-SourceBaselineId` is specified — the baseline owner tenant is auto-resolved. |
+| **DestinationTenantId** | Object | No | Destination tenant (numeric ID, GUID, or tenant name). Can be omitted when `-DestinationBaselineId` is specified — the baseline owner tenant is auto-resolved. |
 | **SourceSession** | Hashtable | No | Session from `Connect-Inforcer -PassThru`. Defaults to current session. |
 | **DestinationSession** | Hashtable | No | Session from `Connect-Inforcer -PassThru`. Defaults to current session. |
 | **SourceBaselineId** | String | No | Baseline GUID or friendly name for the source tenant. Scopes comparison to only policies in this baseline. |
@@ -627,6 +627,10 @@ Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fab
 # Compare a baseline against another tenant
 Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' `
     -DestinationTenantId 'Fabrikam'
+
+# Compare a baseline without specifying the owner tenant (auto-resolved)
+Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' `
+    -DestinationTenantId 14506
 
 # Compare two baselines from different tenants
 Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1' `

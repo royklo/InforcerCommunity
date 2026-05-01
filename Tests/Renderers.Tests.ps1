@@ -127,16 +127,16 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
         $script:HtmlOutput | Should -Match 'toc-categories'
     }
 
-    It 'TOC has collapsible product entries, content product sections are collapsed by default' {
-        # TOC contains per-product details elements
-        $script:HtmlOutput | Should -Match 'toc-l1'
-        # Product sections do not have open attribute
-        $productOpen = ([regex]::Matches($script:HtmlOutput, '<details class="product-section"[^>]*open')).Count
-        $productOpen | Should -Be 0
+    It 'TOC has collapsible product entries, first product section is open by default' {
+        # TOC contains per-product button elements (click-based toggle)
+        $script:HtmlOutput | Should -Match 'toc-product-btn'
+        # First product section is open by default, rest are collapsed
+        $productOpen = ([regex]::Matches($script:HtmlOutput, 'class="product-section open"')).Count
+        $productOpen | Should -Be 1
     }
 
-    It 'contains policy details/summary elements with policy-section class' {
-        $script:HtmlOutput | Should -Match 'class="policy-section"'
+    It 'contains policy cards with policy-card class' {
+        $script:HtmlOutput | Should -Match 'class="policy-card"'
     }
 
     It 'shows setting count badge in policy summary' {
@@ -178,7 +178,7 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
     }
 
     It 'shows tenant info in footer section' {
-        $script:HtmlOutput | Should -Match 'class="footer"'
+        $script:HtmlOutput | Should -Match 'class="report-footer"'
         $script:HtmlOutput | Should -Match 'Test Tenant'
     }
 
@@ -1188,9 +1188,9 @@ Describe 'ConvertTo-InforcerComparisonHtml - Filtering and Navigation' -Tag 'FLT
     # FLT-02: Filter summary font size (D-03)
     # -------------------------------------------------------------------------
     Context 'FLT-02: Filter summary' {
-        It 'filter-summary div uses font-size:0.75rem' -Tag 'FLT-02' {
-            # D-03: UI-SPEC requires 0.75rem
-            $script:FltHtml | Should -Match 'filter-summary.*font-size:0\.75rem'
+        It 'filter-summary div uses font-size:var(--text-xs)' -Tag 'FLT-02' {
+            # D-03: UI-SPEC uses design token var(--text-xs) which resolves to 0.7rem
+            $script:FltHtml | Should -Match 'filter-summary.*font-size:var\(--text-xs\)'
         }
     }
 
@@ -1342,7 +1342,7 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
 
         It 'Duplicates tab button shows count badge with 3' -Tag 'DUP-01' {
             # D-01: count badge shows number of unique duplicate settings (3 in fixture)
-            $script:DupHtml | Should -Match 'Duplicates.*<span[^>]*status-badge[^>]*>3</span>'
+            $script:DupHtml | Should -Match 'Duplicates <span class="count count-warn">3</span>'
         }
 
         It 'does NOT render Duplicates tab button when no duplicates' -Tag 'DUP-01' {
@@ -1360,10 +1360,10 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
             $script:NoDupHtml | Should -Not -Match 'tab-duplicates'
         }
 
-        It 'renders amber info banner with warning text' -Tag 'DUP-01' {
-            # D-03: informational amber banner at top of tab explaining duplicate settings
-            $script:DupHtml | Should -Match 'dup-info-banner'
-            $script:DupHtml | Should -Match 'Duplicate Settings Detected'
+        It 'renders descriptive paragraph at top of duplicates tab' -Tag 'DUP-01' {
+            # D-03: descriptive text at top of tab explaining duplicate settings
+            $script:DupHtml | Should -Match 'tab-duplicates'
+            $script:DupHtml | Should -Match 'Settings configured in multiple policies'
         }
     }
 
@@ -1371,12 +1371,12 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
     # DUP-02: Three-column table with policy entries
     # -------------------------------------------------------------------------
     Context 'DUP-02: Three-column table with policy entries' {
-        It 'renders dup-tab-table with three column headers' -Tag 'DUP-02' {
-            # D-04: three-column table: Setting | Policies & Values | Analysis
-            $script:DupHtml | Should -Match 'dup-tab-table'
+        It 'renders dup-flat-table with four column headers' -Tag 'DUP-02' {
+            # D-04: four-column flat table: Status | Setting | Category | Policies & Values
+            $script:DupHtml | Should -Match 'dup-flat-table'
+            $script:DupHtml | Should -Match '>Status<'
             $script:DupHtml | Should -Match '>Setting<'
             $script:DupHtml | Should -Match '>Policies &amp; Values<'
-            $script:DupHtml | Should -Match '>Analysis<'
         }
 
         It 'renders setting name deviceLock_maxMinutesOfInactivity in table row' -Tag 'DUP-02' {
@@ -1385,18 +1385,18 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
         }
 
         It 'renders Source side badge for source policy' -Tag 'DUP-02' {
-            # D-05, D-06: Source badge reuses .side-badge .side-source CSS classes
-            $script:DupHtml | Should -Match 'side-badge side-source.*Source'
+            # D-05, D-06: Source badge uses .pv-side .pv-src CSS classes with SRC label
+            $script:DupHtml | Should -Match 'pv-side pv-src.*SRC'
         }
 
         It 'renders Destination side badge for destination policy' -Tag 'DUP-02' {
-            # D-05, D-06: Destination badge reuses .side-badge .side-dest CSS classes
-            $script:DupHtml | Should -Match 'side-badge side-dest.*Destination'
+            # D-05, D-06: Destination badge uses .pv-side .pv-dst CSS classes with DST label
+            $script:DupHtml | Should -Match 'pv-side pv-dst.*DST'
         }
 
-        It 'renders policy values in dup-policy-value class' -Tag 'DUP-02' {
-            # D-05: value displayed in monospace amber text below policy name
-            $script:DupHtml | Should -Match 'dup-policy-value'
+        It 'renders policy values in pv-val class' -Tag 'DUP-02' {
+            # D-05: value displayed in monospace text via pv-val class
+            $script:DupHtml | Should -Match 'pv-val'
         }
     }
 
@@ -1404,19 +1404,19 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
     # DUP-03: Analysis messaging via analyzeDuplicate JS
     # -------------------------------------------------------------------------
     Context 'DUP-03: Analysis messaging via analyzeDuplicate JS' {
-        It 'HTML contains analyzeDuplicate JavaScript function' -Tag 'DUP-03' {
-            # D-07: analyzeDuplicate() function ported from IntuneLens DuplicateSettingsTab.tsx
-            $script:DupHtml | Should -Match 'function analyzeDuplicate\('
+        It 'HTML contains dupTabSearch JavaScript function' -Tag 'DUP-03' {
+            # D-07: dupTabSearch() function for filtering flat duplicate table rows
+            $script:DupHtml | Should -Match 'function dupTabSearch\('
         }
 
-        It 'table rows contain data-policies-json attribute with valid JSON' -Tag 'DUP-03' {
-            # D-09: each row carries the policies JSON for analyzeDuplicate() to consume
-            $script:DupHtml | Should -Match 'data-policies-json="'
+        It 'table rows contain data-dup-row attribute for JS targeting' -Tag 'DUP-03' {
+            # D-09: each row carries data-dup-row attribute for dupTabSearch() to target
+            $script:DupHtml | Should -Match 'data-dup-row'
         }
 
-        It 'analysis cells have dup-analysis-text class' -Tag 'DUP-03' {
-            # D-08: analysis text rendered in small muted text with relaxed line-height
-            $script:DupHtml | Should -Match 'dup-analysis-text'
+        It 'duplicate rows use pv-entry layout with policy and value spans' -Tag 'DUP-03' {
+            # D-08: each policy entry uses pv-entry grid with pv-policy and pv-val spans
+            $script:DupHtml | Should -Match 'pv-entry'
         }
     }
 
@@ -1426,7 +1426,7 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
     Context 'DUP-04: Duplicate tab search' {
         It 'renders search input with correct placeholder' -Tag 'DUP-04' {
             # D-10: independent search input inside the Duplicates tab content area
-            $script:DupHtml | Should -Match 'placeholder="Search settings or policies\.\.\."'
+            $script:DupHtml | Should -Match 'placeholder="Search duplicates\.\.\."'
         }
 
         It 'HTML contains dupTabSearch JavaScript function' -Tag 'DUP-04' {
@@ -1434,15 +1434,15 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
             $script:DupHtml | Should -Match 'function dupTabSearch\('
         }
 
-        It 'renders summary line with dup-summary id' -Tag 'DUP-04' {
-            # D-12: summary line "Showing X of Y duplicate settings across Z policies"
-            $script:DupHtml | Should -Match 'id="dup-summary"'
+        It 'renders summary bar with dup-summary-bar class' -Tag 'DUP-04' {
+            # D-12: summary strip with conflict/settings/policies stats
+            $script:DupHtml | Should -Match 'class="dup-summary-bar"'
         }
 
-        It 'table rows contain data-setting and data-policies attributes for JS filtering' -Tag 'DUP-04' {
-            # D-11: data attributes for case-insensitive substring matching in JS
-            $script:DupHtml | Should -Match 'data-setting="'
-            $script:DupHtml | Should -Match 'data-policies="'
+        It 'table rows contain data-dup-row attribute and textContent-based search' -Tag 'DUP-04' {
+            # D-11: dupTabSearch uses row.textContent for case-insensitive substring matching
+            $script:DupHtml | Should -Match 'data-dup-row'
+            $script:DupHtml | Should -Match 'textContent\.toLowerCase'
         }
     }
 
@@ -1450,9 +1450,9 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
     # DUP-01: CSS classes for Duplicates tab
     # -------------------------------------------------------------------------
     Context 'DUP-01: CSS classes' {
-        It 'CSS block contains dup-tab-table class' -Tag 'DUP-01' {
-            # UI-SPEC: .dup-tab-table — three-column duplicate table
-            $script:DupHtml | Should -Match '\.dup-tab-table\s*\{'
+        It 'CSS block contains dup-flat-table class' -Tag 'DUP-01' {
+            # UI-SPEC: .dup-flat-table — flat duplicate table
+            $script:DupHtml | Should -Match '\.dup-flat-table\s*\{'
         }
 
         It 'CSS block contains dup-info-banner class' -Tag 'DUP-01' {
@@ -1460,9 +1460,9 @@ Describe 'ConvertTo-InforcerComparisonHtml - Duplicates Tab' -Tag 'DuplicatesTab
             $script:DupHtml | Should -Match '\.dup-info-banner\s*\{'
         }
 
-        It 'CSS block contains dup-policy-value class with monospace font' -Tag 'DUP-02' {
-            # UI-SPEC: .dup-policy-value — monospace amber value text
-            $script:DupHtml | Should -Match '\.dup-policy-value\s*\{[^}]*monospace'
+        It 'CSS block contains pv-val class with monospace font' -Tag 'DUP-02' {
+            # UI-SPEC: .pv-val — monospace value text
+            $script:DupHtml | Should -Match '\.pv-val\s*\{[^}]*monospace'
         }
     }
 }
@@ -1646,11 +1646,11 @@ Describe 'ConvertTo-InforcerComparisonHtml - BUG-03 duplicate tab values' -Tag '
     }
 
     It 'renders value "5" in duplicate tab policy entry' {
-        $script:Bug03Html | Should -Match 'dup-policy-value[^<]*>5<'
+        $script:Bug03Html | Should -Match 'pv-val[^"]*"[^>]*>5<'
     }
 
     It 'renders value "15" in duplicate tab policy entry' {
-        $script:Bug03Html | Should -Match 'dup-policy-value[^<]*>15<'
+        $script:Bug03Html | Should -Match 'pv-val[^"]*"[^>]*>15<'
     }
 
     It 'renders both policy names in duplicate tab' {

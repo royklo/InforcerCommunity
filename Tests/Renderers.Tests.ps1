@@ -122,9 +122,9 @@ Describe 'ConvertTo-InforcerHtml' -Tag 'Html' {
         $script:HtmlOutput | Should -Match 'toggleEmpty'
     }
 
-    It 'contains TOC with details elements' {
-        $script:HtmlOutput | Should -Match 'toc-section'
-        $script:HtmlOutput | Should -Match '<details'
+    It 'contains TOC with product entries' {
+        $script:HtmlOutput | Should -Match 'toc-product'
+        $script:HtmlOutput | Should -Match 'toc-categories'
     }
 
     It 'TOC has collapsible product entries, content product sections are collapsed by default' {

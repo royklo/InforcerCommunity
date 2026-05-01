@@ -844,6 +844,8 @@ function Compare-InforcerDocModels {
     # Finds settings appearing in 2+ policies with different values within the same side.
     # Per D-01: adds entries to $manualReview under 'Duplicate Settings (Different Values)'
     # Per D-06: scopes per product (platform) — no cross-product matching
+    # Declared in parent scope so BUG-04 can access it after the scriptblock runs
+    $duplicateDefIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $scanForDuplicates = {
         # Phase 1: Build per-product-per-platform setting index
         # Scoped by product AND platform to prevent cross-OS matching (e.g., Win Edge vs Mac Edge)
@@ -963,7 +965,6 @@ function Compare-InforcerDocModels {
         }
 
         # Phase 2: Detect duplicates and build ManualReview entries
-        $duplicateDefIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $duplicateItems = [System.Collections.Generic.List[object]]::new()
         $processedPolicySides = [System.Collections.Generic.HashSet[string]]::new()
         # O(1) lookup for existing items by policyKey (avoids Where-Object O(n) per Pitfall 4)

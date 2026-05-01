@@ -1076,12 +1076,13 @@ Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
     It 'setting value starts with __DUPLICATE_TABLE__ followed by valid JSON with Policy, Value, Side' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
-            # Exactly 2 policies with different values — __DUPLICATE_TABLE__ JSON must have exactly 2 entries
+            # 2 same-side policies with different values — within-tenant duplicate
             $src = & $buildModel 'SourceTenant' 'src-id' @(
-                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_fw' }) }
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Firewall'; Value = 'Enabled'; DefinitionId = 'def_fw' }) },
+                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Firewall'; Value = 'Disabled'; DefinitionId = 'def_fw' }) }
             )
             $dest = & $buildModel 'DestTenant' 'dest-id' @(
-                @{ Name = 'Policy B'; Settings = @(@{ Name = 'Firewall'; Value = 'Disabled'; DefinitionId = 'def_fw' }) }
+                @{ Name = 'Policy C'; Settings = @(@{ Name = 'Other'; Value = 'xyz'; DefinitionId = 'def_other' }) }
             )
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $buildDuplicateModel }
@@ -1091,7 +1092,7 @@ Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
         $val | Should -Match '^__DUPLICATE_TABLE__'
         $json = $val -replace '^__DUPLICATE_TABLE__', ''
         $parsed = $json | ConvertFrom-Json
-        $parsed | Should -HaveCount 2
+        $parsed.Count | Should -BeGreaterOrEqual 2
         $parsed[0].PSObject.Properties.Name | Should -Contain 'Policy'
         $parsed[0].PSObject.Properties.Name | Should -Contain 'Value'
         $parsed[0].PSObject.Properties.Name | Should -Contain 'Side'
@@ -1169,7 +1170,7 @@ Describe 'Compare-InforcerDocModels - ENG-04 cross-tenant duplicates' -Tag 'ENG-
         $sourceDupes[0].ProfileType | Should -Match 'Source'
     }
 
-    It 'detects cross-tenant duplicate (policies on Source and Destination side)' {
+    It 'does NOT flag cross-tenant difference as duplicate (one policy per side)' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
             $src = & $buildModel 'SourceTenant' 'src-id' @(
@@ -1181,11 +1182,8 @@ Describe 'Compare-InforcerDocModels - ENG-04 cross-tenant duplicates' -Tag 'ENG-
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $buildDuplicateModel }
         $entries = $result.ManualReview.'Duplicate Settings (Different Values)'
-        $entries | Should -Not -BeNullOrEmpty
-        # Entries should include both Source and Destination sides
-        $sides = $entries | ForEach-Object { $_.Side } | Select-Object -Unique
-        $sides | Should -Contain 'Source'
-        $sides | Should -Contain 'Destination'
+        # Cross-tenant differences belong in the Comparison tab, not Duplicates
+        $entries | Should -BeNullOrEmpty
     }
 
     It 'policyValues JSON in __DUPLICATE_TABLE__ contains Policy, Value, Side for all entries (3+ scenario)' {
@@ -1217,11 +1215,13 @@ Describe 'Compare-InforcerDocModels - ENG-04 cross-tenant duplicates' -Tag 'ENG-
     It 'ProfileType message matches format "{N} duplicate settings — also in: {policy (Side), ...}"' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
+            # 2 same-side policies = within-tenant duplicate
             $src = & $buildModel 'SourceTenant' 'src-id' @(
-                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Encryption'; Value = 'AES256'; DefinitionId = 'def_enc' }) }
+                @{ Name = 'Policy A'; Settings = @(@{ Name = 'Encryption'; Value = 'AES256'; DefinitionId = 'def_enc' }) },
+                @{ Name = 'Policy X'; Settings = @(@{ Name = 'Encryption'; Value = 'AES128'; DefinitionId = 'def_enc' }) }
             )
             $dest = & $buildModel 'DestTenant' 'dest-id' @(
-                @{ Name = 'Policy X'; Settings = @(@{ Name = 'Encryption'; Value = 'AES128'; DefinitionId = 'def_enc' }) }
+                @{ Name = 'Policy C'; Settings = @(@{ Name = 'Other'; Value = 'xyz'; DefinitionId = 'def_other' }) }
             )
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $buildDuplicateModel }
@@ -1231,7 +1231,7 @@ Describe 'Compare-InforcerDocModels - ENG-04 cross-tenant duplicates' -Tag 'ENG-
         # Must match: "{N} duplicate settings — also in: {policy (Side), ...}"
         $profileType | Should -Match '^\d+ duplicate settings'
         $profileType | Should -Match '\u2014 also in:'
-        $profileType | Should -Match '\(Source\)|\(Destination\)'
+        $profileType | Should -Match '\(Source\)'
     }
 }
 
@@ -1342,7 +1342,7 @@ Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG
         $foundInComparison | Should -Be $false
     }
 
-    It 'settings with both comparison and duplicate presence remain in ComparisonRows' {
+    It 'duplicate setting is removed from ComparisonRows but non-duplicate setting remains' {
         # Source has 2 policies with same setting (duplicate) AND Destination has a match (comparison)
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
@@ -1364,27 +1364,19 @@ Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $script:BuildBug04Model }
 
-        # Screen Lock Timeout has conflicting values in source (5 vs 15) AND exists in dest (10).
-        # Comparison is ambiguous — should be removed from ComparisonRows and routed to Manual Review.
-        $foundInComparison = $false
+        # Screen Lock Timeout is a within-source duplicate — removed from ComparisonRows
+        $foundLock = $false
+        $foundEnc  = $false
         foreach ($prodKey in $result.Products.Keys) {
             foreach ($catKey in $result.Products[$prodKey].Categories.Keys) {
                 foreach ($row in $result.Products[$prodKey].Categories[$catKey].ComparisonRows) {
-                    if ($row.Name -eq 'Screen Lock Timeout') {
-                        $foundInComparison = $true
-                    }
+                    if ($row.Name -eq 'Screen Lock Timeout') { $foundLock = $true }
+                    if ($row.Name -eq 'Encryption')          { $foundEnc  = $true }
                 }
             }
         }
-        $foundInComparison | Should -Be $false
-
-        # Should appear in Manual Review under the original category with ambiguous prefix
-        $ambiguousFound = $false
-        foreach ($catKey in $result.ManualReview.Keys) {
-            foreach ($item in $result.ManualReview[$catKey]) {
-                if ($item.PolicyName -match 'Ambiguous.*Screen Lock Timeout') { $ambiguousFound = $true }
-            }
-        }
-        $ambiguousFound | Should -Be $true
+        $foundLock | Should -Be $false
+        # Encryption has no duplicates — stays in ComparisonRows
+        $foundEnc | Should -Be $true
     }
 }

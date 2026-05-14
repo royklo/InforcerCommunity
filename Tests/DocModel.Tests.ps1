@@ -779,6 +779,16 @@ Describe 'Compare-InforcerDocModels - ENG-01 noise exclusion' -Tag 'ENG-01' {
         $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 1
     }
 
+    It 'excludes Deployed App Count setting from comparison output' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src  = & $buildModel 'Deployed App Count' '37' 'Source' 'src-id'
+            $dest = & $buildModel 'Deployed App Count' '40' 'Dest'   'dest-id'
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $buildModelWithSetting }
+        $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0
+    }
+
     It 'does not exclude non-standalone GUID text from comparison output' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)

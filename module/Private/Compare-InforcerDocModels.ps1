@@ -62,6 +62,7 @@ function Compare-InforcerDocModels {
         'Onboarding Blob'
         'Tenant Id'
         'Tenant Id (Device)'
+        'Deployed App Count'
     )
 
     # App protection: settings that enumerate individual app IDs (noise)

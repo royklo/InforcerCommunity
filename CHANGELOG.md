@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
+## [0.3.2] - 2026-05-14
+
+### Bug Fixes
+
+- **Cross-category DefinitionId reconciliation** — when one tenant uses Endpoint Security templates (Disk Encryption, Antivirus, Firewall) and another uses Settings Catalog for the same settings, they land in different categories and were never compared. Added a reconciliation pass that matches unmatched settings by DefinitionId across categories, reclassifying them as Matched or Conflicting instead of SourceOnly/DestOnly.
+- **Excluded Deployed App Count from comparison** — the "Deployed App Count" setting in App Protection Policies is a tenant-specific metadata value that nobody controls. It was causing false conflicts when comparing identical MAM policies across tenants.
+
+### Tests
+
+- Added cross-category reconciliation tests (4 scenarios: matched, conflicting, no-defId fallback, same-category untouched).
+- Added noise exclusion test for Deployed App Count filtering.
+
 ## [0.3.1] - 2026-05-01
 
 ### Features

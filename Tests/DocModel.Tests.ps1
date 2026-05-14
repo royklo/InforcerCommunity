@@ -1380,3 +1380,158 @@ Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG
         $foundEnc | Should -Be $true
     }
 }
+
+Describe 'Compare-InforcerDocModels - cross-category reconciliation' -Tag 'CrossCategory' {
+    BeforeAll {
+        # Helper: builds a DocModel with explicit product and category per policy
+        $script:BuildCrossCatModel = {
+            param(
+                [string]$TenantName,
+                [string]$TenantId,
+                [array]$Policies  # each: @{ Name; Settings; Product; Category }
+            )
+            $products = [ordered]@{}
+            foreach ($p in $Policies) {
+                $prod = if ($p.Product) { $p.Product } else { 'Windows' }
+                $cat  = if ($p.Category) { $p.Category } else { 'Settings Catalog' }
+                if (-not $products.Contains($prod)) {
+                    $products[$prod] = @{ Categories = [ordered]@{} }
+                }
+                if (-not $products[$prod].Categories.Contains($cat)) {
+                    $products[$prod].Categories[$cat] = [System.Collections.Generic.List[object]]::new()
+                }
+                $policyObj = @{
+                    Basics      = @{ Name = $p.Name; ProfileType = 'Settings Catalog'; Platform = $prod }
+                    Settings    = @(
+                        $p.Settings | ForEach-Object {
+                            [PSCustomObject]@{
+                                Name         = $_.Name
+                                Value        = $_.Value
+                                Indent       = if ($null -ne $_.Indent) { $_.Indent } else { 0 }
+                                IsConfigured = if ($null -ne $_.IsConfigured) { $_.IsConfigured } else { $true }
+                                DefinitionId = $_.DefinitionId
+                            }
+                        }
+                    )
+                    Assignments = @()
+                }
+                [void]$products[$prod].Categories[$cat].Add($policyObj)
+            }
+            @{
+                TenantName = $TenantName
+                TenantId   = $TenantId
+                Products   = $products
+            }
+        }
+    }
+
+    It 'reconciles same DefinitionId across different categories as Matched' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{
+                    Name = 'BitLocker Policy'; Product = 'Windows'; Category = 'Disk Encryption'
+                    Settings = @(
+                        @{ Name = 'Require Encryption'; Value = 'Enabled'; DefinitionId = 'device_vendor_msft_bitlocker_requireencryption' }
+                    )
+                }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{
+                    Name = 'CIS - BitLocker'; Product = 'Windows'; Category = 'Settings Catalog'
+                    Settings = @(
+                        @{ Name = 'Require Encryption'; Value = 'Enabled'; DefinitionId = 'device_vendor_msft_bitlocker_requireencryption' }
+                    )
+                }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $script:BuildCrossCatModel }
+
+        $result.Counters.Matched | Should -Be 1
+        $result.Counters.SourceOnly | Should -Be 0
+        $result.Counters.DestOnly | Should -Be 0
+    }
+
+    It 'reconciles same DefinitionId with different values as Conflicting' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{
+                    Name = 'Firewall Policy'; Product = 'Windows'; Category = 'Firewall'
+                    Settings = @(
+                        @{ Name = 'Enable Firewall'; Value = 'True'; DefinitionId = 'device_vendor_msft_firewall_enable' }
+                    )
+                }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{
+                    Name = 'CIS - Firewall'; Product = 'Windows'; Category = 'Settings Catalog'
+                    Settings = @(
+                        @{ Name = 'Enable Firewall'; Value = 'False'; DefinitionId = 'device_vendor_msft_firewall_enable' }
+                    )
+                }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $script:BuildCrossCatModel }
+
+        $result.Counters.Conflicting | Should -Be 1
+        $result.Counters.SourceOnly | Should -Be 0
+        $result.Counters.DestOnly | Should -Be 0
+    }
+
+    It 'does not reconcile settings without DefinitionId (path-based keys)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{
+                    Name = 'Policy A'; Product = 'Windows'; Category = 'Disk Encryption'
+                    Settings = @(
+                        @{ Name = 'Some Setting'; Value = 'On'; DefinitionId = '' }
+                    )
+                }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{
+                    Name = 'Policy B'; Product = 'Windows'; Category = 'Settings Catalog'
+                    Settings = @(
+                        @{ Name = 'Some Setting'; Value = 'On'; DefinitionId = '' }
+                    )
+                }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $script:BuildCrossCatModel }
+
+        # Without DefinitionId, cannot reconcile cross-category — stays SourceOnly + DestOnly
+        $result.Counters.SourceOnly | Should -Be 1
+        $result.Counters.DestOnly | Should -Be 1
+        $result.Counters.Matched | Should -Be 0
+    }
+
+    It 'leaves same-category matching untouched (no double-counting)' {
+        $result = InModuleScope InforcerCommunity {
+            param($buildModel)
+            $src = & $buildModel 'SourceTenant' 'src-id' @(
+                @{
+                    Name = 'Same Policy'; Product = 'Windows'; Category = 'Settings Catalog'
+                    Settings = @(
+                        @{ Name = 'Setting A'; Value = 'X'; DefinitionId = 'device_vendor_msft_setting_a' }
+                    )
+                }
+            )
+            $dest = & $buildModel 'DestTenant' 'dest-id' @(
+                @{
+                    Name = 'Same Policy'; Product = 'Windows'; Category = 'Settings Catalog'
+                    Settings = @(
+                        @{ Name = 'Setting A'; Value = 'X'; DefinitionId = 'device_vendor_msft_setting_a' }
+                    )
+                }
+            )
+            Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
+        } -Parameters @{ buildModel = $script:BuildCrossCatModel }
+
+        # Already matched in same category — no cross-category needed
+        $result.Counters.Matched | Should -Be 1
+        $result.Counters.SourceOnly | Should -Be 0
+        $result.Counters.DestOnly | Should -Be 0
+    }
+}

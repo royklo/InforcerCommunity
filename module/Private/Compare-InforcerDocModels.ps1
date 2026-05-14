@@ -779,6 +779,87 @@ function Compare-InforcerDocModels {
         }
     }
 
+    # ── Cross-category reconciliation ────────────────────────────────────
+    # When the same Intune setting (same DefinitionId) is delivered via different
+    # policy types (e.g., Endpoint Security template vs Settings Catalog), they
+    # land in different categories and both appear as SourceOnly / DestOnly.
+    # This pass matches them by DefinitionId and reclassifies as Matched/Conflicting.
+    $sourceOnlyByDefId = [ordered]@{}   # defId -> @{ Row; Product; Category }
+    $destOnlyByDefId   = [ordered]@{}
+
+    foreach ($prodName in @($products.Keys)) {
+        foreach ($catName in @($products[$prodName].Categories.Keys)) {
+            foreach ($row in $products[$prodName].Categories[$catName].ComparisonRows) {
+                $defId = $row.LookupKey
+                if ([string]::IsNullOrEmpty($defId)) { continue }
+                # Only index rows keyed by DefinitionId (not SettingPath fallbacks)
+                # DefinitionIds never contain spaces; SettingPaths always do
+                if ($defId -match '\s') { continue }
+
+                if ($row.Status -eq 'SourceOnly') {
+                    if (-not $sourceOnlyByDefId.Contains($defId)) {
+                        $sourceOnlyByDefId[$defId] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    [void]$sourceOnlyByDefId[$defId].Add(@{
+                        Row      = $row
+                        Product  = $prodName
+                        Category = $catName
+                    })
+                }
+                elseif ($row.Status -eq 'DestOnly') {
+                    if (-not $destOnlyByDefId.Contains($defId)) {
+                        $destOnlyByDefId[$defId] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    [void]$destOnlyByDefId[$defId].Add(@{
+                        Row      = $row
+                        Product  = $prodName
+                        Category = $catName
+                    })
+                }
+            }
+        }
+    }
+
+    # Match SourceOnly <-> DestOnly by shared DefinitionId
+    foreach ($defId in $sourceOnlyByDefId.Keys) {
+        if (-not $destOnlyByDefId.Contains($defId)) { continue }
+
+        $srcEntries = $sourceOnlyByDefId[$defId]
+        $dstEntries = $destOnlyByDefId[$defId]
+
+        # Pair 1:1 positionally (typically one source, one dest per defId)
+        $pairCount = [math]::Min($srcEntries.Count, $dstEntries.Count)
+        for ($i = 0; $i -lt $pairCount; $i++) {
+            $srcEntry = $srcEntries[$i]
+            $dstEntry = $dstEntries[$i]
+            $srcRow = $srcEntry.Row
+            $dstRow = $dstEntry.Row
+
+            # Determine new status
+            $newStatus = if ($srcRow.SourceValue -eq $dstRow.DestValue) { 'Matched' } else { 'Conflicting' }
+
+            # Update the source row in-place to become the reconciled row
+            $srcRow.Status     = $newStatus
+            $srcRow.DestPolicy = $dstRow.DestPolicy
+            $srcRow.DestValue  = $dstRow.DestValue
+            if ($srcRow.ContainsKey('DestAssignment') -and $dstRow.ContainsKey('DestAssignment')) {
+                $srcRow.DestAssignment = $dstRow.DestAssignment
+            }
+
+            # Update counters: source row was SourceOnly, now is Matched/Conflicting
+            $counters['SourceOnly']--
+            $counters[$newStatus]++
+            $products[$srcEntry.Product].Counters['SourceOnly']--
+            $products[$srcEntry.Product].Counters[$newStatus]++
+
+            # Remove the dest row from its original category
+            $dstRows = $products[$dstEntry.Product].Categories[$dstEntry.Category].ComparisonRows
+            [void]$dstRows.Remove($dstRow)
+            $counters['DestOnly']--
+            $products[$dstEntry.Product].Counters['DestOnly']--
+        }
+    }
+
     # ── Manual Review = script/remediation/custom compliance + deprecated ──
     $manualReview = $manualReviewCategories
 

@@ -62,6 +62,7 @@ function Compare-InforcerDocModels {
         'Onboarding Blob'
         'Tenant Id'
         'Tenant Id (Device)'
+        'Deployed App Count'
     )
 
     # App protection: settings that enumerate individual app IDs (noise)
@@ -598,15 +599,6 @@ function Compare-InforcerDocModels {
                         [void]$usedRemSrc.Add($candidate.Si)
                         [void]$usedRemDst.Add($candidate.Di)
                     }
-                    # Leftover unmatched
-                    $extraSrc = [System.Collections.Generic.List[object]]::new()
-                    $extraDst = [System.Collections.Generic.List[object]]::new()
-                    for ($si = 0; $si -lt $remainingSrc.Count; $si++) {
-                        if (-not $usedRemSrc.Contains($si)) { [void]$extraSrc.Add($remainingSrc[$si]) }
-                    }
-                    for ($di = 0; $di -lt $remainingDst.Count; $di++) {
-                        if (-not $usedRemDst.Contains($di)) { [void]$extraDst.Add($remainingDst[$di]) }
-                    }
 
                     # Helper: disambiguate policy name when duplicates exist (append short ID)
                     $disambiguateName = {
@@ -636,11 +628,12 @@ function Compare-InforcerDocModels {
                         $dstLookup = & $buildSettingLookup $dstPolicy.Settings
 
                         $allSettingKeys = [System.Collections.Generic.List[string]]::new()
+                        $seenKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                         foreach ($k in $srcLookup.Keys) {
-                            if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
+                            if ($seenKeys.Add($k)) { [void]$allSettingKeys.Add($k) }
                         }
                         foreach ($k in $dstLookup.Keys) {
-                            if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
+                            if ($seenKeys.Add($k)) { [void]$allSettingKeys.Add($k) }
                         }
 
                         foreach ($settingKey in $allSettingKeys) {
@@ -662,18 +655,20 @@ function Compare-InforcerDocModels {
                                 $status = 'DestOnly'
                             }
 
+                            $refEntry = if ($inSrc) { $srcLookup[$settingKey] } else { $dstLookup[$settingKey] }
                             $row = @{
-                                ItemType     = 'Setting'
-                                Name         = $displayName
-                                SettingPath  = if ($inSrc) { $srcLookup[$settingKey].SettingPath } else { $dstLookup[$settingKey].SettingPath }
-                                LookupKey    = $settingKey
-                                Category     = $categoryLabel
-                                Status       = $status
-                                SourcePolicy = $srcPolicyName
-                                SourceValue  = $srcVal
-                                DestPolicy   = $dstPolicyName
-                                DestValue    = $dstVal
-                                IsDeprecated = if ($inSrc) { $srcLookup[$settingKey].IsDeprecated -eq $true } else { $dstLookup[$settingKey].IsDeprecated -eq $true }
+                                ItemType        = 'Setting'
+                                Name            = $displayName
+                                SettingPath     = $refEntry.SettingPath
+                                LookupKey       = $settingKey
+                                HasDefinitionId = -not [string]::IsNullOrEmpty($refEntry.DefinitionId)
+                                Category        = $categoryLabel
+                                Status          = $status
+                                SourcePolicy    = $srcPolicyName
+                                SourceValue     = $srcVal
+                                DestPolicy      = $dstPolicyName
+                                DestValue       = $dstVal
+                                IsDeprecated    = $refEntry.IsDeprecated -eq $true
                             }
                             if ($IncludingAssignments) {
                                 $row.SourceAssignment = $srcAssignStr
@@ -692,12 +687,12 @@ function Compare-InforcerDocModels {
                         $groupPolicies = [System.Collections.Generic.List[object]]::new()
                         foreach ($p in $srcList) {
                             $pName = & $disambiguateName $p $true
-                            $settingCount = @($p.Settings | Where-Object { $_.IsConfigured -eq $true }).Count
+                            $settingCount = 0; foreach ($s in $p.Settings) { if ($s.IsConfigured -eq $true) { $settingCount++ } }
                             [void]$groupPolicies.Add(@{ Name = $pName; Side = 'Source'; SettingCount = $settingCount; Id = $p.Basics.Id })
                         }
                         foreach ($p in $dstList) {
                             $pName = & $disambiguateName $p $true
-                            $settingCount = @($p.Settings | Where-Object { $_.IsConfigured -eq $true }).Count
+                            $settingCount = 0; foreach ($s in $p.Settings) { if ($s.IsConfigured -eq $true) { $settingCount++ } }
                             [void]$groupPolicies.Add(@{ Name = $pName; Side = 'Destination'; SettingCount = $settingCount; Id = $p.Basics.Id })
                         }
                         [void]$duplicatePolicies.Add(@{
@@ -720,17 +715,18 @@ function Compare-InforcerDocModels {
                             if (& $isEmptyValue $srcVal) { continue }
 
                             $row = @{
-                                ItemType     = 'Setting'
-                                Name         = $srcLookup[$settingKey].Name
-                                SettingPath  = $srcLookup[$settingKey].SettingPath
-                                LookupKey    = $settingKey
-                                Category     = $categoryLabel
-                                Status       = 'SourceOnly'
-                                SourcePolicy = $srcPolicyName
-                                SourceValue  = $srcVal
-                                DestPolicy   = ''
-                                DestValue    = ''
-                                IsDeprecated = $srcLookup[$settingKey].IsDeprecated -eq $true
+                                ItemType        = 'Setting'
+                                Name            = $srcLookup[$settingKey].Name
+                                SettingPath     = $srcLookup[$settingKey].SettingPath
+                                LookupKey       = $settingKey
+                                HasDefinitionId = -not [string]::IsNullOrEmpty($srcLookup[$settingKey].DefinitionId)
+                                Category        = $categoryLabel
+                                Status          = 'SourceOnly'
+                                SourcePolicy    = $srcPolicyName
+                                SourceValue     = $srcVal
+                                DestPolicy      = ''
+                                DestValue       = ''
+                                IsDeprecated    = $srcLookup[$settingKey].IsDeprecated -eq $true
                             }
                             if ($IncludingAssignments) {
                                 $row.SourceAssignment = $srcAssignStr
@@ -754,17 +750,18 @@ function Compare-InforcerDocModels {
                             if (& $isEmptyValue $dstVal) { continue }
 
                             $row = @{
-                                ItemType     = 'Setting'
-                                Name         = $dstLookup[$settingKey].Name
-                                SettingPath  = $dstLookup[$settingKey].SettingPath
-                                LookupKey    = $settingKey
-                                Category     = $categoryLabel
-                                Status       = 'DestOnly'
-                                SourcePolicy = ''
-                                SourceValue  = ''
-                                DestPolicy   = $dstPolicyName
-                                DestValue    = $dstVal
-                                IsDeprecated = $dstLookup[$settingKey].IsDeprecated -eq $true
+                                ItemType        = 'Setting'
+                                Name            = $dstLookup[$settingKey].Name
+                                SettingPath     = $dstLookup[$settingKey].SettingPath
+                                LookupKey       = $settingKey
+                                HasDefinitionId = -not [string]::IsNullOrEmpty($dstLookup[$settingKey].DefinitionId)
+                                Category        = $categoryLabel
+                                Status          = 'DestOnly'
+                                SourcePolicy    = ''
+                                SourceValue     = ''
+                                DestPolicy      = $dstPolicyName
+                                DestValue       = $dstVal
+                                IsDeprecated    = $dstLookup[$settingKey].IsDeprecated -eq $true
                             }
                             if ($IncludingAssignments) {
                                 $row.SourceAssignment = ''
@@ -776,6 +773,86 @@ function Compare-InforcerDocModels {
                     }
                 }
             }
+        }
+    }
+
+    # ── Cross-category reconciliation ────────────────────────────────────
+    # When the same Intune setting (same DefinitionId) is delivered via different
+    # policy types (e.g., Endpoint Security template vs Settings Catalog), they
+    # land in different categories and both appear as SourceOnly / DestOnly.
+    # This pass matches them by DefinitionId and reclassifies as Matched/Conflicting.
+    $sourceOnlyByDefId = [ordered]@{}   # defId -> @{ Row; Product; Category }
+    $destOnlyByDefId   = [ordered]@{}
+
+    foreach ($prodName in @($products.Keys)) {
+        foreach ($catName in @($products[$prodName].Categories.Keys)) {
+            foreach ($row in $products[$prodName].Categories[$catName].ComparisonRows) {
+                $defId = $row.LookupKey
+                if ([string]::IsNullOrEmpty($defId)) { continue }
+                # Only index rows keyed by DefinitionId (not SettingPath fallbacks)
+                if (-not $row.HasDefinitionId) { continue }
+
+                if ($row.Status -eq 'SourceOnly') {
+                    if (-not $sourceOnlyByDefId.Contains($defId)) {
+                        $sourceOnlyByDefId[$defId] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    [void]$sourceOnlyByDefId[$defId].Add(@{
+                        Row      = $row
+                        Product  = $prodName
+                        Category = $catName
+                    })
+                }
+                elseif ($row.Status -eq 'DestOnly') {
+                    if (-not $destOnlyByDefId.Contains($defId)) {
+                        $destOnlyByDefId[$defId] = [System.Collections.Generic.List[object]]::new()
+                    }
+                    [void]$destOnlyByDefId[$defId].Add(@{
+                        Row      = $row
+                        Product  = $prodName
+                        Category = $catName
+                    })
+                }
+            }
+        }
+    }
+
+    # Match SourceOnly <-> DestOnly by shared DefinitionId
+    foreach ($defId in $sourceOnlyByDefId.Keys) {
+        if (-not $destOnlyByDefId.Contains($defId)) { continue }
+
+        $srcEntries = $sourceOnlyByDefId[$defId]
+        $dstEntries = $destOnlyByDefId[$defId]
+
+        # Pair 1:1 positionally (typically one source, one dest per defId)
+        $pairCount = [math]::Min($srcEntries.Count, $dstEntries.Count)
+        for ($i = 0; $i -lt $pairCount; $i++) {
+            $srcEntry = $srcEntries[$i]
+            $dstEntry = $dstEntries[$i]
+            $srcRow = $srcEntry.Row
+            $dstRow = $dstEntry.Row
+
+            # Determine new status
+            $newStatus = if ($srcRow.SourceValue -eq $dstRow.DestValue) { 'Matched' } else { 'Conflicting' }
+
+            # Update the source row in-place to become the reconciled row
+            $srcRow.Status     = $newStatus
+            $srcRow.DestPolicy = $dstRow.DestPolicy
+            $srcRow.DestValue  = $dstRow.DestValue
+            if ($srcRow.ContainsKey('DestAssignment') -and $dstRow.ContainsKey('DestAssignment')) {
+                $srcRow.DestAssignment = $dstRow.DestAssignment
+            }
+
+            # Update counters: source row was SourceOnly, now is Matched/Conflicting
+            $counters['SourceOnly']--
+            $counters[$newStatus]++
+            $products[$srcEntry.Product].Counters['SourceOnly']--
+            $products[$srcEntry.Product].Counters[$newStatus]++
+
+            # Remove the dest row from its original category
+            $dstRows = $products[$dstEntry.Product].Categories[$dstEntry.Category].ComparisonRows
+            [void]$dstRows.Remove($dstRow)
+            $counters['DestOnly']--
+            $products[$dstEntry.Product].Counters['DestOnly']--
         }
     }
 
@@ -1287,7 +1364,6 @@ function Compare-InforcerDocModels {
         AlignmentScore       = $alignmentScore
         TotalItems           = $totalItems
         Counters             = $counters
-        DeprecatedSettings   = @()  # deprecated policies are now in ManualReview with HasDeprecated flag
         Products             = $products
         ManualReview         = $manualReview
         DuplicatePolicies    = $duplicatePolicies

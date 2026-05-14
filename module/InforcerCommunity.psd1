@@ -31,7 +31,7 @@
         PSData = @{
             ProjectUri   = 'https://github.com/royklo/InforcerCommunity'
             LicenseUri   = 'https://github.com/royklo/InforcerCommunity/blob/main/LICENSE'
-            ReleaseNotes = 'Community module for the Inforcer API. Renamed to InforcerCommunity; consistency tests; gallery-ready metadata.'
+            ReleaseNotes = 'v0.3.2: Cross-category DefinitionId reconciliation for mixed Endpoint Security/Settings Catalog comparisons. Excluded Deployed App Count as tenant-specific noise.'
             Tags         = @('Inforcer', 'API', 'Community')
         }
     }

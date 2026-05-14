@@ -663,18 +663,20 @@ function Compare-InforcerDocModels {
                                 $status = 'DestOnly'
                             }
 
+                            $refEntry = if ($inSrc) { $srcLookup[$settingKey] } else { $dstLookup[$settingKey] }
                             $row = @{
-                                ItemType     = 'Setting'
-                                Name         = $displayName
-                                SettingPath  = if ($inSrc) { $srcLookup[$settingKey].SettingPath } else { $dstLookup[$settingKey].SettingPath }
-                                LookupKey    = $settingKey
-                                Category     = $categoryLabel
-                                Status       = $status
-                                SourcePolicy = $srcPolicyName
-                                SourceValue  = $srcVal
-                                DestPolicy   = $dstPolicyName
-                                DestValue    = $dstVal
-                                IsDeprecated = if ($inSrc) { $srcLookup[$settingKey].IsDeprecated -eq $true } else { $dstLookup[$settingKey].IsDeprecated -eq $true }
+                                ItemType        = 'Setting'
+                                Name            = $displayName
+                                SettingPath     = $refEntry.SettingPath
+                                LookupKey       = $settingKey
+                                HasDefinitionId = -not [string]::IsNullOrEmpty($refEntry.DefinitionId)
+                                Category        = $categoryLabel
+                                Status          = $status
+                                SourcePolicy    = $srcPolicyName
+                                SourceValue     = $srcVal
+                                DestPolicy      = $dstPolicyName
+                                DestValue       = $dstVal
+                                IsDeprecated    = $refEntry.IsDeprecated -eq $true
                             }
                             if ($IncludingAssignments) {
                                 $row.SourceAssignment = $srcAssignStr
@@ -721,17 +723,18 @@ function Compare-InforcerDocModels {
                             if (& $isEmptyValue $srcVal) { continue }
 
                             $row = @{
-                                ItemType     = 'Setting'
-                                Name         = $srcLookup[$settingKey].Name
-                                SettingPath  = $srcLookup[$settingKey].SettingPath
-                                LookupKey    = $settingKey
-                                Category     = $categoryLabel
-                                Status       = 'SourceOnly'
-                                SourcePolicy = $srcPolicyName
-                                SourceValue  = $srcVal
-                                DestPolicy   = ''
-                                DestValue    = ''
-                                IsDeprecated = $srcLookup[$settingKey].IsDeprecated -eq $true
+                                ItemType        = 'Setting'
+                                Name            = $srcLookup[$settingKey].Name
+                                SettingPath     = $srcLookup[$settingKey].SettingPath
+                                LookupKey       = $settingKey
+                                HasDefinitionId = -not [string]::IsNullOrEmpty($srcLookup[$settingKey].DefinitionId)
+                                Category        = $categoryLabel
+                                Status          = 'SourceOnly'
+                                SourcePolicy    = $srcPolicyName
+                                SourceValue     = $srcVal
+                                DestPolicy      = ''
+                                DestValue       = ''
+                                IsDeprecated    = $srcLookup[$settingKey].IsDeprecated -eq $true
                             }
                             if ($IncludingAssignments) {
                                 $row.SourceAssignment = $srcAssignStr
@@ -755,17 +758,18 @@ function Compare-InforcerDocModels {
                             if (& $isEmptyValue $dstVal) { continue }
 
                             $row = @{
-                                ItemType     = 'Setting'
-                                Name         = $dstLookup[$settingKey].Name
-                                SettingPath  = $dstLookup[$settingKey].SettingPath
-                                LookupKey    = $settingKey
-                                Category     = $categoryLabel
-                                Status       = 'DestOnly'
-                                SourcePolicy = ''
-                                SourceValue  = ''
-                                DestPolicy   = $dstPolicyName
-                                DestValue    = $dstVal
-                                IsDeprecated = $dstLookup[$settingKey].IsDeprecated -eq $true
+                                ItemType        = 'Setting'
+                                Name            = $dstLookup[$settingKey].Name
+                                SettingPath     = $dstLookup[$settingKey].SettingPath
+                                LookupKey       = $settingKey
+                                HasDefinitionId = -not [string]::IsNullOrEmpty($dstLookup[$settingKey].DefinitionId)
+                                Category        = $categoryLabel
+                                Status          = 'DestOnly'
+                                SourcePolicy    = ''
+                                SourceValue     = ''
+                                DestPolicy      = $dstPolicyName
+                                DestValue       = $dstVal
+                                IsDeprecated    = $dstLookup[$settingKey].IsDeprecated -eq $true
                             }
                             if ($IncludingAssignments) {
                                 $row.SourceAssignment = ''
@@ -794,8 +798,7 @@ function Compare-InforcerDocModels {
                 $defId = $row.LookupKey
                 if ([string]::IsNullOrEmpty($defId)) { continue }
                 # Only index rows keyed by DefinitionId (not SettingPath fallbacks)
-                # DefinitionIds never contain spaces; SettingPaths always do
-                if ($defId -match '\s') { continue }
+                if (-not $row.HasDefinitionId) { continue }
 
                 if ($row.Status -eq 'SourceOnly') {
                     if (-not $sourceOnlyByDefId.Contains($defId)) {

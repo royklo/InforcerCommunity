@@ -599,15 +599,6 @@ function Compare-InforcerDocModels {
                         [void]$usedRemSrc.Add($candidate.Si)
                         [void]$usedRemDst.Add($candidate.Di)
                     }
-                    # Leftover unmatched
-                    $extraSrc = [System.Collections.Generic.List[object]]::new()
-                    $extraDst = [System.Collections.Generic.List[object]]::new()
-                    for ($si = 0; $si -lt $remainingSrc.Count; $si++) {
-                        if (-not $usedRemSrc.Contains($si)) { [void]$extraSrc.Add($remainingSrc[$si]) }
-                    }
-                    for ($di = 0; $di -lt $remainingDst.Count; $di++) {
-                        if (-not $usedRemDst.Contains($di)) { [void]$extraDst.Add($remainingDst[$di]) }
-                    }
 
                     # Helper: disambiguate policy name when duplicates exist (append short ID)
                     $disambiguateName = {
@@ -637,11 +628,12 @@ function Compare-InforcerDocModels {
                         $dstLookup = & $buildSettingLookup $dstPolicy.Settings
 
                         $allSettingKeys = [System.Collections.Generic.List[string]]::new()
+                        $seenKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                         foreach ($k in $srcLookup.Keys) {
-                            if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
+                            if ($seenKeys.Add($k)) { [void]$allSettingKeys.Add($k) }
                         }
                         foreach ($k in $dstLookup.Keys) {
-                            if (-not $allSettingKeys.Contains($k)) { [void]$allSettingKeys.Add($k) }
+                            if ($seenKeys.Add($k)) { [void]$allSettingKeys.Add($k) }
                         }
 
                         foreach ($settingKey in $allSettingKeys) {
@@ -695,12 +687,12 @@ function Compare-InforcerDocModels {
                         $groupPolicies = [System.Collections.Generic.List[object]]::new()
                         foreach ($p in $srcList) {
                             $pName = & $disambiguateName $p $true
-                            $settingCount = @($p.Settings | Where-Object { $_.IsConfigured -eq $true }).Count
+                            $settingCount = 0; foreach ($s in $p.Settings) { if ($s.IsConfigured -eq $true) { $settingCount++ } }
                             [void]$groupPolicies.Add(@{ Name = $pName; Side = 'Source'; SettingCount = $settingCount; Id = $p.Basics.Id })
                         }
                         foreach ($p in $dstList) {
                             $pName = & $disambiguateName $p $true
-                            $settingCount = @($p.Settings | Where-Object { $_.IsConfigured -eq $true }).Count
+                            $settingCount = 0; foreach ($s in $p.Settings) { if ($s.IsConfigured -eq $true) { $settingCount++ } }
                             [void]$groupPolicies.Add(@{ Name = $pName; Side = 'Destination'; SettingCount = $settingCount; Id = $p.Basics.Id })
                         }
                         [void]$duplicatePolicies.Add(@{
@@ -1372,7 +1364,6 @@ function Compare-InforcerDocModels {
         AlignmentScore       = $alignmentScore
         TotalItems           = $totalItems
         Counters             = $counters
-        DeprecatedSettings   = @()  # deprecated policies are now in ManualReview with HasDeprecated flag
         Products             = $products
         ManualReview         = $manualReview
         DuplicatePolicies    = $duplicatePolicies

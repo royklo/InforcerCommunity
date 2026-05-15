@@ -129,13 +129,13 @@ thead th .th-detail{display:block;font-size:0.58rem;font-weight:400;color:var(--
 
 /* Matrix */
 .matrix-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:auto;background:var(--card);flex:1;min-height:0}
-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}
-thead th{position:sticky;top:0;z-index:10;background:#f8fafc;padding:0.65rem 0.6rem;text-align:center;font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy);border-bottom:2px solid var(--border);white-space:nowrap}
-thead th:first-child{position:sticky;left:0;z-index:20;text-align:left;min-width:340px;background:#f8fafc}
-thead th.tc{min-width:100px;max-width:130px}
+table{border-collapse:separate;border-spacing:0}
+thead th{position:sticky;top:0;z-index:10;background:#f8fafc;padding:0.55rem 0.5rem;text-align:center;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy);border-bottom:2px solid var(--border)}
+thead th:first-child{position:sticky;left:0;z-index:20;text-align:left;min-width:320px;max-width:360px;background:#f8fafc}
+thead th.tc{min-width:110px;width:110px;white-space:normal;word-wrap:break-word;vertical-align:bottom;line-height:1.3}
 thead th .th-s{display:block;font-size:0.6rem;font-weight:700;margin-top:0.15rem;font-variant-numeric:tabular-nums}
-tbody td{padding:0.5rem 0.6rem;border-bottom:1px solid var(--border-light);text-align:center;vertical-align:middle;font-size:0.78rem}
-tbody td:first-child{position:sticky;left:0;z-index:5;background:var(--card);text-align:left;min-width:340px;border-right:1px solid var(--border)}
+tbody td{padding:0.45rem 0.5rem;border-bottom:1px solid var(--border-light);text-align:center;vertical-align:middle;font-size:0.78rem}
+tbody td:first-child{position:sticky;left:0;z-index:5;background:var(--card);text-align:left;min-width:320px;max-width:360px;border-right:1px solid var(--border)}
 tbody tr:hover td{background:#f8fafc}
 tbody tr:hover td:first-child{background:#f3f4f6}
 
@@ -152,9 +152,9 @@ tbody tr:hover td:first-child{background:#f3f4f6}
 .st-f{background:var(--fail-bg);color:#991b1b;border:1px solid rgba(220,38,38,0.2)}
 .st-n{color:#d1d5db;font-size:0.65rem}
 
-/* Category row */
+/* Category row — first cell sticky, rest scroll */
 .cat-row td{background:#eef2ff !important;font-weight:700;color:var(--navy);font-size:0.78rem;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);letter-spacing:0.02em}
-.cat-row td:first-child{background:#eef2ff !important}
+.cat-row td:first-child{background:#eef2ff !important;position:sticky;left:0;z-index:5}
 
 /* Details button */
 .ck-toggle{display:inline-flex;align-items:center;gap:0.25rem;font-size:0.65rem;color:var(--cyan);cursor:pointer;margin-top:0.2rem;border:none;background:none;padding:0}
@@ -298,7 +298,7 @@ function render(){
   // Body
   var tb='',lc='',idx=0;
   M.forEach(function(r){
-    if(r.category!==lc){lc=r.category;tb+='<tr class="cat-row"><td colspan="'+(vt.length+1)+'">'+esc(lc)+'</td></tr>'}
+    if(r.category!==lc){lc=r.category;tb+='<tr class="cat-row"><td>'+esc(lc)+'</td>';for(var ci=0;ci<vt.length;ci++)tb+='<td></td>';tb+='</tr>'}
     var imp=String(r.importance||'').toLowerCase();
     var ic=imp==='high'?'ck-h':imp==='medium'?'ck-m':'ck-l';
     tb+='<tr data-n="'+esc(r.name)+'" data-c="'+esc(r.category)+'">';

@@ -124,16 +124,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .t-drop input[type=checkbox]{accent-color:var(--cyan);width:14px;height:14px}
 .t-drop .t-score{margin-left:auto;font-size:0.72rem;font-weight:600;font-variant-numeric:tabular-nums}
 
-/* Score cards */
-.scores{display:flex;gap:0.75rem;margin-bottom:1.25rem;overflow-x:auto;padding-bottom:0.5rem}
-.sc{min-width:150px;flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;text-align:center;box-shadow:var(--shadow);position:relative;overflow:hidden}
-.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
-.sc-g::before{background:var(--pass)}.sc-a::before{background:var(--warn)}.sc-r::before{background:var(--fail)}
-.sc .name{font-size:0.72rem;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sc .pct{font-size:1.5rem;font-weight:800;margin:0.15rem 0;font-variant-numeric:tabular-nums}
-.sc .detail{font-size:0.65rem;color:var(--text-secondary)}
-.sc .bar{height:4px;background:#e2e8f0;border-radius:2px;margin-top:0.5rem;overflow:hidden}
-.sc .bar-fill{height:100%;border-radius:2px;transition:width 1.5s cubic-bezier(0.4,0,0.2,1)}
+/* Column header detail */
+thead th .th-detail{display:block;font-size:0.58rem;font-weight:400;color:var(--text-secondary);margin-top:0.1rem}
 
 /* Matrix */
 .matrix-wrap{border:1px solid var(--border);border-radius:var(--r);overflow:auto;background:var(--card);box-shadow:var(--shadow);max-height:calc(100vh - 300px)}
@@ -228,8 +220,7 @@ tbody tr:hover td:first-child{background:#f3f4f6}
       </div>
     </div>
   </div>
-  <div class="scores fade" id="scores"></div>
-  <div class="matrix-wrap fade">
+  <div class="matrix-wrap animate-in" style="animation-delay:0.2s">
     <table>
       <thead id="mHead"></thead>
       <tbody id="mBody"></tbody>
@@ -297,20 +288,11 @@ function applyFilters(){
 
 function render(){
   var vt=T.filter(function(t){return vis.has(t.name)});
-  // Scores
-  var sh='';vt.forEach(function(t){
-    var c=sCol(t.score),cl=sClass(t.score),bc=c;
-    sh+='<div class="sc '+cl+'"><div class="name">'+esc(t.name)+'</div>';
-    sh+='<div class="pct" style="color:'+c+'">'+t.score+'%</div>';
-    sh+='<div class="detail">'+t.passed+' / '+t.total+' passed</div>';
-    sh+='<div class="bar"><div class="bar-fill" style="width:'+t.score+'%;background:'+bc+'"></div></div></div>';
-  });
-  document.getElementById('scores').innerHTML=sh;
-  // Head
+  // Head with score + passed/total
   var th='<tr><th>Check</th>';
   vt.forEach(function(t){
     var c=sCol(t.score);
-    th+='<th class="tc">'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span></th>';
+    th+='<th class="tc">'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span><span class="th-detail">'+t.passed+' / '+t.total+' passed</span></th>';
   });
   th+='</tr>';document.getElementById('mHead').innerHTML=th;
   // Body

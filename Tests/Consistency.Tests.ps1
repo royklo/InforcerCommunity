@@ -813,4 +813,195 @@ Describe 'Private helpers (via module scope)' {
             }
         }
     }
+
+    Context 'Resolve-InforcerAssessmentId' {
+        It 'Returns exact ID match when ID exists in data' {
+            & (Get-Module InforcerCommunity) {
+                $assessments = @(
+                    [PSCustomObject]@{ id = 'abc123'; name = 'Copilot Readiness' }
+                    [PSCustomObject]@{ id = 'def456'; name = 'CIS Benchmark' }
+                )
+                $result = Resolve-InforcerAssessmentId -AssessmentId 'abc123' -AssessmentData $assessments
+                $result | Should -Be 'abc123'
+            }
+        }
+
+        It 'Resolves friendly name to ID with exact case' {
+            & (Get-Module InforcerCommunity) {
+                $assessments = @(
+                    [PSCustomObject]@{ id = 'abc123'; name = 'Copilot Readiness' }
+                    [PSCustomObject]@{ id = 'def456'; name = 'CIS Benchmark' }
+                )
+                $result = Resolve-InforcerAssessmentId -AssessmentId 'Copilot Readiness' -AssessmentData $assessments
+                $result | Should -Be 'abc123'
+            }
+        }
+
+        It 'Resolves friendly name with case-insensitive fallback' {
+            & (Get-Module InforcerCommunity) {
+                $assessments = @([PSCustomObject]@{ id = 'abc123'; name = 'Copilot Readiness' })
+                $result = Resolve-InforcerAssessmentId -AssessmentId 'copilot readiness' -AssessmentData $assessments
+                $result | Should -Be 'abc123'
+            }
+        }
+
+        It 'Prefers exact case match over case-insensitive' {
+            & (Get-Module InforcerCommunity) {
+                $assessments = @(
+                    [PSCustomObject]@{ id = '111'; name = 'test' }
+                    [PSCustomObject]@{ id = '222'; name = 'Test' }
+                )
+                $result = Resolve-InforcerAssessmentId -AssessmentId 'Test' -AssessmentData $assessments
+                $result | Should -Be '222'
+            }
+        }
+
+        It 'Throws when assessment name not found' {
+            & (Get-Module InforcerCommunity) {
+                $assessments = @([PSCustomObject]@{ id = 'abc'; name = 'Existing' })
+                { Resolve-InforcerAssessmentId -AssessmentId 'NonExistent' -AssessmentData $assessments } | Should -Throw '*No assessment found*'
+            }
+        }
+
+        It 'Handles whitespace in assessment ID' {
+            & (Get-Module InforcerCommunity) {
+                $assessments = @([PSCustomObject]@{ id = 'abc123'; name = 'Copilot Readiness' })
+                $result = Resolve-InforcerAssessmentId -AssessmentId '  Copilot Readiness  ' -AssessmentData $assessments
+                $result | Should -Be 'abc123'
+            }
+        }
+    }
+
+    Context 'Add-InforcerPropertyAliases Assessment' {
+        It 'Assessment: adds PascalCase aliases and converts tags to string' {
+            & (Get-Module InforcerCommunity) {
+                $assessment = [PSCustomObject]@{
+                    id = 'abc123'
+                    name = 'Copilot Readiness'
+                    description = 'Checks for Copilot'
+                    assessmentType = 'platform'
+                    tags = @('copilot', 'inforcer', 'platform')
+                    lastUpdated = '2025-10-01T12:00:00Z'
+                    created = '2025-07-21T12:00:00Z'
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $assessment -ObjectType Assessment
+                $assessment.Id | Should -Be 'abc123'
+                $assessment.Name | Should -Be 'Copilot Readiness'
+                $assessment.AssessmentType | Should -Be 'platform'
+                $assessment.tags | Should -BeOfType [string]
+                $assessment.tags | Should -Be 'copilot, inforcer, platform'
+            }
+        }
+
+        It 'Assessment: handles null tags without error' {
+            & (Get-Module InforcerCommunity) {
+                $assessment = [PSCustomObject]@{
+                    id = 'xyz'; name = 'Test'; description = ''; assessmentType = 'custom'
+                    tags = $null; lastUpdated = $null; created = $null
+                }
+                { $null = Add-InforcerPropertyAliases -InputObject $assessment -ObjectType Assessment } | Should -Not -Throw
+                $assessment.Id | Should -Be 'xyz'
+            }
+        }
+
+        It 'Assessment: handles empty tags array' {
+            & (Get-Module InforcerCommunity) {
+                $assessment = [PSCustomObject]@{
+                    id = 'xyz'; name = 'Test'; description = ''; assessmentType = 'custom'
+                    tags = @(); lastUpdated = $null; created = $null
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $assessment -ObjectType Assessment
+                $assessment.tags | Should -Be ''
+            }
+        }
+    }
+
+    Context 'ConvertTo-InforcerAssessmentHtml' {
+        It 'Generates valid HTML with correct structure' {
+            & (Get-Module InforcerCommunity) {
+                $checks = @(
+                    [PSCustomObject]@{
+                        name = 'Test Check'; category = 'Entra'; subCategory = 'CA'; importance = 'High'
+                        Status = 'Pass'; FindingsMessage = '1 of 1 passed'; description = 'Test desc'
+                        remediation = ''; impact = ''; rationale = ''
+                        Scores = @([PSCustomObject]@{
+                            objectName = 'Policy A'; score = 100
+                            passes = @('All good'); violations = @(); warnings = @()
+                        })
+                    }
+                )
+                $html = ConvertTo-InforcerAssessmentHtml -AssessmentName 'Test' -TenantName 'Tenant' `
+                    -Checks $checks -Score 100 -TotalChecks 1 -Passed 1 -Failed 0
+                $html | Should -Match '<!DOCTYPE html>'
+                $html | Should -Match 'Test'
+                $html | Should -Match 'Test Check'
+                $html | Should -Match 'Compliant'
+                $html | Should -Not -Match 'cdn'
+            }
+        }
+
+        It 'Renders markdown in description' {
+            & (Get-Module InforcerCommunity) {
+                $checks = @(
+                    [PSCustomObject]@{
+                        name = 'MD Check'; category = 'Test'; subCategory = ''; importance = 'Low'
+                        Status = 'Fail'; FindingsMessage = '0 of 1'; description = '**Bold text** and `code`'
+                        remediation = ''; impact = ''; rationale = ''
+                        Scores = @()
+                    }
+                )
+                $html = ConvertTo-InforcerAssessmentHtml -AssessmentName 'Test' -TenantName 'T' `
+                    -Checks $checks -Score 0 -TotalChecks 1 -Passed 0 -Failed 1
+                $html | Should -Match '<strong>Bold text</strong>'
+                $html | Should -Match '<code'
+            }
+        }
+    }
+
+    Context 'ConvertTo-InforcerAssessmentMatrixHtml' {
+        It 'Generates valid HTML with tenant columns' {
+            & (Get-Module InforcerCommunity) {
+                $tenantResults = @(
+                    @{
+                        TenantName = 'Contoso'; TenantId = 1; Score = 100; Passed = 1; Failed = 0; TotalChecks = 1
+                        Checks = @([PSCustomObject]@{
+                            name = 'Check A'; category = 'Entra'; subCategory = 'CA'; importance = 'High'
+                            Status = 'Pass'; description = 'Desc'; impact = ''; rationale = ''; key = ''
+                            FindingsMessage = ''; ObjectsEvaluated = 0; Scores = @(); Violations = @(); Warnings = @(); Passes = @()
+                        })
+                    },
+                    @{
+                        TenantName = 'Fabrikam'; TenantId = 2; Score = 0; Passed = 0; Failed = 1; TotalChecks = 1
+                        Checks = @([PSCustomObject]@{
+                            name = 'Check A'; category = 'Entra'; subCategory = 'CA'; importance = 'High'
+                            Status = 'Fail'; description = 'Desc'; impact = ''; rationale = ''; key = ''
+                            FindingsMessage = ''; ObjectsEvaluated = 0; Scores = @(); Violations = @(); Warnings = @(); Passes = @()
+                        })
+                    }
+                )
+                $html = ConvertTo-InforcerAssessmentMatrixHtml -AssessmentName 'Test Matrix' -TenantResults $tenantResults
+                $html | Should -Match '<!DOCTYPE html>'
+                $html | Should -Match 'Contoso'
+                $html | Should -Match 'Fabrikam'
+                $html | Should -Match 'Test Matrix'
+                $html | Should -Not -Match 'cdn'
+            }
+        }
+
+        It 'Includes tenant filter dropdown' {
+            & (Get-Module InforcerCommunity) {
+                $tr = @(@{
+                    TenantName = 'T1'; TenantId = 1; Score = 50; Passed = 1; Failed = 1; TotalChecks = 2
+                    Checks = @(
+                        [PSCustomObject]@{ name='A'; category='X'; subCategory=''; importance='High'; Status='Pass'; description=''; impact=''; rationale=''; key=''; FindingsMessage=''; ObjectsEvaluated=0; Scores=@(); Violations=@(); Warnings=@(); Passes=@() },
+                        [PSCustomObject]@{ name='B'; category='X'; subCategory=''; importance='Low'; Status='Fail'; description=''; impact=''; rationale=''; key=''; FindingsMessage=''; ObjectsEvaluated=0; Scores=@(); Violations=@(); Warnings=@(); Passes=@() }
+                    )
+                })
+                $html = ConvertTo-InforcerAssessmentMatrixHtml -AssessmentName 'Test' -TenantResults $tr
+                $html | Should -Match 'tenant-btn'
+                $html | Should -Match 'togAll'
+                $html | Should -Match 'checkbox'
+            }
+        }
+    }
 }

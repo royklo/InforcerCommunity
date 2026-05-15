@@ -31,6 +31,35 @@ function ConvertTo-InforcerAssessmentHtml {
 
     $placeholders = @('[Multiple Objects Evaluated]', '[unknown name]', '[unknown id]')
     $esc = { param([string]$s) [System.Web.HttpUtility]::HtmlEncode($s) }
+    # Simple markdown to HTML converter for description/remediation text
+    $md2html = {
+        param([string]$text)
+        if ([string]::IsNullOrWhiteSpace($text)) { return '' }
+        $h = [System.Web.HttpUtility]::HtmlEncode($text)
+        # Code blocks (``` ... ```)
+        $h = [regex]::Replace($h, '```(\w*)\r?\n([\s\S]*?)```', '<pre><code>$2</code></pre>')
+        # Headings (# ## ###)
+        $h = [regex]::Replace($h, '(?m)^#{3}\s+(.+)$', '<h5>$1</h5>')
+        $h = [regex]::Replace($h, '(?m)^#{2}\s+(.+)$', '<h4>$1</h4>')
+        $h = [regex]::Replace($h, '(?m)^#{1}\s+(.+)$', '<h3 style="font-size:0.9rem;margin:0.5rem 0 0.25rem">$1</h3>')
+        # Bold
+        $h = [regex]::Replace($h, '\*\*(.+?)\*\*', '<strong>$1</strong>')
+        # Blockquotes
+        $h = [regex]::Replace($h, '(?m)^&gt;\s*(.+)$', '<blockquote style="border-left:3px solid var(--cyan);padding:0.25rem 0.75rem;margin:0.35rem 0;color:var(--text-secondary);font-size:0.8rem">$1</blockquote>')
+        # Unordered lists (- or *)
+        $h = [regex]::Replace($h, '(?m)^[\-\*]\s+(.+)$', '<li>$1</li>')
+        $h = [regex]::Replace($h, '(<li>.*?</li>(\r?\n)?)+', '<ul style="margin:0.25rem 0;padding-left:1.25rem">$0</ul>')
+        # Numbered lists
+        $h = [regex]::Replace($h, '(?m)^\d+\.\s+(.+)$', '<li>$1</li>')
+        # Links: [text](url)
+        $h = [regex]::Replace($h, '\[([^\]]+)\]\(([^)]+)\)', '<a href="$2" style="color:var(--cyan)" target="_blank">$1</a>')
+        # Inline code
+        $h = [regex]::Replace($h, '`([^`]+)`', '<code style="background:#e2e8f0;padding:0.1rem 0.3rem;border-radius:3px;font-size:0.78rem">$1</code>')
+        # Line breaks
+        $h = $h -replace "`r?`n`r?`n", '</p><p style="margin:0.35rem 0">'
+        $h = $h -replace "`r?`n", '<br>'
+        return "<p style=`"margin:0.35rem 0`">$h</p>"
+    }
     $sb = [System.Text.StringBuilder]::new(64000)
 
     $scoreColor = if ($Score -ge 90) { '#16a34a' } elseif ($Score -ge 70) { '#178BDB' } else { '#dc2626' }
@@ -141,6 +170,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .detail-col-right{flex:2;display:flex;flex-direction:column;gap:0.5rem}
 .detail-label{font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-secondary);margin-bottom:0.35rem}
 .detail-text{font-size:0.8125rem;color:var(--text-body);line-height:1.625}
+.detail-text pre{background:#1e293b;color:#e2e8f0;padding:0.75rem 1rem;border-radius:6px;overflow-x:auto;font-size:0.78rem;margin:0.5rem 0;line-height:1.5}
+.detail-text code{font-family:'SF Mono',Consolas,monospace}
+.detail-text h3,.detail-text h4,.detail-text h5{color:var(--navy);margin:0.5rem 0 0.25rem}
+.detail-text h4{font-size:0.85rem}.detail-text h5{font-size:0.8rem}
+.detail-text ul,.detail-text ol{margin:0.25rem 0 0.25rem 1.25rem}
+.detail-text li{margin-bottom:0.15rem}
 .findings-list{display:flex;flex-direction:column;gap:0.35rem}
 .finding-pass{font-size:0.8125rem;color:#166534;display:flex;align-items:flex-start;gap:0.4rem}
 .finding-fail{font-size:0.8125rem;color:#991b1b;display:flex;align-items:flex-start;gap:0.4rem}
@@ -272,8 +307,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
             [void]$sb.Append(@"
 
-      <div class="control-item $itemClass" data-name="$(& $esc $check.name)" data-status="$($check.Status)" onclick="toggleControl(this)">
-        <div class="control-header">
+      <div class="control-item $itemClass" data-name="$(& $esc $check.name)" data-status="$($check.Status)">
+        <div class="control-header" onclick="toggleControl(this.parentElement)">
           <div class="control-left">
             <span class="control-imp $impClass">$(& $esc $check.importance)</span>
             <span class="control-name">$(& $esc $check.name)</span>
@@ -286,10 +321,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="control-detail">
           <div class="detail-grid">
             <div class="detail-col-left">
-              <div class="detail-section"><div class="detail-label">Description</div><div class="detail-text">$(& $esc $check.description)</div></div>
+              <div class="detail-section"><div class="detail-label">Description</div><div class="detail-text">$(& $md2html $check.description)</div></div>
 "@)
             if ($check.remediation) {
-                [void]$sb.Append("<div class=`"detail-section`"><div class=`"detail-label`">Remediation</div><div class=`"detail-text`">$(& $esc $check.remediation)</div></div>")
+                [void]$sb.Append("<div class=`"detail-section`"><div class=`"detail-label`">Remediation</div><div class=`"detail-text`">$(& $md2html $check.remediation)</div></div>")
             }
             [void]$sb.Append(@"
 

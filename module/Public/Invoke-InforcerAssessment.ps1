@@ -214,11 +214,23 @@ if ($isMultiTenant) {
         return
     }
 
+    # Format elapsed time as human-readable
+    $fmtTime = {
+        param([double]$totalSeconds)
+        if ($totalSeconds -ge 60) {
+            $mins = [math]::Floor($totalSeconds / 60)
+            $secs = [math]::Round($totalSeconds % 60)
+            return "${mins}m ${secs}s"
+        }
+        return "$([math]::Round($totalSeconds, 1))s"
+    }
+
     Write-Host ""
     Write-Host "Multi-tenant assessment: '$assessmentDisplayName' across $($tenantsToRun.Count) tenant(s)" -ForegroundColor Cyan
     Write-Host ""
 
     # Run assessment for each tenant
+    $totalStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     $allTenantResults = [System.Collections.Generic.List[object]]::new()
     $tenantIndex = 0
     foreach ($tenant in $tenantsToRun) {
@@ -254,8 +266,11 @@ if ($isMultiTenant) {
         })
     }
 
+    $totalStopwatch.Stop()
+    $totalTimeStr = & $fmtTime $totalStopwatch.Elapsed.TotalSeconds
+
     Write-Host ""
-    Write-Host "All assessments complete. $($allTenantResults.Count) tenant(s) processed." -ForegroundColor Green
+    Write-Host "All assessments complete. $($allTenantResults.Count) tenant(s) processed in $totalTimeStr." -ForegroundColor Green
 
     # Summary per tenant
     foreach ($tr in $allTenantResults) {

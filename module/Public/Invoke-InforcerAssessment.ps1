@@ -279,6 +279,37 @@ if ($isMultiTenant) {
     }
     Write-Host ""
 
+    # JsonObject output for automation
+    if ($OutputType -eq 'JsonObject') {
+        $jsonOutput = [System.Collections.Generic.List[object]]::new()
+        foreach ($tr in $allTenantResults) {
+            [void]$jsonOutput.Add([PSCustomObject]@{
+                TenantName      = $tr.TenantName
+                TenantId        = $tr.TenantId
+                ComplianceScore = $tr.Score
+                TotalChecks     = $tr.TotalChecks
+                Passed          = $tr.Passed
+                Failed          = $tr.Failed
+                Checks          = @($tr.Checks | ForEach-Object {
+                    [PSCustomObject]@{
+                        Name             = $_.name
+                        Category         = $_.category
+                        SubCategory      = $_.subCategory
+                        Importance       = $_.importance
+                        Status           = $_.Status
+                        ObjectsEvaluated = $_.ObjectsEvaluated
+                        FindingsMessage  = $_.FindingsMessage
+                        Violations       = $_.Violations
+                        Warnings         = $_.Warnings
+                        Passes           = $_.Passes
+                    }
+                })
+            })
+        }
+        $jsonOutput | ConvertTo-Json -Depth 100
+        return
+    }
+
     # Export
     if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
         $resolvedPath = [System.IO.Path]::GetFullPath($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath))

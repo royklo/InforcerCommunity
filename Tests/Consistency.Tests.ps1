@@ -30,13 +30,14 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 14
+        $script:expectedCount = 16
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
             'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole',
-            'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments'
+            'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
+            'Get-InforcerAssessment', 'Invoke-InforcerAssessment'
         )
         $script:expectedParameters = @{
             'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl', 'FetchGraphData', 'PassThru')
@@ -53,6 +54,8 @@ Describe 'Consistency contract' {
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
             'Compare-InforcerEnvironments'  = @('SourceTenantId', 'DestinationTenantId', 'SourceSession', 'DestinationSession', 'SourceBaselineId', 'DestinationBaselineId', 'IncludingAssignments', 'SettingsCatalogPath', 'FetchGraphData', 'ExcludeOS', 'PolicyNameFilter', 'OutputPath')
+            'Get-InforcerAssessment'        = @('Format', 'OutputType')
+            'Invoke-InforcerAssessment'     = @('TenantId', 'AssessmentId', 'OutputType')
         }
     }
 
@@ -190,6 +193,18 @@ Describe 'No-silent-failure contract' {
     It 'Export-InforcerTenantDocumentation produces an error when not connected' {
         $err = $null
         Export-InforcerTenantDocumentation -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Get-InforcerAssessment produces an error when not connected' {
+        $err = $null
+        Get-InforcerAssessment -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Invoke-InforcerAssessment produces an error when not connected' {
+        $err = $null
+        Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'test' -ErrorVariable err -ErrorAction SilentlyContinue
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 }
@@ -398,6 +413,44 @@ Describe 'Parameter binding and behavior' {
         ($hasOutput -or $hasError) | Should -BeTrue -Because 'Export-InforcerTenantDocumentation must not silently do nothing'
         if ($hasError -and $err[0].ToString() -match 'Cannot bind|Parameter.*not found|Unknown parameter') {
             Set-ItResult -Inconclusive -Because 'Parameter binding failed; check parameter names'
+        }
+    }
+
+    It 'Get-InforcerAssessment binds all key parameters without errors' {
+        $err = $null
+        $null = Get-InforcerAssessment -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | ForEach-Object {
+            $_.Exception.Message | Should -Not -BeLike '*parameter*'
+            $_.Exception.Message | Should -Not -BeLike '*cannot bind*'
+        }
+    }
+
+    It 'Get-InforcerAssessment -OutputType JsonObject returns string or error' {
+        $err = $null
+        $result = Get-InforcerAssessment -OutputType JsonObject -ErrorVariable err -ErrorAction SilentlyContinue
+        if ($result) {
+            $result | Should -BeOfType [string]
+        } else {
+            $err | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    It 'Invoke-InforcerAssessment binds all key parameters without errors' {
+        $err = $null
+        $null = Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'test' -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | ForEach-Object {
+            $_.Exception.Message | Should -Not -BeLike '*parameter*'
+            $_.Exception.Message | Should -Not -BeLike '*cannot bind*'
+        }
+    }
+
+    It 'Invoke-InforcerAssessment -OutputType JsonObject returns string or error' {
+        $err = $null
+        $result = Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'test' -OutputType JsonObject -ErrorVariable err -ErrorAction SilentlyContinue
+        if ($result) {
+            $result | Should -BeOfType [string]
+        } else {
+            $err | Should -Not -BeNullOrEmpty
         }
     }
 }

@@ -244,7 +244,6 @@ var filt='all';
 
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function sCol(s){return s>=90?'var(--pass)':s>=70?'var(--cyan)':'var(--fail)'}
-function sClass(s){return s>=90?'sc-g':s>=70?'sc-a':'sc-r'}
 
 function buildCbs(){
   var h='';T.forEach(function(t){

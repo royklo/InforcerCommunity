@@ -266,7 +266,7 @@ if ($isMultiTenant) {
 
     # Export
     if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
-        $resolvedPath = [System.IO.Path]::GetFullPath($OutputPath)
+        $resolvedPath = [System.IO.Path]::GetFullPath($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath))
         $ext = [System.IO.Path]::GetExtension($resolvedPath).ToLower()
 
         if ($ext -eq '.html' -or $ext -eq '.htm') {
@@ -356,7 +356,7 @@ Write-Host ""
 
 # Export or emit
 if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
-    $resolvedPath = [System.IO.Path]::GetFullPath($OutputPath)
+    $resolvedPath = [System.IO.Path]::GetFullPath($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath))
     $ext = [System.IO.Path]::GetExtension($resolvedPath).ToLower()
 
     if ($ext -eq '.html' -or $ext -eq '.htm') {

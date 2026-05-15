@@ -129,13 +129,12 @@ thead th .th-detail{display:block;font-size:0.58rem;font-weight:400;color:var(--
 
 /* Matrix */
 .matrix-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:auto;background:var(--card);flex:1;min-height:0}
-table{border-collapse:separate;border-spacing:0}
-thead th{position:sticky;top:0;z-index:10;background:#f8fafc;padding:0.55rem 0.5rem;text-align:center;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy);border-bottom:2px solid var(--border)}
-thead th:first-child{position:sticky;left:0;z-index:20;text-align:left;min-width:320px;max-width:360px;background:#f8fafc}
-thead th.tc{min-width:110px;width:110px;white-space:normal;word-wrap:break-word;vertical-align:bottom;line-height:1.3}
+table{border-collapse:separate;border-spacing:0;min-width:100%;table-layout:auto}
+thead th{position:sticky;top:0;z-index:10;background:#f8fafc;padding:0.55rem 0.5rem;text-align:center;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy);border-bottom:2px solid var(--border);white-space:normal;word-wrap:break-word;vertical-align:bottom;line-height:1.3}
+thead th:first-child{position:sticky;left:0;z-index:20;text-align:left;width:320px;min-width:320px;background:#f8fafc;white-space:normal}
 thead th .th-s{display:block;font-size:0.6rem;font-weight:700;margin-top:0.15rem;font-variant-numeric:tabular-nums}
 tbody td{padding:0.45rem 0.5rem;border-bottom:1px solid var(--border-light);text-align:center;vertical-align:middle;font-size:0.78rem}
-tbody td:first-child{position:sticky;left:0;z-index:5;background:var(--card);text-align:left;min-width:320px;max-width:360px;border-right:1px solid var(--border)}
+tbody td:first-child{position:sticky;left:0;z-index:5;background:var(--card);text-align:left;width:320px;min-width:320px;border-right:1px solid var(--border)}
 tbody tr:hover td{background:#f8fafc}
 tbody tr:hover td:first-child{background:#f3f4f6}
 
@@ -292,7 +291,7 @@ function render(){
   var th='<tr><th>Check</th>';
   vt.forEach(function(t){
     var c=sCol(t.score);
-    th+='<th class="tc">'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span><span class="th-detail">'+t.passed+' / '+t.total+' passed</span></th>';
+    th+='<th>'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span><span class="th-detail">'+t.passed+' / '+t.total+' passed</span></th>';
   });
   th+='</tr>';document.getElementById('mHead').innerHTML=th;
   // Body

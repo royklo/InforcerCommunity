@@ -342,7 +342,7 @@ if ($isMultiTenant) {
                     })
                 }
             }
-            $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding UTF8
+            $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding utf8NoBOM
             Write-Host "CSV report saved to: $resolvedPath"
         }
         else {
@@ -432,7 +432,7 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
                 Passes           = ($c.Passes -join '; ')
             }
         }
-        $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding UTF8
+        $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding utf8NoBOM
         Write-Host "CSV report saved to: $resolvedPath"
     }
     else {

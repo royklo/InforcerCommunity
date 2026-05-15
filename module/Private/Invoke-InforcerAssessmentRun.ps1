@@ -14,6 +14,17 @@ function Invoke-InforcerAssessmentRun {
         [Parameter(Mandatory)] [string]$AssessmentDisplayName
     )
 
+    # Format elapsed time as human-readable (e.g. "1m 23s", "45s")
+    $formatElapsed = {
+        param([double]$totalSeconds)
+        if ($totalSeconds -ge 60) {
+            $mins = [math]::Floor($totalSeconds / 60)
+            $secs = [math]::Round($totalSeconds % 60)
+            return "${mins}m ${secs}s"
+        }
+        return "$([math]::Round($totalSeconds, 1))s"
+    }
+
     Write-Host "Running '$AssessmentDisplayName' against $TenantDisplayName..."
 
     $endpoint = "/beta/tenants/$ClientTenantId/assessments/$ResolvedAssessmentId/runs"
@@ -33,7 +44,7 @@ function Invoke-InforcerAssessmentRun {
         Start-Sleep -Milliseconds 500
         $elapsed = [math]::Floor($stopwatch.Elapsed.TotalSeconds)
         if ($elapsed -gt 0 -and $elapsed % 10 -eq 0 -and $elapsed -ne $lastUpdate) {
-            Write-Host "  Still running... ${elapsed}s elapsed"
+            Write-Host "  Still running... $(& $formatElapsed $elapsed) elapsed"
             $lastUpdate = $elapsed
         }
     }
@@ -62,12 +73,12 @@ function Invoke-InforcerAssessmentRun {
     }
 
     $stopwatch.Stop()
-    $elapsed = [math]::Round($stopwatch.Elapsed.TotalSeconds, 1)
+    $elapsedStr = & $formatElapsed $stopwatch.Elapsed.TotalSeconds
     if ($hasError) {
-        Write-Host "  Failed after ${elapsed}s."
+        Write-Host "  Failed after $elapsedStr."
         return $null
     }
-    Write-Host "  Completed in ${elapsed}s."
+    Write-Host "  Completed in $elapsedStr."
 
     # Unwrap response
     $responseObj = if ($rawResponse -and $rawResponse.Count -gt 0) { $rawResponse[0] } else { $null }

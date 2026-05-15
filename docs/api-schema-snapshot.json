@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-18T06:36:43Z",
+  "generatedAt": "2026-05-15T07:21:15Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -7,7 +7,7 @@
         "tenantFriendlyName": "string",
         "tenantDnsName": "string",
         "msTenantId": "string",
-        "secureScore": "integer",
+        "secureScore": "number",
         "isBaseline": "boolean",
         "lastBackupTimestamp": "datetime",
         "recentChanges": "integer",
@@ -69,24 +69,6 @@
         "baselineGroupId": "string",
         "baselineGroupName": "string",
         "lastComparisonDateTime": "datetime"
-      }
-    },
-    "GET /beta/tenants/{tenantId}/policies": {
-      "properties": {
-        "id": "string",
-        "policyTypeId": "integer",
-        "name": "null",
-        "displayName": "string",
-        "friendlyName": "string",
-        "description": "null",
-        "readOnly": "boolean",
-        "product": "string",
-        "primaryGroup": "string",
-        "secondaryGroup": "string",
-        "platform": "null",
-        "policyCategoryId": "integer",
-        "tags": "array",
-        "policyData": "object"
       }
     },
     "GET /beta/tenants/{tenantId}/alignmentDetails": {

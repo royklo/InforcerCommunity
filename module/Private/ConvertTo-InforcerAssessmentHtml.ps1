@@ -49,10 +49,12 @@ function ConvertTo-InforcerAssessmentHtml {
         # Unordered lists (- or *)
         $h = [regex]::Replace($h, '(?m)^[\-\*]\s+(.+)$', '<li>$1</li>')
         $h = [regex]::Replace($h, '(<li>.*?</li>(\r?\n)?)+', '<ul style="margin:0.25rem 0;padding-left:1.25rem">$0</ul>')
-        # Numbered lists
-        $h = [regex]::Replace($h, '(?m)^\d+\.\s+(.+)$', '<li>$1</li>')
-        # Links: [text](url)
-        $h = [regex]::Replace($h, '\[([^\]]+)\]\(([^)]+)\)', '<a href="$2" style="color:var(--cyan)" target="_blank">$1</a>')
+        # Numbered lists (wrap in <ol>)
+        $h = [regex]::Replace($h, '(?m)^\d+\.\s+(.+)$', '<li data-ol>$1</li>')
+        $h = [regex]::Replace($h, '(<li data-ol>.*?</li>(\r?\n)?)+', '<ol style="margin:0.25rem 0;padding-left:1.25rem">$0</ol>')
+        $h = $h -replace '<li data-ol>', '<li>'
+        # Links: [text](url) — only allow http/https schemes
+        $h = [regex]::Replace($h, '\[([^\]]+)\]\((https?://[^)]+)\)', '<a href="$2" style="color:var(--cyan)" target="_blank">$1</a>')
         # Inline code
         $h = [regex]::Replace($h, '`([^`]+)`', '<code style="background:#e2e8f0;padding:0.1rem 0.3rem;border-radius:3px;font-size:0.78rem">$1</code>')
         # Line breaks

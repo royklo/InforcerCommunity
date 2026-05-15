@@ -80,9 +80,17 @@ function Invoke-InforcerAssessmentRun {
     }
     Write-Host "  Completed in $elapsedStr."
 
-    # Unwrap response
+    # Unwrap response and check for API-level errors
     $responseObj = if ($rawResponse -and $rawResponse.Count -gt 0) { $rawResponse[0] } else { $null }
     if ($null -eq $responseObj) { return $null }
+    # Check for success:false (API returned 200 but operation failed)
+    $successProp = $responseObj.PSObject.Properties['success']
+    if ($successProp -and $successProp.Value -eq $false) {
+        $msgProp = $responseObj.PSObject.Properties['message']
+        $apiMsg = if ($msgProp) { $msgProp.Value } else { 'Unknown API error' }
+        Write-Error -Message "Assessment API error: $apiMsg" -ErrorId 'AssessmentApiFailed' -Category InvalidResult
+        return $null
+    }
     $dataProp = $responseObj.PSObject.Properties['data']
     if ($dataProp) { return $dataProp.Value } else { return $responseObj }
 }

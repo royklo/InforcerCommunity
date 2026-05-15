@@ -306,7 +306,7 @@ if ($isMultiTenant) {
                 })
             })
         }
-        $jsonOutput | ConvertTo-Json -Depth 100
+        ConvertTo-Json -InputObject @($jsonOutput) -Depth 100
         return
     }
 

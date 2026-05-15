@@ -41,9 +41,10 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
     $timeStr = Get-Date -Format 'HH:mm'
     $avgScore = if ($TenantResults.Count -gt 0) { [math]::Round(($TenantResults | ForEach-Object { $_.Score } | Measure-Object -Average).Average, 1) } else { 0 }
 
-    $tenantsJson = $TenantResults | ForEach-Object {
+    $tenantsArray = @($TenantResults | ForEach-Object {
         @{ name = $_.TenantName; id = $_.TenantId; score = $_.Score; passed = $_.Passed; failed = $_.Failed; total = $_.TotalChecks }
-    } | ConvertTo-Json -Depth 100 -Compress
+    })
+    $tenantsJson = ConvertTo-Json -InputObject $tenantsArray -Depth 100 -Compress
 
     $matrixRows = [System.Collections.Generic.List[object]]::new()
     foreach ($ck in $allChecks) {
@@ -58,7 +59,7 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
         $rationale = if ($ck.rationale) { ($ck.rationale -replace "`r?`n", '\n') } else { '' }
         [void]$matrixRows.Add(@{ name = $ck.name; category = $ck.category; sub = $ck.subCategory; importance = $ck.importance; statuses = $statuses; desc = $desc; impact = $impact; rationale = $rationale })
     }
-    $matrixJson = $matrixRows | ConvertTo-Json -Depth 100 -Compress
+    $matrixJson = ConvertTo-Json -InputObject @($matrixRows) -Depth 100 -Compress
 
     $sb = [System.Text.StringBuilder]::new(48000)
     [void]$sb.Append(@"
@@ -238,7 +239,7 @@ tbody tr:hover td:first-child{background:#f3f4f6}
   </div>
 </div>
 <script>
-var T=$tenantsJson,M=$matrixJson;
+var T=$($tenantsJson -replace '</','<\/'),M=$($matrixJson -replace '</','<\/');
 var vis=new Set(T.map(function(t){return t.name}));
 var filt='all';
 
@@ -326,9 +327,9 @@ function openPanel(idx){
     '<span class="ck-imp '+ic+'" style="font-size:0.65rem">'+esc(r.importance||'')+'</span>'+
     ' &middot; '+esc(r.category);
   var h='';
-  if(r.desc){h+='<div class="panel-section"><div class="panel-section-title">Description</div><p>'+r.desc.replace(/\\n/g,'\n')+'</p></div>'}
-  if(r.impact){h+='<div class="panel-section"><div class="panel-section-title">Impact</div><p>'+r.impact.replace(/\\n/g,'\n')+'</p></div>'}
-  if(r.rationale){h+='<div class="panel-section"><div class="panel-section-title">Rationale</div><p>'+r.rationale.replace(/\\n/g,'\n')+'</p></div>'}
+  if(r.desc){h+='<div class="panel-section"><div class="panel-section-title">Description</div><p>'+esc(String(r.desc).replace(/\\n/g,'\n'))+'</p></div>'}
+  if(r.impact){h+='<div class="panel-section"><div class="panel-section-title">Impact</div><p>'+esc(String(r.impact).replace(/\\n/g,'\n'))+'</p></div>'}
+  if(r.rationale){h+='<div class="panel-section"><div class="panel-section-title">Rationale</div><p>'+esc(String(r.rationale).replace(/\\n/g,'\n'))+'</p></div>'}
   document.getElementById('panelBody').innerHTML=h;
   document.getElementById('panelOverlay').classList.add('open');
   document.getElementById('panel').classList.add('open');

@@ -375,5 +375,82 @@
       </ListControl>
     </View>
 
+    <!-- ASSESSMENT -->
+    <View>
+      <Name>InforcerCommunity.Assessment.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.Assessment</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem>
+                <PropertyName>Name</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>Id</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>Description</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>AssessmentType</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>Tags</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>LastUpdated</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>Created</PropertyName>
+              </ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- ASSESSMENT CHECK -->
+    <View>
+      <Name>InforcerCommunity.AssessmentCheck.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.AssessmentCheck</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem>
+                <PropertyName>Status</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>name</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>category</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>subCategory</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>importance</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>ObjectsEvaluated</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>FindingsMessage</PropertyName>
+              </ListItem>
+              <ListItem>
+                <PropertyName>Scores</PropertyName>
+              </ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

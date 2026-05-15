@@ -17,7 +17,7 @@ function Add-InforcerPropertyAliases {
         [object]$InputObject,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User', 'GroupSummary', 'Group', 'Role')]
+        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User', 'GroupSummary', 'Group', 'Role', 'Assessment')]
         [string]$ObjectType
     )
 
@@ -334,6 +334,20 @@ function Add-InforcerPropertyAliases {
                 AddAliasIfExists $obj 'IsBuiltIn' 'isBuiltIn'
                 AddAliasIfExists $obj 'IsEnabled' 'isEnabled'
                 AddAliasIfExists $obj 'IsPrivileged' 'isPrivileged'
+            }
+            'Assessment' {
+                AddAliasIfExists $obj 'Id' 'id'
+                AddAliasIfExists $obj 'Name' 'name'
+                AddAliasIfExists $obj 'Description' 'description'
+                AddAliasIfExists $obj 'AssessmentType' 'assessmentType'
+                AddAliasIfExists $obj 'LastUpdated' 'lastUpdated'
+                AddAliasIfExists $obj 'Created' 'created'
+                # Convert tags array to comma-separated string for display
+                $tagsProp = $obj.PSObject.Properties['tags']
+                if ($tagsProp -and $tagsProp.Value -is [array]) {
+                    $tagsProp.Value = ($tagsProp.Value | Where-Object { $_ }) -join ', '
+                }
+                AddAliasIfExists $obj 'Tags' 'tags'
             }
         }
 

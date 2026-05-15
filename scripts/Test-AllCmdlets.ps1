@@ -66,6 +66,12 @@ foreach ($name in $exported) {
             'Compare-InforcerEnvironments' {
                 $out = & $name -SourceTenantId 1 -DestinationTenantId 2 -ErrorVariable err -ErrorAction SilentlyContinue
             }
+            'Get-InforcerAssessment' {
+                $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Invoke-InforcerAssessment' {
+                $out = & $name -TenantId 1 -AssessmentId 'test' -ErrorVariable err -ErrorAction SilentlyContinue
+            }
             default {
                 $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
             }

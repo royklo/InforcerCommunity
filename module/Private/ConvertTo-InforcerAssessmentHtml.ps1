@@ -146,10 +146,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .finding-fail{font-size:0.8125rem;color:#991b1b;display:flex;align-items:flex-start;gap:0.4rem}
 .finding-warn{font-size:0.8125rem;color:#92400e;display:flex;align-items:flex-start;gap:0.4rem}
 .finding-icon{flex-shrink:0;font-weight:700}
-.score-row-grid{display:grid;grid-template-columns:1fr 80px;gap:0.5rem;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--border-light);font-size:0.78rem}
-.score-row-grid:last-child{border-bottom:none}
-.sr-name{font-weight:500;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sr-score{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.obj-cards{display:flex;flex-direction:column;gap:0.5rem;margin-top:0.5rem}
+.obj-card{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.obj-card-header{display:flex;align-items:center;justify-content:space-between;padding:0.65rem 1rem;cursor:pointer;transition:background 0.15s;user-select:none}
+.obj-card-header:hover{background:#f8fafc}
+.obj-card-left{display:flex;align-items:center;gap:0.5rem;min-width:0;flex:1}
+.obj-card-chevron{font-size:0.55rem;color:var(--text-secondary);transition:transform 0.25s;display:inline-block}
+.obj-card.open .obj-card-chevron{transform:rotate(90deg)}
+.obj-card-name{font-size:0.8125rem;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.obj-card-score{font-size:0.75rem;color:var(--text-secondary)}
+.obj-card-badge{font-size:0.65rem;font-weight:600;padding:0.15rem 0.5rem;border-radius:999px;flex-shrink:0}
+.obj-badge-pass{background:var(--pass-bg);color:#166534}
+.obj-badge-fail{background:var(--fail-bg);color:#991b1b}
+.obj-card-body{max-height:0;overflow:hidden;transition:max-height 0.35s cubic-bezier(0.4,0,0.2,1);background:#f8fafc;border-top:1px solid var(--border-light)}
+.obj-card.open .obj-card-body{max-height:5000px}
+.obj-card-content{padding:0.75rem 1rem}
+.obj-section-label{font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.35rem;margin-top:0.5rem}
+.obj-section-label:first-child{margin-top:0}
+.viol-label{color:var(--fail)}.pass-label{color:var(--pass)}.warn-label{color:var(--warn)}
+.obj-finding{font-size:0.8125rem;padding:0.4rem 0.75rem;border-radius:6px;margin-bottom:0.3rem;display:flex;align-items:flex-start;gap:0.4rem}
+.obj-finding-fail{background:var(--fail-bg);color:#991b1b}
+.obj-finding-pass{background:var(--pass-bg);color:#166534}
+.obj-finding-warn{background:var(--warn-bg);color:#92400e}
 .footer{text-align:center;margin-top:2rem;padding:1rem;font-size:0.72rem;color:var(--text-secondary);border-top:1px solid var(--border)}
 .footer a{color:var(--cyan);text-decoration:none}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -277,34 +295,57 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
             </div>
             <div class="detail-col-right">
-              <div class="detail-section"><div class="detail-label">Findings</div><div class="detail-text" style="font-size:0.78rem;color:var(--text-secondary)">$(& $esc $check.FindingsMessage)</div></div>
-              <div class="detail-section"><div class="detail-label">Results</div><div class="findings-list">
+              <div class="detail-section"><div class="detail-label">Detailed Checks</div>
+                <div class="detail-text" style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.5rem">$(& $esc $check.FindingsMessage)</div>
+                <div class="obj-cards">
 "@)
             if ($check.Scores) {
                 foreach ($s in $check.Scores) {
-                    $objName = if ($s.objectName -and $s.objectName -notin $placeholders) { $s.objectName } else { '' }
-                    $namePrefix = if ($objName) { "$(& $esc $objName): " } else { '' }
+                    $objName = if ($s.objectName -and $s.objectName -notin $placeholders) { $s.objectName } else { 'Tenant check' }
+                    $objScore = if ($null -ne $s.score) { $s.score } else { 0 }
+                    $vCount = if ($s.violations) { @($s.violations | Where-Object { $_ }).Count } else { 0 }
+                    $wCount = if ($s.warnings) { @($s.warnings | Where-Object { $_ }).Count } else { 0 }
+                    $pCount = if ($s.passes) { @($s.passes | Where-Object { $_ }).Count } else { 0 }
+                    $objBadgeClass = if ($vCount -eq 0 -and $wCount -eq 0) { 'obj-badge-pass' } else { 'obj-badge-fail' }
+                    $objBadgeText = if ($vCount -eq 0 -and $wCount -eq 0) { 'Passed' } else { 'Failed' }
 
-                    if ($s.violations -and @($s.violations).Count -gt 0) {
+                    [void]$sb.Append(@"
+<div class="obj-card">
+  <div class="obj-card-header">
+    <div class="obj-card-left">
+      <span class="obj-card-chevron">&#9654;</span>
+      <span class="obj-card-name">$(& $esc $objName)</span>
+      <span class="obj-card-score">Score: ${objScore}%</span>
+    </div>
+    <span class="obj-card-badge $objBadgeClass">$objBadgeText</span>
+  </div>
+  <div class="obj-card-body"><div class="obj-card-content">
+"@)
+                    if ($vCount -gt 0) {
+                        [void]$sb.Append("<div class=`"obj-section-label viol-label`">VIOLATIONS ($vCount)</div>")
                         foreach ($v in $s.violations) {
-                            if ($v) { [void]$sb.Append("<div class=`"finding-fail`"><span class=`"finding-icon`">&#10007;</span> ${namePrefix}$(& $esc $v)</div>") }
+                            if ($v) { [void]$sb.Append("<div class=`"obj-finding obj-finding-fail`"><span class=`"finding-icon`">&#10007;</span> $(& $esc $v)</div>") }
                         }
                     }
-                    if ($s.warnings -and @($s.warnings).Count -gt 0) {
+                    if ($wCount -gt 0) {
+                        [void]$sb.Append("<div class=`"obj-section-label warn-label`">WARNINGS ($wCount)</div>")
                         foreach ($w in $s.warnings) {
-                            if ($w) { [void]$sb.Append("<div class=`"finding-warn`"><span class=`"finding-icon`">&#9888;</span> ${namePrefix}$(& $esc $w)</div>") }
+                            if ($w) { [void]$sb.Append("<div class=`"obj-finding obj-finding-warn`"><span class=`"finding-icon`">&#9888;</span> $(& $esc $w)</div>") }
                         }
                     }
-                    if ($s.passes -and @($s.passes).Count -gt 0) {
+                    if ($pCount -gt 0) {
+                        [void]$sb.Append("<div class=`"obj-section-label pass-label`">PASSED CHECKS ($pCount)</div>")
                         foreach ($p in $s.passes) {
-                            if ($p) { [void]$sb.Append("<div class=`"finding-pass`"><span class=`"finding-icon`">&#10003;</span> ${namePrefix}$(& $esc $p)</div>") }
+                            if ($p) { [void]$sb.Append("<div class=`"obj-finding obj-finding-pass`"><span class=`"finding-icon`">&#10003;</span> $(& $esc $p)</div>") }
                         }
                     }
+                    [void]$sb.Append("</div></div></div>")
                 }
             }
 
             [void]$sb.Append(@"
-</div></div>
+</div>
+              </div>
             </div>
           </div>
         </div>
@@ -328,9 +369,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 </div>
 <script>
 function toggleSubcat(el){el.closest('.subcategory').classList.toggle('open')}
-function toggleControl(el){el.classList.toggle('expanded')}
+function toggleControl(el){if(!el.classList.contains('control-item'))el=el.closest('.control-item');if(el)el.classList.toggle('expanded')}
 function expandAll(){document.querySelectorAll('.subcategory').forEach(function(s){s.classList.add('open')});document.querySelectorAll('.control-item').forEach(function(c){c.classList.add('expanded')})}
 function collapseAll(){document.querySelectorAll('.subcategory').forEach(function(s){s.classList.remove('open')});document.querySelectorAll('.control-item').forEach(function(c){c.classList.remove('expanded')})}
+document.addEventListener('click',function(e){var oc=e.target.closest('.obj-card');if(oc){e.stopPropagation();oc.classList.toggle('open')}});
 var currentFilter='all';
 function setFilter(f,btn){
   currentFilter=f;

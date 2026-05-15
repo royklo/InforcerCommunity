@@ -16,39 +16,35 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
 
     $esc = { param([string]$s) [System.Web.HttpUtility]::HtmlEncode($s) }
 
-    # Build unique check list (union of all checks across tenants, ordered by category + name)
+    # Build unique check list
     $checkIndex = [ordered]@{}
     foreach ($tr in $TenantResults) {
         foreach ($c in $tr.Checks) {
             $key = "$($c.category)|$($c.name)"
             if (-not $checkIndex.Contains($key)) {
-                $checkIndex[$key] = @{ name = $c.name; category = $c.category; subCategory = $c.subCategory; importance = $c.importance; key = $c.key }
+                $checkIndex[$key] = @{ name = $c.name; category = $c.category; subCategory = $c.subCategory; importance = $c.importance; key = $c.key; description = $c.description; impact = $c.impact; rationale = $c.rationale }
             }
         }
     }
     $allChecks = @($checkIndex.Values)
 
-    # Build per-tenant lookup: checkKey -> status
+    # Build per-tenant lookup
     $tenantCheckMap = [ordered]@{}
     foreach ($tr in $TenantResults) {
         $map = @{}
-        foreach ($c in $tr.Checks) {
-            $key = "$($c.category)|$($c.name)"
-            $map[$key] = $c.Status
-        }
+        foreach ($c in $tr.Checks) { $map["$($c.category)|$($c.name)"] = $c.Status }
         $tenantCheckMap[$tr.TenantName] = $map
     }
 
     $tenantNames = @($TenantResults | ForEach-Object { $_.TenantName })
     $dateStr = Get-Date -Format 'yyyy-MM-dd'
     $timeStr = Get-Date -Format 'HH:mm'
+    $avgScore = if ($TenantResults.Count -gt 0) { [math]::Round(($TenantResults | ForEach-Object { $_.Score } | Measure-Object -Average).Average, 1) } else { 0 }
 
-    # Build tenant data JSON for JS
     $tenantsJson = $TenantResults | ForEach-Object {
         @{ name = $_.TenantName; id = $_.TenantId; score = $_.Score; passed = $_.Passed; failed = $_.Failed; total = $_.TotalChecks }
     } | ConvertTo-Json -Depth 100 -Compress
 
-    # Build matrix data JSON
     $matrixRows = [System.Collections.Generic.List[object]]::new()
     foreach ($ck in $allChecks) {
         $key = "$($ck.category)|$($ck.name)"
@@ -57,17 +53,14 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
             $st = if ($tenantCheckMap[$tn].ContainsKey($key)) { $tenantCheckMap[$tn][$key] } else { 'N/A' }
             $statuses[$tn] = $st
         }
-        [void]$matrixRows.Add(@{
-            name       = $ck.name
-            category   = $ck.category
-            sub        = $ck.subCategory
-            importance = $ck.importance
-            statuses   = $statuses
-        })
+        $desc = if ($ck.description) { ($ck.description -replace "`r?`n", '\n') } else { '' }
+        $impact = if ($ck.impact) { ($ck.impact -replace "`r?`n", '\n') } else { '' }
+        $rationale = if ($ck.rationale) { ($ck.rationale -replace "`r?`n", '\n') } else { '' }
+        [void]$matrixRows.Add(@{ name = $ck.name; category = $ck.category; sub = $ck.subCategory; importance = $ck.importance; statuses = $statuses; desc = $desc; impact = $impact; rationale = $rationale })
     }
     $matrixJson = $matrixRows | ConvertTo-Json -Depth 100 -Compress
 
-    $sb = [System.Text.StringBuilder]::new(32000)
+    $sb = [System.Text.StringBuilder]::new(48000)
     [void]$sb.Append(@"
 <!DOCTYPE html>
 <html lang="en">
@@ -76,128 +69,176 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>$(& $esc $AssessmentName) - Multi-Tenant Matrix</title>
 <style>
-:root{--navy:rgb(23,27,58);--cyan:rgb(23,139,219);--bg:#f1f5f9;--card:#fff;--border:#d1d5db;--border-light:#e5e7eb;
---text:#171b3a;--text-body:rgb(71,85,105);--text-secondary:rgb(100,116,139);
---pass:#16a34a;--pass-bg:#dcfce7;--fail:#dc2626;--fail-bg:#fee2e2;--warn:#d97706;--warn-bg:#fef3c7;--radius:8px}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+:root{
+  --bg:#0c0e14;--bg-2:#13151e;--bg-3:#1a1d2a;--bg-4:#222636;
+  --border:#2a2f42;--border-2:#333952;
+  --text:#eaecf0;--text-2:#a0a6b8;--text-3:#6b7190;
+  --accent:#6366f1;--accent-2:#818cf8;--accent-bg:rgba(99,102,241,0.1);--accent-border:rgba(99,102,241,0.25);
+  --green:#22c55e;--green-bg:rgba(34,197,94,0.1);--green-b:rgba(34,197,94,0.25);
+  --red:#ef4444;--red-bg:rgba(239,68,68,0.1);--red-b:rgba(239,68,68,0.25);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,0.1);
+  --r:10px;--r-sm:6px;
+  --shadow:0 2px 8px rgba(0,0,0,0.4);--shadow-lg:0 12px 40px rgba(0,0,0,0.5);
+  --tr:0.2s ease;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text-body);line-height:1.5;font-size:0.8125rem}
-.cover{position:relative;width:100%;overflow:hidden;margin-bottom:1.5rem;background:var(--navy)}
-.cover-bg{position:absolute;inset:0;overflow:hidden}
-.cover-bg .orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:0.3}
-.orb-1{width:400px;height:400px;background:#0025ce;top:-100px;right:-50px}
-.orb-2{width:300px;height:300px;background:#00ccff;bottom:-80px;left:10%}
-.orb-3{width:250px;height:250px;background:#7300ff;top:50%;left:50%;transform:translate(-50%,-50%)}
-.cover-content{position:relative;z-index:1;padding:1.75rem 2.5rem;display:flex;align-items:center;gap:1.5rem}
-.cover-icon{font-size:2rem;color:rgba(255,255,255,0.9)}
-.cover-divider{width:1px;align-self:stretch;background:rgba(255,255,255,0.18)}
-.cover-text{flex:1}
-.cover-title{font-size:1.25rem;font-weight:700;color:#fff;letter-spacing:-0.01em}
-.cover-sub{font-size:0.75rem;color:rgba(255,255,255,0.55);margin-top:0.15rem}
-.cover-meta{display:flex;gap:1.5rem;margin-top:0.5rem}
-.cover-meta dt{font-size:0.6rem;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.35);font-weight:600}
-.cover-meta dd{font-size:0.8125rem;color:#fff;font-weight:600}
-.cover-accent{position:absolute;bottom:0;left:0;right:0;height:3px;z-index:2;background:linear-gradient(90deg,#0025ce,#00ccff,#3894ff,#7300ff)}
-.container{max-width:100%;margin:0 auto;padding:0 1.5rem 2rem}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;font-size:0.8125rem;-webkit-font-smoothing:antialiased}
+
+/* Brand bar */
+.brand-bar{position:fixed;top:0;left:0;right:0;height:3px;z-index:200;
+  background:linear-gradient(90deg,#6366f1,#8b5cf6,#ec4899,#6366f1);background-size:200% 100%;
+  animation:shimmer 4s ease infinite}
+@keyframes shimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+/* Header */
+.header{padding:2.5rem 2rem 1.75rem;border-bottom:1px solid var(--border);background:var(--bg-2);margin-bottom:1.5rem}
+.header-inner{max-width:1800px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:2rem;flex-wrap:wrap}
+.header-left{display:flex;align-items:center;gap:1.25rem}
+.header-icon{width:44px;height:44px;border-radius:var(--r);background:var(--accent-bg);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-size:1.4rem}
+.header h1{font-size:1.35rem;font-weight:700;letter-spacing:-0.03em;color:var(--text)}
+.header .sub{font-size:0.78rem;color:var(--text-3);margin-top:0.1rem}
+.header-stats{display:flex;gap:1.75rem}
+.hstat{text-align:center}
+.hstat .val{font-size:1.5rem;font-weight:800;line-height:1.1}
+.hstat .lbl{font-size:0.6rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-top:0.1rem}
+
+.container{max-width:1800px;margin:0 auto;padding:0 2rem 3rem}
 
 /* Toolbar */
-.toolbar{display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap}
-.toolbar input{flex:1;min-width:180px;padding:0.45rem 0.85rem;border:1px solid var(--border);border-radius:var(--radius);font-size:0.8125rem;outline:none;background:var(--card)}
-.toolbar input:focus{border-color:var(--cyan)}
-.filter-btn{padding:0.4rem 0.85rem;border:1px solid var(--border);border-radius:var(--radius);font-size:0.75rem;font-weight:500;background:var(--card);cursor:pointer;transition:all 0.15s;user-select:none}
-.filter-btn:hover{background:#eef2ff}.filter-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
-.tenant-filter-btn{padding:0.4rem 0.85rem;border:1px solid var(--border);border-radius:var(--radius);font-size:0.75rem;background:var(--card);cursor:pointer;position:relative}
-.tenant-filter-btn:hover{border-color:var(--cyan)}
+.toolbar{display:flex;align-items:center;gap:0.6rem;margin-bottom:1.25rem;flex-wrap:wrap}
+.search{flex:1;min-width:180px;padding:0.5rem 1rem 0.5rem 2.25rem;border-radius:99px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);font-size:0.78rem;outline:none;transition:border var(--tr);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%236b7190' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 10-1.397 1.398h-.001l3.85 3.85a1 1 0 001.415-1.415l-3.85-3.85zm-5.242.156a5 5 0 110-10 5 5 0 010 10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:0.75rem center}
+.search:focus{border-color:var(--accent)}
+.search::placeholder{color:var(--text-3)}
+.pill-btn{padding:0.4rem 0.85rem;border-radius:99px;border:1px solid var(--border);background:var(--bg-3);color:var(--text-2);font-size:0.72rem;font-weight:500;cursor:pointer;transition:all var(--tr);user-select:none}
+.pill-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pill-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.tenant-wrap{position:relative}
+.tenant-btn{padding:0.4rem 0.85rem;border-radius:99px;border:1px solid var(--border);background:var(--bg-3);color:var(--text-2);font-size:0.72rem;cursor:pointer;display:flex;align-items:center;gap:0.35rem;transition:all var(--tr)}
+.tenant-btn:hover{border-color:var(--accent)}
 
 /* Tenant dropdown */
-.tenant-dropdown{display:none;position:absolute;top:100%;right:0;margin-top:0.35rem;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:50;min-width:220px;max-height:400px;overflow-y:auto;padding:0.5rem}
-.tenant-dropdown.open{display:block}
-.tenant-dropdown label{display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.78rem;white-space:nowrap}
-.tenant-dropdown label:hover{background:#f1f5f9}
-.tenant-dropdown input[type=checkbox]{accent-color:var(--cyan)}
-.tenant-actions{display:flex;gap:0.35rem;padding:0.35rem 0.5rem;border-bottom:1px solid var(--border-light);margin-bottom:0.35rem}
-.tenant-actions button{font-size:0.7rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer}
-.tenant-actions button:hover{background:#f1f5f9}
+.t-drop{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-3);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);z-index:100;min-width:260px;max-height:420px;overflow-y:auto;padding:0.5rem 0}
+.t-drop.open{display:block}
+.t-drop-actions{display:flex;gap:0.35rem;padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);margin-bottom:0.25rem}
+.t-drop-actions button{font-size:0.68rem;padding:0.2rem 0.6rem;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-4);color:var(--text-2);cursor:pointer;transition:all var(--tr)}
+.t-drop-actions button:hover{border-color:var(--accent);color:var(--accent)}
+.t-drop label{display:flex;align-items:center;gap:0.6rem;padding:0.35rem 0.75rem;cursor:pointer;font-size:0.75rem;color:var(--text-2);transition:background var(--tr)}
+.t-drop label:hover{background:var(--bg-4)}
+.t-drop input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
+.t-drop .t-score{margin-left:auto;font-size:0.68rem;font-weight:600;font-variant-numeric:tabular-nums}
 
-/* Score cards row */
-.scores-row{display:flex;gap:0.75rem;margin-bottom:1.25rem;overflow-x:auto;padding-bottom:0.5rem}
-.score-card{min-width:140px;flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:0.75rem 1rem;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
-.score-card .sc-name{font-size:0.7rem;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.score-card .sc-pct{font-size:1.5rem;font-weight:800;margin:0.15rem 0}
-.score-card .sc-detail{font-size:0.65rem;color:var(--text-secondary)}
+/* Score cards */
+.scores{display:flex;gap:0.6rem;margin-bottom:1.5rem;overflow-x:auto;padding-bottom:0.5rem;scrollbar-width:thin}
+.scores::-webkit-scrollbar{height:4px}.scores::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.sc{min-width:150px;flex-shrink:0;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;text-align:center;transition:border var(--tr);position:relative;overflow:hidden}
+.sc:hover{border-color:var(--accent-border)}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.sc-g::before{background:var(--green)}.sc-a::before{background:var(--amber)}.sc-r::before{background:var(--red)}
+.sc .name{font-size:0.7rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc .pct{font-size:1.6rem;font-weight:800;margin:0.2rem 0;font-variant-numeric:tabular-nums}
+.sc .detail{font-size:0.62rem;color:var(--text-3)}
+.sc .bar{height:3px;background:var(--bg-4);border-radius:2px;margin-top:0.5rem;overflow:hidden}
+.sc .bar-fill{height:100%;border-radius:2px;transition:width 1s ease}
 
-/* Matrix table */
-.matrix-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,0.05)}
-.matrix{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-size:0.78rem}
-.matrix thead th{position:sticky;top:0;z-index:10;background:#f8fafc;padding:0.6rem 0.75rem;text-align:center;font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy);border-bottom:2px solid var(--border);white-space:nowrap}
-.matrix thead th:first-child{position:sticky;left:0;z-index:20;text-align:left;min-width:320px;background:#f8fafc}
-.matrix thead th.tenant-col{min-width:110px;max-width:140px;writing-mode:horizontal-tb}
-.matrix thead th .th-score{font-size:0.65rem;font-weight:400;color:var(--text-secondary);display:block}
-.matrix tbody td{padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-light);text-align:center;white-space:nowrap}
-.matrix tbody td:first-child{position:sticky;left:0;z-index:5;background:var(--card);text-align:left;font-weight:500;color:var(--navy);white-space:normal;min-width:320px}
-.matrix tbody tr:hover td{background:#fafbfc}
-.matrix tbody tr:hover td:first-child{background:#f3f4f6}
-.check-info{display:flex;flex-direction:column;gap:0.1rem}
-.check-name{font-weight:500;color:var(--navy)}
-.check-meta{font-size:0.68rem;color:var(--text-secondary)}
-.check-imp{font-size:0.6rem;font-weight:600;padding:0.05rem 0.35rem;border-radius:3px;display:inline-block}
-.imp-h{background:#fee2e2;color:#991b1b}.imp-m{background:#fef3c7;color:#92400e}.imp-l{background:#f1f5f9;color:var(--text-secondary)}
+/* Matrix */
+.matrix-wrap{border:1px solid var(--border);border-radius:var(--r);overflow:auto;background:var(--bg-2);box-shadow:var(--shadow);max-height:calc(100vh - 300px)}
+.matrix-wrap::-webkit-scrollbar{width:6px;height:6px}
+.matrix-wrap::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px}
+.matrix-wrap::-webkit-scrollbar-corner{background:var(--bg-2)}
+table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}
+thead th{position:sticky;top:0;z-index:10;background:var(--bg-3);padding:0.65rem 0.6rem;text-align:center;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-2);border-bottom:1px solid var(--border);white-space:nowrap}
+thead th:first-child{position:sticky;left:0;z-index:20;text-align:left;min-width:340px;background:var(--bg-3)}
+thead th.tc{min-width:100px;max-width:130px}
+thead th .th-s{display:block;font-size:0.6rem;font-weight:700;margin-top:0.15rem;font-variant-numeric:tabular-nums}
+tbody td{padding:0.45rem 0.6rem;border-bottom:1px solid rgba(42,47,66,0.5);text-align:center;vertical-align:middle;font-size:0.75rem}
+tbody td:first-child{position:sticky;left:0;z-index:5;background:var(--bg-2);text-align:left;min-width:340px;border-right:1px solid var(--border)}
+tbody tr:hover td{background:var(--bg-3)}
+tbody tr:hover td:first-child{background:var(--bg-4)}
+
+/* Check info in first col */
+.ck{display:flex;flex-direction:column;gap:0.1rem}
+.ck-name{font-weight:500;color:var(--text);font-size:0.78rem}
+.ck-meta{font-size:0.65rem;color:var(--text-3);display:flex;align-items:center;gap:0.4rem}
+.ck-imp{font-size:0.58rem;font-weight:600;padding:0.1rem 0.35rem;border-radius:3px;text-transform:uppercase;letter-spacing:0.03em}
+.ck-h{background:var(--red-bg);color:var(--red)}.ck-m{background:var(--amber-bg);color:var(--amber)}.ck-l{background:rgba(107,113,144,0.15);color:var(--text-3)}
 
 /* Status cells */
-.cell-pass{background:var(--pass-bg);color:#166534;font-weight:600;font-size:0.75rem}
-.cell-fail{background:var(--fail-bg);color:#991b1b;font-weight:600;font-size:0.75rem}
-.cell-na{background:#f9fafb;color:#d1d5db;font-size:0.7rem}
+.st{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-size:0.75rem;font-weight:700}
+.st-p{background:var(--green-bg);color:var(--green);border:1px solid var(--green-b)}
+.st-f{background:var(--red-bg);color:var(--red);border:1px solid var(--red-b)}
+.st-n{color:var(--text-3);font-size:0.65rem}
 
-/* Category separator */
-.cat-row td{background:#eef2ff !important;font-weight:700;color:var(--navy);font-size:0.78rem;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border)}
-.cat-row td:first-child{background:#eef2ff !important}
+/* Category row */
+/* Category row */
+.cat-row td{background:var(--bg-4) !important;font-weight:700;color:var(--accent-2);font-size:0.72rem;padding:0.45rem 0.75rem;border-bottom:1px solid var(--border);letter-spacing:0.02em}
+.cat-row td:first-child{background:var(--bg-4) !important}
 
-.footer{text-align:center;margin-top:2rem;padding:1rem;font-size:0.7rem;color:var(--text-secondary);border-top:1px solid var(--border)}
-.footer a{color:var(--cyan);text-decoration:none}
+/* Expandable check info button */
+.ck-toggle{display:inline-flex;align-items:center;gap:0.25rem;font-size:0.6rem;color:var(--accent);cursor:pointer;margin-top:0.2rem;border:none;background:none;padding:0}
+.ck-toggle:hover{color:var(--accent-2)}
+.ck-toggle .arr{font-size:0.5rem;transition:transform 0.2s;display:inline-block}
+
+/* Detail row */
+.detail-row td{padding:0 !important;border-bottom:1px solid var(--border)}
+.detail-row td:first-child{background:var(--bg-2) !important}
+.detail-row.hidden td{display:none}
+.detail-inner{padding:0.75rem 1rem 1rem 1.5rem;display:flex;gap:1.5rem;flex-wrap:wrap}
+.detail-block{flex:1;min-width:250px}
+.detail-block h4{font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--accent-2);margin-bottom:0.3rem}
+.detail-block p{font-size:0.75rem;color:var(--text-2);line-height:1.6;white-space:pre-wrap}
+
+.footer{text-align:center;margin-top:2.5rem;padding:1.25rem;font-size:0.68rem;color:var(--text-3);border-top:1px solid var(--border)}
+.footer a{color:var(--accent);text-decoration:none}
+.footer a:hover{text-decoration:underline}
 .hidden{display:none}
-@media print{.toolbar,.tenant-filter-btn{display:none}.matrix thead th:first-child,.matrix tbody td:first-child{position:static}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade{animation:fadeIn 0.4s ease forwards}
+@media print{.toolbar,.tenant-wrap,.brand-bar{display:none}thead th:first-child,tbody td:first-child{position:static}.matrix-wrap{max-height:none;overflow:visible}}
 </style>
 </head>
 <body>
-<div class="cover">
-  <div class="cover-bg"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
-  <div class="cover-content">
-    <div class="cover-icon">&#x1F6E1;</div>
-    <div class="cover-divider"></div>
-    <div class="cover-text">
-      <div class="cover-title">$(& $esc $AssessmentName)</div>
-      <div class="cover-sub">Multi-Tenant Assessment Matrix</div>
-      <div class="cover-meta">
-        <div><dt>Tenants</dt><dd>$($TenantResults.Count)</dd></div>
-        <div><dt>Checks</dt><dd>$($allChecks.Count)</dd></div>
-        <div><dt>Date</dt><dd>$dateStr</dd></div>
-        <div><dt>Time</dt><dd>$timeStr</dd></div>
+<div class="brand-bar"></div>
+<div class="header fade">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="header-icon">&#x1F6E1;</div>
+      <div>
+        <h1>$(& $esc $AssessmentName)</h1>
+        <div class="sub">Multi-Tenant Compliance Matrix &middot; $dateStr $timeStr</div>
       </div>
     </div>
+    <div class="header-stats">
+      <div class="hstat"><div class="val" style="color:var(--text)">$($TenantResults.Count)</div><div class="lbl">Tenants</div></div>
+      <div class="hstat"><div class="val" style="color:var(--text)">$($allChecks.Count)</div><div class="lbl">Checks</div></div>
+      <div class="hstat"><div class="val" style="color:$(if ($avgScore -ge 90) { 'var(--green)' } elseif ($avgScore -ge 70) { 'var(--amber)' } else { 'var(--red)' })">$avgScore%</div><div class="lbl">Avg Score</div></div>
+    </div>
   </div>
-  <div class="cover-accent"></div>
 </div>
 <div class="container">
-  <div class="toolbar">
-    <input type="text" id="search" placeholder="Search checks..." oninput="applyFilters()">
-    <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
-    <button class="filter-btn" onclick="setFilter('fail',this)">Has Failures</button>
-    <button class="filter-btn" onclick="setFilter('pass',this)">All Passed</button>
-    <div style="position:relative">
-      <button class="tenant-filter-btn" onclick="toggleTenantDropdown(event)">&#x1F465; Tenants ($($tenantNames.Count))</button>
-      <div class="tenant-dropdown" id="tenantDropdown">
-        <div class="tenant-actions">
-          <button onclick="toggleAllTenants(true)">Select All</button>
-          <button onclick="toggleAllTenants(false)">Deselect All</button>
+  <div class="toolbar fade">
+    <input class="search" type="text" id="search" placeholder="Search checks, categories..." oninput="applyFilters()">
+    <button class="pill-btn active" onclick="setFilter('all',this)">All</button>
+    <button class="pill-btn" onclick="setFilter('fail',this)">Has Failures</button>
+    <button class="pill-btn" onclick="setFilter('pass',this)">All Passed</button>
+    <div class="tenant-wrap">
+      <button class="tenant-btn" onclick="toggleDrop(event)">&#x1F465; Tenants <span style="opacity:0.5">($($tenantNames.Count))</span></button>
+      <div class="t-drop" id="tDrop">
+        <div class="t-drop-actions">
+          <button onclick="togAll(true)">Select All</button>
+          <button onclick="togAll(false)">Deselect All</button>
         </div>
-        <div id="tenantCheckboxes"></div>
+        <div id="tCbs"></div>
       </div>
     </div>
   </div>
-  <div class="scores-row" id="scoresRow"></div>
-  <div class="matrix-wrap">
-    <table class="matrix" id="matrixTable">
-      <thead id="matrixHead"></thead>
-      <tbody id="matrixBody"></tbody>
+  <div class="scores fade" id="scores"></div>
+  <div class="matrix-wrap fade">
+    <table>
+      <thead id="mHead"></thead>
+      <tbody id="mBody"></tbody>
     </table>
   </div>
   <div class="footer">
@@ -205,125 +246,108 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
 </div>
 <script>
-var TENANTS = $tenantsJson;
-var MATRIX = $matrixJson;
-var visibleTenants = new Set(TENANTS.map(function(t){return t.name}));
-var currentFilter = 'all';
+var T=$tenantsJson,M=$matrixJson;
+var vis=new Set(T.map(function(t){return t.name}));
+var filt='all';
 
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
-function scoreColor(s){return s>=90?'var(--pass)':s>=70?'var(--cyan)':'var(--fail)'}
+function sCol(s){return s>=90?'var(--green)':s>=70?'var(--amber)':'var(--red)'}
+function sClass(s){return s>=90?'sc-g':s>=70?'sc-a':'sc-r'}
 
-function buildTenantCheckboxes(){
-  var h='';
-  TENANTS.forEach(function(t){
-    h+='<label><input type="checkbox" checked onchange="toggleTenant(this,\''+esc(t.name)+'\')">' +esc(t.name)+' ('+t.score+'%)</label>';
+function buildCbs(){
+  var h='';T.forEach(function(t){
+    var c=sCol(t.score);
+    h+='<label><input type=checkbox checked onchange="togT(this,\''+esc(t.name).replace(/'/g,"\\'")+'\')">'+esc(t.name)+'<span class="t-score" style="color:'+c+'">'+t.score+'%</span></label>';
   });
-  document.getElementById('tenantCheckboxes').innerHTML=h;
+  document.getElementById('tCbs').innerHTML=h;
 }
-
-function toggleTenantDropdown(e){
-  e.stopPropagation();
-  document.getElementById('tenantDropdown').classList.toggle('open');
-}
-document.addEventListener('click',function(){document.getElementById('tenantDropdown').classList.remove('open')});
-document.getElementById('tenantDropdown').addEventListener('click',function(e){e.stopPropagation()});
-
-function toggleTenant(cb,name){
-  if(cb.checked)visibleTenants.add(name);else visibleTenants.delete(name);
-  render();
-}
-function toggleAllTenants(on){
-  visibleTenants=on?new Set(TENANTS.map(function(t){return t.name})):new Set();
-  document.querySelectorAll('#tenantCheckboxes input').forEach(function(cb){cb.checked=on});
-  render();
-}
-
-function setFilter(f,btn){
-  currentFilter=f;
-  document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('active')});
-  btn.classList.add('active');
-  applyFilters();
-}
+function toggleDrop(e){e.stopPropagation();document.getElementById('tDrop').classList.toggle('open')}
+document.addEventListener('click',function(){document.getElementById('tDrop').classList.remove('open')});
+document.getElementById('tDrop').addEventListener('click',function(e){e.stopPropagation()});
+function togT(cb,n){if(cb.checked)vis.add(n);else vis.delete(n);render()}
+function togAll(on){vis=on?new Set(T.map(function(t){return t.name})):new Set();document.querySelectorAll('#tCbs input').forEach(function(c){c.checked=on});render()}
+function setFilter(f,btn){filt=f;document.querySelectorAll('.pill-btn').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');applyFilters()}
 
 function applyFilters(){
   var q=document.getElementById('search').value.toLowerCase();
-  document.querySelectorAll('#matrixBody tr').forEach(function(row){
+  var rows=document.querySelectorAll('#mBody tr');
+  rows.forEach(function(row){
     if(row.classList.contains('cat-row')){row.style.display='';return}
-    var name=row.getAttribute('data-name')||'';
-    var cat=row.getAttribute('data-cat')||'';
+    var n=(row.getAttribute('data-n')||'').toLowerCase();
+    var c=(row.getAttribute('data-c')||'').toLowerCase();
     var show=true;
-    if(q&&(name+' '+cat).toLowerCase().indexOf(q)===-1)show=false;
-    if(show&&currentFilter==='fail'){
-      var hasF=false;
-      var cells=row.querySelectorAll('td.cell-fail');
-      if(cells.length===0)show=false;
-    }
-    if(show&&currentFilter==='pass'){
-      var hasF2=row.querySelectorAll('td.cell-fail');
-      if(hasF2.length>0)show=false;
-    }
+    if(q&&(n+' '+c).indexOf(q)===-1)show=false;
+    if(show&&filt==='fail'){if(!row.querySelector('.st-f'))show=false}
+    if(show&&filt==='pass'){if(row.querySelector('.st-f'))show=false}
     row.style.display=show?'':'none';
   });
-  // Hide empty category rows
-  var lastCat=null;
-  var rows=document.querySelectorAll('#matrixBody tr');
+  // Hide empty categories
   for(var i=rows.length-1;i>=0;i--){
-    if(rows[i].classList.contains('cat-row')){
-      var nextVis=false;
-      for(var j=i+1;j<rows.length;j++){
-        if(rows[j].classList.contains('cat-row'))break;
-        if(rows[j].style.display!=='none'){nextVis=true;break}
-      }
-      rows[i].style.display=nextVis?'':'none';
+    if(!rows[i].classList.contains('cat-row'))continue;
+    var nxt=false;
+    for(var j=i+1;j<rows.length;j++){
+      if(rows[j].classList.contains('cat-row'))break;
+      if(rows[j].style.display!=='none'){nxt=true;break}
     }
+    rows[i].style.display=nxt?'':'none';
   }
 }
 
 function render(){
-  var vt=TENANTS.filter(function(t){return visibleTenants.has(t.name)});
-
-  // Score cards
-  var sh='';
-  vt.forEach(function(t){
-    sh+='<div class="score-card"><div class="sc-name">'+esc(t.name)+'</div>';
-    sh+='<div class="sc-pct" style="color:'+scoreColor(t.score)+'">'+t.score+'%</div>';
-    sh+='<div class="sc-detail">'+t.passed+'/'+t.total+' passed</div></div>';
+  var vt=T.filter(function(t){return vis.has(t.name)});
+  // Scores
+  var sh='';vt.forEach(function(t){
+    var c=sCol(t.score),cl=sClass(t.score),bc=c;
+    sh+='<div class="sc '+cl+'"><div class="name">'+esc(t.name)+'</div>';
+    sh+='<div class="pct" style="color:'+c+'">'+t.score+'%</div>';
+    sh+='<div class="detail">'+t.passed+' / '+t.total+' passed</div>';
+    sh+='<div class="bar"><div class="bar-fill" style="width:'+t.score+'%;background:'+bc+'"></div></div></div>';
   });
-  document.getElementById('scoresRow').innerHTML=sh;
-
-  // Table header
+  document.getElementById('scores').innerHTML=sh;
+  // Head
   var th='<tr><th>Check</th>';
   vt.forEach(function(t){
-    th+='<th class="tenant-col">'+esc(t.name)+'<span class="th-score">'+t.score+'%</span></th>';
+    var c=sCol(t.score);
+    th+='<th class="tc">'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span></th>';
   });
-  th+='</tr>';
-  document.getElementById('matrixHead').innerHTML=th;
-
-  // Table body
-  var tb='';var lastCat='';
-  MATRIX.forEach(function(row){
-    if(row.category!==lastCat){
-      lastCat=row.category;
-      tb+='<tr class="cat-row"><td colspan="'+(vt.length+1)+'">'+esc(lastCat)+'</td></tr>';
-    }
-    var impC=row.importance==='High'||row.importance==='high'?'imp-h':(row.importance==='Medium'||row.importance==='medium'?'imp-m':'imp-l');
-    tb+='<tr data-name="'+esc(row.name)+'" data-cat="'+esc(row.category)+'">';
-    tb+='<td><div class="check-info"><span class="check-name">'+esc(row.name)+'</span>';
-    tb+='<span class="check-meta">'+esc(row.sub||'')+' <span class="check-imp '+impC+'">'+esc(row.importance||'')+'</span></span></div></td>';
+  th+='</tr>';document.getElementById('mHead').innerHTML=th;
+  // Body
+  var tb='',lc='',idx=0;
+  M.forEach(function(r){
+    if(r.category!==lc){lc=r.category;tb+='<tr class="cat-row"><td colspan="'+(vt.length+1)+'">'+esc(lc)+'</td></tr>'}
+    var imp=String(r.importance||'').toLowerCase();
+    var ic=imp==='high'?'ck-h':imp==='medium'?'ck-m':'ck-l';
+    tb+='<tr data-n="'+esc(r.name)+'" data-c="'+esc(r.category)+'">';
+    var hasDetail=r.desc||r.impact||r.rationale;
+    var rid='r'+idx;idx++;
+    tb+='<td><div class="ck"><span class="ck-name">'+esc(r.name)+'</span>';
+    tb+='<span class="ck-meta">'+(r.sub?esc(r.sub)+' ':'')+'<span class="ck-imp '+ic+'">'+esc(r.importance||'')+'</span></span>';
+    if(hasDetail)tb+='<button class="ck-toggle" onclick="event.stopPropagation();togDetail(\''+rid+'\',this)"><span class="arr">\u25B6</span> Details</button>';
+    tb+='</div></td>';
     vt.forEach(function(t){
-      var st=row.statuses[t.name]||'N/A';
-      var cls=st==='Pass'?'cell-pass':st==='Fail'?'cell-fail':'cell-na';
-      var icon=st==='Pass'?'\u2713':st==='Fail'?'\u2717':'\u2014';
-      tb+='<td class="'+cls+'">'+icon+'</td>';
+      var st=r.statuses[t.name]||'N/A';
+      if(st==='Pass')tb+='<td><span class="st st-p">\u2713</span></td>';
+      else if(st==='Fail')tb+='<td><span class="st st-f">\u2717</span></td>';
+      else tb+='<td><span class="st st-n">\u2014</span></td>';
     });
     tb+='</tr>';
+    if(hasDetail){
+      tb+='<tr class="detail-row hidden" id="'+rid+'"><td colspan="'+(vt.length+1)+'">';
+      tb+='<div class="detail-inner">';
+      if(r.desc)tb+='<div class="detail-block"><h4>Description</h4><p>'+r.desc.replace(/\\n/g,'\n')+'</p></div>';
+      if(r.impact)tb+='<div class="detail-block"><h4>Impact</h4><p>'+r.impact.replace(/\\n/g,'\n')+'</p></div>';
+      if(r.rationale)tb+='<div class="detail-block"><h4>Rationale</h4><p>'+r.rationale.replace(/\\n/g,'\n')+'</p></div>';
+      tb+='</div></td></tr>';
+    }
   });
-  document.getElementById('matrixBody').innerHTML=tb;
+  document.getElementById('mBody').innerHTML=tb;
   applyFilters();
 }
-
-buildTenantCheckboxes();
-render();
+function togDetail(id,btn){
+  var row=document.getElementById(id);
+  if(row){row.classList.toggle('hidden');var arr=btn.querySelector('.arr');arr.style.transform=row.classList.contains('hidden')?'':'rotate(90deg)'}
+}
+buildCbs();render();
 </script>
 </body>
 </html>

@@ -79,7 +79,7 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
   --tr:0.2s ease;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text-body);line-height:1.5;font-size:0.8125rem}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text-body);line-height:1.5;font-size:0.8125rem;overflow:hidden;height:100vh;display:flex;flex-direction:column}
 
 /* Cover — matches single-tenant report */
 .report-cover{position:relative;width:100%;overflow:hidden;margin-bottom:1.5rem;background:var(--navy)}
@@ -101,7 +101,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .cover-meta-item dd{font-size:0.875rem;color:#fff;font-weight:600}
 .cover-accent{position:absolute;bottom:0;left:0;right:0;height:3px;z-index:2;background:linear-gradient(90deg,#0025ce,#00ccff,#3894ff,#7300ff,#cf86ff)}
 
-.container{max-width:100%;margin:0 auto;padding:0 1.5rem 2rem}
+.container{max-width:100%;margin:0 auto;padding:0 1.5rem 0;flex:1;display:flex;flex-direction:column;min-height:0}
 
 /* Toolbar */
 .toolbar{display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap}
@@ -110,8 +110,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .pill-btn{padding:0.45rem 0.9rem;border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem;font-weight:500;background:var(--card);cursor:pointer;transition:all 0.15s;user-select:none}
 .pill-btn:hover{background:#f8fafc}.pill-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
 .tenant-wrap{position:relative}
-.tenant-btn{padding:0.45rem 0.9rem;border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem;background:var(--card);cursor:pointer;display:flex;align-items:center;gap:0.35rem;transition:all var(--tr)}
-.tenant-btn:hover{border-color:var(--cyan)}
+.tenant-btn{padding:0.45rem 1rem;border:2px solid var(--cyan);border-radius:var(--r);font-size:0.78rem;font-weight:600;background:var(--card);color:var(--cyan);cursor:pointer;display:flex;align-items:center;gap:0.4rem;transition:all var(--tr)}
+.tenant-btn:hover{background:var(--cyan);color:#fff}
 
 /* Tenant dropdown */
 .t-drop{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);z-index:100;min-width:260px;max-height:420px;overflow-y:auto;padding:0.5rem 0}
@@ -128,7 +128,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 thead th .th-detail{display:block;font-size:0.58rem;font-weight:400;color:var(--text-secondary);margin-top:0.1rem}
 
 /* Matrix */
-.matrix-wrap{border:1px solid var(--border);border-radius:var(--r);overflow:auto;background:var(--card);box-shadow:var(--shadow);max-height:calc(100vh - 300px)}
+.matrix-wrap{border:1px solid var(--border);border-radius:var(--r);overflow:auto;background:var(--card);box-shadow:var(--shadow);flex:1;min-height:0}
 table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}
 thead th{position:sticky;top:0;z-index:10;background:#f8fafc;padding:0.65rem 0.6rem;text-align:center;font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy);border-bottom:2px solid var(--border);white-space:nowrap}
 thead th:first-child{position:sticky;left:0;z-index:20;text-align:left;min-width:340px;background:#f8fafc}
@@ -175,7 +175,7 @@ tbody tr:hover td:first-child{background:#f3f4f6}
 .panel-section-title{font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--cyan);margin-bottom:0.5rem;padding-bottom:0.35rem;border-bottom:1px solid var(--border-light)}
 .panel-section p{font-size:0.8125rem;color:var(--text-body);line-height:1.7;white-space:pre-wrap}
 
-.footer{text-align:center;margin-top:2rem;padding:1rem;font-size:0.72rem;color:var(--text-secondary);border-top:1px solid var(--border)}
+.footer{text-align:center;padding:0.6rem 1rem;font-size:0.68rem;color:var(--text-secondary);border-top:1px solid var(--border);flex-shrink:0}
 .footer a{color:var(--cyan);text-decoration:none}
 .hidden{display:none}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}

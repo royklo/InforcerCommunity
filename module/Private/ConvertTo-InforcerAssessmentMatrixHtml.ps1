@@ -101,7 +101,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .cover-meta-item dd{font-size:0.875rem;color:#fff;font-weight:600}
 .cover-accent{position:absolute;bottom:0;left:0;right:0;height:3px;z-index:2;background:linear-gradient(90deg,#0025ce,#00ccff,#3894ff,#7300ff,#cf86ff)}
 
-.container{max-width:100%;margin:0 auto;padding:0 1.5rem 0;flex:1;display:flex;flex-direction:column;min-height:0}
+.container{width:100%;padding:0 0.75rem 0;flex:1;display:flex;flex-direction:column;min-height:0}
 
 /* Toolbar */
 .toolbar{display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap}
@@ -128,7 +128,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 thead th .th-detail{display:block;font-size:0.58rem;font-weight:400;color:var(--text-secondary);margin-top:0.1rem}
 
 /* Matrix */
-.matrix-wrap{border:1px solid var(--border);border-radius:var(--r);overflow:auto;background:var(--card);box-shadow:var(--shadow);flex:1;min-height:0}
+.matrix-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:auto;background:var(--card);flex:1;min-height:0}
 table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}
 thead th{position:sticky;top:0;z-index:10;background:#f8fafc;padding:0.65rem 0.6rem;text-align:center;font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy);border-bottom:2px solid var(--border);white-space:nowrap}
 thead th:first-child{position:sticky;left:0;z-index:20;text-align:left;min-width:340px;background:#f8fafc}

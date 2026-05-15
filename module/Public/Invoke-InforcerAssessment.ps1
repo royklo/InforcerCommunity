@@ -5,23 +5,31 @@
     Triggers an assessment run for a specific tenant and returns detailed results including
     per-check scores, passes, violations, warnings, and framework metadata.
     -AssessmentId accepts an assessment ID string or a friendly name (e.g. "Copilot Readiness").
+    -OutputPath exports results to HTML (.html) or CSV (.csv) based on file extension.
 .PARAMETER TenantId
     The tenant to run the assessment against. Accepts numeric ID, GUID, or tenant name.
 .PARAMETER AssessmentId
     The assessment to run. Accepts an assessment ID string or a friendly assessment name.
+.PARAMETER OutputPath
+    Optional. File path to export results. Auto-detects format from file extension:
+    HTML (.html) generates an interactive report, CSV (.csv) exports flat data.
+    Returns System.IO.FileInfo when specified.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON uses Depth 100.
 .EXAMPLE
     Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness"
     Runs the Copilot Readiness assessment against tenant 144.
 .EXAMPLE
-    Invoke-InforcerAssessment -TenantId "Contoso" -AssessmentId "l1f8wd29pl44pp1j66r9"
-    Runs the assessment by ID against the Contoso tenant.
+    Invoke-InforcerAssessment -TenantId "Contoso" -AssessmentId "Copilot Readiness" -OutputPath ./report.html
+    Generates an interactive HTML assessment report.
+.EXAMPLE
+    Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness" -OutputPath ./report.csv
+    Exports assessment results to CSV.
 .EXAMPLE
     Invoke-InforcerAssessment -TenantId 144 -AssessmentId "CIS Microsoft 365 Foundations Benchmark v6.0.0 (L1)" -OutputType JsonObject
     Returns the assessment results as a JSON string.
 .OUTPUTS
-    PSObject or String
+    PSObject, String, or System.IO.FileInfo
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#invoke-inforcerassessment
 .LINK
@@ -31,7 +39,7 @@
 #>
 function Invoke-InforcerAssessment {
 [CmdletBinding()]
-[OutputType([PSObject], [string])]
+[OutputType([PSObject], [string], [System.IO.FileInfo])]
 param(
     [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
     [Alias('ClientTenantId')]
@@ -39,6 +47,9 @@ param(
 
     [Parameter(Mandatory = $true)]
     [string]$AssessmentId,
+
+    [Parameter(Mandatory = $false)]
+    [string]$OutputPath,
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('PowerShellObject', 'JsonObject')]
@@ -199,7 +210,9 @@ Write-Host ""
 Write-Host "  $assessmentDisplayName — ${score}% compliant ($compliantCount/$totalChecks checks passed)" -ForegroundColor $(if ($score -eq 100) { 'Green' } elseif ($score -ge 75) { 'Yellow' } else { 'Red' })
 Write-Host ""
 
-# Emit each check as a pipeline object
+# Process each check into enriched objects
+$placeholderNames = @('[Multiple Objects Evaluated]', '[unknown id]', '[unknown name]')
+$processedChecks = [System.Collections.Generic.List[object]]::new()
 foreach ($r in $results) {
     if (-not ($r -is [PSObject])) { continue }
     $fp = $r.PSObject.Properties['findings']
@@ -215,8 +228,6 @@ foreach ($r in $results) {
     $statusText = if ($isCompliant) { 'Pass' } else { 'Fail' }
 
     # Flatten passes, violations, warnings from findings.scores
-    # Strip placeholder objectNames — only prefix with real policy/object names
-    $placeholderNames = @('[Multiple Objects Evaluated]', '[unknown id]', '[unknown name]')
     $allPasses = [System.Collections.Generic.List[string]]::new()
     $allViolations = [System.Collections.Generic.List[string]]::new()
     $allWarnings = [System.Collections.Generic.List[string]]::new()
@@ -248,38 +259,15 @@ foreach ($r in $results) {
         }
     }
 
-    # Build per-object findings summary and count objects evaluated
+    # Count objects evaluated and promote Scores
     $objectsEvaluated = 0
-    $findingsSummary = [System.Collections.Generic.List[string]]::new()
-    if ($fp -and $fp.Value -is [PSObject]) {
-        $scoresProp2 = $fp.Value.PSObject.Properties['scores']
-        if ($scoresProp2 -and $scoresProp2.Value -is [array]) {
-            $objectsEvaluated = $scoresProp2.Value.Count
-            foreach ($s in $scoresProp2.Value) {
-                if (-not ($s -is [PSObject])) { continue }
-                $onp = $s.PSObject.Properties['objectName']
-                $oName = if ($onp -and $onp.Value -and $onp.Value -notin $placeholderNames) { $onp.Value } else { 'Tenant check' }
-                $oScore = $s.PSObject.Properties['score']
-                $scoreVal = if ($oScore) { "$($oScore.Value)%" } else { '?' }
-                $vCount = 0; $wCount = 0
-                $vArr = $s.PSObject.Properties['violations']
-                if ($vArr -and $vArr.Value -is [array]) { $vCount = @($vArr.Value | Where-Object { $_ }).Count }
-                $wArr = $s.PSObject.Properties['warnings']
-                if ($wArr -and $wArr.Value -is [array]) { $wCount = @($wArr.Value | Where-Object { $_ }).Count }
-                $issues = [System.Collections.Generic.List[string]]::new()
-                if ($vCount -gt 0) { [void]$issues.Add("$vCount violation$(if ($vCount -ne 1) { 's' })") }
-                if ($wCount -gt 0) { [void]$issues.Add("$wCount warning$(if ($wCount -ne 1) { 's' })") }
-                $suffix = if ($issues.Count -gt 0) { " ($($issues -join ', '))" } else { '' }
-                [void]$findingsSummary.Add("$oName — $scoreVal$suffix")
-            }
-        }
-    }
-
-    # Promote findings.scores to top-level Scores property for easy access
     $scoresArray = @()
     if ($fp -and $fp.Value -is [PSObject]) {
         $sp = $fp.Value.PSObject.Properties['scores']
-        if ($sp -and $sp.Value -is [array]) { $scoresArray = $sp.Value }
+        if ($sp -and $sp.Value -is [array]) {
+            $objectsEvaluated = $sp.Value.Count
+            $scoresArray = $sp.Value
+        }
     }
 
     $r | Add-Member -NotePropertyName 'Status' -NotePropertyValue $statusText -Force
@@ -290,6 +278,53 @@ foreach ($r in $results) {
     $r | Add-Member -NotePropertyName 'Warnings' -NotePropertyValue @($allWarnings) -Force
     $r | Add-Member -NotePropertyName 'Passes' -NotePropertyValue @($allPasses) -Force
     $r.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AssessmentCheck')
-    $r
+    [void]$processedChecks.Add($r)
 }
+
+# ── Export or emit to pipeline ──
+if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
+    $resolvedPath = [System.IO.Path]::GetFullPath($OutputPath)
+    $ext = [System.IO.Path]::GetExtension($resolvedPath).ToLower()
+
+    if ($ext -eq '.html' -or $ext -eq '.htm') {
+        $html = ConvertTo-InforcerAssessmentHtml `
+            -AssessmentName $assessmentDisplayName `
+            -TenantName $tenantDisplayName `
+            -Checks @($processedChecks) `
+            -Score $score `
+            -TotalChecks $totalChecks `
+            -Passed $compliantCount `
+            -Failed $nonCompliantCount
+        $html | Set-Content -Path $resolvedPath -Encoding UTF8
+        Write-Host "HTML report saved to: $resolvedPath"
+    }
+    elseif ($ext -eq '.csv') {
+        $csvRows = foreach ($c in $processedChecks) {
+            [PSCustomObject]@{
+                Status           = $c.Status
+                Name             = $c.name
+                Category         = $c.category
+                SubCategory      = $c.subCategory
+                Importance       = $c.importance
+                ObjectsEvaluated = $c.ObjectsEvaluated
+                FindingsMessage  = $c.FindingsMessage
+                Violations       = ($c.Violations -join '; ')
+                Warnings         = ($c.Warnings -join '; ')
+                Passes           = ($c.Passes -join '; ')
+            }
+        }
+        $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding UTF8
+        Write-Host "CSV report saved to: $resolvedPath"
+    }
+    else {
+        Write-Error -Message "Unsupported file extension '$ext'. Use .html or .csv." -ErrorId 'UnsupportedFormat' -Category InvalidArgument
+        return
+    }
+
+    [System.IO.FileInfo]::new($resolvedPath)
+    return
+}
+
+# Default: emit to pipeline
+foreach ($c in $processedChecks) { $c }
 }

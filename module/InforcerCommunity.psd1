@@ -1,6 +1,6 @@
 @{
     RootModule        = 'InforcerCommunity.psm1'
-    ModuleVersion     = '0.3.2'
+    ModuleVersion     = '0.4.0'
     GUID              = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
     Author            = 'Roy Klooster'
     Description       = 'Community PowerShell module for the Inforcer API. Created by Roy Klooster. Not owned or officially maintained by Inforcer.'
@@ -33,7 +33,7 @@
         PSData = @{
             ProjectUri   = 'https://github.com/royklo/InforcerCommunity'
             LicenseUri   = 'https://github.com/royklo/InforcerCommunity/blob/main/LICENSE'
-            ReleaseNotes = 'v0.3.2: Cross-category DefinitionId reconciliation for mixed Endpoint Security/Settings Catalog comparisons. Excluded Deployed App Count as tenant-specific noise.'
+            ReleaseNotes = 'v0.4.0: New assessment cmdlets (Get-InforcerAssessment, Invoke-InforcerAssessment) with single/multi-tenant support, HTML/CSV/JSON export, interactive matrix reports, and async progress.'
             Tags         = @('Inforcer', 'API', 'Community')
         }
     }

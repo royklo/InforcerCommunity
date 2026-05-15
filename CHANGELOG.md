@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
 
+## [0.4.0] - 2026-05-15
+
+### Features
+
+- **New cmdlet: `Get-InforcerAssessment`** — lists all available assessments (Copilot Readiness, CIS Benchmarks, Essential Eight, etc.) from `GET /beta/assessments`. Returns assessment name, ID, description, tags, type, and dates.
+- **New cmdlet: `Invoke-InforcerAssessment`** — runs an assessment against one or more tenants via `POST /beta/tenants/{id}/assessments/{id}/runs`. Key capabilities:
+  - **Friendly name resolution** — `-AssessmentId "Copilot Readiness"` resolves to the assessment ID automatically. `-TenantId` supports numeric IDs, GUIDs, and tenant names.
+  - **Async execution with progress** — runs in a background runspace with 10-second progress updates and human-readable elapsed time (e.g., "3m 16s").
+  - **Per-check pipeline output** — each check emits as a pipeline object with Status, Scores, Violations, Warnings, Passes arrays for automation.
+  - **Multi-tenant mode** — `-MultiTenant` runs against all tenants; `-TenantId "Contoso","Fabrikam"` runs against a subset. Shows per-tenant compliance summary and total elapsed time.
+  - **HTML export** — `-OutputPath report.html` generates an interactive single-tenant report with collapsible checks, per-object expandable cards, markdown-rendered descriptions/remediation, and CIS benchmark-style design.
+  - **Multi-tenant HTML matrix** — `-MultiTenant -OutputPath matrix.html` generates a full-viewport matrix report with sticky check column, horizontal scroll for 100+ tenants, tenant filter dropdown, search, status filters, slide-out detail panel, and category grouping.
+  - **CSV export** — `-OutputPath report.csv` exports flat data with UTF-8 no-BOM encoding. Multi-tenant CSV includes a Tenant column.
+  - **JSON output** — `-OutputType JsonObject` returns structured JSON for automation pipelines, both single and multi-tenant.
+- **New private helpers** — `Resolve-InforcerAssessmentId` (name/ID resolution), `Invoke-InforcerAssessmentRun` (async single-tenant runner), `ConvertTo-InforcerAssessmentHtml` (single-tenant report), `ConvertTo-InforcerAssessmentMatrixHtml` (multi-tenant matrix).
+
+### Bug Fixes
+
+- **Cross-category DefinitionId reconciliation** — when one tenant uses Endpoint Security templates and another uses Settings Catalog for the same settings, they now reconcile correctly as Matched or Conflicting instead of SourceOnly/DestOnly.
+- **Excluded Deployed App Count from comparison** — tenant-specific metadata in App Protection Policies no longer causes false conflicts.
+- **Whitespace heuristic replaced with HasDefinitionId flag** — prevents false cross-category reconciliation of single-word setting paths.
+- **Dead code removed** — unused `$extraSrc`/`$extraDst` lists, vestigial `DeprecatedSettings` output property.
+- **O(n^2) optimization** — setting key union building uses HashSet for O(1) lookups.
+- **Where-Object replaced with foreach** — setting count loops follow module conventions.
+
+### Tests
+
+- Added 6 new consistency tests for assessment cmdlets (no-session, parameter binding, JSON output).
+- Updated expected cmdlet count from 14 to 16.
+- Added cross-category reconciliation tests and Deployed App Count noise exclusion test.
+
 ## [0.3.2] - 2026-05-14
 
 ### Bug Fixes

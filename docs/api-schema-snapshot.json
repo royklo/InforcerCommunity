@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-28T07:36:27Z",
+  "generatedAt": "2026-05-29T07:35:12Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -69,24 +69,6 @@
         "baselineGroupId": "string",
         "baselineGroupName": "string",
         "lastComparisonDateTime": "datetime"
-      }
-    },
-    "GET /beta/tenants/{tenantId}/policies": {
-      "properties": {
-        "id": "string",
-        "policyTypeId": "integer",
-        "name": "null",
-        "displayName": "string",
-        "friendlyName": "string",
-        "description": "null",
-        "readOnly": "boolean",
-        "product": "string",
-        "primaryGroup": "string",
-        "secondaryGroup": "string",
-        "platform": "null",
-        "policyCategoryId": "integer",
-        "tags": "array",
-        "policyData": "object"
       }
     },
     "GET /beta/tenants/{tenantId}/alignmentDetails": {
@@ -206,8 +188,8 @@
             "nameLookup": {
               "_type": "object",
               "_properties": {
-                "user:username:244": "string",
-                "user:displayName:244": "string"
+                "user:username:237": "string",
+                "user:displayName:237": "string"
               }
             }
           }

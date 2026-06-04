@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-03T07:58:02Z",
+  "generatedAt": "2026-06-04T07:51:39Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -206,8 +206,8 @@
             "nameLookup": {
               "_type": "object",
               "_properties": {
-                "user:username:244": "string",
-                "user:displayName:244": "string"
+                "user:username:237": "string",
+                "user:displayName:237": "string"
               }
             }
           }

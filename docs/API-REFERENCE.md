@@ -9,6 +9,7 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
 ## Table of Contents
 
 - [Authentication](#authentication)
+- [API Scopes](#api-scopes)
 - [Endpoints](#endpoints)
   - [Baselines](#baselines)
   - [Alignment Scores](#alignment-scores)
@@ -48,6 +49,55 @@ All API requests require authentication via API key. Use `Connect-Inforcer` to e
 
 ---
 
+## API Scopes
+
+Inforcer API keys are issued with one or more scopes. Each cmdlet and endpoint below lists its required scope(s). Request the narrowest scope that satisfies your use case; `Tenants.Read` is a broad scope that covers most tenant-related reads.
+
+### Scope → Routes
+
+| Scope | Routes |
+|-------|--------|
+| `Baselines.Read` | `/beta/baselines` |
+| `Tenants.Read` | `/beta/baselines`, `/beta/alignmentScores`, `/beta/tenants`, `/beta/tenants/{tenantId}`, `/beta/tenants/{tenantId}/groups`, `/beta/tenants/{tenantId}/groups/{groupId}`, `/beta/tenants/{tenantId}/roles`, `/beta/tenants/{tenantId}/secureScores`, `/beta/tenants/{tenantId}/users`, `/beta/tenants/{tenantId}/users/{userId}` |
+| `AlignmentScores.Read` | `/beta/alignmentScores` |
+| `tenants.policies.Read` | `/beta/tenants/{tenantId}/policies`, `/beta/tenants/{tenantId}/alignmentDetails` |
+| `Assessments.Read` | `/beta/assessments` |
+| `Assessments.Run` | `/beta/tenants/{tenantId}/assessments/{assessmentId}/runs` |
+| `Audit.Read` | `/beta/auditEvents/search`, `/beta/auditEvents/eventTypes` *(needs confirmation — see note below)* |
+| `Tenants.Groups.Read` | `/beta/tenants/{tenantId}/groups`, `/beta/tenants/{tenantId}/groups/{groupId}` |
+| `Tenants.Roles.Read` | `/beta/tenants/{tenantId}/roles` |
+| `Tenants.SecureScores.Read` | `/beta/tenants/{tenantId}/secureScores` |
+| `Tenants.Users.Read` | `/beta/tenants/{tenantId}/users`, `/beta/tenants/{tenantId}/users/{userId}` |
+
+> **Note on `Audit.Read`**: The scope mapping provided by the Inforcer API team lists `Audit.Read → /beta/assessments`, but `/beta/assessments` is already covered by `Assessments.Read`, and the module's audit cmdlets call `/beta/auditEvents/search` and `/beta/auditEvents/eventTypes`. This table assumes `Audit.Read` applies to the `/beta/auditEvents/*` routes. **This needs confirmation with the Inforcer API team.**
+
+### Cmdlet → Endpoints → Required Scopes
+
+Built mechanically by tracing each public cmdlet through the module (including the `Resolve-InforcerTenantId` helper that hits `GET /beta/tenants` whenever `-TenantId` is passed as a GUID or tenant name). The minimum-scope column is the **narrowest** union; `Tenants.Read` alone is always sufficient for every route it covers, so you can collapse the narrow scopes into `Tenants.Read` if you prefer broader access.
+
+| Cmdlet | Endpoints called | Minimum scopes |
+|--------|------------------|----------------|
+| `Connect-Inforcer` | — (session validation only) | None |
+| `Disconnect-Inforcer` | — | None |
+| `Test-InforcerConnection` | — | None |
+| `Get-InforcerTenant` | `GET /beta/tenants` | `Tenants.Read` |
+| `Get-InforcerBaseline` | `GET /beta/baselines` | `Baselines.Read` |
+| `Get-InforcerTenantPolicies` | `GET /beta/tenants/{tenantId}/policies` + `GET /beta/tenants` *(GUID/name lookup)* | `tenants.policies.Read` + `Tenants.Read`† |
+| `Get-InforcerAlignmentDetails` | `GET /beta/baselines`, `GET /beta/alignmentScores`, `GET /beta/tenants`, `GET /beta/tenants/{tenantId}/alignmentDetails` | `Baselines.Read` + `AlignmentScores.Read` + `Tenants.Read` + `tenants.policies.Read` |
+| `Get-InforcerAuditEvent` | `POST /beta/auditEvents/search` | `Audit.Read` *(unmapped — see note above)* |
+| `Get-InforcerSupportedEventType` | `GET /beta/auditEvents/eventTypes` | `Audit.Read` *(unmapped — see note above)* |
+| `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Users.Read` + `Tenants.Read`† |
+| `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
+| `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
+| `Get-InforcerAssessment` | `GET /beta/assessments` | `Assessments.Read` |
+| `Invoke-InforcerAssessment` | `GET /beta/tenants`, `GET /beta/assessments`, `POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Tenants.Read` + `Assessments.Read` + `Assessments.Run` |
+| `Export-InforcerTenantDocumentation` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
+| `Compare-InforcerEnvironments` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` *(per side)* | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
+
+> † `Tenants.Read` is only consumed for the tenant-list lookup that `Resolve-InforcerTenantId` performs when `-TenantId` is a GUID or tenant name. If callers always pass a numeric Client Tenant ID, the `Tenants.Read` portion can be omitted.
+
+---
+
 ## Endpoints
 
 ### Baselines
@@ -57,6 +107,8 @@ All API requests require authentication via API key. Use `Connect-Inforcer` to e
 Retrieves baseline groups and their members.
 
 **Cmdlet**: `Get-InforcerBaseline`
+
+**Required scope**: `Baselines.Read` (or `Tenants.Read`)
 
 | Parameter | Location | Required | Type | Description |
 |-----------|----------|----------|------|-------------|
@@ -74,6 +126,8 @@ Retrieves alignment scores for tenants.
 
 **Cmdlet**: `Get-InforcerAlignmentDetails`
 
+**Required scope**: `AlignmentScores.Read` (or `Tenants.Read`)
+
 **Response**: Array of [AlignmentScore](#alignmentscore)
 
 ---
@@ -86,6 +140,8 @@ Retrieves all tenants.
 
 **Cmdlet**: `Get-InforcerTenant`
 
+**Required scope**: `Tenants.Read`
+
 **Response**: Array of [Tenant](#tenant)
 
 ---
@@ -95,6 +151,8 @@ Retrieves all tenants.
 Retrieves a specific tenant by ID.
 
 **Cmdlet**: `Get-InforcerTenant -TenantId`
+
+**Required scope**: `Tenants.Read`
 
 | Parameter | Location | Required | Type | Description |
 |-----------|----------|----------|------|-------------|
@@ -114,6 +172,8 @@ Retrieves policies for a specific tenant.
 
 **Cmdlet**: `Get-InforcerTenantPolicies`
 
+**Required scope**: `tenants.policies.Read`
+
 | Parameter | Location | Required | Type | Description |
 |-----------|----------|----------|------|-------------|
 | tenantId | path | Yes | integer | The unique identifier for the tenant. |
@@ -130,6 +190,8 @@ Retrieves available event types for filtering audit events.
 
 **Cmdlet**: Internal use (populates `-EventType` tab completion)
 
+**Required scope**: `Audit.Read` *(needs confirmation — see [API Scopes](#api-scopes))*
+
 **Response**: Array of [EventType](#eventtype)
 
 ---
@@ -139,6 +201,8 @@ Retrieves available event types for filtering audit events.
 Searches the activity log with optional filters.
 
 **Cmdlet**: `Get-InforcerAuditEvent`
+
+**Required scope**: `Audit.Read` *(needs confirmation — see [API Scopes](#api-scopes))*
 
 **Request Body**:
 
@@ -171,6 +235,8 @@ Searches the activity log with optional filters.
 
 Returns a paginated list of user summaries for a tenant.
 
+**Required scope**: `Tenants.Users.Read` (or `Tenants.Read`)
+
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
 | `tenantId` | path | integer | Yes | Inforcer tenant ID. |
@@ -182,6 +248,8 @@ Returns a paginated list of user summaries for a tenant.
 #### `GET /beta/tenants/{tenantId}/users/{userId}`
 
 Returns full detail for a single user.
+
+**Required scope**: `Tenants.Users.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
@@ -196,6 +264,8 @@ Returns full detail for a single user.
 
 Returns a paginated list of Entra ID group summaries for a tenant.
 
+**Required scope**: `Tenants.Groups.Read` (or `Tenants.Read`)
+
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
 | `tenantId` | path | integer | Yes | Inforcer tenant ID. |
@@ -207,6 +277,8 @@ Returns a paginated list of Entra ID group summaries for a tenant.
 #### `GET /beta/tenants/{tenantId}/groups/{groupId}`
 
 Returns full detail for a single group including members.
+
+**Required scope**: `Tenants.Groups.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
@@ -220,6 +292,8 @@ Returns full detail for a single group including members.
 #### `GET /beta/tenants/{tenantId}/roles`
 
 Returns the list of Entra ID directory role definitions for a tenant.
+
+**Required scope**: `Tenants.Roles.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|

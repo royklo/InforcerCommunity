@@ -12,6 +12,8 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 Establishes a secure connection to the Inforcer REST API. The API key is stored as a SecureString. A minimal API call validates the key before returning; on failure (e.g. wrong key or endpoint), the connection is not established.
 
+**Required API scope(s)**: None (session management only)
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **ApiKey** | Object | Yes | API key (string or SecureString). Alias: `Key`. |
@@ -47,6 +49,8 @@ ConnectedAt : 05-Mar-2025 14:30:00
 
 Disconnects from the Inforcer API and clears the session from memory.
 
+**Required API scope(s)**: None (session management only)
+
 No parameters.
 
 ### Example
@@ -75,6 +79,8 @@ No active session to disconnect.
 
 Tests the current API connection by sending a request to the API. Requires an active session (run `Connect-Inforcer` first).
 
+**Required API scope(s)**: None (session management only)
+
 No parameters.
 
 ### Example
@@ -99,6 +105,8 @@ When not connected, an error is written (e.g. "Not connected. To connect, run: C
 ## Get-InforcerTenant
 
 Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
+
+**Required API scope(s)**: `Tenants.Read`
 
 **Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`
 
@@ -150,6 +158,8 @@ Same shape as one of the objects above (one tenant).
 
 Retrieves baseline groups and their members. Optionally filter by `-TenantId` (owner or member).
 
+**Required API scope(s)**: `Baselines.Read` *(or `Tenants.Read`)*
+
 **Output schema**: [BaselineGroup](./API-REFERENCE.md#baselinegroup) — includes `members`, `items`, alignment thresholds
 
 | Parameter | Type | Mandatory | Description |
@@ -185,6 +195,8 @@ Use `| Select-Object *` to see all properties including `autoAddNewPolicies`, `i
 ## Get-InforcerTenantPolicies
 
 Retrieves policies for a specified tenant. TenantId accepts a numeric ID, Microsoft Tenant ID (GUID), or tenant name.
+
+**Required API scope(s)**: `tenants.policies.Read`
 
 **Output schema**: [Policy](./API-REFERENCE.md#policy) — includes `product`, `platform`, `policyData`, `tags`
 
@@ -228,6 +240,8 @@ The default view shows 7 key properties. Use `| Select-Object *` to see all prop
 ## Get-InforcerAlignmentDetails
 
 Retrieves alignment scores or detailed alignment data. **Format Table** (default): one row per alignment with columns below. **Format Raw**: raw API response. Optional `-TenantId` and `-Tag` filter the table. With `-BaselineId`, retrieves detailed per-policy alignment data. When `-BaselineId` is used without `-TenantId`, the first member tenant is queried (baseline policies are identical across all members).
+
+**Required API scope(s)**: `Baselines.Read`, `AlignmentScores.Read`, `Tenants.Read`, `tenants.policies.Read`
 
 **Output schema**: [AlignmentScore](./API-REFERENCE.md#alignmentscore) — includes `score`, `baselineGroupId`, `lastComparisonDateTime`
 
@@ -308,6 +322,8 @@ A JSON string (array of objects) with properties such as `tenantId`, `tenantFrie
 
 Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-DateFrom`, `-DateTo`, `-PageSize`, and `-MaxResults`.
 
+**Required API scope(s)**: `Audit.Read` *(needs confirmation with Inforcer API team — see [API-REFERENCE.md scopes section](./API-REFERENCE.md#api-scopes))*
+
 **Output schema**: [AuditEvent](./API-REFERENCE.md#auditevent) — includes `eventType`, `timestamp`, flattened metadata fields
 
 | Parameter | Type | Mandatory | Description |
@@ -358,6 +374,8 @@ The default view shows 8 key properties. Use `| Select-Object *` to see all prop
 ## Get-InforcerUser
 
 Retrieves users from an Inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information.
+
+**Required API scope(s)**: `Tenants.Users.Read` *(or `Tenants.Read`)*
 
 **Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail)
 
@@ -413,6 +431,8 @@ RiskLevel        :
 ## Get-InforcerGroup
 
 Retrieves Entra ID groups from an Inforcer tenant. When called without `-Group`, returns all groups (GroupSummary objects) with optional search filtering and auto-pagination. When called with `-Group`, resolves the group by GUID or display name and returns the full group detail (Group object) including members.
+
+**Required API scope(s)**: `Tenants.Groups.Read` *(or `Tenants.Read`)*
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -476,6 +496,8 @@ Members          : Isaiah Langer (user), Adele Vance (user)
 
 Retrieves Entra ID directory role definitions from an Inforcer tenant. Returns role definitions including display name, description, and whether the role is built-in, enabled, or privileged.
 
+**Required API scope(s)**: `Tenants.Roles.Read` *(or `Tenants.Read`)*
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **TenantId** | Object | Yes | Inforcer tenant ID (numeric ID, GUID, or tenant name). Alias: `ClientTenantId`. |
@@ -513,6 +535,8 @@ IsPrivileged : True
 ## Export-InforcerTenantDocumentation
 
 Generates comprehensive, human-readable documentation of an entire M365 tenant's configuration as managed through the Inforcer API. Pulls data from existing cmdlets (`Get-InforcerBaseline`, `Get-InforcerTenant`, `Get-InforcerTenantPolicies`), resolves Intune Settings Catalog settingDefinitionIDs to friendly names, and outputs in multiple formats.
+
+**Required API scope(s)**: `tenants.policies.Read`, `Tenants.Read`, `Baselines.Read`
 
 The HTML output features a modern admin dashboard design with a collapsible sidebar navigation, search, tag filtering, dark/light mode toggle, and hide-empty-fields toggle. All output is self-contained (no external dependencies or CDN links).
 
@@ -593,6 +617,8 @@ Applied automatically (no `-FetchGraphData` required):
 
 Compares the Intune policy configuration of two tenants and generates an interactive HTML report. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` to compare only policies belonging to a specific baseline. Uses the shared DocModel pipeline to normalize both environments, then diffs settings at the `settingDefinitionId` level. The report includes tabs for Comparison, Manual Review, Duplicates, and Deprecated settings.
 
+**Required API scope(s)**: `Baselines.Read`, `tenants.policies.Read`, `Tenants.Read`
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **SourceTenantId** | Object | No | Source tenant (numeric ID, GUID, or tenant name). Can be omitted when `-SourceBaselineId` is specified — the baseline owner tenant is auto-resolved. |
@@ -657,6 +683,106 @@ When specified, connects to Microsoft Graph for each tenant:
 - Assignment filter and scope tag IDs resolved to names
 - Compliance policy detection rules (`rulesContent`) fetched individually
 - Discovery scripts linked to parent compliance policies
+
+---
+
+## Get-InforcerSupportedEventType
+
+Returns the list of supported audit event type names from the Inforcer API. Used internally to populate `-EventType` tab completion for `Get-InforcerAuditEvent`. Results are cached for the session.
+
+**Required API scope(s)**: `Audit.Read` *(needs confirmation with Inforcer API team — see [API-REFERENCE.md scopes section](./API-REFERENCE.md#api-scopes))*
+
+No parameters.
+
+### Example
+
+```powershell
+Get-InforcerSupportedEventType
+```
+
+### Example output
+
+```
+authentication
+failedAuthentication
+policyChange
+userCreated
+```
+
+---
+
+## Get-InforcerAssessment
+
+Retrieves available assessments from the Inforcer API. Returns a list of assessments that can be run against tenants via `Invoke-InforcerAssessment`.
+
+**Required API scope(s)**: `Assessments.Read`
+
+**Output schema**: [Assessment](./API-REFERENCE.md#schemas)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
+
+### Examples
+
+```powershell
+Get-InforcerAssessment
+Get-InforcerAssessment -OutputType JsonObject
+```
+
+### Example output
+
+```
+Name           : CIS Microsoft 365 Foundations Benchmark
+Id             : assess-001
+Description    : Checks M365 configuration against CIS benchmark controls.
+AssessmentType : Compliance
+Tags           : {CIS, M365}
+LastUpdated    : 2025-01-15T00:00:00Z
+Created        : 2024-06-01T00:00:00Z
+```
+
+---
+
+## Invoke-InforcerAssessment
+
+Runs an assessment against one or more Inforcer tenants and outputs per-check results to the pipeline. Supports friendly assessment name resolution, multi-tenant execution, and optional HTML/CSV export.
+
+**Required API scope(s)**: `Tenants.Read`, `Assessments.Read`, `Assessments.Run`
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object[] | No | One or more tenant IDs (numeric ID, GUID, or tenant name). Accepts arrays and friendly names. Required unless `-MultiTenant` is specified. |
+| **AssessmentId** | String | Yes | Assessment ID or friendly name to run. |
+| **MultiTenant** | Switch | No | Run the assessment against all tenants in the account. |
+| **OutputPath** | String | No | Directory to write an HTML or CSV export. When omitted, results stream to the pipeline only. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
+
+### Examples
+
+```powershell
+# Run against a single tenant
+Invoke-InforcerAssessment -TenantId 482 -AssessmentId "CIS Microsoft 365 Foundations Benchmark"
+
+# Run against all tenants
+Invoke-InforcerAssessment -AssessmentId "assess-001" -MultiTenant
+
+# Export results to HTML
+Invoke-InforcerAssessment -TenantId 482 -AssessmentId "assess-001" -OutputPath C:\Reports
+```
+
+### Example output
+
+```
+Status           : Pass
+name             : Ensure MFA is enabled for all users
+category         : Identity
+subCategory      : Authentication
+importance       : High
+ObjectsEvaluated : 42
+FindingsMessage  : All users have MFA enabled.
+```
 
 ---
 

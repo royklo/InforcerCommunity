@@ -71,26 +71,30 @@ Inforcer API keys are issued with one or more scopes. Each cmdlet and endpoint b
 
 > **Note on `Audit.Read`**: The scope mapping provided by the Inforcer API team lists `Audit.Read → /beta/assessments`, but `/beta/assessments` is already covered by `Assessments.Read`, and the module's audit cmdlets call `/beta/auditEvents/search` and `/beta/auditEvents/eventTypes`. This table assumes `Audit.Read` applies to the `/beta/auditEvents/*` routes. **This needs confirmation with the Inforcer API team.**
 
-### Cmdlet → Required Scopes
+### Cmdlet → Endpoints → Required Scopes
 
-| Cmdlet | Required scope(s) |
-|--------|-------------------|
-| `Connect-Inforcer` | None (session management) |
-| `Disconnect-Inforcer` | None |
-| `Test-InforcerConnection` | None |
-| `Get-InforcerTenant` | `Tenants.Read` |
-| `Get-InforcerBaseline` | `Baselines.Read` (or `Tenants.Read`) |
-| `Get-InforcerTenantPolicies` | `tenants.policies.Read` |
-| `Get-InforcerAlignmentDetails` | `Baselines.Read`, `AlignmentScores.Read`, `Tenants.Read`, `tenants.policies.Read` |
-| `Get-InforcerAuditEvent` | `Audit.Read` *(needs confirmation)* |
-| `Get-InforcerSupportedEventType` | `Audit.Read` *(needs confirmation)* |
-| `Get-InforcerUser` | `Tenants.Users.Read` (or `Tenants.Read`) |
-| `Get-InforcerGroup` | `Tenants.Groups.Read` (or `Tenants.Read`) |
-| `Get-InforcerRole` | `Tenants.Roles.Read` (or `Tenants.Read`) |
-| `Get-InforcerAssessment` | `Assessments.Read` |
-| `Invoke-InforcerAssessment` | `Tenants.Read`, `Assessments.Read`, `Assessments.Run` |
-| `Export-InforcerTenantDocumentation` | `tenants.policies.Read`, `Tenants.Read`, `Baselines.Read` |
-| `Compare-InforcerEnvironments` | `Baselines.Read`, `tenants.policies.Read`, `Tenants.Read` |
+Built mechanically by tracing each public cmdlet through the module (including the `Resolve-InforcerTenantId` helper that hits `GET /beta/tenants` whenever `-TenantId` is passed as a GUID or tenant name). The minimum-scope column is the **narrowest** union; `Tenants.Read` alone is always sufficient for every route it covers, so you can collapse the narrow scopes into `Tenants.Read` if you prefer broader access.
+
+| Cmdlet | Endpoints called | Minimum scopes |
+|--------|------------------|----------------|
+| `Connect-Inforcer` | — (session validation only) | None |
+| `Disconnect-Inforcer` | — | None |
+| `Test-InforcerConnection` | — | None |
+| `Get-InforcerTenant` | `GET /beta/tenants` | `Tenants.Read` |
+| `Get-InforcerBaseline` | `GET /beta/baselines` | `Baselines.Read` |
+| `Get-InforcerTenantPolicies` | `GET /beta/tenants/{tenantId}/policies` + `GET /beta/tenants` *(GUID/name lookup)* | `tenants.policies.Read` + `Tenants.Read`† |
+| `Get-InforcerAlignmentDetails` | `GET /beta/baselines`, `GET /beta/alignmentScores`, `GET /beta/tenants`, `GET /beta/tenants/{tenantId}/alignmentDetails` | `Baselines.Read` + `AlignmentScores.Read` + `Tenants.Read` + `tenants.policies.Read` |
+| `Get-InforcerAuditEvent` | `POST /beta/auditEvents/search` | `Audit.Read` *(unmapped — see note above)* |
+| `Get-InforcerSupportedEventType` | `GET /beta/auditEvents/eventTypes` | `Audit.Read` *(unmapped — see note above)* |
+| `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Users.Read` + `Tenants.Read`† |
+| `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
+| `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
+| `Get-InforcerAssessment` | `GET /beta/assessments` | `Assessments.Read` |
+| `Invoke-InforcerAssessment` | `GET /beta/tenants`, `GET /beta/assessments`, `POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Tenants.Read` + `Assessments.Read` + `Assessments.Run` |
+| `Export-InforcerTenantDocumentation` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
+| `Compare-InforcerEnvironments` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` *(per side)* | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
+
+> † `Tenants.Read` is only consumed for the tenant-list lookup that `Resolve-InforcerTenantId` performs when `-TenantId` is a GUID or tenant name. If callers always pass a numeric Client Tenant ID, the `Tenants.Read` portion can be omitted.
 
 ---
 

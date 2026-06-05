@@ -106,6 +106,7 @@ When not connected, an error is written (e.g. "Not connected. To connect, run: C
 
 Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
 
+**Endpoints called**: `GET /beta/tenants`
 **Required API scope(s)**: `Tenants.Read`
 
 **Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`
@@ -158,7 +159,8 @@ Same shape as one of the objects above (one tenant).
 
 Retrieves baseline groups and their members. Optionally filter by `-TenantId` (owner or member).
 
-**Required API scope(s)**: `Baselines.Read` *(or `Tenants.Read`)*
+**Endpoints called**: `GET /beta/baselines`
+**Required API scope(s)**: `Baselines.Read`
 
 **Output schema**: [BaselineGroup](./API-REFERENCE.md#baselinegroup) — includes `members`, `items`, alignment thresholds
 
@@ -196,7 +198,8 @@ Use `| Select-Object *` to see all properties including `autoAddNewPolicies`, `i
 
 Retrieves policies for a specified tenant. TenantId accepts a numeric ID, Microsoft Tenant ID (GUID), or tenant name.
 
-**Required API scope(s)**: `tenants.policies.Read`
+**Endpoints called**: `GET /beta/tenants/{tenantId}/policies` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (used by `Resolve-InforcerTenantId` to look up the numeric `clientTenantId`).
+**Required API scope(s)**: `tenants.policies.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 
 **Output schema**: [Policy](./API-REFERENCE.md#policy) — includes `product`, `platform`, `policyData`, `tags`
 
@@ -241,7 +244,8 @@ The default view shows 7 key properties. Use `| Select-Object *` to see all prop
 
 Retrieves alignment scores or detailed alignment data. **Format Table** (default): one row per alignment with columns below. **Format Raw**: raw API response. Optional `-TenantId` and `-Tag` filter the table. With `-BaselineId`, retrieves detailed per-policy alignment data. When `-BaselineId` is used without `-TenantId`, the first member tenant is queried (baseline policies are identical across all members).
 
-**Required API scope(s)**: `Baselines.Read`, `AlignmentScores.Read`, `Tenants.Read`, `tenants.policies.Read`
+**Endpoints called**: `GET /beta/baselines`, `GET /beta/alignmentScores`, `GET /beta/tenants`, `GET /beta/tenants/{tenantId}/alignmentDetails`
+**Required API scope(s)**: `Baselines.Read` + `AlignmentScores.Read` + `Tenants.Read` + `tenants.policies.Read`
 
 **Output schema**: [AlignmentScore](./API-REFERENCE.md#alignmentscore) — includes `score`, `baselineGroupId`, `lastComparisonDateTime`
 
@@ -322,7 +326,8 @@ A JSON string (array of objects) with properties such as `tenantId`, `tenantFrie
 
 Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-DateFrom`, `-DateTo`, `-PageSize`, and `-MaxResults`.
 
-**Required API scope(s)**: `Audit.Read` *(needs confirmation with Inforcer API team — see [API-REFERENCE.md scopes section](./API-REFERENCE.md#api-scopes))*
+**Endpoints called**: `POST /beta/auditEvents/search`
+**Required API scope(s)**: `Audit.Read` *(not in the API team's published scope→route mapping — the route `/beta/auditEvents/search` is unmapped; `Audit.Read` is the assumed scope based on naming. Confirm with Inforcer API team.)*
 
 **Output schema**: [AuditEvent](./API-REFERENCE.md#auditevent) — includes `eventType`, `timestamp`, flattened metadata fields
 
@@ -375,7 +380,8 @@ The default view shows 8 key properties. Use `| Select-Object *` to see all prop
 
 Retrieves users from an Inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information.
 
-**Required API scope(s)**: `Tenants.Users.Read` *(or `Tenants.Read`)*
+**Endpoints called**: `GET /beta/tenants/{tenantId}/users` (list) or `GET /beta/tenants/{tenantId}/users/{userId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
+**Required API scope(s)**: `Tenants.Users.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 
 **Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail)
 
@@ -432,7 +438,8 @@ RiskLevel        :
 
 Retrieves Entra ID groups from an Inforcer tenant. When called without `-Group`, returns all groups (GroupSummary objects) with optional search filtering and auto-pagination. When called with `-Group`, resolves the group by GUID or display name and returns the full group detail (Group object) including members.
 
-**Required API scope(s)**: `Tenants.Groups.Read` *(or `Tenants.Read`)*
+**Endpoints called**: `GET /beta/tenants/{tenantId}/groups` (list) or `GET /beta/tenants/{tenantId}/groups/{groupId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
+**Required API scope(s)**: `Tenants.Groups.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -496,7 +503,8 @@ Members          : Isaiah Langer (user), Adele Vance (user)
 
 Retrieves Entra ID directory role definitions from an Inforcer tenant. Returns role definitions including display name, description, and whether the role is built-in, enabled, or privileged.
 
-**Required API scope(s)**: `Tenants.Roles.Read` *(or `Tenants.Read`)*
+**Endpoints called**: `GET /beta/tenants/{tenantId}/roles` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
+**Required API scope(s)**: `Tenants.Roles.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -536,7 +544,8 @@ IsPrivileged : True
 
 Generates comprehensive, human-readable documentation of an entire M365 tenant's configuration as managed through the Inforcer API. Pulls data from existing cmdlets (`Get-InforcerBaseline`, `Get-InforcerTenant`, `Get-InforcerTenantPolicies`), resolves Intune Settings Catalog settingDefinitionIDs to friendly names, and outputs in multiple formats.
 
-**Required API scope(s)**: `tenants.policies.Read`, `Tenants.Read`, `Baselines.Read`
+**Endpoints called**: `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` (via `Get-InforcerDocData`).
+**Required API scope(s)**: `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read`
 
 The HTML output features a modern admin dashboard design with a collapsible sidebar navigation, search, tag filtering, dark/light mode toggle, and hide-empty-fields toggle. All output is self-contained (no external dependencies or CDN links).
 
@@ -617,7 +626,8 @@ Applied automatically (no `-FetchGraphData` required):
 
 Compares the Intune policy configuration of two tenants and generates an interactive HTML report. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` to compare only policies belonging to a specific baseline. Uses the shared DocModel pipeline to normalize both environments, then diffs settings at the `settingDefinitionId` level. The report includes tabs for Comparison, Manual Review, Duplicates, and Deprecated settings.
 
-**Required API scope(s)**: `Baselines.Read`, `tenants.policies.Read`, `Tenants.Read`
+**Endpoints called**: `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` (for both source and destination tenants, via `Get-InforcerDocData`).
+**Required API scope(s)**: `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -690,7 +700,8 @@ When specified, connects to Microsoft Graph for each tenant:
 
 Returns the list of supported audit event type names from the Inforcer API. Used internally to populate `-EventType` tab completion for `Get-InforcerAuditEvent`. Results are cached for the session.
 
-**Required API scope(s)**: `Audit.Read` *(needs confirmation with Inforcer API team — see [API-REFERENCE.md scopes section](./API-REFERENCE.md#api-scopes))*
+**Endpoints called**: `GET /beta/auditEvents/eventTypes`
+**Required API scope(s)**: `Audit.Read` *(not in the API team's published scope→route mapping — the route `/beta/auditEvents/eventTypes` is unmapped; `Audit.Read` is the assumed scope based on naming. Confirm with Inforcer API team.)*
 
 No parameters.
 
@@ -715,6 +726,7 @@ userCreated
 
 Retrieves available assessments from the Inforcer API. Returns a list of assessments that can be run against tenants via `Invoke-InforcerAssessment`.
 
+**Endpoints called**: `GET /beta/assessments`
 **Required API scope(s)**: `Assessments.Read`
 
 **Output schema**: [Assessment](./API-REFERENCE.md#schemas)
@@ -749,7 +761,8 @@ Created        : 2024-06-01T00:00:00Z
 
 Runs an assessment against one or more Inforcer tenants and outputs per-check results to the pipeline. Supports friendly assessment name resolution, multi-tenant execution, and optional HTML/CSV export.
 
-**Required API scope(s)**: `Tenants.Read`, `Assessments.Read`, `Assessments.Run`
+**Endpoints called**: `GET /beta/tenants`, `GET /beta/assessments`, `POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs`
+**Required API scope(s)**: `Tenants.Read` + `Assessments.Read` + `Assessments.Run`
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|

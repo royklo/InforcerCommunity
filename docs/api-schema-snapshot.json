@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-18T07:57:42Z",
+  "generatedAt": "2026-06-19T08:08:00Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -125,26 +125,21 @@
                     "subjectPolicyGuid": "null",
                     "policyDataDiff": "array",
                     "policyAssignmentsDiff": "array",
-                    "policyTags": "array",
+                    "policyTags": {
+                      "_type": "array",
+                      "_itemProperties": {
+                        "id": "string",
+                        "name": "string",
+                        "description": "null"
+                      }
+                    },
                     "acceptedDeviations": "array"
                   }
                 },
                 "isDeviation": "boolean",
                 "isMissingFromSubject": "boolean",
                 "isAdditionalInSubject": "boolean",
-                "matchingVariables": {
-                  "_type": "array",
-                  "_itemProperties": {
-                    "variableId": "string",
-                    "variableName": "string",
-                    "baselineValue": "string",
-                    "subjectValue": "string",
-                    "description": "string",
-                    "propertyPath": "string",
-                    "isHidden": "boolean",
-                    "isBaselineOnly": "boolean"
-                  }
-                },
+                "matchingVariables": "array",
                 "similarPolicies": "array",
                 "acceptedDeviations": "array",
                 "policyGuid": "null",
@@ -206,8 +201,8 @@
             "nameLookup": {
               "_type": "object",
               "_properties": {
-                "user:username:244": "string",
-                "user:displayName:244": "string"
+                "user:username:237": "string",
+                "user:displayName:237": "string"
               }
             }
           }

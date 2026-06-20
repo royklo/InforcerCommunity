@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-19T08:08:00Z",
+  "generatedAt": "2026-06-20T07:32:54Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -139,7 +139,19 @@
                 "isDeviation": "boolean",
                 "isMissingFromSubject": "boolean",
                 "isAdditionalInSubject": "boolean",
-                "matchingVariables": "array",
+                "matchingVariables": {
+                  "_type": "array",
+                  "_itemProperties": {
+                    "variableId": "string",
+                    "variableName": "string",
+                    "baselineValue": "string",
+                    "subjectValue": "string",
+                    "description": "string",
+                    "propertyPath": "string",
+                    "isHidden": "boolean",
+                    "isBaselineOnly": "boolean"
+                  }
+                },
                 "similarPolicies": "array",
                 "acceptedDeviations": "array",
                 "policyGuid": "null",
@@ -201,8 +213,8 @@
             "nameLookup": {
               "_type": "object",
               "_properties": {
-                "user:username:237": "string",
-                "user:displayName:237": "string"
+                "user:username:244": "string",
+                "user:displayName:244": "string"
               }
             }
           }

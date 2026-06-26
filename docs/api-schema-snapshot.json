@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-25T07:25:32Z",
+  "generatedAt": "2026-06-26T07:31:57Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -7,24 +7,13 @@
         "tenantFriendlyName": "string",
         "tenantDnsName": "string",
         "msTenantId": "string",
-        "secureScore": "number",
+        "secureScore": "integer",
         "isBaseline": "boolean",
         "lastBackupTimestamp": "datetime",
         "recentChanges": "integer",
         "policyDiff": "string",
         "tags": "array",
-        "alignmentSummaries": {
-          "_type": "array",
-          "_itemProperties": {
-            "alignedBaselineTenantId": "integer",
-            "alignedBaselineId": "string",
-            "alignedBaselineName": "string",
-            "alignmentScore": "number",
-            "alignedThreshold": "integer",
-            "semiAlignedThreshold": "integer",
-            "lastAlignmentDateTime": "datetime"
-          }
-        },
+        "alignmentSummaries": "array",
         "licenses": {
           "_type": "array",
           "_itemProperties": {
@@ -125,14 +114,7 @@
                     "subjectPolicyGuid": "null",
                     "policyDataDiff": "array",
                     "policyAssignmentsDiff": "array",
-                    "policyTags": {
-                      "_type": "array",
-                      "_itemProperties": {
-                        "id": "string",
-                        "name": "string",
-                        "description": "null"
-                      }
-                    },
+                    "policyTags": "array",
                     "acceptedDeviations": "array"
                   }
                 },
@@ -213,8 +195,8 @@
             "nameLookup": {
               "_type": "object",
               "_properties": {
-                "user:username:237": "string",
-                "user:displayName:237": "string"
+                "user:username:244": "string",
+                "user:displayName:244": "string"
               }
             }
           }
@@ -225,9 +207,9 @@
       "properties": {
         "id": "string",
         "displayName": "string",
-        "description": "null",
-        "mail": "null",
-        "visibility": "null",
+        "description": "string",
+        "mail": "string",
+        "visibility": "string",
         "groupTypes": "array"
       }
     },
@@ -235,16 +217,23 @@
       "properties": {
         "id": "string",
         "displayName": "string",
-        "description": "null",
-        "mail": "null",
+        "description": "string",
+        "mail": "string",
         "mailNickname": "string",
-        "visibility": "null",
+        "visibility": "string",
         "membershipRule": "null",
         "groupTypes": "array",
         "createdDateTime": "datetime",
         "mailEnabled": "boolean",
         "onPremisesSyncEnabled": "null",
-        "members": "array"
+        "members": {
+          "_type": "array",
+          "_itemProperties": {
+            "id": "string",
+            "displayName": "string",
+            "type": "string"
+          }
+        }
       }
     },
     "GET /beta/tenants/{tenantId}/roles": {

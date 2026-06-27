@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-26T07:31:57Z",
+  "generatedAt": "2026-06-27T07:16:59Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -7,7 +7,7 @@
         "tenantFriendlyName": "string",
         "tenantDnsName": "string",
         "msTenantId": "string",
-        "secureScore": "integer",
+        "secureScore": "number",
         "isBaseline": "boolean",
         "lastBackupTimestamp": "datetime",
         "recentChanges": "integer",
@@ -121,19 +121,7 @@
                 "isDeviation": "boolean",
                 "isMissingFromSubject": "boolean",
                 "isAdditionalInSubject": "boolean",
-                "matchingVariables": {
-                  "_type": "array",
-                  "_itemProperties": {
-                    "variableId": "string",
-                    "variableName": "string",
-                    "baselineValue": "string",
-                    "subjectValue": "string",
-                    "description": "string",
-                    "propertyPath": "string",
-                    "isHidden": "boolean",
-                    "isBaselineOnly": "boolean"
-                  }
-                },
+                "matchingVariables": "array",
                 "similarPolicies": "array",
                 "acceptedDeviations": "array",
                 "policyGuid": "null",

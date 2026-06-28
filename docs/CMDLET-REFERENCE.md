@@ -859,7 +859,7 @@ Queues one or more Inforcer reports, polls the outputs endpoint until each run i
 | **Collate** | Switch | No | Request a single cross-tenant output. Rejected when the type's catalog says `collatable: false`. |
 | **NoWait** | Switch | No | Return immediately after `POST` with run identifiers. Skip polling and download. |
 | **NoSave** | Switch | No | Poll until terminal but do not write files. Returns outputs metadata. |
-| **OutDir** | String | No | Directory for downloaded outputs. Default: current working directory. |
+| **OutputPath** | String | No | Directory for downloaded outputs. Default: current working directory. |
 | **TimeoutSeconds** | Int | No | Maximum wait per run when polling. Default: 600. |
 | **PollIntervalSeconds** | Int | No | Initial poll interval (doubles up to 15s cap). Default: 2. |
 | **Format** | String | No | `Raw` (default). |
@@ -969,7 +969,7 @@ Downloads a report output to disk. Pipeline-friendly: pipe output records from `
 |-----------|------|-----------|-------------|
 | **RunId** | Guid | Yes | The run identifier. Pipeline-bindable. |
 | **OutputId** | String | Yes | The output identifier. Pipeline-bindable. Alias: `-Id`. |
-| **OutDir** | String | No | Target directory. Default: current working directory. Created if missing. |
+| **OutputPath** | String | No | Target directory. Default: current working directory. Created if missing. |
 | **FileName** | String | No | Override the server-suggested filename (sanitized for filesystem safety). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 
@@ -981,12 +981,12 @@ Save-InforcerReportOutput -RunId 094a49ed-b9b8-492b-870f-0f76fd3b2954 -OutputId 
 
 # Bulk download via pipeline
 Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -NoSave |
-    Save-InforcerReportOutput -OutDir ./reports
+    Save-InforcerReportOutput -OutputPath ./reports
 
 # Bulk download from every visible run
 Get-InforcerReportRun -IncludeOutputs |
     ForEach-Object { $_.outputs } |
-    Save-InforcerReportOutput -OutDir ./bulk
+    Save-InforcerReportOutput -OutputPath ./bulk
 ```
 
 ### Example output

@@ -5,7 +5,7 @@
     Required API scope(s): Reports.Read
 .DESCRIPTION
     GET /beta/reports/runs/{runId}/outputs/{outputId} returns the raw bytes plus a
-    Content-Disposition filename. This cmdlet writes those bytes to -OutDir using the
+    Content-Disposition filename. This cmdlet writes those bytes to -OutputPath using the
     server-suggested filename (sanitized) and emits a result object per saved file.
 
     Pipeline-friendly: pipe output records from Invoke-InforcerReport -NoSave or
@@ -15,7 +15,7 @@
 .PARAMETER OutputId
     The output identifier (string) — the id field on each output record. Pipeline-bindable
     by property name (also accepts -Id as an alias).
-.PARAMETER OutDir
+.PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
     Created if it doesn't exist.
 .PARAMETER FileName
@@ -27,12 +27,12 @@
     Saves a single output to the current directory.
 .EXAMPLE
     Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 14436 -NoSave |
-        Save-InforcerReportOutput -OutDir ./reports
+        Save-InforcerReportOutput -OutputPath ./reports
     Queues + polls a report without saving, then downloads every output to ./reports.
 .EXAMPLE
     Get-InforcerReportRun -IncludeOutputs |
         ForEach-Object { $_.outputs } |
-        Save-InforcerReportOutput -OutDir ./bulk
+        Save-InforcerReportOutput -OutputPath ./bulk
     Bulk-downloads every output from every visible run.
 .OUTPUTS
     PSObject or String — per saved file, with { RunId, OutputId, FilePath, FileName, FileSize, ContentType, CorrelationId }
@@ -55,7 +55,7 @@ param(
     [string]$OutputId,
 
     [Parameter(Mandatory = $false)]
-    [string]$OutDir = $PWD.Path,
+    [string]$OutputPath = $PWD.Path,
 
     [Parameter(Mandatory = $false)]
     [string]$FileName,
@@ -69,7 +69,7 @@ begin {
     # PowerShell quirk: `return` inside `begin` does NOT prevent `process` from firing for
     # piped items. Gate `process` on a "begin succeeded" flag instead.
     $script:_SaveBeginOk = $false
-    $script:_SaveOutDir  = $null
+    $script:_SaveOutputPath  = $null
 
     if (-not (Test-InforcerSession)) {
         Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' `
@@ -77,13 +77,13 @@ begin {
         return
     }
     try {
-        if (-not (Test-Path -LiteralPath $OutDir -PathType Container)) {
-            $null = New-Item -Path $OutDir -ItemType Directory -Force -ErrorAction Stop
+        if (-not (Test-Path -LiteralPath $OutputPath -PathType Container)) {
+            $null = New-Item -Path $OutputPath -ItemType Directory -Force -ErrorAction Stop
         }
-        $script:_SaveOutDir = (Resolve-Path -LiteralPath $OutDir).Path
+        $script:_SaveOutputPath = (Resolve-Path -LiteralPath $OutputPath).Path
     } catch {
-        Write-Error -Message "Cannot prepare output directory '$OutDir': $($_.Exception.Message)" `
-            -ErrorId 'OutDirFailed' -Category InvalidArgument
+        Write-Error -Message "Cannot prepare output directory '$OutputPath': $($_.Exception.Message)" `
+            -ErrorId 'OutputPathFailed' -Category InvalidArgument
         return
     }
     $script:_SaveBeginOk = $true
@@ -104,7 +104,7 @@ process {
     $userSuppliedName = $PSBoundParameters.ContainsKey('FileName')
     $defaultName = if ($userSuppliedName) { $FileName } else { ('{0}-{1}' -f $runIdStr, $OutputId) }
 
-    $target = "$runIdStr / $OutputId → $script:_SaveOutDir"
+    $target = "$runIdStr / $OutputId → $script:_SaveOutputPath"
     if (-not $PSCmdlet.ShouldProcess($target, 'Download report output')) { return }
 
     Write-Verbose "Downloading: $endpoint"
@@ -125,7 +125,7 @@ process {
         $download.FileName
     }
 
-    $filePath = Join-Path -Path $script:_SaveOutDir -ChildPath $effectiveName
+    $filePath = Join-Path -Path $script:_SaveOutputPath -ChildPath $effectiveName
     try {
         [System.IO.File]::WriteAllBytes($filePath, $download.Bytes)
     } catch {

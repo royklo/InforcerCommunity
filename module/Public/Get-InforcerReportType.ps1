@@ -50,12 +50,69 @@ function Get-InforcerReportType {
 param(
     [Parameter(Mandatory = $false, Position = 0)]
     [Alias('Name', 'ReportType')]
+    [ArgumentCompleter({
+        param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+        # Static fallback list when cache isn't primed yet; otherwise use the cached catalog.
+        $known = @(
+            'ActiveUserCount','ActiveUsers','Assessment','CopilotAdoption','CredentialUserRegistrationDetails',
+            'EncryptionDisabledDevices','EncryptionEnabledDevices','GetDetectedRisks',
+            'GetDetectedServicePrincipalRisks','GetOneDriveUsageAccountCounts','GetOneDriveUsageStorage',
+            'GetRiskyServicePrincipals','GetRiskyUsers','GetSharePointSiteUsageDetail',
+            'GetSharePointSiteUsageStorage','GetTenantMFAReport','GlobalAdmins','NonCompliantDevices',
+            'SecureScores','SecureScoresAverageComparativeScores','SecureScoresControlScores',
+            'ShadowAiDetection','SubscribedSkus','TenantAuditReport','TenantMfaReport'
+        )
+        $candidates = if ($script:InforcerReportTypeCache) {
+            $tmp = [System.Collections.Generic.List[string]]::new()
+            foreach ($e in $script:InforcerReportTypeCache) {
+                $v = $e.PSObject.Properties['key'].Value -as [string]
+                if ($v) { [void]$tmp.Add($v) }
+            }
+            $tmp
+        } else { $known }
+        $matched = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($c in $candidates) { if ($c -like "$wordToComplete*") { [void]$matched.Add($c) } }
+        foreach ($c in $matched) {
+            [System.Management.Automation.CompletionResult]::new($c, $c, 'ParameterValue', $c)
+        }
+    })]
     [string]$Key,
 
     [Parameter(Mandatory = $false)]
+    [ArgumentCompleter({
+        param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+        $known = @('Adoption','Identity','Productivity','Security')
+        $candidates = if ($script:InforcerReportTypeCache) {
+            $tmp = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($e in $script:InforcerReportTypeCache) {
+                $tagsProp = $e.PSObject.Properties['tags']
+                if ($tagsProp) {
+                    foreach ($t in @($tagsProp.Value)) {
+                        $tStr = $t -as [string]
+                        if ($tStr) { [void]$tmp.Add($tStr) }
+                    }
+                }
+            }
+            $tmp
+        } else { $known }
+        foreach ($c in $candidates) {
+            if ($c -like "$wordToComplete*") {
+                [System.Management.Automation.CompletionResult]::new($c, $c, 'ParameterValue', $c)
+            }
+        }
+    })]
     [string]$Tag,
 
     [Parameter(Mandatory = $false)]
+    [ArgumentCompleter({
+        param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+        $formats = @('csv','json','html','pdf','xlsx')
+        foreach ($f in $formats) {
+            if ($f -like "$wordToComplete*") {
+                [System.Management.Automation.CompletionResult]::new($f, $f, 'ParameterValue', $f)
+            }
+        }
+    })]
     [string]$OutputFormat,
 
     [Parameter(Mandatory = $false)]

@@ -6,7 +6,7 @@
 .DESCRIPTION
     POST /beta/reports/runs submits a batch of (ReportType, OutputFormat) pairs against the
     target tenants. By default the cmdlet runs synchronously: it polls the outputs endpoint
-    until each run is terminal, downloads every output to the current directory (or -OutDir),
+    until each run is terminal, downloads every output to the current directory (or -OutputPath),
     and emits a result object per saved file.
 
     Use -NoWait to return immediately after queueing (no polling, no download); use -NoSave
@@ -50,7 +50,7 @@
     Return immediately after POST with run identifiers. Skip polling and download.
 .PARAMETER NoSave
     Poll until terminal but do not download the output bytes. Returns outputs metadata.
-.PARAMETER OutDir
+.PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
     Created if it doesn't exist.
 .PARAMETER TimeoutSeconds
@@ -293,7 +293,7 @@ param(
     [switch]$NoSave,
 
     [Parameter(Mandatory = $false)]
-    [string]$OutDir = $PWD.Path,
+    [string]$OutputPath = $PWD.Path,
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(10, 3600)]
@@ -390,14 +390,35 @@ if ($entries.Count -eq 0) {
 }
 
 # --- Resolve tenants ---
+# Fast path: if every -TenantId is already a numeric Client Tenant ID, skip the
+# /beta/tenants lookup entirely (it needs Tenants.Read scope which a Reports-only
+# key won't have). Only when the user passes a name or GUID do we need the list.
 $tenantData = $null
 $resolvedTenants = [System.Collections.Generic.List[int]]::new()
-[int]$tenantParseTmp = 0    # hoisted out of the loop — TryParse needs a ref target
+[int]$tenantParseTmp = 0
+$needsLookup = $false
+foreach ($t in $TenantId) {
+    if ($t -isnot [int] -and -not [int]::TryParse(($t -as [string]), [ref]$tenantParseTmp)) {
+        $needsLookup = $true; break
+    }
+}
+if ($needsLookup) {
+    $tenantData = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject -ErrorVariable tenantListErr -ErrorAction SilentlyContinue)
+    if (-not $tenantData -or $tenantData.Count -eq 0) {
+        $apiErr = if ($tenantListErr) { $tenantListErr[-1].Exception.Message } else { 'no response' }
+        $isAuthFail = ($tenantListErr -and $tenantListErr.FullyQualifiedErrorId -match 'ApiRequestFailed_(401|403)')
+        $nonNumeric = @($TenantId | Where-Object { $_ -isnot [int] -and -not [int]::TryParse(($_ -as [string]), [ref]$tenantParseTmp) }) -join "', '"
+        $hint = if ($isAuthFail) {
+            "The API key was rejected when looking up tenant '$nonNumeric' against GET /beta/tenants (this endpoint requires the Tenants.Read scope, which a Reports-only key does not include). Pass the numeric Client Tenant ID directly — e.g. -TenantId 14436 — or re-key with Tenants.Read to enable name / GUID resolution."
+        } else {
+            "Could not retrieve the tenant list to resolve '$nonNumeric'. Underlying error: $apiErr"
+        }
+        Write-Error -Message $hint -ErrorId 'TenantLookupUnavailable' -Category PermissionDenied
+        return
+    }
+}
 foreach ($t in $TenantId) {
     try {
-        if ($null -eq $tenantData -and ($t -isnot [int]) -and -not [int]::TryParse(($t -as [string]), [ref]$tenantParseTmp)) {
-            $tenantData = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject)
-        }
         $resolvedId = if ($tenantData) {
             Resolve-InforcerTenantId -TenantId $t -TenantData $tenantData
         } else {
@@ -414,17 +435,17 @@ if ($resolvedTenants.Count -eq 0) {
     return
 }
 
-# --- Validate -OutDir (only when we actually intend to save) ---
+# --- Validate -OutputPath (only when we actually intend to save) ---
 $wantSave = -not $NoWait.IsPresent -and -not $NoSave.IsPresent
 if ($wantSave) {
     try {
-        if (-not (Test-Path -LiteralPath $OutDir -PathType Container)) {
-            $null = New-Item -Path $OutDir -ItemType Directory -Force -ErrorAction Stop
+        if (-not (Test-Path -LiteralPath $OutputPath -PathType Container)) {
+            $null = New-Item -Path $OutputPath -ItemType Directory -Force -ErrorAction Stop
         }
-        $OutDir = (Resolve-Path -LiteralPath $OutDir).Path
+        $OutputPath = (Resolve-Path -LiteralPath $OutputPath).Path
     } catch {
-        Write-Error -Message "Cannot prepare output directory '$OutDir': $($_.Exception.Message)" `
-            -ErrorId 'OutDirFailed' -Category InvalidArgument
+        Write-Error -Message "Cannot prepare output directory '$OutputPath': $($_.Exception.Message)" `
+            -ErrorId 'OutputPathFailed' -Category InvalidArgument
         return
     }
 }
@@ -560,7 +581,7 @@ foreach ($run in $runs) {
         }
         if ($null -eq $download) { continue }
 
-        $filePath = Join-Path -Path $OutDir -ChildPath $download.FileName
+        $filePath = Join-Path -Path $OutputPath -ChildPath $download.FileName
         try {
             [System.IO.File]::WriteAllBytes($filePath, $download.Bytes)
         } catch {

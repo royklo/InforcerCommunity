@@ -482,14 +482,17 @@
                 if (-not $p) { $p = $_.PSObject.Properties['Parameters'] }
                 if (-not $p) { $p = $_.PSObject.Properties['requiredParameters'] }
                 if (-not $p) { $p = $_.PSObject.Properties['parameters'] }
+                $rendered = '(none)'
                 if ($p -and $null -ne $p.Value) {
                     $keys = foreach ($entry in @($p.Value)) {
                         if ($entry -is [string]) { $entry }
                         elseif ($entry.PSObject.Properties['key']) { $entry.PSObject.Properties['key'].Value }
                         elseif ($entry.PSObject.Properties['name']) { $entry.PSObject.Properties['name'].Value }
                     }
-                    ($keys | Where-Object { $_ }) -join ', '
-                } else { '' }
+                    $filtered = $keys | Where-Object { $_ }
+                    if ($filtered) { $rendered = ($filtered -join ', ') }
+                }
+                $rendered
               </ScriptBlock></ListItem>
             </ListItems>
           </ListEntry>

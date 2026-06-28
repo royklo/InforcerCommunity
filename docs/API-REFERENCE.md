@@ -19,6 +19,7 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [Users](#users)
   - [Groups](#groups)
   - [Roles](#roles)
+  - [Reports](#reports)
 - [Schemas](#schemas)
   - [BaselineGroup](#baselinegroup)
   - [BaselineMember](#baselinemember)
@@ -38,6 +39,9 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [TenantGroupSummary](#tenantgroupsummary)
   - [TenantGroup](#tenantgroup)
   - [TenantRole](#tenantrole)
+  - [ReportType](#reporttype)
+  - [ReportRun](#reportrun)
+  - [ReportOutput](#reportoutput)
 - [Response Wrapper](#response-wrapper)
 - [Error Responses](#error-responses)
 
@@ -68,6 +72,8 @@ Inforcer API keys are issued with one or more scopes. Each cmdlet and endpoint b
 | `Tenants.Roles.Read` | `/beta/tenants/{tenantId}/roles` |
 | `Tenants.SecureScores.Read` | `/beta/tenants/{tenantId}/secureScores` |
 | `Tenants.Users.Read` | `/beta/tenants/{tenantId}/users`, `/beta/tenants/{tenantId}/users/{userId}` |
+| `Reports.Read` | `/beta/reports/types`, `/beta/reports/runs`, `/beta/reports/runs/{runId}/outputs`, `/beta/reports/runs/{runId}/outputs/{outputId}` |
+| `Reports.Run` | `/beta/reports/runs` *(POST only)* |
 
 > **Note on `Audit.Read`**: The scope mapping provided by the Inforcer API team lists `Audit.Read → /beta/assessments`, but `/beta/assessments` is already covered by `Assessments.Read`, and the module's audit cmdlets call `/beta/auditEvents/search` and `/beta/auditEvents/eventTypes`. This table assumes `Audit.Read` applies to the `/beta/auditEvents/*` routes. **This needs confirmation with the Inforcer API team.**
 
@@ -93,6 +99,10 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Invoke-InforcerAssessment` | `GET /beta/tenants`, `GET /beta/assessments`, `POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Tenants.Read` + `Assessments.Read` + `Assessments.Run` |
 | `Export-InforcerTenantDocumentation` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
 | `Compare-InforcerEnvironments` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` *(per side)* | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
+| `Get-InforcerReportType` | `GET /beta/reports/types` | `Reports.Read` |
+| `Invoke-InforcerReport` | `POST /beta/reports/runs`, `GET /beta/reports/runs/{runId}/outputs`, `GET /beta/reports/runs/{runId}/outputs/{outputId}` + `GET /beta/tenants` *(GUID/name lookup)* | `Reports.Read` + `Reports.Run` + `Tenants.Read`† |
+| `Get-InforcerReportRun` | `GET /beta/reports/runs`, `GET /beta/reports/runs/{runId}/outputs` *(with `-Wait` or `-IncludeOutputs`)* | `Reports.Read` |
+| `Save-InforcerReportOutput` | `GET /beta/reports/runs/{runId}/outputs/{outputId}` | `Reports.Read` |
 
 > † `Tenants.Read` is only consumed for the tenant-list lookup that `Resolve-InforcerTenantId` performs when `-TenantId` is a GUID or tenant name. If callers always pass a numeric Client Tenant ID, the `Tenants.Read` portion can be omitted.
 
@@ -300,6 +310,107 @@ Returns the list of Entra ID directory role definitions for a tenant.
 | `tenantId` | path | integer | Yes | Inforcer tenant ID. |
 
 **Response**: Array of [TenantRole](#tenantrole) objects.
+
+### Reports
+
+Beta endpoints for triggering and retrieving asynchronous report runs.
+
+#### `GET /beta/reports/types`
+
+Returns the catalog of available report types. Each entry advertises the report's key, supported output formats, whether it can be collated across tenants, accepted parameters, and tags.
+
+**Required API scope(s)**: `Reports.Read`
+
+**Cmdlet**: `Get-InforcerReportType`
+
+**Response**: Array of [ReportType](#reporttype) objects (under `data`).
+
+#### `POST /beta/reports/runs`
+
+Queues one or more report runs against a set of target tenants. Returns one run record per (report × tenant) combination unless `collate: true` is set on a `collatable: true` type, in which case a single cross-tenant output is produced.
+
+**Required API scope(s)**: `Reports.Run`
+
+**Cmdlet**: `Invoke-InforcerReport`
+
+**Request body**:
+
+```json
+{
+  "reports": [
+    {
+      "type": "ActiveUserCount",
+      "outputFormat": "csv",
+      "collate": false,
+      "parameters": { "report-period": "30" }
+    }
+  ],
+  "tenants": { "includeTenants": [482, 483] }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reports[].type` | string | Yes | Report type key from `GET /reports/types`. Case-insensitive. |
+| `reports[].outputFormat` | string | Yes | One of the `outputFormats` advertised by the type. Case-insensitive. |
+| `reports[].collate` | boolean | No | When `true` on a `collatable: true` type, produces a single cross-tenant output. |
+| `reports[].parameters` | object | No | Type-specific parameters (string-keyed, string-valued). Unknown keys are silently accepted today; the module rejects them client-side. |
+| `tenants.includeTenants` | int[] | Yes | Numeric Client Tenant IDs. Duplicates are deduped by the server. |
+
+**Response**: Array of [ReportRun](#reportrun) objects (one per created run).
+
+> **Known bug (ENG-4591)**: Duplicate `(type, outputFormat)` entries currently render all duplicates in the last-listed format. The module deduplicates client-side before POST.
+
+#### `GET /beta/reports/runs`
+
+Lists report runs across all tenants the caller has visibility into. Server-side cap: `maxItems: 500`, last 7 days. Query parameters (`?status=`, `?since=`, `?limit=`, ...) are currently ignored — filter client-side.
+
+**Required API scope(s)**: `Reports.Read`
+
+**Cmdlet**: `Get-InforcerReportRun`
+
+> **Propagation lag**: a newly-queued run does not appear in this list for ~4 minutes. For freshly-queued runs, poll `GET /beta/reports/runs/{runId}/outputs` directly (404 until terminal, 200 once complete).
+
+**Response**: Array of [ReportRun](#reportrun) objects (under `data`).
+
+#### `GET /beta/reports/runs/{runId}/outputs`
+
+Returns the list of outputs for a single terminal run. Used as the polling probe for run completion (bypasses the list-endpoint propagation lag).
+
+**Required API scope(s)**: `Reports.Read`
+
+**Cmdlet**: `Test-InforcerReportRunTerminal` *(private helper, used by `Invoke-InforcerReport -Wait`, `Get-InforcerReportRun -Wait`, and `Get-InforcerReportRun -IncludeOutputs`)*
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `runId` | path | string (GUID) | Yes | The run identifier returned by `POST /reports/runs`. |
+
+**Responses:**
+
+| Code | Body | Meaning |
+|------|------|---------|
+| 200 | `{ data: [ReportOutput, ...] }` | Run is in a terminal state (`completed` or `completedWithErrors`) and outputs are available. |
+| 200 | `{ data: [] }` | Run is visible to the API key, but **no outputs are within the key's tenant scope.** Collated outputs (covering multiple tenants) are only returned when the key covers every tenant the run targeted. |
+| 404 | — | **Deliberately indistinguishable across four cases**: (1) run does not exist, (2) run belongs to a different client, (3) run is not in a terminal state (still `running`, or `failed`), (4) output ID does not belong to this run. Designed this way to avoid leaking run existence across clients. |
+
+> **Polling implication**: `Invoke-InforcerReport -Wait` and `Get-InforcerReportRun -Wait` cannot distinguish a still-running run from a `failed` run — both 404 indefinitely. The cmdlet times out cleanly after `-TimeoutSeconds`. To detect `failed` status, query `GET /beta/reports/runs` (subject to the 4-minute lag).
+
+#### `GET /beta/reports/runs/{runId}/outputs/{outputId}`
+
+Downloads the raw bytes of a single output. Returns proper MIME type and a `Content-Disposition: attachment; filename=...; filename*=UTF-8''...` header. No `Range` / `ETag` support — every fetch is a full GET.
+
+**Required API scope(s)**: `Reports.Read`
+
+**Cmdlet**: `Save-InforcerReportOutput`
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `runId` | path | string (GUID) | Yes | Run identifier. |
+| `outputId` | path | string | Yes | Output identifier from the outputs list. |
+
+**404 is deliberately indistinguishable** across: run doesn't exist, run belongs to a different client, run isn't in a terminal state, output ID doesn't belong to the run, or the output's tenant is outside the key's tenant scope. Designed to avoid leaking run/output existence.
+
+**Response**: Raw bytes (CSV, JSON, HTML, PDF, etc. depending on `outputFormat`).
 
 ---
 
@@ -650,6 +761,62 @@ An Entra ID directory role definition.
 | isPrivileged | boolean | No | Whether the role is privileged. |
 
 **PSTypeName:** `InforcerCommunity.Role`
+
+### ReportType
+
+A catalog entry from `GET /beta/reports/types`. Field names verified against `api-uk.inforcer.com`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| key | string | Yes | Stable identifier (e.g. `ActiveUserCount`, `CopilotAdoption`). Case-insensitive in requests. |
+| name | string | No | Display name. |
+| description | string | No | One-line description of what the report contains. |
+| collatable | boolean | No | Whether the type can produce a single cross-tenant output when `collate: true` is passed. |
+| supportedOutputFormats | string[] | No | Output formats accepted for this type at `POST /reports/runs`. Observed values: `csv`, `json`, `pdf`, `html`. |
+| tags | string[] | No | Categorization tags (e.g. `Identity`, `Adoption`, `Security`). |
+| requiredParameters | array\<object\> | No | Per-type parameters (e.g. `report-period`, `assessment-id`). Empty array `[]` for types that take no parameters. Each entry typically exposes `key`, `name`, `type`, and value/range constraints. |
+
+**PSTypeName:** `InforcerCommunity.ReportType`. The module also exposes `OutputFormats` and `Parameters` as PascalCase back-compat aliases over `supportedOutputFormats` / `requiredParameters`.
+
+### ReportRun
+
+A run record from `GET /beta/reports/runs` (list) or `POST /beta/reports/runs` (create). **One run batches the full reports[] array submitted in the POST**, so the run carries plural `reportTypes` and `outputFormats` arrays — not singular fields. Field names verified against `api-uk.inforcer.com`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| runId | string (GUID) | Yes | Unique run identifier. **POST response shape is `{ data: { runId: "<guid>" } }` — only the runId is returned at create time.** |
+| status | string | Yes | One of `running`, `completed`, `completedWithErrors`, `failed`. |
+| reportTypes | string[] | No | The report type keys batched into this run (case may differ from catalog — e.g. `activeusercount` instead of `ActiveUserCount`). |
+| outputFormats | string[] | No | The output formats requested across the run's reports. |
+| triggeredByType | string | No | `user` or `scheduled`. |
+| triggeredBy | string | No | Identity that triggered the run. |
+| createdAt | string (ISO 8601) | No | When the run was created. |
+| startedAt | string (ISO 8601) | No | When processing began (typically the same instant as `createdAt`). |
+| completedAt | string (ISO 8601) | No | When the run reached a terminal status. |
+| outputCount | int | No | Number of outputs produced (0 is valid — e.g. no Copilot data, or no tenant-visible outputs). |
+| outputs | array\<[ReportOutput](#reportoutput)\> | No | Embedded when `-IncludeOutputs` / `-Wait` is used; absent from the raw list endpoint. |
+
+**PSTypeName:** `InforcerCommunity.ReportRun`. `Id` is exposed as a PascalCase alias over `runId` for `-Id`-style pipeline binding.
+
+### ReportOutput
+
+An output record from `GET /beta/reports/runs/{runId}/outputs`. The actual bytes are fetched via the per-output download endpoint (see `Save-InforcerReportOutput`). Field names verified against `api-uk.inforcer.com`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| id | string (GUID) | Yes | Output identifier (unique within the run). Aliased as `OutputId`. |
+| reportType | string | Yes | Report type key for this output (e.g. `ActiveUserCount`). |
+| tenantId | int | Yes | Numeric Client Tenant ID. Absent on collated cross-tenant outputs. |
+| format | string | Yes | Output format (`csv`, `json`, `pdf`, `html`). Aliased as `OutputFormat`. |
+| sizeBytes | int | Yes | Size in bytes. Aliased as `FileSize`. |
+
+**Server does not return**: a `fileName`, `contentType`, or `createdAt` on the output record — the filename and MIME type come from the download endpoint's `Content-Disposition` and `Content-Type` headers respectively.
+
+**Module-attached property**: `RunId` is attached client-side when needed for pipeline binding to `Save-InforcerReportOutput`.
+
+**PSTypeName:** `InforcerCommunity.ReportOutput`
+
+> **Empty-result caveat**: Some report types produce a 4-byte UTF-8 BOM CSV (`EF BB BF 0A`) when there's no data, while others omit the output entirely. The cmdlet does not try to disambiguate "report ran with empty result" from "report didn't run for this tenant"; callers should inspect `fileSize` and/or content.
 
 ---
 

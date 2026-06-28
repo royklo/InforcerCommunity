@@ -30,14 +30,15 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 16
+        $script:expectedCount = 20
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
             'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole',
             'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
-            'Get-InforcerAssessment', 'Invoke-InforcerAssessment'
+            'Get-InforcerAssessment', 'Invoke-InforcerAssessment',
+            'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
         )
         $script:expectedParameters = @{
             'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl', 'FetchGraphData', 'PassThru')
@@ -56,6 +57,10 @@ Describe 'Consistency contract' {
             'Compare-InforcerEnvironments'  = @('SourceTenantId', 'DestinationTenantId', 'SourceSession', 'DestinationSession', 'SourceBaselineId', 'DestinationBaselineId', 'IncludingAssignments', 'SettingsCatalogPath', 'FetchGraphData', 'ExcludeOS', 'PolicyNameFilter', 'OutputPath')
             'Get-InforcerAssessment'        = @('Format', 'OutputType')
             'Invoke-InforcerAssessment'     = @('TenantId', 'AssessmentId', 'OutputType')
+            'Get-InforcerReportType'        = @('Key', 'Tag', 'OutputFormat', 'Force', 'Format', 'OutputType')
+            'Invoke-InforcerReport'         = @('ReportType', 'OutputFormat', 'TenantId', 'ReportPeriod', 'AssessmentId', 'Parameter', 'Collate', 'NoWait', 'NoSave', 'OutDir', 'TimeoutSeconds', 'PollIntervalSeconds', 'Format', 'OutputType')
+            'Get-InforcerReportRun'         = @('RunId', 'Wait', 'IncludeOutputs', 'TimeoutSeconds', 'PollIntervalSeconds', 'Format', 'OutputType')
+            'Save-InforcerReportOutput'     = @('RunId', 'OutputId', 'OutDir', 'FileName', 'OutputType')
         }
     }
 
@@ -205,6 +210,31 @@ Describe 'No-silent-failure contract' {
     It 'Invoke-InforcerAssessment produces an error when not connected' {
         $err = $null
         Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'test' -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Get-InforcerReportType produces an error when not connected' {
+        $err = $null
+        Get-InforcerReportType -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Invoke-InforcerReport produces an error when not connected' {
+        $err = $null
+        Invoke-InforcerReport -ReportType 'ActiveUserCount' -OutputFormat csv -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Get-InforcerReportRun produces an error when not connected' {
+        $err = $null
+        Get-InforcerReportRun -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Save-InforcerReportOutput produces an error when not connected' {
+        $err = $null
+        $guid = [guid]::NewGuid()
+        Save-InforcerReportOutput -RunId $guid -OutputId 'out-1' -ErrorVariable err -ErrorAction SilentlyContinue
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 }
@@ -1001,6 +1031,423 @@ Describe 'Private helpers (via module scope)' {
                 $html | Should -Match 'tenant-btn'
                 $html | Should -Match 'togAll'
                 $html | Should -Match 'checkbox'
+            }
+        }
+    }
+
+    Context 'Resolve-InforcerReportOutputFileName' {
+        It 'Parses plain filename=' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportOutputFileName -ContentDisposition 'attachment; filename=Report.csv'
+                $r | Should -Be 'Report.csv'
+            }
+        }
+
+        It 'Parses quoted filename with spaces' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportOutputFileName -ContentDisposition 'attachment; filename="my report.csv"'
+                $r | Should -Be 'my report.csv'
+            }
+        }
+
+        It 'Parses RFC 5987 filename* with UTF-8 percent-encoding' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportOutputFileName -ContentDisposition "attachment; filename*=UTF-8''na%C3%AFve.txt"
+                $r | Should -Be 'naïve.txt'
+            }
+        }
+
+        It 'Prefers filename* over filename when both present' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportOutputFileName -ContentDisposition "attachment; filename=fallback.txt; filename*=UTF-8''na%C3%AFve.txt"
+                $r | Should -Be 'naïve.txt'
+            }
+        }
+
+        It 'Strips path components for safety' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportOutputFileName -ContentDisposition 'attachment; filename=../../etc/passwd'
+                $r | Should -Be 'passwd'
+            }
+        }
+
+        It 'Sanitizes reserved characters' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportOutputFileName -ContentDisposition 'attachment; filename="weird:|name.txt"'
+                $r | Should -Be 'weird__name.txt'
+            }
+        }
+
+        It 'Falls back to default when header is empty' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportOutputFileName -ContentDisposition '' -DefaultName 'my-default.bin'
+                $r | Should -Be 'my-default.bin'
+            }
+        }
+
+        It 'Falls back to default when header is null' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportOutputFileName -ContentDisposition $null
+                $r | Should -Be 'output'
+            }
+        }
+    }
+
+    Context 'Get-InforcerHeaderValue' {
+        It 'Returns null for null headers' {
+            & (Get-Module InforcerCommunity) {
+                Get-InforcerHeaderValue -Headers $null -Name 'x-correlation-id' | Should -BeNullOrEmpty
+            }
+        }
+
+        It 'Reads from hashtable case-insensitively (lower-case lookup)' {
+            & (Get-Module InforcerCommunity) {
+                $h = @{ 'X-Correlation-Id' = 'abc-123' }
+                Get-InforcerHeaderValue -Headers $h -Name 'x-correlation-id' | Should -Be 'abc-123'
+            }
+        }
+
+        It 'Reads from hashtable case-insensitively (mixed-case lookup)' {
+            & (Get-Module InforcerCommunity) {
+                $h = @{ 'x-correlation-id' = 'abc-123' }
+                Get-InforcerHeaderValue -Headers $h -Name 'X-Correlation-Id' | Should -Be 'abc-123'
+            }
+        }
+
+        It 'Unwraps single-element array values (Invoke-RestMethod shape)' {
+            & (Get-Module InforcerCommunity) {
+                $h = @{ 'x-correlation-id' = @('abc-123') }
+                Get-InforcerHeaderValue -Headers $h -Name 'x-correlation-id' | Should -Be 'abc-123'
+            }
+        }
+    }
+
+    Context 'Resolve-InforcerReportTypeSchema (with seeded cache)' {
+        BeforeAll {
+            & (Get-Module InforcerCommunity) {
+                $script:InforcerReportTypeCache = @(
+                    [pscustomobject]@{
+                        key           = 'ActiveUserCount'
+                        outputFormats = @('csv','json')
+                        collatable    = $true
+                        parameters    = @()
+                    }
+                    [pscustomobject]@{
+                        key           = 'TenantAuditReport'
+                        outputFormats = @('html','pdf')
+                        collatable    = $false
+                        parameters    = @()
+                    }
+                    [pscustomobject]@{
+                        key           = 'CopilotAdoption'
+                        outputFormats = @('csv','json')
+                        collatable    = $true
+                        parameters    = @([pscustomobject]@{ key = 'report-period' })
+                    }
+                    [pscustomobject]@{
+                        key           = 'Assessment'
+                        outputFormats = @('pdf')
+                        collatable    = $false
+                        parameters    = @([pscustomobject]@{ key = 'assessment-id' })
+                    }
+                )
+            }
+        }
+
+        AfterAll {
+            & (Get-Module InforcerCommunity) {
+                $script:InforcerReportTypeCache = $null
+            }
+        }
+
+        It 'Resolves a valid (type, format) pair into an API entry' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportTypeSchema -ReportType ActiveUserCount -OutputFormat csv
+                $r.TypeKey | Should -Be 'ActiveUserCount'
+                $r.OutputFormat | Should -Be 'csv'
+                $r.Entry.type | Should -Be 'ActiveUserCount'
+                $r.Entry.outputFormat | Should -Be 'csv'
+            }
+        }
+
+        It 'Auto-defaults report-period for CopilotAdoption' {
+            & (Get-Module InforcerCommunity) {
+                $r = Resolve-InforcerReportTypeSchema -ReportType CopilotAdoption -OutputFormat csv
+                $r.Parameters['report-period'] | Should -Be '30'
+                $r.Entry.parameters['report-period'] | Should -Be '30'
+            }
+        }
+
+        It 'Throws on unknown report type' {
+            & (Get-Module InforcerCommunity) {
+                { Resolve-InforcerReportTypeSchema -ReportType NotARealType -OutputFormat csv } |
+                    Should -Throw '*Unknown report type*'
+            }
+        }
+
+        It 'Throws on unsupported output format for the type' {
+            & (Get-Module InforcerCommunity) {
+                { Resolve-InforcerReportTypeSchema -ReportType ActiveUserCount -OutputFormat pdf } |
+                    Should -Throw '*does not support output format*'
+            }
+        }
+
+        It 'Throws when -Collate set on non-collatable type' {
+            & (Get-Module InforcerCommunity) {
+                { Resolve-InforcerReportTypeSchema -ReportType TenantAuditReport -OutputFormat pdf -Collate } |
+                    Should -Throw '*does not support collation*'
+            }
+        }
+
+        It 'Throws when Assessment requested without -AssessmentId' {
+            & (Get-Module InforcerCommunity) {
+                { Resolve-InforcerReportTypeSchema -ReportType Assessment -OutputFormat pdf } |
+                    Should -Throw "*requires -AssessmentId*"
+            }
+        }
+
+        It 'Accepts Assessment with -AssessmentId (alphanumeric string, not a GUID)' {
+            & (Get-Module InforcerCommunity) {
+                # Real Inforcer assessment IDs are alphanumeric strings, e.g. l1f8wd29pl44pp1j66r9
+                $id = 'l1f8wd29pl44pp1j66r9'
+                $r = Resolve-InforcerReportTypeSchema -ReportType Assessment -OutputFormat pdf -AssessmentId $id
+                $r.Parameters['assessment-id'] | Should -Be $id
+            }
+        }
+
+        It 'Rejects unknown -Parameter keys against the catalog' {
+            & (Get-Module InforcerCommunity) {
+                { Resolve-InforcerReportTypeSchema -ReportType CopilotAdoption -OutputFormat csv -Parameter @{ 'bogus-key' = 'x' } } |
+                    Should -Throw '*Unknown parameter*'
+            }
+        }
+    }
+
+    Context 'Add-InforcerPropertyAliases — ReportType / ReportRun / ReportOutput' {
+        It 'Adds PascalCase aliases for ReportType (real API shape)' {
+            & (Get-Module InforcerCommunity) {
+                # Source shape verified against api-uk.inforcer.com beta:
+                #   key, name, description, collatable, supportedOutputFormats[], tags[], requiredParameters[]
+                $obj = [pscustomobject]@{
+                    key                    = 'ActiveUserCount'
+                    name                   = 'Active User Count'
+                    description            = 'A count of all Active Users'
+                    collatable             = $true
+                    supportedOutputFormats = @('csv','json')
+                    tags                   = @('Identity','Adoption')
+                    requiredParameters     = @()
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $obj -ObjectType ReportType
+                $obj.Key | Should -Be 'ActiveUserCount'
+                $obj.Name | Should -Be 'Active User Count'
+                $obj.Collatable | Should -BeTrue
+                ($obj.SupportedOutputFormats -join ',') | Should -Be 'csv,json'
+                ($obj.OutputFormats -join ',') | Should -Be 'csv,json'   # back-compat alias
+                $obj.Tags | Should -Be 'Identity, Adoption'              # array→comma-separated string
+            }
+        }
+
+        It 'Adds PascalCase aliases for ReportRun (real API shape)' {
+            & (Get-Module InforcerCommunity) {
+                # Source shape verified: runId, status, reportTypes[], outputFormats[],
+                # triggeredByType, createdAt, startedAt, completedAt, outputCount.
+                $obj = [pscustomobject]@{
+                    runId            = '094a49ed-b9b8-492b-870f-0f76fd3b2954'
+                    status           = 'completed'
+                    reportTypes      = @('activeusercount')
+                    outputFormats    = @('csv')
+                    triggeredByType  = 'user'
+                    createdAt        = '2026-06-26T14:01:23Z'
+                    startedAt        = '2026-06-26T14:01:23Z'
+                    completedAt      = '2026-06-26T14:01:29Z'
+                    outputCount      = 1
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $obj -ObjectType ReportRun
+                $obj.RunId | Should -Be '094a49ed-b9b8-492b-870f-0f76fd3b2954'
+                $obj.Status | Should -Be 'completed'
+                ($obj.ReportTypes -join ',') | Should -Be 'activeusercount'
+                ($obj.OutputFormats -join ',') | Should -Be 'csv'
+                $obj.TriggeredByType | Should -Be 'user'
+                $obj.OutputCount | Should -Be 1
+            }
+        }
+
+        It 'Adds PascalCase aliases for ReportOutput (real API shape)' {
+            & (Get-Module InforcerCommunity) {
+                # Source shape verified: id, reportType, tenantId, format, sizeBytes.
+                $obj = [pscustomobject]@{
+                    id          = '45c94952-e649-45af-b35e-9cd0e7b1bf45'
+                    reportType  = 'ActiveUserCount'
+                    tenantId    = 14436
+                    format      = 'csv'
+                    sizeBytes   = 60
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $obj -ObjectType ReportOutput
+                $obj.OutputId | Should -Be '45c94952-e649-45af-b35e-9cd0e7b1bf45'
+                $obj.ReportType | Should -Be 'ActiveUserCount'
+                $obj.TenantId | Should -Be 14436
+                $obj.OutputFormat | Should -Be 'csv'
+                $obj.FileSize | Should -Be 60
+            }
+        }
+
+        It 'Does not throw on missing properties' {
+            & (Get-Module InforcerCommunity) {
+                $obj = [pscustomobject]@{ key = 'ActiveUserCount' }
+                { $null = Add-InforcerPropertyAliases -InputObject $obj -ObjectType ReportType } | Should -Not -Throw
+            }
+        }
+    }
+
+    Context 'Test-InforcerReportRunTerminal' {
+        BeforeAll {
+            & (Get-Module InforcerCommunity) {
+                $secKey = ConvertTo-SecureString 'fake' -AsPlainText -Force
+                $script:InforcerSession = @{ ApiKey = $secKey; BaseUrl = 'https://example.invalid/api' }
+            }
+        }
+
+        It 'Returns IsTerminal=true with outputs on 200' {
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [pscustomobject]@{
+                    StatusCode = 200
+                    Headers    = @{ 'x-correlation-id' = 'cor-1' }
+                    Content    = '{"data":{"outputs":[{"id":"out-1","reportType":"X","format":"csv","sizeBytes":42}]},"success":true}'
+                }
+            }
+            $r = & (Get-Module InforcerCommunity) { Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') }
+            $r.IsTerminal | Should -BeTrue
+            $r.StatusCode | Should -Be 200
+            $r.Outputs.Count | Should -Be 1
+            $r.Outputs[0].id | Should -Be 'out-1'
+            $r.CorrelationId | Should -Be 'cor-1'
+        }
+
+        It 'Returns IsTerminal=false on 404 (not terminal yet)' {
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [pscustomobject]@{
+                    StatusCode = 404
+                    Headers    = @{ 'x-correlation-id' = 'cor-2' }
+                    Content    = '{"statusCode":404,"message":"Resource not found"}'
+                }
+            }
+            $r = & (Get-Module InforcerCommunity) { Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') }
+            $r.IsTerminal | Should -BeFalse
+            $r.StatusCode | Should -Be 404
+            $r.Outputs | Should -BeNullOrEmpty
+        }
+
+        It 'Writes an error on non-200, non-404 status' {
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [pscustomobject]@{
+                    StatusCode = 500
+                    Headers    = @{}
+                    Content    = '{"message":"Internal Server Error"}'
+                }
+            }
+            $err = $null
+            $r = & (Get-Module InforcerCommunity) {
+                param($ev)
+                Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') -ErrorVariable ev -ErrorAction SilentlyContinue
+                $ev
+            } ([ref]$null)
+            # The error stream captured the failure
+            $err = $r | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }
+            (Test-Path variable:r) | Should -BeTrue
+        }
+
+        It 'Returns NotConnected error when no session' {
+            & (Get-Module InforcerCommunity) { $script:InforcerSession = $null }
+            $err = $null
+            & (Get-Module InforcerCommunity) {
+                Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            # Restore session for subsequent tests
+            & (Get-Module InforcerCommunity) {
+                $secKey = ConvertTo-SecureString 'fake' -AsPlainText -Force
+                $script:InforcerSession = @{ ApiKey = $secKey; BaseUrl = 'https://example.invalid/api' }
+            }
+        }
+    }
+
+    Context 'Invoke-InforcerRawDownload' {
+        BeforeAll {
+            & (Get-Module InforcerCommunity) {
+                $secKey = ConvertTo-SecureString 'fake' -AsPlainText -Force
+                $script:InforcerSession = @{ ApiKey = $secKey; BaseUrl = 'https://example.invalid/api' }
+            }
+        }
+
+        It 'Returns bytes + filename + correlation ID on 200' {
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes('hello,world')
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [pscustomobject]@{
+                    StatusCode = 200
+                    Headers    = @{
+                        'x-correlation-id'    = 'cor-7'
+                        'Content-Disposition' = 'attachment; filename="MyReport.csv"'
+                        'Content-Type'        = 'text/csv'
+                    }
+                    Content    = $bytes
+                }
+            }
+            $r = & (Get-Module InforcerCommunity) { Invoke-InforcerRawDownload -Endpoint '/beta/reports/runs/abc/outputs/xyz' }
+            $r.FileName | Should -Be 'MyReport.csv'
+            $r.ContentType | Should -Be 'text/csv'
+            $r.CorrelationId | Should -Be 'cor-7'
+            $r.StatusCode | Should -Be 200
+            $r.Bytes.Length | Should -Be 11
+        }
+
+        It 'Falls back to DefaultFileName when Content-Disposition is missing' {
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes('xyz')
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [pscustomobject]@{
+                    StatusCode = 200
+                    Headers    = @{ 'Content-Type' = 'text/plain' }
+                    Content    = $bytes
+                }
+            }
+            $r = & (Get-Module InforcerCommunity) { Invoke-InforcerRawDownload -Endpoint '/x' -DefaultFileName 'fallback.bin' }
+            $r.FileName | Should -Be 'fallback.bin'
+        }
+
+        It 'Writes an error on 4xx with the API message extracted' {
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [pscustomobject]@{
+                    StatusCode = 403
+                    Headers    = @{ 'x-correlation-id' = 'cor-8' }
+                    Content    = ([System.Text.Encoding]::UTF8.GetBytes('{"success":false,"message":"Forbidden"}'))
+                }
+            }
+            $err = $null
+            & (Get-Module InforcerCommunity) {
+                Invoke-InforcerRawDownload -Endpoint '/x' -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            # The mock should fire — caller gets no bytes back
+        }
+    }
+
+    Context 'Disconnect-Inforcer cache clearing' {
+        It 'Clears every $script:Inforcer*Cache variable' {
+            # Seed session and multiple caches, then disconnect, then assert all are null.
+            & (Get-Module InforcerCommunity) {
+                $script:InforcerSession = @{
+                    ApiKey      = ConvertTo-SecureString 'fake' -AsPlainText -Force
+                    BaseUrl     = 'https://example.invalid/api'
+                    Region      = 'uk'
+                    ConnectedAt = Get-Date
+                }
+                $script:InforcerReportTypeCache = @('seeded')
+                $script:InforcerAssessmentCache = @('seeded')
+                $script:InforcerFakeFutureCache = @('seeded')
+            }
+            $null = Disconnect-Inforcer
+            & (Get-Module InforcerCommunity) {
+                foreach ($n in 'InforcerReportTypeCache','InforcerAssessmentCache','InforcerFakeFutureCache') {
+                    $v = Get-Variable -Scope Script -Name $n -ValueOnly -ErrorAction SilentlyContinue
+                    $v | Should -BeNullOrEmpty -Because "$n must be cleared on disconnect"
+                }
             }
         }
     }

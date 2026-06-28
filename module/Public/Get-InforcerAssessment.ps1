@@ -64,5 +64,10 @@ if ($result -is [array]) {
     $result.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Assessment')
 }
 
+# Prime the assessment cache so the -AssessmentId tab completer on Invoke-InforcerReport
+# is instant. Successful list call also clears any prior denial sentinel.
+$script:InforcerAssessmentCache       = @($result)
+$script:InforcerAssessmentCacheDeniedAt = $null
+
 $result
 }

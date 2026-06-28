@@ -25,6 +25,10 @@
         'Compare-InforcerEnvironments'
         'Get-InforcerAssessment'
         'Invoke-InforcerAssessment'
+        'Get-InforcerReportType'
+        'Invoke-InforcerReport'
+        'Get-InforcerReportRun'
+        'Save-InforcerReportOutput'
     )
     CmdletsToExport   = @()
     VariablesToExport  = @()

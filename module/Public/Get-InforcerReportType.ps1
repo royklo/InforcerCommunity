@@ -35,6 +35,11 @@
 .EXAMPLE
     Get-InforcerReportType -Tag security
     Lists every type tagged with 'security'.
+.EXAMPLE
+    Get-InforcerReportType -Tag security | Invoke-InforcerReport -OutputFormat csv -TenantId 14436
+    Discovers every security-tagged report type and pipes each into Invoke-InforcerReport.
+    Works because Get-InforcerReportType emits a 'Key' alias which binds to
+    Invoke-InforcerReport's -ReportType (ValueFromPipelineByPropertyName).
 .OUTPUTS
     PSObject or String
 .LINK
@@ -52,24 +57,30 @@ param(
     [Alias('Name', 'ReportType')]
     [ArgumentCompleter({
         param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-        # Static fallback list when cache isn't primed yet; otherwise use the cached catalog.
-        $known = @(
-            'ActiveUserCount','ActiveUsers','Assessment','CopilotAdoption','CredentialUserRegistrationDetails',
-            'EncryptionDisabledDevices','EncryptionEnabledDevices','GetDetectedRisks',
-            'GetDetectedServicePrincipalRisks','GetOneDriveUsageAccountCounts','GetOneDriveUsageStorage',
-            'GetRiskyServicePrincipals','GetRiskyUsers','GetSharePointSiteUsageDetail',
-            'GetSharePointSiteUsageStorage','GetTenantMFAReport','GlobalAdmins','NonCompliantDevices',
-            'SecureScores','SecureScoresAverageComparativeScores','SecureScoresControlScores',
-            'ShadowAiDetection','SubscribedSkus','TenantAuditReport','TenantMfaReport'
-        )
-        $candidates = if ($script:InforcerReportTypeCache) {
-            $tmp = [System.Collections.Generic.List[string]]::new()
-            foreach ($e in $script:InforcerReportTypeCache) {
-                $v = $e.PSObject.Properties['key'].Value -as [string]
-                if ($v) { [void]$tmp.Add($v) }
+        # ArgumentCompleter scriptblocks run in the *caller's* session state, NOT the module's,
+        # so $script:InforcerReportTypeCache / $script:InforcerReportTypeStaticKeys are invisible
+        # from here. Bounce through the module's session via Get-Module so $script:* resolves.
+        # The static-fallback list and live cache both live in Private/Get-InforcerReportTypeStaticKeys.ps1.
+        $module = Get-Module InforcerCommunity
+        $candidates = if ($module) {
+            & $module {
+                if ($script:InforcerReportTypeCache) {
+                    $tmp = [System.Collections.Generic.List[string]]::new()
+                    foreach ($e in $script:InforcerReportTypeCache) {
+                        if ($e -isnot [PSObject]) { continue }
+                        $keyProp = $e.PSObject.Properties['key']
+                        if (-not $keyProp) { continue }
+                        $v = $keyProp.Value -as [string]
+                        if ($v) { [void]$tmp.Add($v) }
+                    }
+                    # If cache existed but yielded zero keys (malformed entries / unexpected shape),
+                    # fall back to the static list rather than letting PS use filesystem completion.
+                    if ($tmp.Count -eq 0) { ,$script:InforcerReportTypeStaticKeys } else { ,$tmp.ToArray() }
+                } else {
+                    ,$script:InforcerReportTypeStaticKeys
+                }
             }
-            $tmp
-        } else { $known }
+        } else { @() }
         $matched = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($c in $candidates) { if ($c -like "$wordToComplete*") { [void]$matched.Add($c) } }
         foreach ($c in $matched) {
@@ -81,20 +92,31 @@ param(
     [Parameter(Mandatory = $false)]
     [ArgumentCompleter({
         param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+        # ArgumentCompleter scriptblocks run in the caller's session state, so $script:*
+        # variables defined in the module are invisible from here — bounce through the module
+        # to read the live tag set from the cached catalog.
         $known = @('Adoption','Identity','Productivity','Security')
-        $candidates = if ($script:InforcerReportTypeCache) {
-            $tmp = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-            foreach ($e in $script:InforcerReportTypeCache) {
-                $tagsProp = $e.PSObject.Properties['tags']
-                if ($tagsProp) {
-                    foreach ($t in @($tagsProp.Value)) {
-                        $tStr = $t -as [string]
-                        if ($tStr) { [void]$tmp.Add($tStr) }
+        $module = Get-Module InforcerCommunity
+        $candidates = if ($module) {
+            & $module {
+                if ($script:InforcerReportTypeCache) {
+                    $tmp = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                    foreach ($e in $script:InforcerReportTypeCache) {
+                        $tagsProp = $e.PSObject.Properties['tags']
+                        if ($tagsProp) {
+                            foreach ($t in @($tagsProp.Value)) {
+                                $tStr = $t -as [string]
+                                if ($tStr) { [void]$tmp.Add($tStr) }
+                            }
+                        }
                     }
+                    ,$tmp.ToArray()
+                } else {
+                    ,@()
                 }
             }
-            $tmp
-        } else { $known }
+        } else { @() }
+        if (-not $candidates -or @($candidates).Count -eq 0) { $candidates = $known }
         foreach ($c in $candidates) {
             if ($c -like "$wordToComplete*") {
                 [System.Management.Automation.CompletionResult]::new($c, $c, 'ParameterValue', $c)
@@ -146,6 +168,7 @@ if ($OutputType -eq 'JsonObject' -or $Force -or $null -eq $script:InforcerReport
     }
 
     $script:InforcerReportTypeCache = @($response)
+    $script:InforcerReportTypeCacheStamp = Get-Date
 }
 
 $catalog = @($script:InforcerReportTypeCache)

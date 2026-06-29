@@ -859,6 +859,7 @@ Queues one or more Inforcer reports, polls the outputs endpoint until each run i
 | **Collate** | Switch | No | Request a single cross-tenant output. Rejected when the type's catalog says `collatable: false`. |
 | **NoWait** | Switch | No | Return immediately after `POST` with run identifiers. Skip polling and download. |
 | **NoSave** | Switch | No | Poll until terminal but do not write files. Returns outputs metadata. |
+| **Open** | Switch | No | After each output is saved, launch it with the OS default handler (`Invoke-Item`). Ignored when `-NoWait` or `-NoSave` is also set (emits a warning). Aliases: `-Show`, `-ShowResult`. |
 | **OutputPath** | String | No | Directory for downloaded outputs. Default: current working directory. |
 | **TimeoutSeconds** | Int | No | Maximum wait per run when polling. Default: 600. |
 | **PollIntervalSeconds** | Int | No | Initial poll interval (doubles up to 15s cap). Default: 2. |
@@ -884,6 +885,13 @@ Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 48
 
 # Assessment report
 Invoke-InforcerReport -ReportType Assessment -AssessmentId 9b7c... -OutputFormat pdf -TenantId 482
+
+# Save and immediately open the file with the OS default handler
+Invoke-InforcerReport -ReportType TenantAuditReport -OutputFormat html -TenantId 482 -Open
+
+# Discover-then-run pipeline — every Security-tagged type queued in one batch (Key alias on
+# Get-InforcerReportType binds to -ReportType via ValueFromPipelineByPropertyName).
+Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 482
 
 # JSON output
 Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -OutputType JsonObject

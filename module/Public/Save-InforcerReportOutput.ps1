@@ -58,6 +58,7 @@ param(
     [string]$OutputPath = $PWD.Path,
 
     [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
     [string]$FileName,
 
     [Parameter(Mandatory = $false)]
@@ -68,8 +69,10 @@ param(
 begin {
     # PowerShell quirk: `return` inside `begin` does NOT prevent `process` from firing for
     # piped items. Gate `process` on a "begin succeeded" flag instead.
-    $script:_SaveBeginOk = $false
-    $script:_SaveOutputPath  = $null
+    # Locals (NOT $script:*) so two parallel invocations sharing one module import don't
+    # clobber each other's OutputPath.
+    $beginOk = $false
+    $resolvedOutputPath = $null
 
     if (-not (Test-InforcerSession)) {
         Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' `
@@ -77,20 +80,26 @@ begin {
         return
     }
     try {
+        # Defense-in-depth: refuse system paths.
+        $null = Test-InforcerSafeOutputPath -Path $OutputPath
         if (-not (Test-Path -LiteralPath $OutputPath -PathType Container)) {
             $null = New-Item -Path $OutputPath -ItemType Directory -Force -ErrorAction Stop
         }
-        $script:_SaveOutputPath = (Resolve-Path -LiteralPath $OutputPath).Path
+        if (Test-Path -LiteralPath $OutputPath -PathType Container) {
+            $resolvedOutputPath = (Resolve-Path -LiteralPath $OutputPath).Path
+        } elseif (-not $WhatIfPreference) {
+            throw "Output directory '$OutputPath' was not created."
+        }
     } catch {
         Write-Error -Message "Cannot prepare output directory '$OutputPath': $($_.Exception.Message)" `
             -ErrorId 'OutputPathFailed' -Category InvalidArgument
         return
     }
-    $script:_SaveBeginOk = $true
+    $beginOk = $true
 }
 
 process {
-    if (-not $script:_SaveBeginOk) { return }
+    if (-not $beginOk) { return }
     if ([string]::IsNullOrWhiteSpace($OutputId)) {
         Write-Error -Message 'OutputId is empty.' -ErrorId 'InvalidOutputId' -Category InvalidArgument
         return
@@ -101,15 +110,19 @@ process {
 
     # When -FileName is supplied the user's choice wins (after filesystem-safety sanitization).
     # Otherwise the server's Content-Disposition filename is used (via Invoke-InforcerRawDownload).
-    $userSuppliedName = $PSBoundParameters.ContainsKey('FileName')
+    # -FileName has ValidateNotNullOrEmpty so we won't get '' here, but still guard against whitespace.
+    $userSuppliedName = $PSBoundParameters.ContainsKey('FileName') -and -not [string]::IsNullOrWhiteSpace($FileName)
     $defaultName = if ($userSuppliedName) { $FileName } else { ('{0}-{1}' -f $runIdStr, $OutputId) }
 
-    $target = "$runIdStr / $OutputId → $script:_SaveOutputPath"
+    $target = "$runIdStr / $OutputId → $resolvedOutputPath"
     if (-not $PSCmdlet.ShouldProcess($target, 'Download report output')) { return }
 
     Write-Verbose "Downloading: $endpoint"
     try {
-        $download = Invoke-InforcerRawDownload -Endpoint $endpoint -DefaultFileName $defaultName -ErrorAction Stop
+        # Stream straight to disk so multi-GB report outputs don't materialize in memory.
+        # The helper renames the temp file to the Content-Disposition filename for us.
+        $download = Invoke-InforcerRawDownload -Endpoint $endpoint -DefaultFileName $defaultName `
+            -DestinationDirectory $resolvedOutputPath -ErrorAction Stop
     } catch {
         Write-Error -Message "Failed to download output ${OutputId}: $($_.Exception.Message)" `
             -ErrorId 'DownloadFailed' -Category ReadError
@@ -117,29 +130,32 @@ process {
     }
     if ($null -eq $download) { return }
 
-    $effectiveName = if ($userSuppliedName) {
-        # User override: sanitize through the same path the Content-Disposition parser uses
-        # to guarantee filesystem safety.
-        Resolve-InforcerReportOutputFileName -ContentDisposition $null -DefaultName $FileName
-    } else {
-        $download.FileName
+    $filePath = $download.FilePath
+    $effectiveName = $download.FileName
+
+    # When the user supplied an explicit -FileName, rename from the server-derived name to theirs.
+    if ($userSuppliedName) {
+        $overrideName = Resolve-InforcerReportOutputFileName -ContentDisposition $null -DefaultName $FileName
+        $overridePath = Join-Path -Path $resolvedOutputPath -ChildPath $overrideName
+        if ($overridePath -ne $filePath) {
+            try {
+                Move-Item -LiteralPath $filePath -Destination $overridePath -Force -ErrorAction Stop
+                $filePath = $overridePath
+                $effectiveName = $overrideName
+            } catch {
+                Write-Warning "Could not rename to user-requested '$overrideName': $($_.Exception.Message)"
+            }
+        }
     }
 
-    $filePath = Join-Path -Path $script:_SaveOutputPath -ChildPath $effectiveName
-    try {
-        [System.IO.File]::WriteAllBytes($filePath, $download.Bytes)
-    } catch {
-        Write-Error -Message "Failed to write '$filePath': $($_.Exception.Message)" `
-            -ErrorId 'WriteFailed' -Category WriteError
-        return
-    }
+    $fileSize = if ($download.PSObject.Properties['FileSize']) { $download.FileSize } else { (Get-Item -LiteralPath $filePath -ErrorAction SilentlyContinue).Length }
 
     $result = [PSCustomObject][ordered]@{
         RunId         = $runIdStr
         OutputId      = $OutputId
         FilePath      = $filePath
         FileName      = $effectiveName
-        FileSize      = $download.Bytes.Length
+        FileSize      = $fileSize
         ContentType   = $download.ContentType
         CorrelationId = $download.CorrelationId
     }

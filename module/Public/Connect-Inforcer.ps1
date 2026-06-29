@@ -206,6 +206,17 @@ if (-not $keyValid) {
     return
 }
 
+# Clear stale caches from any prior session before establishing the new one. This catches
+# the denial sentinels ($script:InforcerAssessmentCacheDeniedAt, ...) that would otherwise
+# persist after a re-key — a user who reconnects with a higher-scope key shouldn't still
+# see "scope required" hints from the previous one. Uses the same wildcard pattern that
+# Disconnect-Inforcer uses, so any future Inforcer*Cache* var is included automatically.
+$cacheVarsToClear = Get-Variable -Scope Script -Name 'Inforcer*Cache*' -ErrorAction SilentlyContinue
+if ($cacheVarsToClear) {
+    $cacheVarsToClear | Clear-Variable -Scope Script -Force -ErrorAction SilentlyContinue
+    Write-Verbose ('Cleared {0} stale cache variable(s) before establishing new session.' -f $cacheVarsToClear.Count)
+}
+
 $script:InforcerSession = @{
     ApiKey      = $secureApiKey
     BaseUrl     = $baseUrlValue
@@ -214,6 +225,42 @@ $script:InforcerSession = @{
 }
 
 Write-Verbose "Successfully connected to Inforcer API at $baseUrlValue"
+
+# Best-effort prime of the Reports catalog cache so Get-InforcerReportType /
+# Invoke-InforcerReport argument completers show the live key list on the very
+# first TAB. Silent on any failure (key may lack Reports.Read, transient network,
+# rate limit) — the cmdlets re-prime on first invocation via Resolve-InforcerReportTypeSchema.
+# Skip prime when cache is already populated (cache-clear above runs first, so reaching
+# here with populated cache means a defensive condition we shouldn't overwrite).
+$skipPrime = $false
+if ($script:InforcerReportTypeCache -and @($script:InforcerReportTypeCache).Count -gt 0) {
+    Write-Verbose 'Reports catalog cache already populated — skipping prime.'
+    $skipPrime = $true
+}
+if (-not $skipPrime) { try {
+    $catalogProbe = Invoke-WebRequest -Uri ($baseUrlValue.TrimEnd('/') + '/beta/reports/types') `
+        -Method GET -Headers $validateHeaders -UseBasicParsing -SkipHttpErrorCheck `
+        -TimeoutSec 4 -ErrorAction Stop
+    if ([int]$catalogProbe.StatusCode -ge 200 -and [int]$catalogProbe.StatusCode -lt 300) {
+        $catalogJson = if ($catalogProbe.Content -is [byte[]]) {
+            [System.Text.Encoding]::UTF8.GetString($catalogProbe.Content)
+        } else { $catalogProbe.Content -as [string] }
+        if ($catalogJson) {
+            $parsed = $catalogJson | ConvertFrom-Json -ErrorAction Stop
+            $dataProp = $parsed.PSObject.Properties['data']
+            $entries = if ($dataProp) { @($dataProp.Value) } else { @($parsed) }
+            if ($entries.Count -gt 0) {
+                $script:InforcerReportTypeCache = $entries
+                $script:InforcerReportTypeCacheStamp = Get-Date
+                Write-Verbose "Primed Reports catalog cache ($($entries.Count) types) for argument completion."
+            }
+        }
+    } else {
+        Write-Verbose "Skipping Reports catalog prime: HTTP $([int]$catalogProbe.StatusCode) (key likely lacks Reports.Read)."
+    }
+} catch {
+    Write-Verbose "Skipping Reports catalog prime: $($_.Exception.Message)"
+} } # end of if (-not $skipPrime) wrapper
 
 if ($PassThru) {
     # Return a clone of the session hashtable so callers have an independent copy

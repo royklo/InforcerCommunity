@@ -144,6 +144,21 @@ function Invoke-InforcerApiRequest {
                     # Shape A: app-layer envelope { success, message, errors[], errorCode }
                     $errorCode  = ($json.PSObject.Properties['errorCode'].Value -as [string])
                     $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
+
+                    # Surface structured field-level errors. The top-level message is often a
+                    # generic placeholder ("Validation failed, see errors for details") — the
+                    # useful information lives in the errors[] array.
+                    $errorsProp = $json.PSObject.Properties['errors']
+                    if ($errorsProp -and $errorsProp.Value) {
+                        $errorsJoined = Format-InforcerErrorDetail -Errors $errorsProp.Value
+                        if (-not [string]::IsNullOrWhiteSpace($errorsJoined)) {
+                            if ([string]::IsNullOrWhiteSpace($apiMessage)) {
+                                $apiMessage = $errorsJoined
+                            } elseif ($apiMessage -notlike "*$errorsJoined*") {
+                                $apiMessage = "$apiMessage — $errorsJoined"
+                            }
+                        }
+                    }
                 } elseif ($null -ne $json.PSObject.Properties['statusCode'] -and $null -ne $json.PSObject.Properties['message']) {
                     # Shape B: APIM gateway { statusCode, message } — e.g. 404 on unsupported method/path
                     if ($statusCode -le 0) { $statusCode = [int]$json.statusCode }

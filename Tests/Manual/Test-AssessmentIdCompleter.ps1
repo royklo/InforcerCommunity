@@ -29,6 +29,9 @@
 #>
 [CmdletBinding()]
 param(
+    # Prefer SecureString or $env:INFORCER_API_KEY over a plaintext arg — plain strings end up
+    # in `ps -ef` and shell history. A plaintext string is still accepted (auto-converted) but
+    # a warning is emitted.
     [Parameter(Mandatory = $false)]
     [object]$ApiKey,
 
@@ -38,6 +41,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Normalise ApiKey — plaintext → SecureString + warn; env var fallback when omitted.
+if ($null -eq $ApiKey -and $env:INFORCER_API_KEY) {
+    $ApiKey = ConvertTo-SecureString -String $env:INFORCER_API_KEY -AsPlainText -Force
+} elseif ($ApiKey -is [string]) {
+    Write-Warning 'A plaintext -ApiKey was provided; this value persists in shell history. Pass [SecureString] or set $env:INFORCER_API_KEY instead.'
+    $ApiKey = ConvertTo-SecureString -String $ApiKey -AsPlainText -Force
+}
 
 Push-Location (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 try {

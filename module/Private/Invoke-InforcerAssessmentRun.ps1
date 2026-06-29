@@ -38,38 +38,49 @@ function Invoke-InforcerAssessmentRun {
     $null = $ps.AddParameter('Headers', $headers)
     $asyncResult = $ps.BeginInvoke()
 
-    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    $lastUpdate = 0
-    while (-not $asyncResult.IsCompleted) {
-        Start-Sleep -Milliseconds 500
-        $elapsed = [math]::Floor($stopwatch.Elapsed.TotalSeconds)
-        if ($elapsed -gt 0 -and $elapsed % 10 -eq 0 -and $elapsed -ne $lastUpdate) {
-            Write-Host "  Still running... $(& $formatElapsed $elapsed) elapsed"
-            $lastUpdate = $elapsed
-        }
-    }
-
     $rawResponse = $null
     $hasError = $false
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     try {
-        $rawResponse = $ps.EndInvoke($asyncResult)
-        if ($ps.Streams.Error.Count -gt 0) {
-            $hasError = $true
-            foreach ($e in $ps.Streams.Error) {
-                $errMsg = $e.ToString()
-                if ($errMsg -match '<title>([^<]+)</title>') { $errMsg = "API error: $($Matches[1].Trim())" }
-                elseif ($errMsg.Length -gt 500) { $errMsg = $errMsg.Substring(0, 200) + '...' }
-                Write-Error -Message $errMsg -ErrorId 'AssessmentRunFailed' -Category InvalidResult
+        # Poll for completion. Ctrl+C during Start-Sleep raises PipelineStoppedException; the
+        # outer finally still runs and disposes the runspace, so we don't leak the underlying
+        # HTTP socket.
+        $lastUpdate = 0
+        while (-not $asyncResult.IsCompleted) {
+            Start-Sleep -Milliseconds 500
+            $elapsed = [math]::Floor($stopwatch.Elapsed.TotalSeconds)
+            if ($elapsed -gt 0 -and $elapsed % 10 -eq 0 -and $elapsed -ne $lastUpdate) {
+                Write-Host "  Still running... $(& $formatElapsed $elapsed) elapsed"
+                $lastUpdate = $elapsed
             }
         }
-    } catch {
-        $hasError = $true
-        $errMsg = $_.Exception.Message
-        if ($errMsg -match '<title>([^<]+)</title>') { $errMsg = "API error: $($Matches[1].Trim())" }
-        elseif ($errMsg.Length -gt 500) { $errMsg = $errMsg.Substring(0, 200) + '...' }
-        Write-Error -Message "Assessment run failed: $errMsg" -ErrorId 'AssessmentRunFailed' -Category InvalidResult
+        try {
+            $rawResponse = $ps.EndInvoke($asyncResult)
+            if ($ps.Streams.Error.Count -gt 0) {
+                $hasError = $true
+                foreach ($e in $ps.Streams.Error) {
+                    $errMsg = $e.ToString()
+                    if ($errMsg -match '<title>([^<]+)</title>') { $errMsg = "API error: $($Matches[1].Trim())" }
+                    elseif ($errMsg.Length -gt 500) { $errMsg = $errMsg.Substring(0, 200) + '...' }
+                    Write-Error -Message $errMsg -ErrorId 'AssessmentRunFailed' -Category InvalidResult
+                }
+            }
+        } catch {
+            $hasError = $true
+            $errMsg = $_.Exception.Message
+            if ($errMsg -match '<title>([^<]+)</title>') { $errMsg = "API error: $($Matches[1].Trim())" }
+            elseif ($errMsg.Length -gt 500) { $errMsg = $errMsg.Substring(0, 200) + '...' }
+            Write-Error -Message "Assessment run failed: $errMsg" -ErrorId 'AssessmentRunFailed' -Category InvalidResult
+        }
     } finally {
-        $ps.Dispose()
+        # Cancel any in-flight pipeline (no-op if it already completed) and dispose the
+        # runspace. This block also runs when the user Ctrl+C's mid-poll, preventing the
+        # runspace + socket leak that the previous structure (Dispose only inside the
+        # post-loop try/finally) allowed.
+        if ($null -ne $ps) {
+            try { if ($ps.InvocationStateInfo.State -eq 'Running') { $ps.Stop() } } catch { $null }
+            $ps.Dispose()
+        }
     }
 
     $stopwatch.Stop()

@@ -86,11 +86,22 @@ param(
     [string]$OutputType = 'PowerShellObject'
 )
 
-if (-not (Test-InforcerSession)) {
-    Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' `
-        -ErrorId 'NotConnected' -Category ConnectionError
-    return
+begin {
+    $sessionOk = Test-InforcerSession
+    if (-not $sessionOk) {
+        Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' `
+            -ErrorId 'NotConnected' -Category ConnectionError
+    }
+    # Cache the list-endpoint response across process{} iterations so piping N RunIds is
+    # one GET, not N GETs. Per-invocation local — not $script:* — so concurrent invocations
+    # don't share state.
+    $cachedListResponse = $null
+    $listResponseFetched = $false
+    $polledOutputsByRunId = @{}
 }
+
+process {
+    if (-not $sessionOk) { return }
 
 if ($Wait.IsPresent -and -not $PSBoundParameters.ContainsKey('RunId')) {
     Write-Error -Message '-Wait requires -RunId. Use Invoke-InforcerReport for batch polling.' `
@@ -113,6 +124,7 @@ if ($Wait.IsPresent) {
         }
         if ($probe.IsTerminal) {
             $polledOutputs = $probe.Outputs
+            $polledOutputsByRunId[$RunId.ToString()] = $polledOutputs
             break
         }
         if ((Get-Date) -ge $deadline) {
@@ -125,9 +137,13 @@ if ($Wait.IsPresent) {
     }
 }
 
-# --- Fetch list (the only metadata source available) ---
-Write-Verbose 'GET /beta/reports/runs'
-$response = Invoke-InforcerApiRequest -Endpoint '/beta/reports/runs' -Method GET -OutputType PowerShellObject
+# --- Fetch list once, reuse for every piped RunId ---
+if (-not $listResponseFetched) {
+    Write-Verbose 'GET /beta/reports/runs'
+    $cachedListResponse = Invoke-InforcerApiRequest -Endpoint '/beta/reports/runs' -Method GET -OutputType PowerShellObject
+    $listResponseFetched = $true
+}
+$response = $cachedListResponse
 if ($null -eq $response) { return }
 
 $runs = @($response)
@@ -230,4 +246,6 @@ foreach ($r in $runs) {
     }
 }
 $runs
+
+} # end of process{} block
 }

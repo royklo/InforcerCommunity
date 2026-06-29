@@ -2,40 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
-The format follows [Conventional Commits](https://www.conventionalcommits.org/) and this project adheres to [Semantic Versioning](https://semver.org/). Release notes for each version are also generated from git history by the automation pipeline using the same conventional types (feat, fix, docs, refactor, test, etc.).
+The format follows [Conventional Commits](https://www.conventionalcommits.org/). Versioning deviates from strict SemVer: every shipped change (feat / fix / perf / non-breaking refactor) bumps MINOR; only breaking changes bump MAJOR; docs/tests/chore-only commits don't bump. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
-## [Unreleased]
+## [0.5.0] - 2026-06-30
 
 ### Features
 
-- **New cmdlet: `Get-InforcerReportType`** — lists the Reports API catalog from `GET /beta/reports/types`. Filters by `-Key`, `-Tag`, and `-OutputFormat`. Results are cached in `$script:InforcerReportTypeCache` and reused by subsequent calls and tab completion; `-Force` refetches.
-- **New cmdlet: `Invoke-InforcerReport`** — queues one or more report runs via `POST /beta/reports/runs`, polls the outputs endpoint until each run is terminal, and saves the outputs to disk. Default behaviour is sync + save to `$PWD`; `-NoWait` queues and returns immediately, `-NoSave` polls without downloading. Zip / broadcast rules for `-ReportType` / `-OutputFormat` arrays: 1 format broadcasts, N formats pair by index. Client-side guards include duplicate `(type, outputFormat)` dedup (workaround for server bug ENG-4591), `collatable:false` rejection of `-Collate`, and unknown-parameter-key rejection. Required scopes: `Reports.Read` + `Reports.Run` (+ `Tenants.Read` when `-TenantId` is a GUID or tenant name).
-- **New cmdlet: `Get-InforcerReportRun`** — lists report runs from `GET /beta/reports/runs` (server caps the list at 500 items / last 7 days; query filters are silently ignored, so filtering happens client-side). `-Wait` with `-RunId` polls the outputs endpoint (which bypasses the ~4-minute list propagation lag) until terminal; `-IncludeOutputs` embeds the outputs array per run (one extra API call per run).
-- **New cmdlet: `Save-InforcerReportOutput`** — binary-safe download via `GET /beta/reports/runs/{runId}/outputs/{outputId}`. Pipeline-friendly intake of output records from `Invoke-InforcerReport -NoSave` and `Get-InforcerReportRun -IncludeOutputs`. Uses the server's `Content-Disposition` filename (including RFC 5987 `filename*=UTF-8''…` form), with cross-platform filename sanitization.
-- **Dynamic tab completion for `-AssessmentId`** — three-state UX:
-  1. Not connected → `<Run Connect-Inforcer first>` hint
-  2. Connected without `Assessments.Read` → `<Assessments.Read API scope required>` hint (denial cached after first 403 so subsequent TABs are instant)
-  3. Connected with scope → friendly names as `ListItemText`, GUIDs inserted as `CompletionText`, full `name — GUID` pairing as `ToolTip`
-- **New private helpers** — `Invoke-InforcerRawDownload` (binary-safe GET), `Resolve-InforcerReportOutputFileName` (RFC 5987 Content-Disposition parser), `Resolve-InforcerReportTypeSchema` (catalog-driven validation + smart defaults), `Test-InforcerReportRunTerminal` (single-poll probe), `Get-InforcerHeaderValue` / `Get-InforcerCorrelationIdFromHeaders` (case-insensitive header lookup across PowerShell header-collection shapes).
-- **`Invoke-InforcerApiRequest` extended** to recognize all three error envelope shapes returned by the Reports API: the app-layer `{success, message, errors[]}`, the APIM gateway `{statusCode, message}`, and the RFC 9110 ProblemDetails `{type, title, status, traceId}` form. The `x-correlation-id` response header is now captured to the verbose stream on success and included in error records on failure for support tickets.
-- **`Disconnect-Inforcer` clears all `$script:Inforcer*Cache` variables** automatically (using a wildcard lookup) so any future cache variables that follow the naming convention are cleaned up without a code change.
+- **New cmdlet: `Get-InforcerReportType`** — lists all available report types (Active User Count, Tenant Audit Report, Copilot Adoption, etc.) from `GET /beta/reports/types`. Filters by `-Key`, `-Tag`, and `-OutputFormat`. Results cached client-side and reused by tab completion; `-Force` refetches.
+- **New cmdlet: `Invoke-InforcerReport`** — queues one or more report runs via `POST /beta/reports/runs`, polls until each run is complete, and saves the outputs to disk. Key capabilities:
+  - **Three execution modes** — default is sync + save to the current directory (or `-OutputPath`); `-NoWait` queues and returns immediately with the run IDs; `-NoSave` polls until terminal without writing files.
+  - **Auto-open with `-Open`** (aliases `-Show`, `-ShowResult`) — launches each saved file with the OS default handler (HTML → browser, PDF → viewer, CSV/XLSX → spreadsheet). Extensions are allowlisted so the server can't dictate launching an executable.
+  - **Pipeline-bindable** — `Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 14436` batches every piped report type into one POST.
+  - **Three-phase progress bar** — queue → poll (with elapsed time and poll count) → download → complete.
+  - **Friendly input** — `-TenantId` accepts numeric IDs, GUIDs, or tenant names. Unknown report types trigger one auto-refresh of the catalog before failing, so new types ship without forcing a disconnect/reconnect.
+  - **Required scopes** — `Reports.Read` + `Reports.Run` (+ `Tenants.Read` only when `-TenantId` is a GUID or tenant name).
+- **New cmdlet: `Get-InforcerReportRun`** — lists report runs from `GET /beta/reports/runs` (server caps the result at 500 items / last 7 days). `-Wait` with `-RunId` polls until the run is complete and bypasses a ~4-minute lag between completion and list visibility. `-IncludeOutputs` embeds each run's outputs.
+- **New cmdlet: `Save-InforcerReportOutput`** — downloads a specific report output to disk via `GET /beta/reports/runs/{runId}/outputs/{outputId}`. Pipeline-friendly with `Invoke-InforcerReport -NoSave` and `Get-InforcerReportRun -IncludeOutputs`. Uses the server's `Content-Disposition` filename (with full Unicode support); `-FileName` overrides. Sanitizes Windows reserved names (`CON`, `PRN`, `AUX`, etc.) and caps length at 200 characters while preserving the extension.
+- **Dynamic tab completion for `-AssessmentId` on `Invoke-InforcerAssessment`** — three permission-aware states: not connected (hint to run `Connect-Inforcer`), connected without scope (hint about `Assessments.Read`, denial cached so subsequent TABs are instant), connected with scope (friendly names in the dropdown, GUID inserted on selection, `name — GUID` shown as the tooltip).
+- **`Connect-Inforcer` primes the Reports catalog cache** on a successful connect (best-effort, 4-second budget, silent on missing scope) so tab completion on `Invoke-InforcerReport -ReportType` shows live keys on the very first attempt.
+- **API errors now include field-level details.** When the server returns a structured `errors[]` array, each entry is rendered into the error text — `Invoke-InforcerReport` against a tenant outside the key's scope now reads *"Validation failed — tenants.includeTenants contains tenant X that is not in the API key's scope"* instead of the generic *"see errors for details"* placeholder. The `x-correlation-id` response header is also captured (visible in verbose output and included in error records) for support tickets.
 
 ### Documentation
 
-- **`docs/CMDLET-REFERENCE.md`** — added sections for all four new Reports cmdlets with synopsis, parameter table, examples, example output, and `Required API scope(s)` line.
-- **`docs/API-REFERENCE.md`** — added Reports endpoint section (5 endpoints), ReportType/ReportRun/ReportOutput schemas with PSTypeName, TOC entries, `Reports.Read` + `Reports.Run` rows in Scope→Routes, and per-cmdlet rows in Cmdlet→Endpoints→Required Scopes.
-- **`README.md`** — added the 4 Reports cmdlets to the public surface table, alongside the existing Assessment cmdlets.
+- Sections for all four Reports cmdlets added to `docs/CMDLET-REFERENCE.md`; Reports endpoints and schemas added to `docs/API-REFERENCE.md`; the new cmdlets (plus `Get-InforcerSupportedEventType`, which was missing) added to the README public surface table.
 
 ### Bug Fixes
 
-- **`Connect-Inforcer` now reports a meaningful error on HTTP 401 in PowerShell 7.** The catch block previously checked for `[System.Net.WebException]`, which never fires on PS7 (PS7 raises `HttpResponseException`). Status code stayed at `0`, the friendly "API key invalid for this endpoint" branch never triggered, and users saw an empty error. Now extracts `StatusCode` from `$_.Exception.Response.StatusCode` regardless of exception type, and surfaces the API's message text when present.
-- **`Connect-Inforcer` now accepts any valid API key, regardless of scope.** Customers with API keys scoped only to `Reports.Read`, `Assessments.Read`, `Audit.Read`, etc. previously could not connect because validation hit `/beta/baselines` (which requires `Baselines.Read` / `Tenants.Read`) and a 403 was treated as failure. The cmdlet now interprets the response *envelope shape* alongside the status code: an Inforcer-app envelope (`{success, errorCode, errors}`) on any 4xx is proof the APIM gateway accepted the subscription — that's enough to establish the session, even when the probed scope was denied. Only an APIM-gateway envelope (`{statusCode, message}` with no Inforcer markers) on 401 is treated as "key invalid". No scope is privileged for validation.
-- **`-AssessmentId` dynamic completer caches denial on HTTP 401 as well as 403.** APIM returns 401 for subscription-level rejection and for missing scopes; the previous 403-only check let the completer fall through to "empty completions" instead of the `<Assessments.Read API scope required>` hint. Now both 401 and 403 cache the denial sentinel so the second TAB is a sub-millisecond cache hit.
+- **`Connect-Inforcer` now reports a meaningful error on HTTP 401 in PowerShell 7.** Previously the error handler only fired on the PowerShell 5.1 exception type, so PS7 users saw an empty error message when the API key was rejected. Now extracts the status code and message from either exception path.
+- **`Connect-Inforcer` accepts any valid API key, regardless of scope.** Customers with keys scoped only to `Reports.Read`, `Assessments.Read`, or `Audit.Read` previously couldn't connect because the validation probe required `Baselines.Read` / `Tenants.Read` and a 403 was treated as failure. The cmdlet now distinguishes "key rejected" from "key valid but scope missing" and accepts the latter.
+- **`-AssessmentId` dynamic completer caches denial on HTTP 401 as well as 403.** The gateway returns 401 for both subscription-level rejection and missing scopes; previously only 403 was cached, so the second TAB still hit the network. Both are now cached.
+- **JSON depth 100 enforced** in three pre-existing helpers (`Get-InforcerComparisonData`, `Compare-InforcerDocModels`, `Resolve-InforcerGraphEnrichment`) and two cache-metadata writes in `Get-InforcerSettingsCatalogPath` that had no explicit depth — prevents truncation on deep policy structures.
 
-### Notes
+### Tests
 
-- The empirical test of the `-AssessmentId` dynamic completer (see `Tests/Manual/Test-AssessmentIdCompleter.ps1`) is mandatory per the implementation handoff and must be run with a real API key before release. The script exercises all three permission states and the cache-clearing edge case.
-- `docs/api-schema-snapshot.json` does not yet include the new Reports endpoints; the schema snapshot is generated from a live API probe and will pick them up on the next snapshot refresh.
+- 6 new Pester tests for the `errors[]` array renderer covering field/code/message rendering, plain-string entries, alternate property aliases, null/empty inputs, and unrecognized object shapes. Total suite: 394 pass / 0 fail / 2 legit skips.
+- Pre-merge live smoke harness (`Tests/Manual/Live-ApiSmoke.ps1`, gitignored) verified all four Reports cmdlets end-to-end against the DEV API: 24/24 PASS.
 
 ## [0.4.0] - 2026-05-15
 

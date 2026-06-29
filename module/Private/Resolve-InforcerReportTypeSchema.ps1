@@ -68,18 +68,46 @@ function Resolve-InforcerReportTypeSchema {
         [switch]$Force
     )
 
-    # 1. Ensure catalog is available
-    if ($Force -or $null -eq $script:InforcerReportTypeCache) {
+    # 1. Ensure catalog is available. Cache lives for 15 minutes — long-running sessions
+    # auto-refresh so newly-shipped report types don't require disconnect/reconnect.
+    $catalogFetchError = $null
+    $cacheTtlMinutes = 15
+    $cacheIsStale = $false
+    if ($script:InforcerReportTypeCache -and $script:InforcerReportTypeCacheStamp) {
+        $age = (Get-Date) - $script:InforcerReportTypeCacheStamp
+        if ($age.TotalMinutes -gt $cacheTtlMinutes) {
+            Write-Verbose ("Reports catalog cache is {0:N1} minutes old (TTL {1}m) — refreshing." -f $age.TotalMinutes, $cacheTtlMinutes)
+            $cacheIsStale = $true
+        }
+    }
+    if ($Force -or $null -eq $script:InforcerReportTypeCache -or $cacheIsStale) {
         try {
             $catalog = Invoke-InforcerApiRequest -Endpoint '/beta/reports/types' -Method GET -ErrorAction Stop
         } catch {
             $catalog = $null
+            # Defensive re-scrub: even though Invoke-InforcerApiRequest already redacts API
+            # keys, surfacing $_.Exception.Message in our own Write-Warning is safer with one
+            # more pass through Protect-InforcerApiKeyInText.
+            $rawMsg = $_.Exception.Message
+            $catalogFetchError = if ($script:InforcerSession -and $script:InforcerSession.ApiKey) {
+                $maskedKey = ConvertFrom-InforcerSecureString -SecureString $script:InforcerSession.ApiKey
+                Protect-InforcerApiKeyInText -Text $rawMsg -ApiKey $maskedKey
+            } else { $rawMsg }
         }
         if ($catalog) {
             $script:InforcerReportTypeCache = @($catalog)
+            $script:InforcerReportTypeCacheStamp = Get-Date
         }
     }
     $catalog = $script:InforcerReportTypeCache
+
+    # If catalog fetch failed (vs. genuinely-empty endpoint), surface a single warning so
+    # callers know their input wasn't validated client-side. Without this, a transient
+    # network failure / rate limit / scope issue would let bogus -ReportType / -OutputFormat
+    # / unknown -Parameter keys pass through to the API as confusing 400s.
+    if ($null -eq $catalog -and $null -ne $catalogFetchError) {
+        Write-Warning ("Report types catalog could not be fetched ({0}). Client-side validation of -ReportType / -OutputFormat / -Parameter is disabled for this call; errors will surface from the server." -f $catalogFetchError)
+    }
 
     # 2. Look up the type entry (or proceed without when catalog isn't available)
     $typeEntry = $null
@@ -88,6 +116,25 @@ function Resolve-InforcerReportTypeSchema {
             $keyProp = $_.PSObject.Properties['key']
             $keyProp -and (($keyProp.Value -as [string]) -ieq $ReportType)
         } | Select-Object -First 1
+
+        if (-not $typeEntry -and -not $Force) {
+            # Cache may be stale (Inforcer ships new report types regularly). Refetch once before
+            # surfacing "Unknown report type" — auto-recovery beats forcing the user to disconnect.
+            Write-Verbose "Type '$ReportType' not found in cached catalog; refetching once before failing."
+            try {
+                $refreshed = Invoke-InforcerApiRequest -Endpoint '/beta/reports/types' -Method GET -ErrorAction Stop
+            } catch {
+                $refreshed = $null
+            }
+            if ($refreshed) {
+                $script:InforcerReportTypeCache = @($refreshed)
+                $catalog = $script:InforcerReportTypeCache
+                $typeEntry = $catalog | Where-Object {
+                    $keyProp = $_.PSObject.Properties['key']
+                    $keyProp -and (($keyProp.Value -as [string]) -ieq $ReportType)
+                } | Select-Object -First 1
+            }
+        }
 
         if (-not $typeEntry) {
             $availableKeys = @($catalog | ForEach-Object { $_.PSObject.Properties['key'].Value -as [string] } | Where-Object { $_ }) -join ', '
@@ -133,11 +180,31 @@ function Resolve-InforcerReportTypeSchema {
         throw "Report type '$ReportType' does not support collation (collatable:false). Remove -Collate or choose a different type."
     }
 
-    # 6. Build the final flattened parameters bag (string values only — matches API contract)
+    # 6. Build the final flattened parameters bag (string values only — matches API contract).
+    # Reject non-scalar values up-front — passing an array or hashtable would otherwise get
+    # silently coerced via `-as [string]` ("System.Object[]" or "1 2 3"), producing a request
+    # the server can't act on without any clear error.
     $finalParams = @{}
     if ($Parameter) {
         foreach ($k in $Parameter.Keys) {
-            $finalParams[($k -as [string])] = ($Parameter[$k] -as [string])
+            $v = $Parameter[$k]
+            # Scriptblocks would silently stringify to "{...}" via `-as [string]` — reject explicitly
+            # so the user finds out their callable wasn't sent as a value.
+            if ($v -is [scriptblock]) {
+                throw "Parameter '$k' is a [scriptblock]; the API only accepts scalar string-coercible values. Did you mean to invoke the scriptblock first?"
+            }
+            # Arrays / lists / dictionaries silently flatten to "1 2 3" or "System.Object[]".
+            # Exclude [string] (IEnumerable<char>) and [DateTime] (PowerShell decorates date types
+            # with PSCustomObject markers in some hosts — keep them scalar).
+            if ($null -ne $v -and $v -isnot [string] -and $v -isnot [datetime] -and $v -is [System.Collections.IEnumerable]) {
+                throw "Parameter '$k' must be a scalar value; arrays and collections are not supported by the API. Got: $($v.GetType().FullName)."
+            }
+            # Use the literal PSCustomObject type — `-is [PSCustomObject]` is too broad in PS7 and
+            # incorrectly matches scalars like [DateTime].
+            if ($v -is [hashtable] -or $v -is [System.Management.Automation.PSCustomObject]) {
+                throw "Parameter '$k' must be a scalar value; got nested object of type $($v.GetType().FullName)."
+            }
+            $finalParams[($k -as [string])] = ($v -as [string])
         }
     }
     if ($PSBoundParameters.ContainsKey('ReportPeriod')) {

@@ -490,7 +490,7 @@ function Compare-InforcerDocModels {
                                     foreach ($ss in $linkedScript.Settings) {
                                         $scriptJson[$ss.Name] = $ss.Value
                                     }
-                                    $scriptJsonStr = $scriptJson | ConvertTo-Json -Depth 5 -Compress
+                                    $scriptJsonStr = $scriptJson | ConvertTo-Json -Depth 100 -Compress
                                     [void]$settingsSummary.Add(@{ Name = 'Linked Compliance Script'; Value = $scriptJsonStr })
                                 }
                             }

@@ -36,7 +36,7 @@
     Get-InforcerReportType -Tag security
     Lists every type tagged with 'security'.
 .EXAMPLE
-    Get-InforcerReportType -Tag security | Invoke-InforcerReport -OutputFormat csv -TenantId 14436
+    Get-InforcerReportType -Tag security | Invoke-InforcerReport -OutputFormat csv -TenantId 482
     Discovers every security-tagged report type and pipes each into Invoke-InforcerReport.
     Works because Get-InforcerReportType emits a 'Key' alias which binds to
     Invoke-InforcerReport's -ReportType (ValueFromPipelineByPropertyName).

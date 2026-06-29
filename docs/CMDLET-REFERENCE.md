@@ -904,7 +904,7 @@ RunId         : 094a49ed-b9b8-492b-870f-0f76fd3b2954
 ReportType    : ActiveUserCount
 OutputFormat  : csv
 TenantId      : 482
-FilePath      : /Users/jane/reports/ActiveUserCount_2026-06-26.csv
+FilePath      : /path/to/output/ActiveUserCount_2026-06-26.csv
 FileName      : ActiveUserCount_2026-06-26.csv
 FileSize      : 12480
 ContentType   : text/csv
@@ -1002,7 +1002,7 @@ Get-InforcerReportRun -IncludeOutputs |
 ```
 RunId         : 094a49ed-b9b8-492b-870f-0f76fd3b2954
 OutputId      : 1f2e3d4c-...
-FilePath      : /Users/jane/reports/ActiveUserCount_2026-06-26.csv
+FilePath      : /path/to/output/ActiveUserCount_2026-06-26.csv
 FileName      : ActiveUserCount_2026-06-26.csv
 FileSize      : 12480
 ContentType   : text/csv

@@ -37,10 +37,16 @@ TestResults/
 
 # AI tooling and planning
 .claude/
+.claire/
 .planning/
 .superpowers/
 CLAUDE.md
 /docs/superpowers/
+
+# Session handoff / brief docs (internal-only, may contain API keys, personal paths, tenant data)
+SESSION-HANDOFF*.md
+*-HANDOFF*.md
+*-handoff*.md
 
 # Cursor
 .cursor/

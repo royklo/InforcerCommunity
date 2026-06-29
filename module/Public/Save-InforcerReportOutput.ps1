@@ -26,7 +26,7 @@
     Save-InforcerReportOutput -RunId <run> -OutputId <output>
     Saves a single output to the current directory.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 14436 -NoSave |
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -NoSave |
         Save-InforcerReportOutput -OutputPath ./reports
     Queues + polls a report without saving, then downloads every output to ./reports.
 .EXAMPLE

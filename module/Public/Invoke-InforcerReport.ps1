@@ -66,24 +66,24 @@
     PowerShellObject (default) or JsonObject. Affects pipeline output only; the saved files
     are unchanged.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 14436
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482
     Queues, waits, and saves ActiveUserCount.csv to the current directory.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType TenantAuditReport, ActiveUserCount -OutputFormat pdf, csv -TenantId 14436
+    Invoke-InforcerReport -ReportType TenantAuditReport, ActiveUserCount -OutputFormat pdf, csv -TenantId 482
     Pairs by index: TenantAuditReport→pdf, ActiveUserCount→csv.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 14436, 18159 -NoWait
+    Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 482, 139 -NoWait
     Submits and returns immediately with the RunIds.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType Assessment -AssessmentId <guid> -OutputFormat pdf -TenantId 14436
+    Invoke-InforcerReport -ReportType Assessment -AssessmentId <guid> -OutputFormat pdf -TenantId 482
     Runs a specific assessment as a report.
 .EXAMPLE
-    Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 14436
+    Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 482
     Pipeline-discover-then-run: each catalog entry's 'Key' alias binds to -ReportType
     via ValueFromPipelineByPropertyName, so every Security-tagged type is queued in
     one call.
 .EXAMPLE
-    Invoke-InforcerReport -Key TenantAuditReport -OutputFormat html -TenantId 14436 -Open
+    Invoke-InforcerReport -Key TenantAuditReport -OutputFormat html -TenantId 482 -Open
     Runs the report, saves it, and immediately opens the HTML in the default browser.
 .OUTPUTS
     PSObject or String. The shape depends on the mode:

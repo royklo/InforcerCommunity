@@ -12,7 +12,7 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
 - **New cmdlet: `Invoke-InforcerReport`** — queues one or more report runs via `POST /beta/reports/runs`, polls until each run is complete, and saves the outputs to disk. Key capabilities:
   - **Three execution modes** — default is sync + save to the current directory (or `-OutputPath`); `-NoWait` queues and returns immediately with the run IDs; `-NoSave` polls until terminal without writing files.
   - **Auto-open with `-Open`** (aliases `-Show`, `-ShowResult`) — launches each saved file with the OS default handler (HTML → browser, PDF → viewer, CSV/XLSX → spreadsheet). Extensions are allowlisted so the server can't dictate launching an executable.
-  - **Pipeline-bindable** — `Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 14436` batches every piped report type into one POST.
+  - **Pipeline-bindable** — `Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 482` batches every piped report type into one POST.
   - **Three-phase progress bar** — queue → poll (with elapsed time and poll count) → download → complete.
   - **Friendly input** — `-TenantId` accepts numeric IDs, GUIDs, or tenant names. Unknown report types trigger one auto-refresh of the catalog before failing, so new types ship without forcing a disconnect/reconnect.
   - **Required scopes** — `Reports.Read` + `Reports.Run` (+ `Tenants.Read` only when `-TenantId` is a GUID or tenant name).

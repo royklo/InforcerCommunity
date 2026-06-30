@@ -70,9 +70,10 @@ TODO.md
 /scratch.md
 NOTES.local.md
 
-# Live API smoke harness — disposable; captured response artifacts may contain DEV/UAT URLs.
-/Tests/Manual/Live-ApiSmoke.ps1
-/Tests/Manual/.live-smoke-artifacts/
+# Manual / live test harnesses — disposable, may contain DEV/UAT URLs, API keys, tenant data
+# or developer-specific probes. Keep these local-only; the public repo only ships the
+# automated Pester suites at Tests/*.Tests.ps1.
+/Tests/Manual/
 
 # Generated documentation output
 *.xlsx

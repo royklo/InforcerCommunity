@@ -918,8 +918,10 @@ Describe 'Private helpers (via module scope)' {
                 $assessment.Id | Should -Be 'abc123'
                 $assessment.Name | Should -Be 'Copilot Readiness'
                 $assessment.AssessmentType | Should -Be 'platform'
-                $assessment.tags | Should -BeOfType [string]
-                $assessment.tags | Should -Be 'copilot, inforcer, platform'
+                # Raw 'tags' shape is preserved (array stays an array). Format.ps1xml handles
+                # display joining. This was previously mutated to a comma-string but that broke
+                # downstream filter logic that expects the raw shape.
+                @($assessment.tags) | Should -Be @('copilot','inforcer','platform')
             }
         }
 
@@ -941,7 +943,8 @@ Describe 'Private helpers (via module scope)' {
                     tags = @(); lastUpdated = $null; created = $null
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $assessment -ObjectType Assessment
-                $assessment.tags | Should -Be ''
+                # Empty array is preserved (not mutated to empty string).
+                @($assessment.tags).Count | Should -Be 0
             }
         }
     }
@@ -1243,7 +1246,7 @@ Describe 'Private helpers (via module scope)' {
                 $obj.Collatable | Should -BeTrue
                 ($obj.SupportedOutputFormats -join ',') | Should -Be 'csv,json'
                 ($obj.OutputFormats -join ',') | Should -Be 'csv,json'   # back-compat alias
-                $obj.Tags | Should -Be 'Identity, Adoption'              # array→comma-separated string
+                @($obj.Tags) | Should -Be @('Identity','Adoption')        # raw array preserved; display join done by Format.ps1xml
             }
         }
 

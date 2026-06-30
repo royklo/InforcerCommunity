@@ -342,11 +342,9 @@ function Add-InforcerPropertyAliases {
                 AddAliasIfExists $obj 'AssessmentType' 'assessmentType'
                 AddAliasIfExists $obj 'LastUpdated' 'lastUpdated'
                 AddAliasIfExists $obj 'Created' 'created'
-                # Convert tags array to comma-separated string for display
-                $tagsProp = $obj.PSObject.Properties['tags']
-                if ($tagsProp -and $tagsProp.Value -is [array]) {
-                    $tagsProp.Value = ($tagsProp.Value | Where-Object { $_ }) -join ', '
-                }
+                # Keep raw 'tags' shape intact (array OR comma-separated string from the API);
+                # downstream filters (e.g. Get-InforcerReportType -Tag) rely on the raw shape,
+                # and the Format.ps1xml view joins for display.
                 AddAliasIfExists $obj 'Tags' 'tags'
             }
             'ReportType' {
@@ -359,11 +357,9 @@ function Add-InforcerPropertyAliases {
                 AddAliasIfExists $obj 'OutputFormats' 'supportedOutputFormats'
                 AddAliasIfExists $obj 'RequiredParameters' 'requiredParameters'
                 AddAliasIfExists $obj 'Parameters' 'requiredParameters'
-                # Convert tags array to comma-separated string for display
-                $tagsProp = $obj.PSObject.Properties['tags']
-                if ($tagsProp -and $tagsProp.Value -is [array]) {
-                    $tagsProp.Value = ($tagsProp.Value | Where-Object { $_ }) -join ', '
-                }
+                # Keep raw 'tags' shape intact (array OR comma-separated string from the API);
+                # downstream filters (e.g. Get-InforcerReportType -Tag) rely on the raw shape,
+                # and the Format.ps1xml view joins for display.
                 AddAliasIfExists $obj 'Tags' 'tags'
             }
             'ReportRun' {

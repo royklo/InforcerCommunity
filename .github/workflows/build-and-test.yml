@@ -70,7 +70,14 @@ jobs:
         # Don't fail the build on these — but surface findings so broken test files /
         # smoke runners don't silently degrade.
         run: |
-          $results = Invoke-ScriptAnalyzer -Path ./Tests, ./scripts -Recurse -Severity Error -ErrorAction SilentlyContinue
+          # Run per-path: -Path takes a single string, not an array. Comma-separation lands
+          # as [object[]] which the parameter doesn't bind to on Linux runners.
+          $results = @()
+          foreach ($p in @('./Tests', './scripts')) {
+              if (Test-Path $p) {
+                  $results += Invoke-ScriptAnalyzer -Path $p -Recurse -Severity Error -ErrorAction SilentlyContinue
+              }
+          }
           if ($results) {
               $results | Format-Table -AutoSize
               Write-Warning "PSScriptAnalyzer found $($results.Count) error(s) outside ./module (advisory — not failing the build)."

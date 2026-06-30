@@ -126,8 +126,10 @@ $probeRawError   = $null
 # parent's error stream / -ErrorVariable clean when validation goes through the
 # "envelope-shape says key is valid" path even on 403.
 try {
+    # -TimeoutSec 10 prevents Connect from hanging indefinitely on slow networks / proxies /
+    # captive portals. The probe is just a GET on /beta/baselines, so 10s is generous.
     $probeResponse = Invoke-WebRequest -Uri $probeUri -Method GET -Headers $validateHeaders `
-        -UseBasicParsing -SkipHttpErrorCheck -ErrorAction Stop
+        -UseBasicParsing -SkipHttpErrorCheck -TimeoutSec 10 -ErrorAction Stop
 } catch {
     # Only real network errors (DNS, connection refused, TLS) land here; 4xx/5xx are
     # captured via the response object thanks to -SkipHttpErrorCheck.

@@ -19,7 +19,7 @@
       1 report  + N formats → error (would trigger duplicate-report-render bug)
 
     Client-side guards (verified empirically against the Inforcer Reports API):
-      * Duplicate (type, outputFormat) pairs are removed before POST — server bug ENG-4591
+      * Duplicate (type, outputFormat) pairs are removed before POST — known server-side bug
         otherwise renders all duplicates in the last-listed format.
       * -Collate is rejected when the catalog reports collatable:false on the type.
       * Unknown -Parameter keys are rejected — the server would otherwise silently ignore them.
@@ -38,8 +38,10 @@
     Optional integer days — applied as the report-period parameter when supported.
     CopilotAdoption and ShadowAiDetection auto-default to 30 when omitted.
 .PARAMETER AssessmentId
-    Required when ReportType is 'Assessment'. The assessment GUID. Get-InforcerAssessment
-    lists available IDs.
+    Required when ReportType is 'Assessment'. The assessment identifier — an opaque
+    alphanumeric string (NOT a GUID, e.g. 'l1f8wd29pl44pp1j66r9'). Tab completion
+    accepts the friendly name and inserts the ID. Get-InforcerAssessment lists available
+    IDs.
 .PARAMETER Parameter
     Escape hatch for future API parameters not covered by typed switches. Hashtable; keys
     must match the catalog's accepted parameter keys.
@@ -75,7 +77,7 @@
     Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 482, 139 -NoWait
     Submits and returns immediately with the RunIds.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType Assessment -AssessmentId <guid> -OutputFormat pdf -TenantId 482
+    Invoke-InforcerReport -ReportType Assessment -AssessmentId l1f8wd29pl44pp1j66r9 -OutputFormat pdf -TenantId 482
     Runs a specific assessment as a report.
 .EXAMPLE
     Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 482

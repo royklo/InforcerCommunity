@@ -409,9 +409,9 @@ Describe 'ConvertTo-InforcerDocModel - Settings rows' -Skip:(-not $script:Integr
 }
 
 # ---------------------------------------------------------------------------
-# Describe: Compare-InforcerDocModels - ENG-05 definitionId matching
+# Describe: Compare-InforcerDocModels - definitionId matching
 # ---------------------------------------------------------------------------
-Describe 'Compare-InforcerDocModels - ENG-05 definitionId matching' -Tag 'ENG-05' {
+Describe 'Compare-InforcerDocModels - definitionId matching' -Tag 'definitionId-matching' {
 
     It 'matches Settings Catalog settings by definitionId across tenants' {
         $result = InModuleScope InforcerCommunity {
@@ -586,9 +586,9 @@ Describe 'Compare-InforcerDocModels - ENG-05 definitionId matching' -Tag 'ENG-05
 }
 
 # ---------------------------------------------------------------------------
-# Describe: Compare-InforcerDocModels - ENG-06 path building
+# Describe: Compare-InforcerDocModels - path building
 # ---------------------------------------------------------------------------
-Describe 'Compare-InforcerDocModels - ENG-06 path building' -Tag 'ENG-06' {
+Describe 'Compare-InforcerDocModels - path building' -Tag 'path-building' {
 
     It 'produces Parent > Child path for nested settings' {
         $result = InModuleScope InforcerCommunity {
@@ -673,9 +673,9 @@ Describe 'Compare-InforcerDocModels - ENG-06 path building' -Tag 'ENG-06' {
 }
 
 # ---------------------------------------------------------------------------
-# Describe: Compare-InforcerDocModels - ENG-01 noise exclusion
+# Describe: Compare-InforcerDocModels - noise exclusion
 # ---------------------------------------------------------------------------
-Describe 'Compare-InforcerDocModels - ENG-01 noise exclusion' -Tag 'ENG-01' {
+Describe 'Compare-InforcerDocModels - noise exclusion' -Tag 'noise-exclusion' {
 
     BeforeAll {
         # Helper to build a minimal model with one setting having the given Name and Value
@@ -801,12 +801,12 @@ Describe 'Compare-InforcerDocModels - ENG-01 noise exclusion' -Tag 'ENG-01' {
 }
 
 # ---------------------------------------------------------------------------
-# Describe: Compare-InforcerDocModels - ENG-03 deprecated settings
+# Describe: Compare-InforcerDocModels - deprecated settings
 # ---------------------------------------------------------------------------
-Describe 'Compare-InforcerDocModels - ENG-03 deprecated settings' -Tag 'ENG-03' {
+Describe 'Compare-InforcerDocModels - deprecated settings' -Tag 'deprecated-settings' {
 
     BeforeAll {
-        # Reuse the same model builder pattern as ENG-01 but accept optional DefinitionId
+        # Reuse the same model builder pattern as noise exclusion but accept optional DefinitionId
         $buildModelWithSetting = {
             param([string]$SettingName, [string]$SettingValue, [string]$TenantName, [string]$TenantId, [string]$DefId = 'test_definition_id')
             @{
@@ -905,9 +905,9 @@ Describe 'Compare-InforcerDocModels - ENG-03 deprecated settings' -Tag 'ENG-03' 
 }
 
 # ---------------------------------------------------------------------------
-# Describe: Compare-InforcerDocModels - ENG-02 duplicate settings
+# Describe: Compare-InforcerDocModels - duplicate settings
 # ---------------------------------------------------------------------------
-Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
+Describe 'Compare-InforcerDocModels - duplicate settings' -Tag 'duplicate-settings' {
 
     BeforeAll {
         # Helper that builds a DocModel with multiple policies under a given product/category.
@@ -1110,9 +1110,9 @@ Describe 'Compare-InforcerDocModels - ENG-02 duplicate settings' -Tag 'ENG-02' {
 }
 
 # ---------------------------------------------------------------------------
-# Describe: Compare-InforcerDocModels - ENG-04 cross-tenant duplicates
+# Describe: Compare-InforcerDocModels - cross-tenant duplicates
 # ---------------------------------------------------------------------------
-Describe 'Compare-InforcerDocModels - ENG-04 cross-tenant duplicates' -Tag 'ENG-04' {
+Describe 'Compare-InforcerDocModels - cross-tenant duplicates' -Tag 'cross-tenant-duplicates' {
 
     BeforeAll {
         $buildDuplicateModel = {
@@ -1251,7 +1251,7 @@ Describe 'Compare-InforcerDocModels - ENG-04 cross-tenant duplicates' -Tag 'ENG-
 Describe 'Compare-InforcerDocModels - BUG-04 duplicate-only exclusion' -Tag 'BUG-04', 'Phase11' {
 
     BeforeAll {
-        # Reuse the helper pattern from ENG-02 tests
+        # Reuse the helper pattern from duplicate settings tests
         $script:BuildBug04Model = {
             param(
                 [string]$TenantName,

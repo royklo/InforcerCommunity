@@ -884,7 +884,7 @@ Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 48
 Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -NoWait
 
 # Assessment report
-Invoke-InforcerReport -ReportType Assessment -AssessmentId 9b7c... -OutputFormat pdf -TenantId 482
+Invoke-InforcerReport -ReportType Assessment -AssessmentId l1f8wd29pl44pp1j66r9 -OutputFormat pdf -TenantId 482
 
 # Save and immediately open the file with the OS default handler
 Invoke-InforcerReport -ReportType TenantAuditReport -OutputFormat html -TenantId 482 -Open

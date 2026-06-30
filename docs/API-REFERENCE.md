@@ -359,7 +359,7 @@ Queues one or more report runs against a set of target tenants. Returns one run 
 
 **Response**: Array of [ReportRun](#reportrun) objects (one per created run).
 
-> **Known bug (ENG-4591)**: Duplicate `(type, outputFormat)` entries currently render all duplicates in the last-listed format. The module deduplicates client-side before POST.
+> **Known server-side bug**: Duplicate `(type, outputFormat)` entries currently render all duplicates in the last-listed format. The module deduplicates client-side before POST.
 
 #### `GET /beta/reports/runs`
 

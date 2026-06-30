@@ -188,8 +188,16 @@ if ($applyKey -or $applyTag -or $applyFormat) {
             $tagsProp = $entry.PSObject.Properties['tags']
             $hit = $false
             if ($tagsProp) {
-                foreach ($t in @($tagsProp.Value)) {
-                    if (($t -as [string]) -ieq $Tag) { $hit = $true; break }
+                # Handle both shapes the API may return: an array of tag strings, OR a single
+                # comma-separated string (live observed). Split on commas defensively when we
+                # see a string, trim whitespace, and match case-insensitively against each entry.
+                foreach ($raw in @($tagsProp.Value)) {
+                    $rawStr = $raw -as [string]
+                    if (-not $rawStr) { continue }
+                    foreach ($part in ($rawStr -split ',')) {
+                        if ($part.Trim() -ieq $Tag) { $hit = $true; break }
+                    }
+                    if ($hit) { break }
                 }
             }
             if (-not $hit) { continue outer }

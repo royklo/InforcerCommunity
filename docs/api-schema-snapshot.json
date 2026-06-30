@@ -1,5 +1,13 @@
 {
-  "generatedAt": "2026-04-18T06:36:43Z",
+  "generatedAt": "2026-06-29T08:01:48Z",
+  "_meta": {
+    "notes": [
+      "Types use suffixes: '?' = nullable, '*' = pattern key. Bare types are observed-required-non-null in the sample.",
+      "Arrays use `_itemProperties` when the documented item shape is known; bare `\"array\"` only when items are truly schemaless (e.g. variant strings).",
+      "Nullable handling: API contract types are documented at docs/API-REFERENCE.md and considered the source of truth; sampled responses that happen to contain nulls do not collapse the documented type.",
+      "Reports / Assessment endpoints are part of the public surface in v0.5.0 and are included here."
+    ]
+  },
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -7,11 +15,11 @@
         "tenantFriendlyName": "string",
         "tenantDnsName": "string",
         "msTenantId": "string",
-        "secureScore": "integer",
+        "secureScore": "number",
         "isBaseline": "boolean",
         "lastBackupTimestamp": "datetime",
         "recentChanges": "integer",
-        "policyDiff": "string",
+        "policyDiff": "string?",
         "tags": "array",
         "alignmentSummaries": {
           "_type": "array",
@@ -19,9 +27,9 @@
             "alignedBaselineTenantId": "integer",
             "alignedBaselineId": "string",
             "alignedBaselineName": "string",
-            "alignmentScore": "integer",
-            "alignedThreshold": "integer",
-            "semiAlignedThreshold": "integer",
+            "alignmentScore": "number",
+            "alignedThreshold": "number",
+            "semiAlignedThreshold": "number",
             "lastAlignmentDateTime": "datetime"
           }
         },
@@ -43,7 +51,15 @@
         "baselineMsTenantId": "string",
         "alignedThreshold": "integer",
         "semiAlignedThreshold": "integer",
-        "members": "array",
+        "members": {
+          "_type": "array",
+          "_itemProperties": {
+            "clientTenantId": "integer",
+            "tenantFriendlyName": "string",
+            "tenantDnsName": "string",
+            "msTenantId": "string"
+          }
+        },
         "mode": "string",
         "autoAddNewPolicies": "boolean",
         "isComplete": "boolean",
@@ -52,10 +68,10 @@
           "_type": "array",
           "_itemProperties": {
             "policySnapshotId": "string",
-            "childCustomBaselineId": "null",
-            "policyCategoryProduct": "null",
-            "policyCategoryPrimaryGroup": "null",
-            "policyCategorySecondaryGroup": "null",
+            "childCustomBaselineId": "string?",
+            "policyCategoryProduct": "string?",
+            "policyCategoryPrimaryGroup": "string?",
+            "policyCategorySecondaryGroup": "string?",
             "alignAssignments": "boolean"
           }
         }
@@ -65,7 +81,7 @@
       "properties": {
         "tenantId": "integer",
         "tenantFriendlyName": "string",
-        "score": "integer",
+        "score": "number",
         "baselineGroupId": "string",
         "baselineGroupName": "string",
         "lastComparisonDateTime": "datetime"
@@ -75,15 +91,15 @@
       "properties": {
         "id": "string",
         "policyTypeId": "integer",
-        "name": "null",
+        "name": "string?",
         "displayName": "string",
         "friendlyName": "string",
-        "description": "null",
+        "description": "string?",
         "readOnly": "boolean",
         "product": "string",
         "primaryGroup": "string",
         "secondaryGroup": "string",
-        "platform": "null",
+        "platform": "string?",
         "policyCategoryId": "integer",
         "tags": "array",
         "policyData": "object"
@@ -122,7 +138,7 @@
                   "_itemProperties": {
                     "subjectPolicySnapshotId": "string",
                     "subjectPolicySnapshotVersionId": "string",
-                    "subjectPolicyGuid": "null",
+                    "subjectPolicyGuid": "string?",
                     "policyDataDiff": "array",
                     "policyAssignmentsDiff": "array",
                     "policyTags": "array",
@@ -137,9 +153,9 @@
                   "_itemProperties": {
                     "variableId": "string",
                     "variableName": "string",
-                    "baselineValue": "string",
-                    "subjectValue": "string",
-                    "description": "string",
+                    "baselineValue": "string?",
+                    "subjectValue": "string?",
+                    "description": "string?",
                     "propertyPath": "string",
                     "isHidden": "boolean",
                     "isBaselineOnly": "boolean"
@@ -147,18 +163,18 @@
                 },
                 "similarPolicies": "array",
                 "acceptedDeviations": "array",
-                "policyGuid": "null",
+                "policyGuid": "string?",
                 "policyName": "string",
-                "policySnapshotId": "null",
-                "policySnapshotVersionId": "null",
+                "policySnapshotId": "string?",
+                "policySnapshotVersionId": "string?",
                 "policyTypeId": "integer",
                 "inforcerPolicyTypeName": "string",
                 "policyCategoryId": "integer",
                 "product": "string",
                 "primaryGroup": "string",
                 "secondaryGroup": "string",
-                "platform": "null",
-                "description": "null",
+                "platform": "string?",
+                "description": "string?",
                 "isPolicyDeleteDisabled": "boolean",
                 "isPolicyDeployable": "boolean",
                 "policyTags": {
@@ -166,7 +182,7 @@
                   "_itemProperties": {
                     "id": "string",
                     "name": "string",
-                    "description": "null"
+                    "description": "string?"
                   }
                 },
                 "readOnly": "boolean",
@@ -202,12 +218,12 @@
           "_properties": {
             "clientIp": "string",
             "clientIpv4": "string",
-            "clientIpv6": "null",
+            "clientIpv6": "string?",
             "nameLookup": {
               "_type": "object",
-              "_properties": {
-                "user:username:237": "string",
-                "user:displayName:237": "string"
+              "_patternProperties": {
+                "user:username:*": "string",
+                "user:displayName:*": "string"
               }
             }
           }
@@ -218,9 +234,9 @@
       "properties": {
         "id": "string",
         "displayName": "string",
-        "description": "string",
-        "mail": "string",
-        "visibility": "string",
+        "description": "string?",
+        "mail": "string?",
+        "visibility": "string?",
         "groupTypes": "array"
       }
     },
@@ -228,15 +244,15 @@
       "properties": {
         "id": "string",
         "displayName": "string",
-        "description": "string",
-        "mail": "string",
-        "mailNickname": "string",
-        "visibility": "string",
-        "membershipRule": "null",
+        "description": "string?",
+        "mail": "string?",
+        "mailNickname": "string?",
+        "visibility": "string?",
+        "membershipRule": "string?",
         "groupTypes": "array",
         "createdDateTime": "datetime",
         "mailEnabled": "boolean",
-        "onPremisesSyncEnabled": "null",
+        "onPremisesSyncEnabled": "boolean?",
         "members": {
           "_type": "array",
           "_itemProperties": {
@@ -252,10 +268,151 @@
         "id": "string",
         "templateId": "string",
         "displayName": "string",
-        "description": "string",
+        "description": "string?",
         "isBuiltIn": "boolean",
         "isEnabled": "boolean",
         "isPrivileged": "boolean"
+      }
+    },
+    "GET /beta/assessments": {
+      "properties": {
+        "id": "string",
+        "name": "string",
+        "description": "string?",
+        "tags": "array",
+        "assessmentType": "string",
+        "lastUpdated": "datetime",
+        "created": "datetime"
+      }
+    },
+    "POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs": {
+      "properties": {
+        "assessment": "string",
+        "name": "string",
+        "results": {
+          "_type": "array",
+          "_itemProperties": {
+            "id": "string",
+            "key": "string",
+            "name": "string",
+            "category": "string",
+            "subCategory": "string?",
+            "description": "string?",
+            "importance": "string",
+            "impact": "string?",
+            "rationale": "string?",
+            "remediation": "string?",
+            "findings": {
+              "_type": "object",
+              "_properties": {
+                "compliant": "boolean",
+                "message": "string?",
+                "scores": {
+                  "_type": "array",
+                  "_itemProperties": {
+                    "objectId": "string",
+                    "score": "number",
+                    "objectName": "string?",
+                    "passes": "array",
+                    "violations": "array",
+                    "warnings": "array"
+                  }
+                }
+              }
+            },
+            "frameworks": "array",
+            "tags": "array",
+            "version": "string?",
+            "created": "datetime",
+            "lastUpdated": "datetime"
+          }
+        }
+      }
+    },
+    "GET /beta/reports/types": {
+      "properties": {
+        "key": "string",
+        "name": "string",
+        "description": "string?",
+        "collatable": "boolean",
+        "supportedOutputFormats": "array",
+        "requiredParameters": "array",
+        "tags": "array"
+      }
+    },
+    "POST /beta/reports/runs": {
+      "properties": {
+        "runId": "string",
+        "status": "string",
+        "reportTypes": "array",
+        "outputFormats": "array",
+        "triggeredByType": "string",
+        "createdAt": "datetime",
+        "startedAt": "datetime?",
+        "completedAt": "datetime?",
+        "outputCount": "integer"
+      }
+    },
+    "GET /beta/reports/runs": {
+      "properties": {
+        "runId": "string",
+        "status": "string",
+        "reportTypes": "array",
+        "outputFormats": "array",
+        "triggeredByType": "string",
+        "createdAt": "datetime",
+        "startedAt": "datetime?",
+        "completedAt": "datetime?",
+        "outputCount": "integer"
+      }
+    },
+    "GET /beta/reports/runs/{runId}/outputs": {
+      "properties": {
+        "outputs": {
+          "_type": "array",
+          "_itemProperties": {
+            "id": "string",
+            "reportType": "string",
+            "tenantId": "integer",
+            "format": "string",
+            "sizeBytes": "integer"
+          }
+        }
+      }
+    },
+    "GET /beta/reports/runs/{runId}/outputs/{outputId}": {
+      "_responseType": "binary",
+      "_headers": {
+        "Content-Disposition": "string (RFC 5987 filename*= or filename=)",
+        "Content-Type": "string",
+        "x-correlation-id": "string"
+      }
+    },
+    "GET /beta/tenants/{tenantId}/users": {
+      "properties": {
+        "id": "string",
+        "displayName": "string",
+        "userPrincipalName": "string",
+        "userType": "string?",
+        "department": "string?",
+        "assignedLicenses": "array",
+        "isGlobalAdmin": "boolean",
+        "isMfaCapable": "boolean"
+      }
+    },
+    "GET /beta/tenants/{tenantId}/users/{userId}": {
+      "properties": {
+        "id": "string",
+        "displayName": "string",
+        "userPrincipalName": "string",
+        "userType": "string?",
+        "department": "string?",
+        "mail": "string?",
+        "accountEnabled": "boolean",
+        "isGlobalAdmin": "boolean",
+        "isCloudOnly": "boolean",
+        "isMfaRegistered": "boolean",
+        "riskLevel": "string?"
       }
     }
   }

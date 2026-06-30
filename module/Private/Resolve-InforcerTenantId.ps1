@@ -82,8 +82,13 @@ function Resolve-InforcerTenantId {
         }
 
         if ($foundTenants.Count -gt 1) {
-            $ids = ($foundTenants | ForEach-Object { $_.PSObject.Properties['clientTenantId'].Value }) -join ', '
-            throw [System.InvalidOperationException]::new("Multiple tenants match name '$tenantIdString' (IDs: $ids). Use the numeric Client Tenant ID instead.")
+            # Don't leak the matching tenants' Client Tenant IDs into the error message —
+            # in shared-MSP setups multiple Inforcer customers might share a tenant name and
+            # exposing the integer IDs reveals information about other accounts. Tell the
+            # user the count and require them to list tenants themselves (which is gated by
+            # the Tenants.Read scope they already need for any name-based resolution).
+            $count = $foundTenants.Count
+            throw [System.InvalidOperationException]::new("$count tenants match name '$tenantIdString'. Pass the numeric Client Tenant ID for the one you want; run Get-InforcerTenant to list available tenants.")
         }
 
         throw [System.InvalidOperationException]::new("No tenant found with name '$tenantIdString'. Use Get-InforcerTenant to list available tenants.")

@@ -72,6 +72,18 @@ foreach ($name in $exported) {
             'Invoke-InforcerAssessment' {
                 $out = & $name -TenantId 1 -AssessmentId 'test' -ErrorVariable err -ErrorAction SilentlyContinue
             }
+            'Get-InforcerReportType' {
+                $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Invoke-InforcerReport' {
+                $out = & $name -ReportType 'ActiveUserCount' -OutputFormat csv -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Get-InforcerReportRun' {
+                $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Save-InforcerReportOutput' {
+                $out = & $name -RunId ([guid]::NewGuid()) -OutputId 'out-1' -ErrorVariable err -ErrorAction SilentlyContinue
+            }
             default {
                 $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
             }

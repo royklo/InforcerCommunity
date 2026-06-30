@@ -28,6 +28,15 @@ if ($script:InforcerSession -and $script:InforcerSession.ApiKey -and $script:Inf
         $script:InforcerSession = $null
         $script:InforcerSettingsCatalog = $null
 
+        # Clear all module-scoped caches (any $script:Inforcer*Cache* variable). This catches
+        # the simple cache names (InforcerAssessmentCache, InforcerReportTypeCache, ...) and
+        # the sentinel/timestamp companions (InforcerAssessmentCacheDeniedAt, etc.).
+        $cacheVars = Get-Variable -Scope Script -Name 'Inforcer*Cache*' -ErrorAction SilentlyContinue
+        if ($cacheVars) {
+            $cacheVars | Clear-Variable -Scope Script -Force -ErrorAction SilentlyContinue
+            Write-Verbose ('Cleared {0} cache variable(s): {1}' -f $cacheVars.Count, (($cacheVars.Name) -join ', '))
+        }
+
         # Also disconnect Microsoft Graph if it was connected via this module
         if ($script:InforcerGraphConnected) {
             try {

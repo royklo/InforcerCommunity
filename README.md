@@ -106,11 +106,18 @@ Disconnect-Inforcer
 | **Get-InforcerTenantPolicies** | Retrieves policies for a specified tenant.                  |
 | **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
+| **Get-InforcerSupportedEventType** | Returns the canonical list of audit event types accepted by `Get-InforcerAuditEvent -EventType`. Drives the tab completer; cached after first call. |
 | **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId). |
 | **Get-InforcerGroup**          | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
 | **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. |
 | **Compare-InforcerEnvironments** | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` with automatic baseline owner resolution. |
+| **Get-InforcerAssessment**     | Lists available assessments (CIS, Essential Eight, etc.). |
+| **Invoke-InforcerAssessment**  | Runs an assessment against one or more tenants. Supports HTML/CSV export. |
+| **Get-InforcerReportType**     | Lists the report catalog from the Reports API. Cached after first call; supports `-Key`, `-Tag`, and `-OutputFormat` filters. |
+| **Invoke-InforcerReport**      | Queues a report run, polls until complete, and saves outputs to disk. Use `-NoWait` for async or `-NoSave` to download metadata only. |
+| **Get-InforcerReportRun**      | Lists report runs (last 7 days, capped at 500). Use `-Wait` with `-RunId` to bypass the 4-minute list propagation lag. |
+| **Save-InforcerReportOutput**  | Downloads a report output to disk using the server's `Content-Disposition` filename. Pipeline-friendly for bulk download. |
 
 
 For full parameter details and example output, see **[Cmdlet Reference](docs/CMDLET-REFERENCE.md)**. For detailed API schemas and response structures, see **[API Reference](docs/API-REFERENCE.md)**.

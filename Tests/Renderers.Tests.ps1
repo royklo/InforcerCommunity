@@ -372,9 +372,9 @@ Describe 'ConvertTo-InforcerMarkdown' -Tag 'Markdown' {
 }
 
 # ---------------------------------------------------------------------------
-# Describe: ConvertTo-InforcerComparisonHtml - ENG-03 deprecated badge
+# Describe: ConvertTo-InforcerComparisonHtml - deprecated badge
 # ---------------------------------------------------------------------------
-Describe 'ConvertTo-InforcerComparisonHtml - ENG-03 deprecated badge' -Tag 'ENG-03' {
+Describe 'ConvertTo-InforcerComparisonHtml - deprecated badge' -Tag 'deprecated-settings' {
 
     BeforeAll {
         # Minimal comparison model with one deprecated and one non-deprecated row

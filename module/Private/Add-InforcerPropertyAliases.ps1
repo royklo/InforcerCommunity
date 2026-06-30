@@ -17,7 +17,7 @@ function Add-InforcerPropertyAliases {
         [object]$InputObject,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User', 'GroupSummary', 'Group', 'Role', 'Assessment')]
+        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User', 'GroupSummary', 'Group', 'Role', 'Assessment', 'ReportType', 'ReportRun', 'ReportOutput')]
         [string]$ObjectType
     )
 
@@ -342,12 +342,49 @@ function Add-InforcerPropertyAliases {
                 AddAliasIfExists $obj 'AssessmentType' 'assessmentType'
                 AddAliasIfExists $obj 'LastUpdated' 'lastUpdated'
                 AddAliasIfExists $obj 'Created' 'created'
-                # Convert tags array to comma-separated string for display
-                $tagsProp = $obj.PSObject.Properties['tags']
-                if ($tagsProp -and $tagsProp.Value -is [array]) {
-                    $tagsProp.Value = ($tagsProp.Value | Where-Object { $_ }) -join ', '
-                }
+                # Keep raw 'tags' shape intact (array OR comma-separated string from the API);
+                # downstream filters (e.g. Get-InforcerReportType -Tag) rely on the raw shape,
+                # and the Format.ps1xml view joins for display.
                 AddAliasIfExists $obj 'Tags' 'tags'
+            }
+            'ReportType' {
+                AddAliasIfExists $obj 'Key' 'key'
+                AddAliasIfExists $obj 'Name' 'name'
+                AddAliasIfExists $obj 'Description' 'description'
+                AddAliasIfExists $obj 'Collatable' 'collatable'
+                # API uses 'supportedOutputFormats' (confirmed against api-uk.inforcer.com beta).
+                AddAliasIfExists $obj 'SupportedOutputFormats' 'supportedOutputFormats'
+                AddAliasIfExists $obj 'OutputFormats' 'supportedOutputFormats'
+                AddAliasIfExists $obj 'RequiredParameters' 'requiredParameters'
+                AddAliasIfExists $obj 'Parameters' 'requiredParameters'
+                # Keep raw 'tags' shape intact (array OR comma-separated string from the API);
+                # downstream filters (e.g. Get-InforcerReportType -Tag) rely on the raw shape,
+                # and the Format.ps1xml view joins for display.
+                AddAliasIfExists $obj 'Tags' 'tags'
+            }
+            'ReportRun' {
+                # API uses 'runId' (confirmed). Each run can batch multiple report types
+                # and output formats — hence the plurals. Field set verified against api-uk.inforcer.com.
+                AddAliasIfExists $obj 'RunId' 'runId'
+                AddAliasIfExists $obj 'Id' 'runId'
+                AddAliasIfExists $obj 'Status' 'status'
+                AddAliasIfExists $obj 'ReportTypes' 'reportTypes'
+                AddAliasIfExists $obj 'OutputFormats' 'outputFormats'
+                AddAliasIfExists $obj 'TriggeredByType' 'triggeredByType'
+                AddAliasIfExists $obj 'CreatedAt' 'createdAt'
+                AddAliasIfExists $obj 'StartedAt' 'startedAt'
+                AddAliasIfExists $obj 'CompletedAt' 'completedAt'
+                AddAliasIfExists $obj 'OutputCount' 'outputCount'
+            }
+            'ReportOutput' {
+                # Output record uses: id (output id), reportType, tenantId, format, sizeBytes
+                AddAliasIfExists $obj 'OutputId' 'id'
+                AddAliasIfExists $obj 'Id' 'id'
+                AddAliasIfExists $obj 'RunId' 'runId'
+                AddAliasIfExists $obj 'TenantId' 'tenantId'
+                AddAliasIfExists $obj 'ReportType' 'reportType'
+                AddAliasIfExists $obj 'OutputFormat' 'format'
+                AddAliasIfExists $obj 'FileSize' 'sizeBytes'
             }
         }
 

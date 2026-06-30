@@ -19,10 +19,31 @@ jobs:
         run: Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
         shell: pwsh
 
-      - name: Run Consistency.Tests.ps1
+      - name: Run all Pester test files
         run: |
-          $result = Invoke-Pester ./Tests/Consistency.Tests.ps1 -PassThru -Output Detailed
+          # Previously this only ran Consistency.Tests.ps1; the other 5 files in Tests/
+          # (DocModel, GraphResolution, Renderers, SettingsCatalog, SettingsCatalogCache —
+          # ~237 tests) were never exercised in CI. Run the whole Tests/ directory.
+          $result = Invoke-Pester ./Tests/ -PassThru -Output Detailed
           if ($result.FailedCount -gt 0) { exit 1 }
+        shell: pwsh
+
+  smoke-test:
+    name: Smoke (Test-AllCmdlets.ps1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run Test-AllCmdlets.ps1
+        # No live API session — the smoke runner only verifies cmdlets are exported,
+        # have help, and parameter binding works. Real-API tests require a key (manual).
+        run: |
+          Import-Module ./module/InforcerCommunity.psd1 -Force
+          if (Test-Path ./scripts/Test-AllCmdlets.ps1) {
+            pwsh -NoProfile -File ./scripts/Test-AllCmdlets.ps1
+          } else {
+            Write-Host 'No Test-AllCmdlets.ps1 — skipping.'
+          }
         shell: pwsh
 
   static-analysis:
@@ -35,12 +56,32 @@ jobs:
         run: Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
         shell: pwsh
 
-      - name: Run PSScriptAnalyzer
+      - name: Run PSScriptAnalyzer on module
         run: |
           $results = Invoke-ScriptAnalyzer -Path ./module -Recurse -Severity Error
           if ($results) {
               $results | Format-Table -AutoSize
-              throw "PSScriptAnalyzer found $($results.Count) error(s)."
+              throw "PSScriptAnalyzer found $($results.Count) error(s) in ./module."
           }
-          Write-Host 'PSScriptAnalyzer: no errors found.'
+          Write-Host 'PSScriptAnalyzer (./module): no errors found.'
+        shell: pwsh
+
+      - name: Run PSScriptAnalyzer on tests + scripts (advisory)
+        # Don't fail the build on these — but surface findings so broken test files /
+        # smoke runners don't silently degrade.
+        run: |
+          # Run per-path: -Path takes a single string, not an array. Comma-separation lands
+          # as [object[]] which the parameter doesn't bind to on Linux runners.
+          $results = @()
+          foreach ($p in @('./Tests', './scripts')) {
+              if (Test-Path $p) {
+                  $results += Invoke-ScriptAnalyzer -Path $p -Recurse -Severity Error -ErrorAction SilentlyContinue
+              }
+          }
+          if ($results) {
+              $results | Format-Table -AutoSize
+              Write-Warning "PSScriptAnalyzer found $($results.Count) error(s) outside ./module (advisory — not failing the build)."
+          } else {
+              Write-Host 'PSScriptAnalyzer (./Tests, ./scripts): no errors.'
+          }
         shell: pwsh

@@ -452,5 +452,135 @@
       </ListControl>
     </View>
 
+    <!-- REPORT TYPE (catalog entry from /beta/reports/types) -->
+    <View>
+      <Name>InforcerCommunity.ReportType.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.ReportType</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>Key</Label><PropertyName>Key</PropertyName></ListItem>
+              <ListItem><Label>Name</Label><PropertyName>Name</PropertyName></ListItem>
+              <ListItem><Label>Description</Label><PropertyName>Description</PropertyName></ListItem>
+              <ListItem><Label>Collatable</Label><PropertyName>Collatable</PropertyName></ListItem>
+              <ListItem><Label>OutputFormats</Label><ScriptBlock>
+                $formats = $null
+                foreach ($p in 'SupportedOutputFormats','OutputFormats','supportedOutputFormats','outputFormats','supportedFormats','formats') {
+                    if ($_.PSObject.Properties[$p] -and $null -ne $_.PSObject.Properties[$p].Value) {
+                        $formats = $_.PSObject.Properties[$p].Value
+                        break
+                    }
+                }
+                if ($formats) { ($formats -join ', ') } else { '' }
+              </ScriptBlock></ListItem>
+              <ListItem><Label>Tags</Label><PropertyName>Tags</PropertyName></ListItem>
+              <ListItem><Label>Parameters</Label><ScriptBlock>
+                $p = $_.PSObject.Properties['RequiredParameters']
+                if (-not $p) { $p = $_.PSObject.Properties['Parameters'] }
+                if (-not $p) { $p = $_.PSObject.Properties['requiredParameters'] }
+                if (-not $p) { $p = $_.PSObject.Properties['parameters'] }
+                $rendered = '(none)'
+                if ($p -and $null -ne $p.Value) {
+                    $keys = foreach ($entry in @($p.Value)) {
+                        if ($entry -is [string]) { $entry }
+                        elseif ($entry.PSObject.Properties['key']) { $entry.PSObject.Properties['key'].Value }
+                        elseif ($entry.PSObject.Properties['name']) { $entry.PSObject.Properties['name'].Value }
+                    }
+                    $filtered = $keys | Where-Object { $_ }
+                    if ($filtered) { $rendered = ($filtered -join ', ') }
+                }
+                $rendered
+              </ScriptBlock></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- REPORT RUN (run metadata from /beta/reports/runs) -->
+    <View>
+      <Name>InforcerCommunity.ReportRun.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.ReportRun</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>RunId</Label><PropertyName>RunId</PropertyName></ListItem>
+              <ListItem><Label>Status</Label><PropertyName>Status</PropertyName></ListItem>
+              <ListItem><Label>ReportTypes</Label><ScriptBlock>
+                $p = $_.PSObject.Properties['ReportTypes']
+                if (-not $p) { $p = $_.PSObject.Properties['reportTypes'] }
+                if ($p -and $null -ne $p.Value) { @($p.Value) -join ', ' } else { '' }
+              </ScriptBlock></ListItem>
+              <ListItem><Label>OutputFormats</Label><ScriptBlock>
+                $p = $_.PSObject.Properties['OutputFormats']
+                if (-not $p) { $p = $_.PSObject.Properties['outputFormats'] }
+                if ($p -and $null -ne $p.Value) { @($p.Value) -join ', ' } else { '' }
+              </ScriptBlock></ListItem>
+              <ListItem><Label>TriggeredByType</Label><PropertyName>TriggeredByType</PropertyName></ListItem>
+              <ListItem><Label>CreatedAt</Label><PropertyName>CreatedAt</PropertyName></ListItem>
+              <ListItem><Label>CompletedAt</Label><PropertyName>CompletedAt</PropertyName></ListItem>
+              <ListItem><Label>OutputCount</Label><PropertyName>OutputCount</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- REPORT RUN RESULT (per-output saved-file result from Invoke-InforcerReport) -->
+    <View>
+      <Name>InforcerCommunity.ReportRunResult.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.ReportRunResult</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>RunId</Label><PropertyName>RunId</PropertyName></ListItem>
+              <ListItem><Label>ReportType</Label><PropertyName>ReportType</PropertyName></ListItem>
+              <ListItem><Label>OutputFormat</Label><PropertyName>OutputFormat</PropertyName></ListItem>
+              <ListItem><Label>TenantId</Label><PropertyName>TenantId</PropertyName></ListItem>
+              <ListItem><Label>FilePath</Label><PropertyName>FilePath</PropertyName></ListItem>
+              <ListItem><Label>FileName</Label><PropertyName>FileName</PropertyName></ListItem>
+              <ListItem><Label>FileSize</Label><PropertyName>FileSize</PropertyName></ListItem>
+              <ListItem><Label>ContentType</Label><PropertyName>ContentType</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- REPORT OUTPUT (output metadata from /beta/reports/runs/{id}/outputs)
+         Fields verified against api-uk.inforcer.com: id, reportType, tenantId, format, sizeBytes.
+         The server does not return fileName / contentType on output records — those come from
+         the download endpoint's Content-Disposition / Content-Type headers and are surfaced
+         on the ReportRunResult object emitted by Invoke-InforcerReport / Save-InforcerReportOutput. -->
+    <View>
+      <Name>InforcerCommunity.ReportOutput.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.ReportOutput</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>OutputId</Label><PropertyName>OutputId</PropertyName></ListItem>
+              <ListItem><Label>RunId</Label><PropertyName>RunId</PropertyName></ListItem>
+              <ListItem><Label>ReportType</Label><PropertyName>ReportType</PropertyName></ListItem>
+              <ListItem><Label>OutputFormat</Label><PropertyName>OutputFormat</PropertyName></ListItem>
+              <ListItem><Label>TenantId</Label><PropertyName>TenantId</PropertyName></ListItem>
+              <ListItem><Label>FileSize</Label><PropertyName>FileSize</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

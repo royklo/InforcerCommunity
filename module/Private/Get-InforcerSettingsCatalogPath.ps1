@@ -107,7 +107,7 @@ function Get-InforcerSettingsCatalogPath {
             if ($cacheMeta.releaseTimestamp -eq $remoteInfo.updatedAt) {
                 # Remote unchanged -- refresh lastChecked and use cache
                 $cacheMeta.lastChecked = [datetime]::UtcNow.ToString('o')
-                $cacheMeta | ConvertTo-Json | Set-Content -Path $metaPath -Encoding UTF8
+                $cacheMeta | ConvertTo-Json -Depth 100 | Set-Content -Path $metaPath -Encoding UTF8
                 Write-Verbose 'Remote data unchanged -- refreshed cache TTL'
                 return $settingsPath
             }
@@ -157,7 +157,7 @@ function Get-InforcerSettingsCatalogPath {
                     releaseTimestamp = $(if ($remoteInfo) { $remoteInfo.updatedAt } else { [datetime]::UtcNow.ToString('o') })
                     schemaVersion   = $(if ($remoteInfo) { $remoteInfo.schemaVersion } else { 1 })
                 }
-                $newMeta | ConvertTo-Json | Set-Content -Path $metaPath -Encoding UTF8
+                $newMeta | ConvertTo-Json -Depth 100 | Set-Content -Path $metaPath -Encoding UTF8
                 Write-Host '  Settings Catalog data cached successfully.' -ForegroundColor Green
                 return $settingsPath
             }

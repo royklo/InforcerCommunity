@@ -94,40 +94,129 @@ try {
 
 if (!$PSCmdlet.ShouldProcess('Inforcer session', 'Connect')) { return }
 
-# Validate the API key with a minimal request before reporting Connected
-$validateUri = $baseUrlValue.TrimEnd('/') + '/beta/baselines'
+# Validate the API key with a minimal request before reporting Connected.
+#
+# Validation principle: Connect-Inforcer must accept ANY valid key regardless of scope.
+# We pick /beta/baselines as a probe target because it's a common endpoint, but the result
+# is interpreted by RESPONSE SHAPE, not just status code:
+#
+#   * 200                                     → key valid, full scope for this endpoint
+#   * 4xx with Inforcer-app error envelope    → key valid; APIM accepted the subscription,
+#                                               the Inforcer app rejected the scope. That's
+#                                               proof the subscription works.
+#   * 401 with APIM gateway envelope          → APIM rejected the subscription itself. Real
+#                                               auth failure — error out.
+#   * Other 4xx/5xx                           → propagate the message.
+#
+# APIM gateway envelope shape (rejection):   { "statusCode": 401, "message": "Access denied due to invalid subscription key..." }
+# Inforcer app envelope shape (scope deny):  { "success": false, "errorCode": "forbidden", "message": "...", "errors": [...] }
 $validateHeaders = @{
     'Inf-Api-Key' = $plain
     'Accept'      = 'application/json'
 }
+
+$probeUri = $baseUrlValue.TrimEnd('/') + '/beta/baselines'
+$probeSucceeded = $false
+$probeStatusCode = 0
+$probeApiMessage = $null
+$probeEnvelope   = 'unknown'    # 'inforcer' | 'apim' | 'unknown'
+$probeRawError   = $null
+
+# Use Invoke-WebRequest -SkipHttpErrorCheck (PS7+) so 4xx/5xx don't throw — keeps the
+# parent's error stream / -ErrorVariable clean when validation goes through the
+# "envelope-shape says key is valid" path even on 403.
 try {
-    $null = Invoke-RestMethod -Uri $validateUri -Method GET -Headers $validateHeaders -UseBasicParsing
+    # -TimeoutSec 10 prevents Connect from hanging indefinitely on slow networks / proxies /
+    # captive portals. The probe is just a GET on /beta/baselines, so 10s is generous.
+    $probeResponse = Invoke-WebRequest -Uri $probeUri -Method GET -Headers $validateHeaders `
+        -UseBasicParsing -SkipHttpErrorCheck -TimeoutSec 10 -ErrorAction Stop
 } catch {
-    # Parse response body from PS7 (ErrorDetails) or PS5.1 (WebException)
-    $statusCode = 0
-    $apiMessage = $null
-    if ($_.Exception -is [System.Net.WebException] -and $_.Exception.Response) {
-        $statusCode = [int]$_.Exception.Response.StatusCode
+    # Only real network errors (DNS, connection refused, TLS) land here; 4xx/5xx are
+    # captured via the response object thanks to -SkipHttpErrorCheck.
+    $probeRawError = $_
+    Write-Error -Message "Connection failed: $($_.Exception.Message)" `
+        -ErrorId 'ConnectionValidationFailed' -Category ConnectionError
+    return
+}
+
+$probeStatusCode = [int]$probeResponse.StatusCode
+if ($probeStatusCode -ge 200 -and $probeStatusCode -lt 300) {
+    $probeSucceeded = $true
+} else {
+    $bodyText = if ($probeResponse.Content -is [byte[]]) {
+        [System.Text.Encoding]::UTF8.GetString($probeResponse.Content)
+    } else {
+        $probeResponse.Content -as [string]
     }
-    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-        $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
-        if ($json) {
-            if ($json.PSObject.Properties['statusCode']) { $statusCode = [int]$json.statusCode }
-            $msgProp = $json.PSObject.Properties['message']
-            if ($msgProp) { $apiMessage = $msgProp.Value -as [string] }
-        }
+    $json = $null
+    if ($bodyText) {
+        try { $json = $bodyText | ConvertFrom-Json -ErrorAction Stop } catch { $json = $null }
     }
+    if ($json) {
+        $msgProp = $json.PSObject.Properties['message']
+        if ($msgProp) { $probeApiMessage = $msgProp.Value -as [string] }
+
+        # Envelope detection: Inforcer app responses carry success / errorCode / errors;
+        # APIM gateway responses only carry statusCode + message (no Inforcer markers).
+        $hasInforcerMarkers = $json.PSObject.Properties['success'] -or `
+                              $json.PSObject.Properties['errorCode'] -or `
+                              $json.PSObject.Properties['errors']
+        $isApimShape       = $json.PSObject.Properties['statusCode'] -and `
+                             $json.PSObject.Properties['message'] -and `
+                             (-not $hasInforcerMarkers) -and `
+                             (-not $json.PSObject.Properties['data'])
+        if ($hasInforcerMarkers) { $probeEnvelope = 'inforcer' }
+        elseif ($isApimShape)   { $probeEnvelope = 'apim' }
+    }
+}
+
+# Decide validation outcome from status code AND envelope shape.
+$keyValid = switch ($true) {
+    $probeSucceeded                                              { $true; break }   # 200 OK
+    ($probeStatusCode -eq 403 -and $probeEnvelope -eq 'inforcer'){ $true; break }   # APIM passed, scope denied
+    ($probeStatusCode -eq 401 -and $probeEnvelope -eq 'inforcer'){ $true; break }   # Same shape, different code on some routes
+    default                                                      { $false }
+}
+
+if ($keyValid -and -not $probeSucceeded) {
+    Write-Verbose "Key validated against /beta/baselines via $probeEnvelope envelope (HTTP $probeStatusCode). Subscription is active; scope for /beta/baselines is not granted, but the session is established."
+}
+
+if (-not $keyValid) {
     $msg = switch ($true) {
-        ($statusCode -eq 401) { 'Connection failed: the API key is invalid for this endpoint.' }
-        ($statusCode -eq 429 -or $statusCode -eq 403 -and $apiMessage -match 'quota|rate.?limit|throttl') {
-            if ($apiMessage) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
+        ($probeStatusCode -eq 401 -and $probeEnvelope -eq 'apim') {
+            if ($probeApiMessage) { "Connection failed: $probeApiMessage" }
+            else { 'Connection failed: the API subscription key is invalid (APIM gateway rejection). Verify the key in the Inforcer portal.' }
+            break
+        }
+        ($probeStatusCode -eq 429 -or ($probeStatusCode -eq 403 -and $probeApiMessage -match 'quota|rate.?limit|throttl')) {
+            if ($probeApiMessage) { "API rate limit: $probeApiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
+            break
+        }
+        ($probeStatusCode -eq 401) {
+            if ($probeApiMessage) { "Connection failed: $probeApiMessage" }
+            else { 'Connection failed: the API key was rejected.' }
+            break
         }
         default {
-            if ($apiMessage) { "Connection validation failed: $apiMessage" } else { "Connection validation failed: $($_.Exception.Message)" }
+            if ($probeApiMessage) { "Connection validation failed: $probeApiMessage" }
+            elseif ($probeRawError) { "Connection validation failed: $($probeRawError.Exception.Message)" }
+            else { 'Connection validation failed.' }
         }
     }
     Write-Error -Message $msg -ErrorId 'ConnectionValidationFailed' -Category AuthenticationError
     return
+}
+
+# Clear stale caches from any prior session before establishing the new one. This catches
+# the denial sentinels ($script:InforcerAssessmentCacheDeniedAt, ...) that would otherwise
+# persist after a re-key — a user who reconnects with a higher-scope key shouldn't still
+# see "scope required" hints from the previous one. Uses the same wildcard pattern that
+# Disconnect-Inforcer uses, so any future Inforcer*Cache* var is included automatically.
+$cacheVarsToClear = Get-Variable -Scope Script -Name 'Inforcer*Cache*' -ErrorAction SilentlyContinue
+if ($cacheVarsToClear) {
+    $cacheVarsToClear | Clear-Variable -Scope Script -Force -ErrorAction SilentlyContinue
+    Write-Verbose ('Cleared {0} stale cache variable(s) before establishing new session.' -f $cacheVarsToClear.Count)
 }
 
 $script:InforcerSession = @{
@@ -138,6 +227,42 @@ $script:InforcerSession = @{
 }
 
 Write-Verbose "Successfully connected to Inforcer API at $baseUrlValue"
+
+# Best-effort prime of the Reports catalog cache so Get-InforcerReportType /
+# Invoke-InforcerReport argument completers show the live key list on the very
+# first TAB. Silent on any failure (key may lack Reports.Read, transient network,
+# rate limit) — the cmdlets re-prime on first invocation via Resolve-InforcerReportTypeSchema.
+# Skip prime when cache is already populated (cache-clear above runs first, so reaching
+# here with populated cache means a defensive condition we shouldn't overwrite).
+$skipPrime = $false
+if ($script:InforcerReportTypeCache -and @($script:InforcerReportTypeCache).Count -gt 0) {
+    Write-Verbose 'Reports catalog cache already populated — skipping prime.'
+    $skipPrime = $true
+}
+if (-not $skipPrime) { try {
+    $catalogProbe = Invoke-WebRequest -Uri ($baseUrlValue.TrimEnd('/') + '/beta/reports/types') `
+        -Method GET -Headers $validateHeaders -UseBasicParsing -SkipHttpErrorCheck `
+        -TimeoutSec 4 -ErrorAction Stop
+    if ([int]$catalogProbe.StatusCode -ge 200 -and [int]$catalogProbe.StatusCode -lt 300) {
+        $catalogJson = if ($catalogProbe.Content -is [byte[]]) {
+            [System.Text.Encoding]::UTF8.GetString($catalogProbe.Content)
+        } else { $catalogProbe.Content -as [string] }
+        if ($catalogJson) {
+            $parsed = $catalogJson | ConvertFrom-Json -ErrorAction Stop
+            $dataProp = $parsed.PSObject.Properties['data']
+            $entries = if ($dataProp) { @($dataProp.Value) } else { @($parsed) }
+            if ($entries.Count -gt 0) {
+                $script:InforcerReportTypeCache = $entries
+                $script:InforcerReportTypeCacheStamp = Get-Date
+                Write-Verbose "Primed Reports catalog cache ($($entries.Count) types) for argument completion."
+            }
+        }
+    } else {
+        Write-Verbose "Skipping Reports catalog prime: HTTP $([int]$catalogProbe.StatusCode) (key likely lacks Reports.Read)."
+    }
+} catch {
+    Write-Verbose "Skipping Reports catalog prime: $($_.Exception.Message)"
+} } # end of if (-not $skipPrime) wrapper
 
 if ($PassThru) {
     # Return a clone of the session hashtable so callers have an independent copy

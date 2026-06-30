@@ -5,6 +5,15 @@ function Invoke-InforcerApiRequest {
     .DESCRIPTION
         Uses the current session (Inf-Api-Key, BaseUrl), unwraps response.data,
         and returns PSObjects or JSON string. All JSON serialization uses -Depth 100.
+
+        Recognizes three error envelope shapes used by the Inforcer API:
+          * App-layer:     { success, message, errors[], errorCode }
+          * APIM gateway:  { statusCode, message }            (e.g. 404 on unsupported path)
+          * RFC 9110:      { type, title, status, traceId }   (e.g. 415 Unsupported Media Type)
+
+        The x-correlation-id response header is logged to the verbose stream on every
+        request and included in error messages when present. Surface it to the API team
+        when reporting issues.
     .PARAMETER Endpoint
         API path (e.g. /beta/tenants). Leading slash optional.
     .PARAMETER Method
@@ -76,10 +85,12 @@ function Invoke-InforcerApiRequest {
         'Content-Type'   = 'application/json'
     }
 
+    $responseHeaders = $null
     $params = @{
-        Uri             = $uri
-        Method          = $Method
-        Headers         = $headers
+        Uri                     = $uri
+        Method                  = $Method
+        Headers                 = $headers
+        ResponseHeadersVariable = 'responseHeaders'
     }
     if (-not [string]::IsNullOrWhiteSpace($Body)) {
         $params['Body'] = $Body
@@ -87,59 +98,108 @@ function Invoke-InforcerApiRequest {
 
     try {
         $rawResponse = Invoke-RestMethod @params
+        $correlationId = Get-InforcerHeaderValue -Headers $responseHeaders -Name 'x-correlation-id'
+        if ($correlationId) {
+            Write-Verbose "x-correlation-id: $correlationId"
+        }
     } catch {
         $statusCode = 0
         $detail = $_.Exception.Message
+        $correlationId = $null
 
         if ($_.Exception.Response) {
             $statusCode = [int]$_.Exception.Response.StatusCode
+            $correlationId = Get-InforcerHeaderValue -Headers $_.Exception.Response.Headers -Name 'x-correlation-id'
         }
 
-        # PS7: ErrorDetails.Message contains the response body
+        # Response body: PS7 surfaces it via ErrorDetails.Message; PS5.1 needs a stream read.
+        $responseBody = $null
         if ($_.ErrorDetails.Message) {
-            $detail = $_.ErrorDetails.Message
-            try {
-                $json = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
-                if ($json) {
-                    $errorCode = ($json.PSObject.Properties['errorCode'].Value -as [string])
-                    $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
-                    $detail = switch ($true) {
-                        ($statusCode -eq 429 -or ($apiMessage -and $apiMessage -match 'quota|rate.?limit|throttl')) {
-                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
-                        }
-                        ($errorCode -match '^forbidden$') {
-                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { "You don't have permission to access this tenant or resource." }
-                        }
-                        ($errorCode -match 'notfound|not_found') {
-                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { 'Tenant or resource not found.' }
-                        }
-                        default {
-                            if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } elseif ($json.error) { $json.error } else { $detail }
-                        }
-                    }
-                }
-            } catch { }
-        }
-        # PS5.1 fallback: read from response stream
-        elseif ($_.Exception.Response) {
+            $responseBody = $_.ErrorDetails.Message
+        } elseif ($_.Exception.Response) {
             $reader = $null
             try {
                 $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
                 $responseBody = $reader.ReadToEnd()
-                $detail = $responseBody
-                try {
-                    $json = $responseBody | ConvertFrom-Json -ErrorAction SilentlyContinue
-                    if ($json.message) { $detail = $json.message }
-                    elseif ($json.error) { $detail = $json.error }
-                } catch { }
-            } finally {
+            } catch { } finally {
                 if ($reader) { $reader.Dispose() }
             }
         }
 
-        $apiKeyPattern = [regex]::new([regex]::Escape($apiKey), 'Compiled')
-        $detail = $apiKeyPattern.Replace($detail, '[REDACTED]')
+        if (-not [string]::IsNullOrWhiteSpace($responseBody)) {
+            $detail = $responseBody
+            try {
+                $json = $responseBody | ConvertFrom-Json -ErrorAction SilentlyContinue
+            } catch {
+                $json = $null
+            }
+
+            if ($json) {
+                # Identify envelope shape and pull out a useful message + errorCode + status.
+                $apiMessage = $null
+                $errorCode  = $null
+                $traceId    = $null
+
+                if ($null -ne $json.PSObject.Properties['errorCode'] -or $null -ne $json.PSObject.Properties['errors'] -or $null -ne $json.PSObject.Properties['success']) {
+                    # Shape A: app-layer envelope { success, message, errors[], errorCode }
+                    $errorCode  = ($json.PSObject.Properties['errorCode'].Value -as [string])
+                    $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
+
+                    # Surface structured field-level errors. The top-level message is often a
+                    # generic placeholder ("Validation failed, see errors for details") — the
+                    # useful information lives in the errors[] array.
+                    $errorsProp = $json.PSObject.Properties['errors']
+                    if ($errorsProp -and $errorsProp.Value) {
+                        $errorsJoined = Format-InforcerErrorDetail -Errors $errorsProp.Value
+                        if (-not [string]::IsNullOrWhiteSpace($errorsJoined)) {
+                            if ([string]::IsNullOrWhiteSpace($apiMessage)) {
+                                $apiMessage = $errorsJoined
+                            } elseif ($apiMessage -notlike "*$errorsJoined*") {
+                                $apiMessage = "$apiMessage — $errorsJoined"
+                            }
+                        }
+                    }
+                } elseif ($null -ne $json.PSObject.Properties['statusCode'] -and $null -ne $json.PSObject.Properties['message']) {
+                    # Shape B: APIM gateway { statusCode, message } — e.g. 404 on unsupported method/path
+                    if ($statusCode -le 0) { $statusCode = [int]$json.statusCode }
+                    $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
+                } elseif ($null -ne $json.PSObject.Properties['title'] -and ($null -ne $json.PSObject.Properties['status'] -or $null -ne $json.PSObject.Properties['type'])) {
+                    # Shape C: RFC 9110 ProblemDetails { type, title, status, traceId } — e.g. 415
+                    if ($statusCode -le 0 -and $null -ne $json.PSObject.Properties['status']) {
+                        $statusCode = [int]$json.status
+                    }
+                    $apiMessage = ($json.PSObject.Properties['title'].Value -as [string])
+                    $traceId    = ($json.PSObject.Properties['traceId'].Value -as [string])
+                }
+
+                $detail = switch ($true) {
+                    ($statusCode -eq 429 -or ($apiMessage -and $apiMessage -match 'quota|rate.?limit|throttl')) {
+                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
+                    }
+                    ($errorCode -match '^forbidden$') {
+                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { "You don't have permission to access this tenant or resource." }
+                    }
+                    ($errorCode -match 'notfound|not_found') {
+                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { 'Tenant or resource not found.' }
+                    }
+                    default {
+                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage }
+                        elseif ($json.PSObject.Properties['error']) { $json.error -as [string] }
+                        else { $detail }
+                    }
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($traceId)) {
+                    $detail = "$detail (traceId: $traceId)"
+                }
+            }
+        }
+
+        $detail = Protect-InforcerApiKeyInText -Text $detail -ApiKey $apiKey
         $msg = if ($statusCode -gt 0) { "Inforcer API request failed (HTTP $statusCode): $detail" } else { "Inforcer API request failed: $detail" }
+        if ($correlationId) {
+            $msg = "$msg [correlation-id: $correlationId]"
+        }
         $errorId = if ($statusCode -gt 0) { "ApiRequestFailed_$statusCode" } else { 'ApiRequestFailed' }
         Write-Error -Message $msg -ErrorId $errorId -Category ConnectionError
         return

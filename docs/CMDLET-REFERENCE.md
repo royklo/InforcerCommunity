@@ -799,6 +799,225 @@ FindingsMessage  : All users have MFA enabled.
 
 ---
 
+## Get-InforcerReportType
+
+Lists available report types from the Inforcer Reports API. The catalog is cached in the module session; pass `-Force` to refetch.
+
+**Endpoints called**: `GET /beta/reports/types`
+**Required API scope(s)**: `Reports.Read`
+
+**Output schema**: [ReportType](./API-REFERENCE.md#reporttype)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Key** | String | No | Filter to a single report type by key (case-insensitive). Aliases: `-Name`, `-ReportType`. |
+| **Tag** | String | No | Filter to types containing the specified tag. |
+| **OutputFormat** | String | No | Filter to types that support the specified output format. |
+| **Force** | Switch | No | Bypass the in-memory cache and refetch the catalog. |
+| **Format** | String | No | `Raw` (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
+
+### Examples
+
+```powershell
+Get-InforcerReportType
+Get-InforcerReportType -Key CopilotAdoption
+Get-InforcerReportType -OutputFormat pdf
+Get-InforcerReportType -Tag security
+Get-InforcerReportType -OutputType JsonObject
+```
+
+### Example output
+
+```
+Key            : CopilotAdoption
+Name           : Copilot Adoption
+Description    : Usage trends and adoption rates for Microsoft 365 Copilot.
+Collatable     : True
+OutputFormats  : csv, json
+Tags           : Copilot, Productivity
+Parameters     : report-period
+```
+
+---
+
+## Invoke-InforcerReport
+
+Queues one or more Inforcer reports, polls the outputs endpoint until each run is terminal, and saves the outputs to disk. Use `-NoWait` to return immediately, or `-NoSave` to poll without downloading.
+
+**Endpoints called**: `POST /beta/reports/runs`, `GET /beta/reports/runs/{runId}/outputs`, `GET /beta/reports/runs/{runId}/outputs/{outputId}`, `GET /beta/tenants` *(GUID/name lookup)*
+**Required API scope(s)**: `Reports.Read` + `Reports.Run` + `Tenants.Read`†
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **ReportType** | String[] | Yes | One or more report type keys. Aliases: `-Key`. |
+| **OutputFormat** | String[] | Yes | One or more output formats. Zip rules: 1 format broadcasts to all reports; N formats pair by index; any other count errors. |
+| **TenantId** | Object[] | Yes | One or more tenants (numeric ID, GUID, or name). Alias: `-ClientTenantId`. |
+| **ReportPeriod** | Int | No | Days for the `report-period` parameter. CopilotAdoption / ShadowAiDetection auto-default to 30. |
+| **AssessmentId** | String | No | Required when `-ReportType Assessment`. The assessment identifier (alphanumeric string, not a GUID — Inforcer assessment IDs look like `l1f8wd29pl44pp1j66r9`). Tab-completes against `Get-InforcerAssessment`. |
+| **Parameter** | Hashtable | No | Escape hatch for future API parameters. Keys validated against the type's catalog entry. |
+| **Collate** | Switch | No | Request a single cross-tenant output. Rejected when the type's catalog says `collatable: false`. |
+| **NoWait** | Switch | No | Return immediately after `POST` with run identifiers. Skip polling and download. |
+| **NoSave** | Switch | No | Poll until terminal but do not write files. Returns outputs metadata. |
+| **Open** | Switch | No | After each output is saved, launch it with the OS default handler (`Invoke-Item`). Ignored when `-NoWait` or `-NoSave` is also set (emits a warning). Aliases: `-Show`, `-ShowResult`. |
+| **OutputPath** | String | No | Directory for downloaded outputs. Default: current working directory. |
+| **TimeoutSeconds** | Int | No | Maximum wait per run when polling. Default: 600. |
+| **PollIntervalSeconds** | Int | No | Initial poll interval (doubles up to 15s cap). Default: 2. |
+| **Format** | String | No | `Raw` (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
+
+> † `Tenants.Read` is only consumed when `-TenantId` is a GUID or tenant name (which triggers `Resolve-InforcerTenantId`). Numeric `-TenantId` calls skip the tenant-list lookup.
+
+### Examples
+
+```powershell
+# Single report, single tenant — saves ActiveUserCount-<id>.csv to the current directory
+Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482
+
+# Two reports, paired formats — TenantAuditReport→pdf, ActiveUserCount→csv
+Invoke-InforcerReport -ReportType TenantAuditReport, ActiveUserCount -OutputFormat pdf, csv -TenantId 482
+
+# Cross-tenant, broadcast format — same csv format for both
+Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 482, 483
+
+# Async — return RunIds immediately
+Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -NoWait
+
+# Assessment report
+Invoke-InforcerReport -ReportType Assessment -AssessmentId l1f8wd29pl44pp1j66r9 -OutputFormat pdf -TenantId 482
+
+# Save and immediately open the file with the OS default handler
+Invoke-InforcerReport -ReportType TenantAuditReport -OutputFormat html -TenantId 482 -Open
+
+# Discover-then-run pipeline — every Security-tagged type queued in one batch (Key alias on
+# Get-InforcerReportType binds to -ReportType via ValueFromPipelineByPropertyName).
+Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 482
+
+# JSON output
+Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -OutputType JsonObject
+```
+
+### Example output (default sync + save)
+
+```
+RunId         : 094a49ed-b9b8-492b-870f-0f76fd3b2954
+ReportType    : ActiveUserCount
+OutputFormat  : csv
+TenantId      : 482
+FilePath      : /path/to/output/ActiveUserCount_2026-06-26.csv
+FileName      : ActiveUserCount_2026-06-26.csv
+FileSize      : 12480
+ContentType   : text/csv
+```
+
+### Example output (-NoWait)
+
+The POST response is intentionally minimal — `RunId` is the only property the API returns. Poll status with `Get-InforcerReportRun -RunId <id>` or `Get-InforcerReportRun -RunId <id> -Wait -IncludeOutputs`.
+
+```
+RunId : 094a49ed-b9b8-492b-870f-0f76fd3b2954
+```
+
+---
+
+## Get-InforcerReportRun
+
+Lists report runs from the Inforcer Reports API. The list endpoint has a ~4-minute propagation lag for fresh runs and a server-side 500-item / 7-day cap; use `-Wait` with `-RunId` to bypass the lag by polling the outputs endpoint directly.
+
+**Endpoints called**: `GET /beta/reports/runs`, `GET /beta/reports/runs/{runId}/outputs` *(with `-Wait` or `-IncludeOutputs`)*
+**Required API scope(s)**: `Reports.Read`
+
+**Output schema**: [ReportRun](./API-REFERENCE.md#reportrun)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **RunId** | Guid | No | Filter to a single run. Required with `-Wait`. |
+| **Wait** | Switch | No | Poll the outputs endpoint until the run is terminal (or `-TimeoutSeconds` elapses). |
+| **IncludeOutputs** | Switch | No | Fetch outputs for every returned run. Adds one API call per run. |
+| **TimeoutSeconds** | Int | No | Maximum wait when polling. Default: 600. |
+| **PollIntervalSeconds** | Int | No | Initial poll interval. Default: 2. |
+| **Format** | String | No | `Raw` (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
+
+### Examples
+
+```powershell
+Get-InforcerReportRun
+Get-InforcerReportRun -RunId 094a49ed-b9b8-492b-870f-0f76fd3b2954
+Get-InforcerReportRun -RunId 094a49ed-b9b8-492b-870f-0f76fd3b2954 -Wait
+Get-InforcerReportRun -IncludeOutputs
+Get-InforcerReportRun -OutputType JsonObject
+```
+
+### Example output
+
+A run can batch multiple report types and output formats under a single `RunId`, so `ReportTypes` and `OutputFormats` are plural arrays.
+
+```
+RunId           : 094a49ed-b9b8-492b-870f-0f76fd3b2954
+Status          : completed
+ReportTypes     : {activeusercount, globaladmins}
+OutputFormats   : {csv}
+TriggeredByType : user
+CreatedAt       : 2026-06-26T14:01:23Z
+CompletedAt    : 2026-06-26T14:01:29Z
+OutputCount     : 2
+```
+
+---
+
+## Save-InforcerReportOutput
+
+Downloads a report output to disk. Pipeline-friendly: pipe output records from `Invoke-InforcerReport -NoSave` or `Get-InforcerReportRun -IncludeOutputs` to download every output in bulk.
+
+**Endpoints called**: `GET /beta/reports/runs/{runId}/outputs/{outputId}`
+**Required API scope(s)**: `Reports.Read`
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **RunId** | Guid | Yes | The run identifier. Pipeline-bindable. |
+| **OutputId** | String | Yes | The output identifier. Pipeline-bindable. Alias: `-Id`. |
+| **ReportType** | String | No | Pipeline-bindable pass-through. Auto-populated when piped from `Invoke-InforcerReport -NoSave` or `Get-InforcerReportRun -IncludeOutputs`. Surfaced on the result object for parity with `Invoke-InforcerReport`. `$null` when called standalone. |
+| **OutputFormat** | String | No | Pipeline-bindable pass-through. Same behavior as `-ReportType`. |
+| **TenantId** | Object | No | Pipeline-bindable pass-through. Alias: `-ClientTenantId`. Same behavior as `-ReportType`. |
+| **OutputPath** | String | No | Target directory. Default: current working directory. Created if missing. |
+| **FileName** | String | No | Override the server-suggested filename (sanitized for filesystem safety). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
+
+### Examples
+
+```powershell
+# Single download
+Save-InforcerReportOutput -RunId 094a49ed-b9b8-492b-870f-0f76fd3b2954 -OutputId out-1
+
+# Bulk download via pipeline
+Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -NoSave |
+    Save-InforcerReportOutput -OutputPath ./reports
+
+# Bulk download from every visible run
+Get-InforcerReportRun -IncludeOutputs |
+    ForEach-Object { $_.outputs } |
+    Save-InforcerReportOutput -OutputPath ./bulk
+```
+
+### Example output
+
+```
+RunId         : 094a49ed-b9b8-492b-870f-0f76fd3b2954
+OutputId      : 1f2e3d4c-...
+TenantId      : 482
+ReportType    : ActiveUserCount
+OutputFormat  : csv
+FilePath      : /path/to/output/ActiveUserCount_2026-06-26.csv
+FileName      : ActiveUserCount_2026-06-26.csv
+FileSize      : 12480
+ContentType   : text/csv
+```
+
+`TenantId`, `ReportType`, and `OutputFormat` are populated automatically when piped from `Invoke-InforcerReport -NoSave` or `Get-InforcerReportRun -IncludeOutputs`; they are `$null` when the cmdlet is called standalone with bare `-RunId` / `-OutputId`.
+
+---
+
 ## See also
 
 - **[API-REFERENCE.md](./API-REFERENCE.md)** — Detailed API schemas and response structures.

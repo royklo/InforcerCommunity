@@ -204,7 +204,7 @@ function Get-InforcerComparisonData {
                     }
                     $scriptData[$propName] = $val
                 }
-                $scriptJson = $scriptData | ConvertTo-Json -Depth 5 -Compress
+                $scriptJson = $scriptData | ConvertTo-Json -Depth 100 -Compress
                 $policy.policyData | Add-Member -NotePropertyName 'linkedComplianceScript' -NotePropertyValue $scriptJson -Force
                 $scriptPolicy | Add-Member -NotePropertyName '_claimedByCompliancePolicy' -NotePropertyValue $true -Force
             }

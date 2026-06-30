@@ -76,7 +76,7 @@ function Resolve-InforcerGraphEnrichment {
         # Use batch endpoint to resolve all IDs in one call (max 1000 per request)
         $idList = @($objectIds)
         try {
-            $body = @{ ids = $idList; types = @('group','user','device','servicePrincipal') } | ConvertTo-Json -Depth 10 -Compress
+            $body = @{ ids = $idList; types = @('group','user','device','servicePrincipal') } | ConvertTo-Json -Depth 100 -Compress
             $response = Invoke-MgGraphRequest -Uri 'https://graph.microsoft.com/v1.0/directoryObjects/getByIds' `
                 -Method POST -Body $body -ContentType 'application/json' -OutputType PSObject -ErrorAction Stop
             if ($response -and $response.value) {

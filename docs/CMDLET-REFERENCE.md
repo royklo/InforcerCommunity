@@ -977,6 +977,9 @@ Downloads a report output to disk. Pipeline-friendly: pipe output records from `
 |-----------|------|-----------|-------------|
 | **RunId** | Guid | Yes | The run identifier. Pipeline-bindable. |
 | **OutputId** | String | Yes | The output identifier. Pipeline-bindable. Alias: `-Id`. |
+| **ReportType** | String | No | Pipeline-bindable pass-through. Auto-populated when piped from `Invoke-InforcerReport -NoSave` or `Get-InforcerReportRun -IncludeOutputs`. Surfaced on the result object for parity with `Invoke-InforcerReport`. `$null` when called standalone. |
+| **OutputFormat** | String | No | Pipeline-bindable pass-through. Same behavior as `-ReportType`. |
+| **TenantId** | Object | No | Pipeline-bindable pass-through. Alias: `-ClientTenantId`. Same behavior as `-ReportType`. |
 | **OutputPath** | String | No | Target directory. Default: current working directory. Created if missing. |
 | **FileName** | String | No | Override the server-suggested filename (sanitized for filesystem safety). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
@@ -1002,11 +1005,16 @@ Get-InforcerReportRun -IncludeOutputs |
 ```
 RunId         : 094a49ed-b9b8-492b-870f-0f76fd3b2954
 OutputId      : 1f2e3d4c-...
+TenantId      : 482
+ReportType    : ActiveUserCount
+OutputFormat  : csv
 FilePath      : /path/to/output/ActiveUserCount_2026-06-26.csv
 FileName      : ActiveUserCount_2026-06-26.csv
 FileSize      : 12480
 ContentType   : text/csv
 ```
+
+`TenantId`, `ReportType`, and `OutputFormat` are populated automatically when piped from `Invoke-InforcerReport -NoSave` or `Get-InforcerReportRun -IncludeOutputs`; they are `$null` when the cmdlet is called standalone with bare `-RunId` / `-OutputId`.
 
 ---
 

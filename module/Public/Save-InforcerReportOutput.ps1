@@ -15,6 +15,14 @@
 .PARAMETER OutputId
     The output identifier (string) — the id field on each output record. Pipeline-bindable
     by property name (also accepts -Id as an alias).
+.PARAMETER ReportType
+    Pipeline-bindable. When piped from Invoke-InforcerReport -NoSave or Get-InforcerReportRun
+    -IncludeOutputs, this is auto-populated from the upstream record and surfaced on the
+    result object so output formatting matches Invoke-InforcerReport. Otherwise $null.
+.PARAMETER OutputFormat
+    Pipeline-bindable. Same as ReportType — propagated from the upstream record when piped.
+.PARAMETER TenantId
+    Pipeline-bindable. Same as ReportType — propagated from the upstream record when piped.
 .PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
     Created if it doesn't exist.
@@ -35,7 +43,9 @@
         Save-InforcerReportOutput -OutputPath ./bulk
     Bulk-downloads every output from every visible run.
 .OUTPUTS
-    PSObject or String — per saved file, with { RunId, OutputId, FilePath, FileName, FileSize, ContentType, CorrelationId }
+    PSObject or String — per saved file, with { RunId, OutputId, TenantId, ReportType,
+    OutputFormat, FilePath, FileName, FileSize, ContentType, CorrelationId }. TenantId,
+    ReportType, and OutputFormat are $null unless populated via pipeline binding.
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#save-inforcerreportoutput
 .LINK
@@ -53,6 +63,19 @@ param(
     [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true, Position = 1)]
     [Alias('Id')]
     [string]$OutputId,
+
+    # Pipeline pass-through properties from upstream cmdlets (Invoke-InforcerReport -NoSave,
+    # Get-InforcerReportRun -IncludeOutputs). Surfaced on the result so it matches the
+    # InforcerCommunity.ReportRunResult format view; left $null when called standalone.
+    [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
+    [string]$ReportType,
+
+    [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
+    [string]$OutputFormat,
+
+    [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
+    [Alias('ClientTenantId')]
+    [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
     [string]$OutputPath = $PWD.Path,
@@ -153,6 +176,9 @@ process {
     $result = [PSCustomObject][ordered]@{
         RunId         = $runIdStr
         OutputId      = $OutputId
+        TenantId      = if ($PSBoundParameters.ContainsKey('TenantId')) { $TenantId } else { $null }
+        ReportType    = if ($PSBoundParameters.ContainsKey('ReportType')) { $ReportType } else { $null }
+        OutputFormat  = if ($PSBoundParameters.ContainsKey('OutputFormat')) { $OutputFormat } else { $null }
         FilePath      = $filePath
         FileName      = $effectiveName
         FileSize      = $fileSize

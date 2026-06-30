@@ -60,7 +60,7 @@ Describe 'Consistency contract' {
             'Get-InforcerReportType'        = @('Key', 'Tag', 'OutputFormat', 'Force', 'Format', 'OutputType')
             'Invoke-InforcerReport'         = @('ReportType', 'OutputFormat', 'TenantId', 'ReportPeriod', 'AssessmentId', 'Parameter', 'Collate', 'NoWait', 'NoSave', 'OutputPath', 'TimeoutSeconds', 'PollIntervalSeconds', 'Format', 'OutputType')
             'Get-InforcerReportRun'         = @('RunId', 'Wait', 'IncludeOutputs', 'TimeoutSeconds', 'PollIntervalSeconds', 'Format', 'OutputType')
-            'Save-InforcerReportOutput'     = @('RunId', 'OutputId', 'OutputPath', 'FileName', 'OutputType')
+            'Save-InforcerReportOutput'     = @('RunId', 'OutputId', 'ReportType', 'OutputFormat', 'TenantId', 'OutputPath', 'FileName', 'OutputType')
         }
     }
 

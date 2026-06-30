@@ -4,8 +4,7 @@ function Protect-InforcerApiKeyInText {
         Replaces every occurrence of the live API key in a text string with [REDACTED] (Private helper).
     .DESCRIPTION
         Used by error-message construction in API helpers to ensure that exception text, response
-        bodies, and verbose dumps never leak the active subscription key. Uses a compiled regex
-        for a small speedup when called per-error.
+        bodies, and verbose dumps never leak the active subscription key.
     .PARAMETER Text
         The input text — may contain the API key anywhere.
     .PARAMETER ApiKey
@@ -24,6 +23,7 @@ function Protect-InforcerApiKeyInText {
     if ([string]::IsNullOrWhiteSpace($Text) -or [string]::IsNullOrWhiteSpace($ApiKey)) {
         return $Text
     }
-    $pattern = [regex]::new([regex]::Escape($ApiKey), 'Compiled')
-    $pattern.Replace($Text, '[REDACTED]')
+    # No caching here, so a non-compiled regex is faster than building a fresh compiled one
+    # per call — compilation cost only amortizes when the regex object is reused.
+    [regex]::Replace($Text, [regex]::Escape($ApiKey), '[REDACTED]')
 }

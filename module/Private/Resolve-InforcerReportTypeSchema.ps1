@@ -212,7 +212,13 @@ function Resolve-InforcerReportTypeSchema {
         $finalParams['report-period'] = ($ReportPeriod -as [string])
     }
     if ($PSBoundParameters.ContainsKey('AssessmentId')) {
-        $finalParams['assessment-id'] = $AssessmentId.ToString()
+        # Public AssessmentId has no [ValidateNotNullOrEmpty]; an empty value would otherwise
+        # bypass the Assessment-requires-id check below and reach the server with assessment-id=''
+        # producing a confusing "invalid assessment" failure instead of a clear local error.
+        if ([string]::IsNullOrWhiteSpace($AssessmentId)) {
+            throw "AssessmentId was provided but is empty. Provide a non-empty -AssessmentId value (run Get-InforcerAssessment to list available IDs)."
+        }
+        $finalParams['assessment-id'] = $AssessmentId
     }
 
     # 7. Validate parameter keys against catalog (defensive — bug #6: server silently ignores unknowns)

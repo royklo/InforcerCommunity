@@ -80,5 +80,9 @@ NOTES.local.md
 *.md.bak
 api-feedback.md
 api-feedback-evidence/
+# Internal API feedback / issue reports — never published; may contain DEV URLs, tenant data,
+# or call IDs from live runs.
+*API-Feedback*.md
+*api-feedback*.md
 .planning-archive/
 scripts/Test-ApiFeedbackItems.ps1

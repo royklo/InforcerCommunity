@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-18T06:36:43Z",
+  "generatedAt": "2026-06-30T07:31:58Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -7,24 +7,13 @@
         "tenantFriendlyName": "string",
         "tenantDnsName": "string",
         "msTenantId": "string",
-        "secureScore": "integer",
+        "secureScore": "number",
         "isBaseline": "boolean",
         "lastBackupTimestamp": "datetime",
         "recentChanges": "integer",
         "policyDiff": "string",
         "tags": "array",
-        "alignmentSummaries": {
-          "_type": "array",
-          "_itemProperties": {
-            "alignedBaselineTenantId": "integer",
-            "alignedBaselineId": "string",
-            "alignedBaselineName": "string",
-            "alignmentScore": "integer",
-            "alignedThreshold": "integer",
-            "semiAlignedThreshold": "integer",
-            "lastAlignmentDateTime": "datetime"
-          }
-        },
+        "alignmentSummaries": "array",
         "licenses": {
           "_type": "array",
           "_itemProperties": {
@@ -110,7 +99,7 @@
             "subjectTenantId": "integer",
             "subjectDataTimestamp": "datetime",
             "baselineDataTimestamp": "datetime",
-            "alignmentScore": "number",
+            "alignmentScore": "integer",
             "deviatedUnaccepted": "array",
             "matchedPolicies": {
               "_type": "array",
@@ -122,7 +111,7 @@
                   "_itemProperties": {
                     "subjectPolicySnapshotId": "string",
                     "subjectPolicySnapshotVersionId": "string",
-                    "subjectPolicyGuid": "null",
+                    "subjectPolicyGuid": "string",
                     "policyDataDiff": "array",
                     "policyAssignmentsDiff": "array",
                     "policyTags": "array",
@@ -132,22 +121,10 @@
                 "isDeviation": "boolean",
                 "isMissingFromSubject": "boolean",
                 "isAdditionalInSubject": "boolean",
-                "matchingVariables": {
-                  "_type": "array",
-                  "_itemProperties": {
-                    "variableId": "string",
-                    "variableName": "string",
-                    "baselineValue": "string",
-                    "subjectValue": "string",
-                    "description": "string",
-                    "propertyPath": "string",
-                    "isHidden": "boolean",
-                    "isBaselineOnly": "boolean"
-                  }
-                },
+                "matchingVariables": "array",
                 "similarPolicies": "array",
                 "acceptedDeviations": "array",
-                "policyGuid": "null",
+                "policyGuid": "string",
                 "policyName": "string",
                 "policySnapshotId": "null",
                 "policySnapshotVersionId": "null",
@@ -206,8 +183,8 @@
             "nameLookup": {
               "_type": "object",
               "_properties": {
-                "user:username:237": "string",
-                "user:displayName:237": "string"
+                "user:username:244": "string",
+                "user:displayName:244": "string"
               }
             }
           }

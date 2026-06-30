@@ -155,7 +155,9 @@ param(
                     $rtStr = $rt -as [string]
                     $entry = $null
                     foreach ($e in $script:InforcerReportTypeCache) {
-                        if (($e.PSObject.Properties['key'].Value -as [string]) -ieq $rtStr) { $entry = $e; break }
+                        if ($null -eq $e -or $e -isnot [PSObject]) { continue }
+                        $keyProp = $e.PSObject.Properties['key']
+                        if ($keyProp -and (($keyProp.Value -as [string]) -ieq $rtStr)) { $entry = $e; break }
                     }
                     if ($entry) {
                         foreach ($p in 'supportedOutputFormats','outputFormats','supportedFormats','formats') {

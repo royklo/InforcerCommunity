@@ -46,7 +46,9 @@ $ErrorActionPreference = 'Stop'
 $failCount = 0
 
 # Normalise the ApiKey to SecureString. Priority: explicit -ApiKey → $env:INFORCER_API_KEY
-# → interactive prompt. Plain strings are zeroed after conversion.
+# → interactive prompt. Plain strings are converted to SecureString immediately; the original
+# string contents are not zeroed (PowerShell strings are immutable / managed), so avoid passing
+# the API key as a plaintext command-line argument — prefer $env:INFORCER_API_KEY or a prompt.
 function ConvertTo-SafeApiKey {
     param($Value)
     if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrWhiteSpace($Value))) {

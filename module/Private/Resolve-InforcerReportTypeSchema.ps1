@@ -26,8 +26,9 @@ function Resolve-InforcerReportTypeSchema {
     .PARAMETER ReportPeriod
         Optional integer days. When set, merged into parameters as 'report-period'=<value>.
     .PARAMETER AssessmentId
-        Optional GUID. When set, merged into parameters as 'assessment-id'=<value>. Required
-        for ReportType='Assessment'.
+        Optional opaque alphanumeric string (NOT a GUID — e.g. 'l1f8wd29pl44pp1j66r9'). When
+        set, merged into parameters as 'assessment-id'=<value>. Required for
+        ReportType='Assessment'.
     .PARAMETER Collate
         Request a single cross-tenant output. Only valid on types with collatable:true.
     .PARAMETER Force

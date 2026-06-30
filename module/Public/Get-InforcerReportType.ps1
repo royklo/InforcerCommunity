@@ -102,6 +102,7 @@ param(
                 if ($script:InforcerReportTypeCache) {
                     $tmp = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                     foreach ($e in $script:InforcerReportTypeCache) {
+                        if ($null -eq $e -or $e -isnot [PSObject]) { continue }
                         $tagsProp = $e.PSObject.Properties['tags']
                         if ($tagsProp) {
                             foreach ($t in @($tagsProp.Value)) {

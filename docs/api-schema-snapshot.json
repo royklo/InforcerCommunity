@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-04T07:09:05Z",
+  "generatedAt": "2026-07-05T07:15:59Z",
   "endpoints": {
     "GET /beta/tenants": {
       "properties": {
@@ -111,7 +111,7 @@
                   "_itemProperties": {
                     "subjectPolicySnapshotId": "string",
                     "subjectPolicySnapshotVersionId": "string",
-                    "subjectPolicyGuid": "string",
+                    "subjectPolicyGuid": "null",
                     "policyDataDiff": "array",
                     "policyAssignmentsDiff": "array",
                     "policyTags": "array",
@@ -124,7 +124,7 @@
                 "matchingVariables": "array",
                 "similarPolicies": "array",
                 "acceptedDeviations": "array",
-                "policyGuid": "string",
+                "policyGuid": "null",
                 "policyName": "string",
                 "policySnapshotId": "null",
                 "policySnapshotVersionId": "null",

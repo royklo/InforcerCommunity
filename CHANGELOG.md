@@ -20,6 +20,11 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
 - **Removed stale `PolicyDiffFormatted` mention** in `docs/CMDLET-REFERENCE.md` — the property was removed from the module in an earlier version (see FINDINGS #63) but one line in the docs was missed.
 - Added `Get-InforcerSecureScore` section to `docs/CMDLET-REFERENCE.md`; endpoint description, schemas (`TenantSecureScoreDetails`, `TenantSecureScoreHistoryPoint`, `TenantSecureScoreControlProfile`), and scope-mapping row added to `docs/API-REFERENCE.md`; cmdlet added to the README public-surface table.
 
+### Bug Fixes
+
+- **`Get-InforcerUser -UserId` was returning the wrong shape.** Live-API verification exposed this: without `-PreserveStructure`, `Invoke-InforcerApiRequest`'s "unwrap first array property of `.data`" convenience was unwrapping the user object's nested arrays (e.g. `groups`, `assignedLicenses`), so the cmdlet returned an array of group memberships instead of the user detail. `PSTypeName` was never applied. Fix: added `-PreserveStructure` to the API call.
+- **New `Get-InforcerSecureScore` needed the same fix on first flight** — same root cause, same defense (`-PreserveStructure` added). Live-verified: cmdlet now returns a single `InforcerCommunity.SecureScore` object with 90-day history, control profiles, and category scores populated as documented.
+
 ## [0.5.0] - 2026-06-30
 
 ### Features

@@ -1,31 +1,57 @@
 # Internal: returns audit event type names from the API.
 # Used by Get-InforcerAuditEvent when -EventType is omitted (resolve "all types").
-# Tab completion for -EventType uses the static list in Get-InforcerAuditEvent.ps1 so it always works.
-# Uses global cache for API response so "all types" resolution is consistent.
+# $global:InforcerCachedEventTypes is populated at module import from the static
+# fallback below, then refreshed with the live API response on the first
+# authenticated call. The -EventType ArgumentCompleter in Get-InforcerAuditEvent.ps1
+# reads this same variable, so tab completion tracks the server-side list once the
+# user is connected — no need to ship a module release when new event types arrive.
 
 if (-not $global:InforcerCachedEventTypes) {
+    # Static fallback used until an authenticated Get-InforcerSupportedEventType call
+    # refreshes this cache with the live server-side list. Kept alphabetically sorted so
+    # diffs against a live API dump are readable.
     $global:InforcerCachedEventTypes = @(
         'alertRuleCreate', 'alertRuleDelete', 'alertRuleUpdate',
-        'apiKeyCreate', 'apiKeyDelete', 'apiKeyUsage',
+        'apiKeyCreate', 'apiKeyDelete', 'apiKeyUpdate', 'apiKeyUsage',
+        'assignmentsModification',
         'authentication',
-        'clientAdminUpdated', 'clientCreated', 'clientLicenseUpdate', 'clientStatusChanged',
+        'clientAdminUpdated', 'clientCreated', 'clientLicenseUpdate',
+        'clientSsoConfigurationCreated', 'clientSsoConfigurationRemoved',
+        'clientSsoConfigurationToggled', 'clientSsoConfigurationUpdated',
+        'clientStatusChanged',
         'copilotAssessmentFailure', 'copilotAssessmentRun', 'copilotAssessmentSuccess',
+        'copilotManagerToggle',
         'failedAuthentication',
+        'onboardingLinkCreated', 'onboardingLinkDeleted',
+        'onboardingLinkSlugRotated', 'onboardingLinkUpdated',
         'policiesDelete', 'policiesDeployment', 'policiesRename', 'policiesRestore',
         'reportQueued',
         'salesAdminUpdated',
         'scheduleCreate', 'scheduleDelete', 'scheduleUpdate',
+        'securityGroupCreate', 'securityGroupDelete', 'securityGroupFilterUpdate',
+        'securityGroupMembersAdded', 'securityGroupMembersRemoved',
+        'securityGroupRoleUpdate', 'securityGroupUpdate',
         'sharedBaselinesManaged',
         'supportAccessInvoke',
         'tenantAssessmentFailure', 'tenantAssessmentRun', 'tenantAssessmentSuccess',
-        'tenantDelete', 'tenantGroupCreate', 'tenantGroupMembershipsModified', 'tenantGroupUpdate', 'tenantGroupsDeployment',
+        'tenantDelete',
+        'tenantGroupCreate', 'tenantGroupMembershipsModified',
+        'tenantGroupUpdate', 'tenantGroupsDeployment',
         'tenantLicenseUpdate', 'tenantOnboard', 'tenantRefresh',
-        'tenantUserCreate', 'tenantUserGroupMembershipModified', 'tenantUserLicensesModified',
-        'tenantUserOffboardingQueued', 'tenantUserResetMfa', 'tenantUserResetPassword',
-        'tenantUserRevokedSessions', 'tenantUserUpdate',
+        'tenantUserAuthenticationMethodDelete',
+        'tenantUserCreate', 'tenantUserGroupMembershipModified',
+        'tenantUserLicensesModified',
+        'tenantUserOffboardingFailed', 'tenantUserOffboardingQueued',
+        'tenantUserOffboardingScheduled', 'tenantUserOffboardingSucceeded',
+        'tenantUserResetMfa', 'tenantUserResetPassword',
+        'tenantUserRevokedSessions',
+        'tenantUserTemporaryAccessPassCreate',
+        'tenantUserUpdate',
         'userAutoProvision', 'userCreate', 'userDelete',
-        'userGroupCreate', 'userGroupDelete', 'userGroupMembershipModified', 'userGroupUpdate',
-        'userResetMfa', 'userResetPassword', 'userToggleEnable', 'userToggleSso'
+        'userGroupCreate', 'userGroupDelete',
+        'userGroupMembershipModified', 'userGroupUpdate',
+        'userResetMfa', 'userResetPassword',
+        'userToggleClientAdmin', 'userToggleEnable', 'userToggleSso'
     )
 }
 

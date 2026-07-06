@@ -98,7 +98,10 @@ function Get-InforcerUser {
             # --- ById: single user detail ---
             $endpoint = "/beta/tenants/$resolvedTenantId/users/$UserId"
             $err = $null
-            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -ErrorVariable err -ErrorAction SilentlyContinue
+            # -PreserveStructure: user detail response is a single object with many nested arrays
+            # (groups, roles, devices, appRoleAssignments, assignedLicenses, businessPhones, ...).
+            # Without it, Invoke-InforcerApiRequest would unwrap to the first array property.
+            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ErrorVariable err -ErrorAction SilentlyContinue
 
             if ($null -eq $response) {
                 # Only emit UserNotFound if API returned 404; otherwise the API helper already wrote the real error

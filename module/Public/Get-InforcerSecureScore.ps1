@@ -79,7 +79,12 @@ function Get-InforcerSecureScore {
         $endpoint = "/beta/tenants/$resolvedTenantId/secureScores"
         Write-Verbose "Retrieving secure score for tenant $resolvedTenantId..."
 
-        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject
+        # -PreserveStructure prevents Invoke-InforcerApiRequest from unwrapping the first array
+        # property of .data. The secure-score payload is a single object whose interesting
+        # content sits in its `scores`, `controlProfiles`, and `controlCategoryScores` arrays —
+        # without -PreserveStructure the caller would receive one of those inner arrays instead
+        # of the top-level tenantSecureScoreDetails object.
+        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure
         if ($null -eq $response) { return }
 
         if ($OutputType -eq 'JsonObject') {

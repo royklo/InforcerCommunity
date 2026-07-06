@@ -429,6 +429,31 @@ function Add-InforcerPropertyAliases {
                         }
                     }
                 }
+                # Nested per-category scores
+                $ccsProp = $obj.PSObject.Properties['controlCategoryScores']
+                if ($ccsProp -and $null -ne $ccsProp.Value) {
+                    foreach ($cc in @($ccsProp.Value)) {
+                        if ($cc -is [PSObject]) {
+                            AddAliasIfExists $cc 'ControlCategory' 'controlCategory'
+                            AddAliasIfExists $cc 'CurrentScore' 'currentScore'
+                            AddAliasIfExists $cc 'CurrentScorePercentage' 'currentScorePercentage'
+                            AddAliasIfExists $cc 'MaxScore' 'maxScore'
+                            AddAliasIfExists $cc 'HistoricScores' 'historicScores'
+                            # Historic score points inside each category
+                            $hsProp = $cc.PSObject.Properties['historicScores']
+                            if ($hsProp -and $null -ne $hsProp.Value) {
+                                foreach ($h in @($hsProp.Value)) {
+                                    if ($h -is [PSObject]) {
+                                        AddAliasIfExists $h 'CreatedDateTime' 'createdDateTime'
+                                        AddAliasIfExists $h 'CurrentScore' 'currentScore'
+                                        AddAliasIfExists $h 'CurrentScorePercentage' 'currentScorePercentage'
+                                        AddAliasIfExists $h 'MaxScore' 'maxScore'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

@@ -69,30 +69,15 @@ param(
             $prefix = ($prefix -split ',' | ForEach-Object { $_.Trim() })[-1]
         }
         $prefix = $prefix.Trim()
-        # Inline list so completer never depends on script scope (avoids path completion fallback)
-        $types = @(
-            'alertRuleCreate', 'alertRuleDelete', 'alertRuleUpdate',
-            'apiKeyCreate', 'apiKeyDelete', 'apiKeyUsage',
-            'authentication',
-            'clientAdminUpdated', 'clientCreated', 'clientLicenseUpdate', 'clientStatusChanged',
-            'copilotAssessmentFailure', 'copilotAssessmentRun', 'copilotAssessmentSuccess',
-            'failedAuthentication',
-            'policiesDelete', 'policiesDeployment', 'policiesRename', 'policiesRestore',
-            'reportQueued',
-            'salesAdminUpdated',
-            'scheduleCreate', 'scheduleDelete', 'scheduleUpdate',
-            'sharedBaselinesManaged',
-            'supportAccessInvoke',
-            'tenantAssessmentFailure', 'tenantAssessmentRun', 'tenantAssessmentSuccess',
-            'tenantDelete', 'tenantGroupCreate', 'tenantGroupMembershipsModified', 'tenantGroupUpdate', 'tenantGroupsDeployment',
-            'tenantLicenseUpdate', 'tenantOnboard', 'tenantRefresh',
-            'tenantUserCreate', 'tenantUserGroupMembershipModified', 'tenantUserLicensesModified',
-            'tenantUserOffboardingQueued', 'tenantUserResetMfa', 'tenantUserResetPassword',
-            'tenantUserRevokedSessions', 'tenantUserUpdate',
-            'userAutoProvision', 'userCreate', 'userDelete',
-            'userGroupCreate', 'userGroupDelete', 'userGroupMembershipModified', 'userGroupUpdate',
-            'userResetMfa', 'userResetPassword', 'userToggleEnable', 'userToggleSso'
-        )
+        # Dynamic: read $global:InforcerCachedEventTypes populated by Get-InforcerSupportedEventType.ps1
+        # at module import (static fallback) and refreshed with live data after any authenticated
+        # Get-InforcerSupportedEventType call. Two-item minimum fallback covers the case where a user
+        # somehow imports only Get-InforcerAuditEvent without the sibling file.
+        $types = if ($global:InforcerCachedEventTypes -and $global:InforcerCachedEventTypes.Count -gt 0) {
+            $global:InforcerCachedEventTypes
+        } else {
+            @('authentication', 'failedAuthentication')
+        }
         $filterByPrefix = $prefix -and $prefix -notmatch '^[./\\]'
         if ($filterByPrefix) {
             $filtered = @($types | Where-Object { $_ -like "$prefix*" })

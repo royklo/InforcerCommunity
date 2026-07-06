@@ -582,5 +582,27 @@
       </ListControl>
     </View>
 
+    <View>
+      <Name>InforcerCommunity.SecureScore.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.SecureScore</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>CurrentScore</Label><PropertyName>CurrentScore</PropertyName></ListItem>
+              <ListItem><Label>MaxScore</Label><PropertyName>MaxScore</PropertyName></ListItem>
+              <ListItem><Label>CurrentScorePercentage</Label><PropertyName>CurrentScorePercentage</PropertyName></ListItem>
+              <ListItem><Label>LicensedUserCount</Label><PropertyName>LicensedUserCount</PropertyName></ListItem>
+              <ListItem><Label>EnabledServices</Label><ScriptBlock>if ($_.enabledServices) { ($_.enabledServices) -join ', ' } else { '' }</ScriptBlock></ListItem>
+              <ListItem><Label>ScoreHistoryDays</Label><ScriptBlock>if ($_.scores) { @($_.scores).Count } else { 0 }</ScriptBlock></ListItem>
+              <ListItem><Label>ControlProfilesCount</Label><ScriptBlock>if ($_.controlProfiles) { @($_.controlProfiles).Count } else { 0 }</ScriptBlock></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

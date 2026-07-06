@@ -18,6 +18,8 @@
     Start of date/time range (inclusive). Omit with DateTo = 10 years ago to now; if only DateTo set = 30 days before DateTo.
 .PARAMETER DateTo
     End of date/time range (inclusive). Omit with DateFrom = now (UTC).
+.PARAMETER User
+    Filter events server-side by this user (matches the `user` field in the API request body).
 .PARAMETER PageSize
     Page size per API request. Default 100.
 .PARAMETER MaxResults
@@ -112,6 +114,9 @@ param(
     [DateTime]$DateTo,
 
     [Parameter(Mandatory = $false)]
+    [string]$User,
+
+    [Parameter(Mandatory = $false)]
     [int]$PageSize = 100,
 
     [Parameter(Mandatory = $false)]
@@ -180,6 +185,9 @@ foreach ($batch in $typeBatches) {
             dateFrom   = $dateFromStr
             dateTo     = $dateToStr
             pageSize   = $PageSize
+        }
+        if ($User) {
+            $bodyObj['user'] = $User
         }
         if ($continuationToken) {
             $bodyObj['continuationToken'] = $continuationToken

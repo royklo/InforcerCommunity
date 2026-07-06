@@ -324,7 +324,7 @@ A JSON string (array of objects) with properties such as `tenantId`, `tenantFrie
 
 ## Get-InforcerAuditEvent
 
-Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-DateFrom`, `-DateTo`, `-PageSize`, and `-MaxResults`.
+Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-DateFrom`, `-DateTo`, `-User`, `-PageSize`, and `-MaxResults`.
 
 **Endpoints called**: `POST /beta/auditEvents/search`
 **Required API scope(s)**: `Audit.Read` *(not in the API team's published scope→route mapping — the route `/beta/auditEvents/search` is unmapped; `Audit.Read` is the assumed scope based on naming. Confirm with Inforcer API team.)*
@@ -336,6 +336,7 @@ Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-
 | **EventType** | String[] | No | Event types to include. Tab completion with supported event types. Omit for all types. |
 | **DateFrom** | DateTime | No | Start of date/time range (inclusive). |
 | **DateTo** | DateTime | No | End of date/time range (inclusive). |
+| **User** | String | No | Filter events server-side by this user (matches the `user` field in the API request body). |
 | **PageSize** | Int | No | Page size per API request. Default: 100. |
 | **MaxResults** | Int | No | Max events to return. 0 = no limit. Default: 0. |
 | **Format** | String | No | `Raw` (default). |
@@ -347,6 +348,7 @@ Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-
 Get-InforcerAuditEvent
 Get-InforcerAuditEvent -DateFrom (Get-Date).AddDays(-7) -DateTo (Get-Date)
 Get-InforcerAuditEvent -EventType authentication,failedAuthentication -DateFrom $from -DateTo $to
+Get-InforcerAuditEvent -User admin@contoso.com -DateFrom (Get-Date).AddDays(-30)
 Get-InforcerAuditEvent -OutputType JsonObject
 ```
 
@@ -537,6 +539,54 @@ IsBuiltIn    : True
 IsEnabled    : True
 IsPrivileged : True
 ```
+
+---
+
+## Get-InforcerSecureScore
+
+Retrieves the current and historic Microsoft Secure Score for a tenant, including up to 90 days of daily score history, per-category breakdown, and actionable control profiles with remediation guidance.
+
+**Endpoints called**: `GET /beta/tenants/{tenantId}/secureScores` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
+**Required API scope(s)**: `Tenants.SecureScores.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
+
+**Output schema**: [TenantSecureScore](./API-REFERENCE.md#tenantsecurescoredetails) — includes `Scores` (90-day history), `ControlProfiles` (actionable recommendations), and `ControlCategoryScores`.
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|--------------|
+| **TenantId** | Object | Yes | Inforcer tenant ID (numeric ID, GUID, or tenant name). Alias: `ClientTenantId`. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
+
+### Examples
+
+```powershell
+# Summary view for one tenant
+Get-InforcerSecureScore -TenantId 139
+
+# 90-day score history
+(Get-InforcerSecureScore -TenantId 139).Scores
+
+# Top 10 controls with the biggest score gap (highest-value remediation targets)
+(Get-InforcerSecureScore -TenantId 139).ControlProfiles |
+    Sort-Object ScoreDifference -Descending |
+    Select-Object Title, Service, CurrentScore, MaxScore, Remediation -First 10
+
+# Pipeline from Get-InforcerTenant
+Get-InforcerTenant -TenantId 139 | Get-InforcerSecureScore
+```
+
+### Example output (default list view)
+
+```
+CurrentScore           : 412.5
+MaxScore               : 640
+CurrentScorePercentage : 64.45
+LicensedUserCount      : 275
+EnabledServices        : AzureAD, Exchange, SharePoint, Defender
+ScoreHistoryDays       : 90
+ControlProfilesCount   : 128
+```
+
+Use `| Select-Object *` to see all properties including `Scores`, `ControlProfiles`, and `ControlCategoryScores`.
 
 ---
 

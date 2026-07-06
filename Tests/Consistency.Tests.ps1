@@ -30,12 +30,12 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 20
+        $script:expectedCount = 21
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
-            'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole',
+            'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore',
             'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
             'Get-InforcerAssessment', 'Invoke-InforcerAssessment',
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
@@ -48,11 +48,12 @@ Describe 'Consistency contract' {
             'Get-InforcerBaseline'          = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerTenantPolicies'    = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerAlignmentDetails'    = @('Format', 'TenantId', 'BaselineId', 'Tag', 'OutputType')
-            'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'PageSize', 'MaxResults', 'Format', 'OutputType')
+            'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'User', 'PageSize', 'MaxResults', 'Format', 'OutputType')
             'Get-InforcerSupportedEventType'    = @()
             'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'OutputType')
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
+            'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')
             'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
             'Compare-InforcerEnvironments'  = @('SourceTenantId', 'DestinationTenantId', 'SourceSession', 'DestinationSession', 'SourceBaselineId', 'DestinationBaselineId', 'IncludingAssignments', 'SettingsCatalogPath', 'FetchGraphData', 'ExcludeOS', 'PolicyNameFilter', 'OutputPath')
             'Get-InforcerAssessment'        = @('Format', 'OutputType')
@@ -84,7 +85,7 @@ Describe 'Consistency contract' {
     }
 
     It 'Get-* cmdlets that return API data have -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole')
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'OutputType'
@@ -192,6 +193,12 @@ Describe 'No-silent-failure contract' {
     It 'Get-InforcerRole produces an error when not connected' {
         $err = $null
         Get-InforcerRole -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Get-InforcerSecureScore produces an error when not connected' {
+        $err = $null
+        Get-InforcerSecureScore -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 
@@ -780,6 +787,47 @@ Describe 'Private helpers (via module scope)' {
                 $role.IsBuiltIn | Should -BeTrue
                 $role.IsEnabled | Should -BeTrue
                 $role.IsPrivileged | Should -BeTrue
+            }
+        }
+
+        It 'SecureScore: adds top-level and nested aliases' {
+            & (Get-Module InforcerCommunity) {
+                $secure = [PSCustomObject]@{
+                    currentScore = 412.5
+                    currentScorePercentage = 64.45
+                    maxScore = 640
+                    licensedUserCount = 275
+                    enabledServices = @('AzureAD','Exchange')
+                    scores = @(
+                        [PSCustomObject]@{ createdDateTime = '2026-07-01'; currentScore = 410; maxScore = 640 }
+                    )
+                    controlProfiles = @(
+                        [PSCustomObject]@{ id = 'mfa-admins'; title = 'Require MFA for admins'; controlCategory = 'Identity'; currentScore = 0; maxScore = 10; scoreDifference = 10 }
+                    )
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $secure -ObjectType SecureScore
+                $secure.CurrentScore | Should -Be 412.5
+                $secure.MaxScore | Should -Be 640
+                $secure.LicensedUserCount | Should -Be 275
+                $secure.EnabledServices | Should -Be @('AzureAD','Exchange')
+                $secure.Scores[0].CreatedDateTime | Should -Be '2026-07-01'
+                $secure.Scores[0].CurrentScore | Should -Be 410
+                $secure.ControlProfiles[0].Title | Should -Be 'Require MFA for admins'
+                $secure.ControlProfiles[0].ScoreDifference | Should -Be 10
+            }
+        }
+
+        It 'AuditEvent: adds Id alias' {
+            & (Get-Module InforcerCommunity) {
+                $ev = [PSCustomObject]@{
+                    id = 'e1a5-1234'
+                    eventType = 'authentication'
+                    timestamp = '2026-07-01T00:00:00Z'
+                    user = 'admin@contoso.com'
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $ev -ObjectType AuditEvent
+                $ev.Id | Should -Be 'e1a5-1234'
+                $ev.EventType | Should -Be 'authentication'
             }
         }
     }

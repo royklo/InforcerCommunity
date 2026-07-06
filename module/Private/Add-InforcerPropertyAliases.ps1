@@ -17,7 +17,7 @@ function Add-InforcerPropertyAliases {
         [object]$InputObject,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User', 'GroupSummary', 'Group', 'Role', 'Assessment', 'ReportType', 'ReportRun', 'ReportOutput')]
+        [ValidateSet('Tenant', 'Baseline', 'Policy', 'AlignmentScore', 'AlignmentDetail', 'AuditEvent', 'UserSummary', 'User', 'GroupSummary', 'Group', 'Role', 'Assessment', 'ReportType', 'ReportRun', 'ReportOutput', 'SecureScore')]
         [string]$ObjectType
     )
 
@@ -177,6 +177,7 @@ function Add-InforcerPropertyAliases {
                 }
             }
             'AuditEvent' {
+                AddAliasIfExists $obj 'Id' 'id'
                 AddAliasIfExists $obj 'CorrelationId' 'correlationId'
                 AddAliasIfExists $obj 'ClientId' 'clientId'
                 AddAliasIfExists $obj 'RelType' 'relType'
@@ -385,6 +386,49 @@ function Add-InforcerPropertyAliases {
                 AddAliasIfExists $obj 'ReportType' 'reportType'
                 AddAliasIfExists $obj 'OutputFormat' 'format'
                 AddAliasIfExists $obj 'FileSize' 'sizeBytes'
+            }
+            'SecureScore' {
+                AddAliasIfExists $obj 'CurrentScore' 'currentScore'
+                AddAliasIfExists $obj 'CurrentScorePercentage' 'currentScorePercentage'
+                AddAliasIfExists $obj 'MaxScore' 'maxScore'
+                AddAliasIfExists $obj 'LicensedUserCount' 'licensedUserCount'
+                AddAliasIfExists $obj 'EnabledServices' 'enabledServices'
+                AddAliasIfExists $obj 'Scores' 'scores'
+                AddAliasIfExists $obj 'ControlProfiles' 'controlProfiles'
+                AddAliasIfExists $obj 'ControlCategoryScores' 'controlCategoryScores'
+                # Nested historic score points
+                $scoresProp = $obj.PSObject.Properties['scores']
+                if ($scoresProp -and $null -ne $scoresProp.Value) {
+                    foreach ($s in @($scoresProp.Value)) {
+                        if ($s -is [PSObject]) {
+                            AddAliasIfExists $s 'CreatedDateTime' 'createdDateTime'
+                            AddAliasIfExists $s 'CurrentScore' 'currentScore'
+                            AddAliasIfExists $s 'CurrentScorePercentage' 'currentScorePercentage'
+                            AddAliasIfExists $s 'MaxScore' 'maxScore'
+                        }
+                    }
+                }
+                # Nested control profiles
+                $cpProp = $obj.PSObject.Properties['controlProfiles']
+                if ($cpProp -and $null -ne $cpProp.Value) {
+                    foreach ($c in @($cpProp.Value)) {
+                        if ($c -is [PSObject]) {
+                            AddAliasIfExists $c 'Id' 'id'
+                            AddAliasIfExists $c 'Title' 'title'
+                            AddAliasIfExists $c 'ControlCategory' 'controlCategory'
+                            AddAliasIfExists $c 'Service' 'service'
+                            AddAliasIfExists $c 'CurrentScore' 'currentScore'
+                            AddAliasIfExists $c 'CurrentScorePercentage' 'currentScorePercentage'
+                            AddAliasIfExists $c 'MaxScore' 'maxScore'
+                            AddAliasIfExists $c 'MaxScorePercentage' 'maxScorePercentage'
+                            AddAliasIfExists $c 'ScoreDifference' 'scoreDifference'
+                            AddAliasIfExists $c 'ScoreDifferencePercentage' 'scoreDifferencePercentage'
+                            AddAliasIfExists $c 'Remediation' 'remediation'
+                            AddAliasIfExists $c 'RemediationImpact' 'remediationImpact'
+                            AddAliasIfExists $c 'ActionUrl' 'actionUrl'
+                        }
+                    }
+                }
             }
         }
 

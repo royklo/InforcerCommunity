@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
     Retrieves baseline information from the Inforcer API.
+
+    Required API scope(s): Baselines.Read
 .DESCRIPTION
     Retrieves baseline groups and members. Optionally filter by -TenantId (owner or member).
 .PARAMETER Format

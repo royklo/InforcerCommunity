@@ -104,7 +104,7 @@ When not connected, an error is written (e.g. "Not connected. To connect, run: C
 
 ## Get-InforcerTenant
 
-Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
+Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; `PolicyDiff` shows policy change info when the API provides it.
 
 **Endpoints called**: `GET /beta/tenants`
 **Required API scope(s)**: `Tenants.Read`

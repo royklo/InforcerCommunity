@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
     Retrieves audit events from the Inforcer API.
+
+    Required API scope(s): Audit.Read (unconfirmed — see docs/API-REFERENCE.md)
 .DESCRIPTION
     POST /beta/auditEvents/search. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
     When -EventType is not specified, uses all event types from the API (or fallback authentication, failedAuthentication).

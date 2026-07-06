@@ -34,6 +34,8 @@ function Get-InforcerSupportedEventType {
     .SYNOPSIS
     Returns a list of available audit event types from the Inforcer API.
 
+    Required API scope(s): Audit.Read (unconfirmed — see docs/API-REFERENCE.md)
+
     .DESCRIPTION
     Retrieves the valid event type names that can be used with Get-InforcerAuditEvent.
     This function is primarily used for tab completion of the -EventType parameter in Get-InforcerAuditEvent.

@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
     Retrieves tenant information from the Inforcer API.
+
+    Required API scope(s): Tenants.Read
 .DESCRIPTION
     Lists tenants. Optionally filter by -TenantId (numeric ID, Microsoft Tenant ID GUID, or tenant name).
     Output includes PascalCase aliases (e.g. ClientTenantId, TenantFriendlyName). When the API

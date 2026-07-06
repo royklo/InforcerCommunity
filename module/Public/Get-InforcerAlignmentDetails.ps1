@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
     Retrieves alignment scores or alignment details from the Inforcer API.
+
+    Required API scope(s): Baselines.Read + AlignmentScores.Read + Tenants.Read + tenants.policies.Read
 .DESCRIPTION
     Without -BaselineId: retrieves alignment score summaries (table or raw).
     With -BaselineId: retrieves detailed alignment data including metrics,

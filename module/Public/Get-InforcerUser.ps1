@@ -3,6 +3,8 @@ function Get-InforcerUser {
     .SYNOPSIS
         Retrieves users from an Inforcer tenant.
 
+        Required API scope(s): Tenants.Users.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+
     .DESCRIPTION
         Gets a list of users or a single user by ID from the Inforcer API.
         When called without -UserId, returns all users (UserSummary objects) with optional search filtering and auto-pagination.

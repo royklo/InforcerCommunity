@@ -3404,7 +3404,8 @@
       "url": "https://inforcer.com"
     },
     "description": "The inforcer Public API built for developers",
-    "title": "inforcer | Public API"
+    "title": "inforcer | Public API",
+    "version": "1.0.0"
   },
   "openapi": "3.0.1",
   "paths": {
@@ -4404,6 +4405,11 @@
   "security": [
     {
       "apiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:7072/api"
     }
   ],
   "tags": [

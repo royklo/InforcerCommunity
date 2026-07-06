@@ -1,0 +1,4437 @@
+{
+  "components": {
+    "responses": {
+      "conflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "conflict": {
+                "value": {
+                  "errors": [
+                    "The resource is already in use"
+                  ],
+                  "message": "A conflict occurred",
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/errorResponse"
+            }
+          }
+        },
+        "description": "A response returned when a conflict occurs"
+      },
+      "forbidden": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "forbidden": {
+                "value": {
+                  "errors": [
+                    "First years are not permitted to access the Forbidden Forest"
+                  ],
+                  "message": "Client tenant verification failed",
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/errorResponse"
+            }
+          }
+        },
+        "description": "You are not permitted to carry out this operation"
+      },
+      "internalServerError": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "Internal Server Error": {
+                "value": {
+                  "errors": [
+                    "It was the weasel"
+                  ],
+                  "message": "Something went pop",
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/errorResponse"
+            }
+          }
+        },
+        "description": "An unexpected error occurred"
+      },
+      "invalidRequest": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "badRequest": {
+                "value": {
+                  "errors": [
+                    "userId is required and must be a valid integer"
+                  ],
+                  "message": "One or more validation errors occurred",
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/errorResponse"
+            }
+          }
+        },
+        "description": "The request was invalid"
+      },
+      "notFoundError": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "notFoundError": {
+                "value": {
+                  "errors": [
+                    "Could not find the magic"
+                  ],
+                  "message": "The resource 'derp' could not be found",
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/errorResponse"
+            }
+          }
+        },
+        "description": "A response returned when a resource cannot be found"
+      },
+      "unauthorized": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "unauthorized": {
+                "value": {
+                  "errors": [
+                    "Please verify your credentials"
+                  ],
+                  "message": "Your credentials are invalid or you are not logged in",
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/errorResponse"
+            }
+          }
+        },
+        "description": "You are not authorized to access this endpoint"
+      }
+    },
+    "schemas": {
+      "acceptedDeviationDetail": {
+        "additionalProperties": false,
+        "description": "Details of an accepted deviation",
+        "properties": {
+          "acceptAllChanges": {
+            "description": "Indicates that the deviation applied without individual patch operations",
+            "type": "boolean"
+          },
+          "acceptedByUserId": {
+            "description": "ID of user who accepted the deviation",
+            "nullable": true,
+            "type": "integer"
+          },
+          "acceptedByUsername": {
+            "description": "Username who accepted the deviation",
+            "nullable": true,
+            "type": "string"
+          },
+          "acceptedDateTime": {
+            "description": "When the deviation was accepted",
+            "format": "date-time",
+            "type": "string"
+          },
+          "acceptedReason": {
+            "description": "Reason for accepting the deviation",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "ID of the accepted deviation",
+            "nullable": true,
+            "type": "string"
+          },
+          "isObsolete": {
+            "description": "Indicates that this accepted deviation was not applied because it is obsolete (policies now align without it)",
+            "type": "boolean"
+          },
+          "originalBaselineValue": {
+            "description": "The original baseline value when the deviation was created (stringified JSON). May not reflect current baseline state.",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyAssignmentsDiff": {
+            "description": "Assignment JSON patch operations associated with the accepted deviation",
+            "items": {
+              "$ref": "#/components/schemas/patchOperation"
+            },
+            "type": "array"
+          },
+          "policyDataDiff": {
+            "description": "Policy JSON patch operations associated with the accepted deviation",
+            "items": {
+              "$ref": "#/components/schemas/patchOperation"
+            },
+            "type": "array"
+          },
+          "validUntil": {
+            "description": "(Optional) The date/time until which this deviation is valid",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "acceptedDateTime"
+        ],
+        "type": "object"
+      },
+      "alignmentMetricsData": {
+        "additionalProperties": false,
+        "description": "Calculated alignment statistics",
+        "properties": {
+          "customerOnlyPolicies": {
+            "description": "Number of policies present only in the customer tenant and not in baseline",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "deviatedPolicies": {
+            "description": "Number of policies with unaccepted deviations",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "matchedPolicies": {
+            "description": "Number of exactly matched policies",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "matchedWithAcceptedDeviations": {
+            "description": "Number of policies matched using accepted deviations",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "recommendedPoliciesFromBaseline": {
+            "description": "Number of policies recommended from baseline that are missing from subject",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totalPolicies": {
+            "description": "Total number of policies compared",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalPolicies",
+          "matchedPolicies",
+          "matchedWithAcceptedDeviations",
+          "deviatedPolicies",
+          "recommendedPoliciesFromBaseline",
+          "customerOnlyPolicies"
+        ],
+        "type": "object"
+      },
+      "alignmentScore": {
+        "additionalProperties": false,
+        "description": "The alignment score for a tenant",
+        "properties": {
+          "baselineGroupId": {
+            "description": "The ID of the aligned baseline",
+            "format": "guid",
+            "type": "string"
+          },
+          "baselineGroupName": {
+            "description": "The name of the aligned baseline",
+            "type": "string"
+          },
+          "lastComparisonDateTime": {
+            "description": "The last time the tenant was aligned",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "score": {
+            "description": "The alignment score of the tenant",
+            "type": "number"
+          },
+          "tenantFriendlyName": {
+            "description": "The friendly name of the tenant",
+            "type": "string"
+          },
+          "tenantId": {
+            "description": "The unique identifier for the tenant",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "alignmentScoresResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/alignmentScore"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "alignmentSummary": {
+        "additionalProperties": false,
+        "description": "Summary of alignment scores for a tenant",
+        "properties": {
+          "alignedBaselineId": {
+            "description": "The ID of the aligned baseline",
+            "format": "guid",
+            "type": "string"
+          },
+          "alignedBaselineName": {
+            "description": "The name of the aligned baseline",
+            "type": "string"
+          },
+          "alignedBaselineTenantId": {
+            "description": "The ID of the tenant",
+            "type": "integer"
+          },
+          "alignedThreshold": {
+            "description": "The threshold for the alignment score",
+            "type": "number"
+          },
+          "alignmentScore": {
+            "description": "The alignment score of the tenant",
+            "type": "number"
+          },
+          "lastAlignmentDateTime": {
+            "description": "The last time the tenant was aligned",
+            "format": "date-time",
+            "type": "string"
+          },
+          "semiAlignedThreshold": {
+            "description": "The semi-aligned threshold for the alignment score",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "appRoleAssignment": {
+        "additionalProperties": false,
+        "properties": {
+          "appRoleId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "principalDisplayName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "principalId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "principalType": {
+            "nullable": true,
+            "type": "string"
+          },
+          "resourceDisplayName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "resourceId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "assessment": {
+        "additionalProperties": false,
+        "description": "An assessment available for evaluation",
+        "properties": {
+          "assessmentType": {
+            "description": "The type of assessment (e.g. platform, custom, community)",
+            "nullable": true,
+            "type": "string"
+          },
+          "created": {
+            "description": "When the assessment was created",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "description": {
+            "description": "A description of the assessment",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "The unique identifier for the assessment",
+            "type": "string"
+          },
+          "lastUpdated": {
+            "description": "When the assessment was last updated",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "description": "The name of the assessment",
+            "type": "string"
+          },
+          "tags": {
+            "description": "Tags associated with the assessment",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "assessmentRunData": {
+        "additionalProperties": false,
+        "description": "The results of an assessment run",
+        "properties": {
+          "assessment": {
+            "description": "The ID of the assessment that was run",
+            "type": "string"
+          },
+          "name": {
+            "description": "The name of the assessment that was run",
+            "nullable": true,
+            "type": "string"
+          },
+          "results": {
+            "description": "The compliance check results",
+            "items": {
+              "$ref": "#/components/schemas/complianceCheckResult"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "assessmentRunResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/assessmentRunData"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "assessmentsResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/assessment"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "auditEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "clientId": {
+            "description": "The client tenant ID associated with the event",
+            "type": "integer"
+          },
+          "code": {
+            "description": "A code associated with the event",
+            "type": "string"
+          },
+          "correlationId": {
+            "description": "The correlation ID for the activity log event, used to group related events together",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "eventType": {
+            "description": "The type of the event",
+            "type": "string"
+          },
+          "id": {
+            "description": "The unique identifier for the activity log event",
+            "format": "guid",
+            "type": "string"
+          },
+          "message": {
+            "deprecated": true,
+            "description": "A message associated with the event",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "description": "A dynamic object containing information related to the audit event",
+            "nullable": true,
+            "type": "object"
+          },
+          "relId": {
+            "description": "The ID of the related entity for the event, if applicable",
+            "nullable": true,
+            "type": "string"
+          },
+          "relType": {
+            "description": "The type of the related entity for the event, if applicable",
+            "nullable": true,
+            "type": "string"
+          },
+          "timestamp": {
+            "description": "The time the event occurred",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "user": {
+            "description": "The user associated with the event",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "baseResponseEnvelope": {
+        "additionalProperties": false,
+        "description": "The common properties of responses",
+        "properties": {
+          "errors": {
+            "default": [],
+            "description": "Any errors that occurred during the request",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "message": {
+            "description": "An optional message",
+            "nullable": true,
+            "type": "string"
+          },
+          "success": {
+            "description": "Whether the request was successful",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "baselineGroup": {
+        "additionalProperties": false,
+        "description": "The alignment score for a tenant",
+        "properties": {
+          "alignedThreshold": {
+            "description": "The threshold for the alignment score",
+            "type": "number"
+          },
+          "autoAddNewPolicies": {
+            "description": "Whether new policies are automatically added to the baseline group",
+            "type": "boolean"
+          },
+          "baselineClientTenantId": {
+            "description": "The unique identifier for the baseline tenant",
+            "type": "integer"
+          },
+          "baselineMsTenantId": {
+            "description": "The Microsoft tenant ID for the baseline tenant",
+            "format": "guid",
+            "type": "string"
+          },
+          "baselineTenantDnsName": {
+            "description": "The DNS name of the baseline tenant",
+            "type": "string"
+          },
+          "baselineTenantFriendlyName": {
+            "description": "The name of the baseline tenant",
+            "type": "string"
+          },
+          "id": {
+            "description": "The unique identifier for the baseline group",
+            "format": "guid",
+            "type": "string"
+          },
+          "isComplete": {
+            "description": "Whether this is a full or partial baseline",
+            "type": "boolean"
+          },
+          "isShared": {
+            "description": "Whether this baseline is shared",
+            "type": "boolean"
+          },
+          "items": {
+            "description": "List of policy items explicitly configured for this baseline. Each item contains a policy snapshot ID and an alignment assignment flag. This field is null when the baseline does not use explicit items and instead relies on automatic inclusion or exclusion rules.",
+            "items": {
+              "$ref": "#/components/schemas/includedBaselineItem"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "members": {
+            "default": [],
+            "description": "The members of the baseline group",
+            "items": {
+              "$ref": "#/components/schemas/baselineMember"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "description": "The mode of the baseline group (e.g. include, exclude)",
+            "type": "string"
+          },
+          "name": {
+            "description": "The name of the baseline group",
+            "type": "string"
+          },
+          "semiAlignedThreshold": {
+            "description": "The semi-aligned threshold for the alignment score",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "baselineGroupsResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/baselineGroup"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "baselineMember": {
+        "additionalProperties": false,
+        "description": "A member of a baseline group",
+        "properties": {
+          "clientTenantId": {
+            "description": "The unique identifier for the tenant",
+            "type": "integer"
+          },
+          "msTenantId": {
+            "description": "The Microsoft tenant ID for the tenant",
+            "format": "guid",
+            "type": "string"
+          },
+          "tenantDnsName": {
+            "description": "The DNS name of the tenant",
+            "type": "string"
+          },
+          "tenantFriendlyName": {
+            "description": "The name of the tenant",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "complianceCheckFinding": {
+        "additionalProperties": false,
+        "description": "The evaluation outcome for a compliance check against the tenant",
+        "properties": {
+          "compliant": {
+            "description": "Whether the tenant fully passes this check. True means all evaluated objects meet the required configuration",
+            "type": "boolean"
+          },
+          "message": {
+            "description": "A human-readable summary of the finding (e.g. \"3 out of 5 objects are fully-compliant with this check\")",
+            "nullable": true,
+            "type": "string"
+          },
+          "scores": {
+            "description": "Individual scores for each policy or setting evaluated by this check",
+            "items": {
+              "$ref": "#/components/schemas/complianceCheckScore"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "complianceCheckResult": {
+        "additionalProperties": false,
+        "description": "A single compliance check that was evaluated against the tenant's configuration",
+        "properties": {
+          "category": {
+            "description": "The product area this check applies to (e.g. Entra, Sharepoint, Exchange)",
+            "type": "string"
+          },
+          "created": {
+            "description": "When this check definition was created",
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "description": "A detailed explanation of what this check evaluates and why it matters, including recommended configuration",
+            "type": "string"
+          },
+          "findings": {
+            "$ref": "#/components/schemas/complianceCheckFinding"
+          },
+          "frameworks": {
+            "description": "Industry frameworks or standards that reference this check (e.g. CIS Benchmark)",
+            "items": {
+              "$ref": "#/components/schemas/complianceFramework"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "The unique identifier for this check",
+            "type": "string"
+          },
+          "impact": {
+            "description": "A description of the operational impact of enabling the recommended configuration",
+            "nullable": true,
+            "type": "string"
+          },
+          "importance": {
+            "description": "The severity level of this check — high, medium, or low",
+            "type": "string"
+          },
+          "key": {
+            "description": "A unique machine-readable identifier for this check (e.g. ensure_mfa_enabled_for_all_users)",
+            "type": "string"
+          },
+          "lastUpdated": {
+            "description": "When this check definition was last updated",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "A human-readable name describing what this check evaluates",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "The security or compliance rationale for why this check is recommended",
+            "nullable": true,
+            "type": "string"
+          },
+          "remediation": {
+            "description": "Step-by-step instructions (in markdown) for how to fix a non-compliant result, including UI and PowerShell methods",
+            "nullable": true,
+            "type": "string"
+          },
+          "subCategory": {
+            "description": "A more specific grouping within the category (e.g. Policies, Authentication)",
+            "type": "string"
+          },
+          "tags": {
+            "description": "Labels for filtering and grouping checks (e.g. security, compliance, copilot readiness)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "description": "The version number of this check definition",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "complianceCheckScore": {
+        "additionalProperties": false,
+        "description": "The evaluation score for a single policy or setting against a compliance check",
+        "properties": {
+          "objectId": {
+            "description": "The identifier of the evaluated policy or setting",
+            "type": "string"
+          },
+          "objectName": {
+            "description": "The display name of the evaluated policy or setting",
+            "nullable": true,
+            "type": "string"
+          },
+          "passes": {
+            "description": "List of conditions that the object met successfully",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "score": {
+            "description": "Compliance score from 0 to 100, where 100 means fully compliant and 0 means fully non-compliant",
+            "type": "number"
+          },
+          "violations": {
+            "description": "List of conditions that the object failed to meet",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "description": "List of conditions that may need attention but are not strict failures",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "complianceFramework": {
+        "additionalProperties": false,
+        "description": "An industry framework or standard that a compliance check is mapped to",
+        "properties": {
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Framework-specific fields such as control number and compliance level (e.g. control, level)",
+            "type": "object"
+          },
+          "name": {
+            "description": "The name of the framework (e.g. CIS Microsoft 365 Foundations Benchmark v6.0.0)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "directoryObject": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "errorResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "default": {},
+                "type": "object"
+              },
+              "errorCode": {
+                "description": "The error code for the failure",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "description": "The response to a request that failed",
+        "type": "object"
+      },
+      "eventType": {
+        "additionalProperties": false,
+        "description": "A type that an event may have",
+        "properties": {
+          "name": {
+            "description": "name of the event type",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "eventTypesResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/eventType"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "getUserResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/user"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "description": "The response to a request to get a single tenant user",
+        "type": "object"
+      },
+      "getUserSummariesResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "continuationToken": {
+                "description": "A token that can be used to continue the search if there are more results",
+                "nullable": true,
+                "type": "string"
+              },
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/userSummary"
+                },
+                "type": "array"
+              },
+              "totalCount": {
+                "format": "int64",
+                "nullable": false,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "totalCount",
+              "data"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "The response to a request to search tenant users",
+        "type": "object"
+      },
+      "includedBaselineItem": {
+        "additionalProperties": false,
+        "description": "An item included in a custom baseline. Can be a specific policy, nested baseline, or category-based item.",
+        "properties": {
+          "alignAssignments": {
+            "default": true,
+            "description": "Whether policy assignments for this item are aligned",
+            "type": "boolean"
+          },
+          "childCustomBaselineId": {
+            "description": "The child baseline ID if this is a nested baseline item",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyCategoryPrimaryGroup": {
+            "description": "The primary group category (e.g. Settings, Exchange, Windows) for category-based items (requires policyCategoryProduct)",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyCategoryProduct": {
+            "description": "The product category (e.g., Intune, Entra, Defender) for category-based items",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyCategorySecondaryGroup": {
+            "description": "The secondary group category (e.g. Custom Indicators, Sensitivity Labels, Compliance Policies) for category-based items (requires policyCategoryProduct and policyCategoryPrimaryGroup)",
+            "nullable": true,
+            "type": "string"
+          },
+          "policySnapshotId": {
+            "description": "The policy snapshot ID included in the baseline",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "matchedSubjectPolicy": {
+        "additionalProperties": false,
+        "description": "Information about a single subject policy that matched the baseline policy",
+        "properties": {
+          "acceptedDeviations": {
+            "description": "All accepted deviations for this specific subject policy match, ordered by acceptance date (newest first)",
+            "items": {
+              "$ref": "#/components/schemas/acceptedDeviationDetail"
+            },
+            "type": "array"
+          },
+          "policyAssignmentsDiff": {
+            "description": "Policy assignment differences for this specific subject policy",
+            "items": {
+              "$ref": "#/components/schemas/patchOperation"
+            },
+            "type": "array"
+          },
+          "policyDataDiff": {
+            "description": "Policy data differences for this specific subject policy",
+            "items": {
+              "$ref": "#/components/schemas/patchOperation"
+            },
+            "type": "array"
+          },
+          "policyTags": {
+            "description": "Policy tags associated with this subject policy",
+            "items": {
+              "$ref": "#/components/schemas/policyTag"
+            },
+            "type": "array"
+          },
+          "subjectPolicyGuid": {
+            "description": "GUID of the subject policy",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "subjectPolicySnapshotId": {
+            "description": "ID of the subject policy snapshot",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "subjectPolicySnapshotVersionId": {
+            "description": "ID of the subject policy snapshot version",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "subjectPolicyGuid",
+          "policyDataDiff",
+          "policyAssignmentsDiff"
+        ],
+        "type": "object"
+      },
+      "patchOperation": {
+        "additionalProperties": false,
+        "description": "A single JSON patch operation",
+        "properties": {
+          "baselineValue": {
+            "description": "Value in the baseline policy (stringified JSON)",
+            "nullable": true,
+            "type": "string"
+          },
+          "op": {
+            "description": "The patch operation type",
+            "type": "string"
+          },
+          "path": {
+            "description": "JSON path to the changed property",
+            "type": "string"
+          },
+          "subjectValue": {
+            "description": "Value in the subject policy (stringified JSON)",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "path"
+        ],
+        "type": "object"
+      },
+      "policy": {
+        "additionalProperties": false,
+        "description": "A policy associated with a tenant",
+        "properties": {
+          "description": {
+            "description": "A description of the policy",
+            "type": "string"
+          },
+          "displayName": {
+            "description": "The display name of the policy",
+            "nullable": true,
+            "type": "string"
+          },
+          "friendlyName": {
+            "description": "The friendly name of the policy",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the policy",
+            "type": "string"
+          },
+          "name": {
+            "description": "The name of the policy",
+            "nullable": true,
+            "type": "string"
+          },
+          "platform": {
+            "description": "The platform of the policy, used for categorization",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyCategoryId": {
+            "description": "The ID of the policy category",
+            "nullable": true,
+            "type": "integer"
+          },
+          "policyData": {
+            "additionalProperties": true,
+            "description": "The policy data",
+            "type": "object"
+          },
+          "policyTypeId": {
+            "description": "The ID of the policy type",
+            "type": "integer"
+          },
+          "primaryGroup": {
+            "description": "The primary group of the policy, used for categorization",
+            "type": "string"
+          },
+          "product": {
+            "description": "The product of the policy, used for categorization",
+            "type": "string"
+          },
+          "readOnly": {
+            "description": "Whether the policy is read-only",
+            "type": "boolean"
+          },
+          "secondaryGroup": {
+            "description": "The secondary group of the policy, used for categorization",
+            "nullable": true,
+            "type": "string"
+          },
+          "tags": {
+            "default": [],
+            "description": "Tags associated with the policy",
+            "items": {
+              "$ref": "#/components/schemas/policyTag"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "policyComparisonDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/policyDetail"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "acceptedDeviations": {
+                "description": "All accepted deviations for missing policies, ordered by acceptance date (newest first)",
+                "items": {
+                  "$ref": "#/components/schemas/acceptedDeviationDetail"
+                },
+                "type": "array"
+              },
+              "baselinePolicySnapshotId": {
+                "description": "ID of the baseline policy snapshot",
+                "format": "guid",
+                "type": "string"
+              },
+              "baselinePolicySnapshotVersionId": {
+                "description": "ID of the baseline policy snapshot version",
+                "format": "guid",
+                "type": "string"
+              },
+              "isAdditionalInSubject": {
+                "description": "Whether this policy is missing from the baseline tenant",
+                "type": "boolean"
+              },
+              "isDeviation": {
+                "description": "Whether this represents a policy deviation",
+                "type": "boolean"
+              },
+              "isMissingFromSubject": {
+                "description": "Whether this policy is missing from the subject tenant",
+                "type": "boolean"
+              },
+              "matchingSubjectPolicies": {
+                "description": "All subject policies that matched this baseline policy",
+                "items": {
+                  "$ref": "#/components/schemas/matchedSubjectPolicy"
+                },
+                "type": "array"
+              },
+              "matchingVariables": {
+                "description": "Variable substitution details found during policy comparison",
+                "items": {
+                  "$ref": "#/components/schemas/variableSubstitutionDetail"
+                },
+                "type": "array"
+              },
+              "similarPolicies": {
+                "description": "Information about similar policies found",
+                "items": {
+                  "$ref": "#/components/schemas/similarPolicyResult"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "matchingSubjectPolicies",
+              "isDeviation",
+              "isMissingFromSubject",
+              "isAdditionalInSubject",
+              "matchingVariables"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "Detailed information about a single policy comparison result"
+      },
+      "policyDetail": {
+        "additionalProperties": false,
+        "description": "Detailed information about a single policy snapshot",
+        "properties": {
+          "description": {
+            "description": "Policy description from the policyJson if available",
+            "nullable": true,
+            "type": "string"
+          },
+          "fullAccessLicenseRequirements": {
+            "description": "Tenant requires one or more of these licenses for full access to this policy",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "inforcerPolicyTypeName": {
+            "description": "Friendly policy type name used in inforcer",
+            "type": "string"
+          },
+          "isPolicyDeleteDisabled": {
+            "description": "Whether delete protection is enabled for this policy",
+            "type": "boolean"
+          },
+          "isPolicyDeployable": {
+            "description": "Whether this policy can be deployed",
+            "type": "boolean"
+          },
+          "platform": {
+            "description": "The platform from policy category (e.g., Android Device Administrator)",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyCategoryId": {
+            "description": "Policy category identifier",
+            "nullable": true,
+            "type": "integer"
+          },
+          "policyGuid": {
+            "description": "GUID of the policy",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyName": {
+            "description": "Name of the policy",
+            "type": "string"
+          },
+          "policySnapshotId": {
+            "description": "ID of the current policy snapshot",
+            "format": "guid",
+            "type": "string"
+          },
+          "policySnapshotVersionId": {
+            "description": "ID of the current policy snapshot version",
+            "format": "guid",
+            "type": "string"
+          },
+          "policyTags": {
+            "description": "Policy tags associated with the policy",
+            "items": {
+              "$ref": "#/components/schemas/policyTag"
+            },
+            "type": "array"
+          },
+          "policyTypeId": {
+            "description": "Policy type identifier",
+            "type": "integer"
+          },
+          "primaryGroup": {
+            "description": "The primary group from policy category (e.g., Android, iOS)",
+            "nullable": true,
+            "type": "string"
+          },
+          "product": {
+            "description": "The top-level product from policy category (e.g., Intune, Exchange)",
+            "nullable": true,
+            "type": "string"
+          },
+          "readOnly": {
+            "description": "Whether the policy is read-only",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "secondaryGroup": {
+            "description": "The secondary group from policy category (e.g., Configuration Profiles)",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "policyName",
+          "policyTypeId",
+          "inforcerPolicyTypeName",
+          "isPolicyDeleteDisabled",
+          "isPolicyDeployable",
+          "policyTags",
+          "fullAccessLicenseRequirements"
+        ],
+        "type": "object"
+      },
+      "policyTag": {
+        "additionalProperties": false,
+        "description": "A tag associated with a tenant",
+        "properties": {
+          "description": {
+            "description": "A description of the tag",
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the tag",
+            "format": "guid",
+            "type": "string"
+          },
+          "name": {
+            "description": "The name of the tag",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "reportParameter": {
+        "additionalProperties": false,
+        "description": "A parameter that must be supplied when triggering a report. The `key`\nis passed in the `parameters` map of the trigger request, paired with\none of the `options` values (or a free-form value if `options` is absent).\n",
+        "properties": {
+          "description": {
+            "description": "Description of what this parameter controls.",
+            "example": "Report Period",
+            "type": "string"
+          },
+          "key": {
+            "description": "The parameter key to pass in the `parameters` map when triggering\na report run. Treat as an opaque identifier defined by the report type.\n",
+            "example": "report-period",
+            "type": "string"
+          },
+          "options": {
+            "description": "When present, the value supplied for this parameter must be the `key`\nof one of these options. When absent, any string value is accepted.\n",
+            "items": {
+              "$ref": "#/components/schemas/reportParameterOption"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "description"
+        ],
+        "type": "object"
+      },
+      "reportParameterOption": {
+        "additionalProperties": false,
+        "description": "An allowed value for a report parameter that has a fixed set of choices.",
+        "properties": {
+          "description": {
+            "description": "The description for this option, suitable for display to a user.",
+            "example": "Last 30 days",
+            "type": "string"
+          },
+          "key": {
+            "description": "The value to supply for the parent parameter in the trigger\nrequest's `parameters` map.\n",
+            "example": "30",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "description"
+        ],
+        "type": "object"
+      },
+      "reportRunOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "description": "The output format, lower-cased file extension. Matches the `Content-Type`\nreturned by the per-output download endpoint. Known values: `csv`, `json`,\n`html`, `pdf`. New formats may be added — clients should treat unknown\nvalues as informational; the download endpoint serves unknown formats as\n`application/octet-stream`.\n",
+            "type": "string"
+          },
+          "id": {
+            "description": "Stable opaque identifier for the output. Pass to the `getReportRunOutput` operation to download the bytes.",
+            "format": "guid",
+            "type": "string"
+          },
+          "reportType": {
+            "description": "The report type key this output was rendered for, matching `reportType.key` from the `getReportTypes` operation (e.g. \"copilotadoption\", \"activeusercount\").",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "description": "Size of the rendered output in bytes. Nullable when the renderer did not record a size at terminal-event time.",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
+          },
+          "tenantId": {
+            "description": "The inforcer tenant ID this output relates to. Null for outputs collated across multiple tenants.",
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "reportType",
+          "format"
+        ],
+        "type": "object"
+      },
+      "reportRunOutputsData": {
+        "additionalProperties": false,
+        "properties": {
+          "outputs": {
+            "default": [],
+            "description": "One entry per rendered blob produced by the run. Empty for completed runs that produced no outputs.",
+            "items": {
+              "$ref": "#/components/schemas/reportRunOutput"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "outputs"
+        ],
+        "type": "object"
+      },
+      "reportRunOutputsResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/reportRunOutputsData"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "reportRunSummary": {
+        "additionalProperties": false,
+        "description": "Summary of a single report run",
+        "properties": {
+          "completedAt": {
+            "description": "When the run reached a terminal status; null while still running",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "When the run was first recorded (ISO-8601 with UTC offset)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "outputCount": {
+            "description": "Number of successful report outputs produced; null while still running or for failed runs with no outputs",
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
+          },
+          "outputFormats": {
+            "description": "The output formats produced by this run. Known values: `csv`, `json`, `html`, `pdf`.\nNew formats may be added — clients should treat unknown values as informational rather than failing.\n",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reportTypes": {
+            "description": "The report types covered by this run. A run can span multiple types when bundled together.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "runId": {
+            "description": "The unique identifier for the report run",
+            "format": "guid",
+            "type": "string"
+          },
+          "startedAt": {
+            "description": "When rendering started; null until the orchestration picks up the trigger",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "description": "The lifecycle status of the report run",
+            "enum": [
+              "running",
+              "completed",
+              "completedWithErrors",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "triggeredByType": {
+            "description": "How the run was triggered",
+            "enum": [
+              "user",
+              "scheduled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "status",
+          "reportTypes",
+          "outputFormats",
+          "triggeredByType",
+          "createdAt",
+          "startedAt",
+          "completedAt",
+          "outputCount"
+        ],
+        "type": "object"
+      },
+      "reportRunsData": {
+        "additionalProperties": false,
+        "description": "Container for the report-runs list",
+        "properties": {
+          "runs": {
+            "default": [],
+            "description": "Report runs from the last 7 days, ordered newest-first. Capped at 500 entries.",
+            "items": {
+              "$ref": "#/components/schemas/reportRunSummary"
+            },
+            "maxItems": 500,
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "type": "object"
+      },
+      "reportRunsResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/reportRunsData"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "reportType": {
+        "additionalProperties": false,
+        "description": "A report type that can be triggered via the public API",
+        "properties": {
+          "collatable": {
+            "description": "Whether the report can collate multiple tenants' data into a single output",
+            "type": "boolean"
+          },
+          "description": {
+            "description": "A user-friendly description of what the report contains",
+            "nullable": true,
+            "type": "string"
+          },
+          "key": {
+            "description": "The unique key for this report type, used in the trigger request",
+            "type": "string"
+          },
+          "name": {
+            "description": "A human-readable name for the report type",
+            "type": "string"
+          },
+          "requiredParameters": {
+            "description": "Parameters that must be supplied when triggering this report type",
+            "items": {
+              "$ref": "#/components/schemas/reportParameter"
+            },
+            "type": "array"
+          },
+          "supportedOutputFormats": {
+            "description": "Output formats supported by this report type (e.g. pdf, csv, html, json)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "description": "Categorisation tags for the report type",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "collatable",
+          "supportedOutputFormats",
+          "tags",
+          "requiredParameters"
+        ],
+        "type": "object"
+      },
+      "reportTypesResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/reportType"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "role": {
+        "additionalProperties": false,
+        "description": "A directory role assigned to the user",
+        "properties": {
+          "displayName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "roleTemplateId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "searchAuditEventsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "continuationToken": {
+            "description": "A token to continue a previous search in another page",
+            "nullable": true,
+            "type": "string"
+          },
+          "dateFrom": {
+            "description": "The start of a date range to filter the events by",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "dateTo": {
+            "description": "The end of a date range to filter the events by",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "eventTypes": {
+            "description": "A list of event types to filter the events by",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "pageSize": {
+            "default": 25,
+            "description": "The maximum number of items to return at a time, up to a maximum of 100. If there are more items to return than will fit in a page then a continuation token will be returned.",
+            "format": "int32",
+            "maximum": 100,
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer"
+          },
+          "user": {
+            "description": "A user to filter the events by",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "searchAuditEventsResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/searchAuditEventsResponseData"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "searchAuditEventsResponseData": {
+        "additionalProperties": false,
+        "description": "Activity log events and pagination info",
+        "properties": {
+          "continuationToken": {
+            "description": "A token that can be used to continue the search if the page size is exceeded",
+            "nullable": true,
+            "type": "string"
+          },
+          "items": {
+            "description": "The activity log events",
+            "items": {
+              "$ref": "#/components/schemas/auditEvent"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "similarPolicyResult": {
+        "additionalProperties": false,
+        "description": "Details about a subject policy that closely matches the baseline policy",
+        "properties": {
+          "diffCount": {
+            "description": "Number of differences between the baseline and subject policies",
+            "type": "integer"
+          },
+          "isPolicyRenameDisabled": {
+            "description": "Whether the subject policy can be renamed",
+            "type": "boolean"
+          },
+          "lastModified": {
+            "description": "Timestamp when the subject policy was last modified",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "matchCount": {
+            "description": "Number of matching properties between the baseline and subject policies",
+            "type": "integer"
+          },
+          "matchPercentage": {
+            "description": "Match percentage between baseline and subject policies (0-100)",
+            "format": "decimal",
+            "type": "number"
+          },
+          "policyAssignmentsDiff": {
+            "description": "Differences between the baseline and subject policy assignments",
+            "items": {
+              "$ref": "#/components/schemas/patchOperation"
+            },
+            "type": "array"
+          },
+          "policyCategoryId": {
+            "description": "Policy category identifier of the subject policy",
+            "nullable": true,
+            "type": "integer"
+          },
+          "policyCategoryName": {
+            "description": "Human-readable policy category name of the subject policy",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyDataDiff": {
+            "description": "Differences between the baseline and subject policy definitions",
+            "items": {
+              "$ref": "#/components/schemas/patchOperation"
+            },
+            "type": "array"
+          },
+          "policyGuid": {
+            "description": "GUID of the similar subject policy",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "policyName": {
+            "description": "Display name of the similar subject policy",
+            "type": "string"
+          },
+          "policySnapshotId": {
+            "description": "Snapshot ID of the similar subject policy",
+            "format": "guid",
+            "type": "string"
+          },
+          "policySnapshotVersionId": {
+            "description": "Snapshot version ID of the similar subject policy",
+            "format": "guid",
+            "type": "string"
+          },
+          "policyTags": {
+            "description": "Tags associated with the subject policy",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/policyTag"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "policyTypeId": {
+            "description": "Policy type identifier of the subject policy",
+            "type": "integer"
+          },
+          "policyTypeName": {
+            "description": "Friendly policy type name of the subject policy",
+            "nullable": true,
+            "type": "string"
+          },
+          "similarityReason": {
+            "$ref": "#/components/schemas/similarityReasonBreakdown"
+          },
+          "similarityScore": {
+            "description": "Similarity score between baseline and subject policies (0-1)",
+            "format": "decimal",
+            "type": "number"
+          }
+        },
+        "required": [
+          "policyGuid",
+          "policySnapshotId",
+          "policyName",
+          "policyTypeId",
+          "isPolicyRenameDisabled",
+          "matchPercentage",
+          "diffCount",
+          "matchCount",
+          "policyDataDiff",
+          "policyAssignmentsDiff"
+        ],
+        "type": "object"
+      },
+      "similarityReasonBreakdown": {
+        "additionalProperties": false,
+        "description": "Breakdown of similarity scores by category",
+        "properties": {
+          "assignments": {
+            "description": "Assignment similarity percentage (0-100)",
+            "format": "decimal",
+            "type": "number"
+          },
+          "configuration": {
+            "description": "Configuration settings similarity percentage (0-100)",
+            "format": "decimal",
+            "type": "number"
+          },
+          "critical": {
+            "description": "Critical settings similarity percentage (0-100)",
+            "format": "decimal",
+            "type": "number"
+          },
+          "metadata": {
+            "description": "Metadata similarity percentage (0-100)",
+            "format": "decimal",
+            "type": "number"
+          },
+          "summary": {
+            "description": "Overall similarity summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary"
+        ],
+        "type": "object"
+      },
+      "tenant": {
+        "additionalProperties": false,
+        "description": "A tenant in the system",
+        "properties": {
+          "alignmentSummaries": {
+            "default": [],
+            "description": "Alignment summaries for the tenant",
+            "items": {
+              "$ref": "#/components/schemas/alignmentSummary"
+            },
+            "type": "array"
+          },
+          "clientTenantId": {
+            "description": "The unique identifier for the tenant",
+            "type": "integer"
+          },
+          "isBaseline": {
+            "description": "Whether the tenant is a baseline tenant",
+            "type": "boolean"
+          },
+          "lastBackupTimestamp": {
+            "description": "The last time the tenant was backed up",
+            "format": "date-time",
+            "type": "string"
+          },
+          "licenses": {
+            "default": [],
+            "description": "Licenses associated with the tenant",
+            "items": {
+              "$ref": "#/components/schemas/tenantLicense"
+            },
+            "type": "array"
+          },
+          "msTenantId": {
+            "description": "The Microsoft tenant ID for the tenant",
+            "format": "guid",
+            "type": "string"
+          },
+          "policyDiff": {
+            "description": "Text report of added, removed, and changed policies",
+            "type": "string"
+          },
+          "recentChanges": {
+            "description": "The number of recent policy changes detected",
+            "type": "integer"
+          },
+          "secureScore": {
+            "description": "The secure score of the tenant",
+            "type": "number"
+          },
+          "tags": {
+            "default": [],
+            "description": "Tags associated with the tenant",
+            "items": {
+              "$ref": "#/components/schemas/tenantTag"
+            },
+            "type": "array"
+          },
+          "tenantDnsName": {
+            "description": "The DNS name of the tenant",
+            "type": "string"
+          },
+          "tenantFriendlyName": {
+            "description": "The name of the tenant",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tenantAlignmentDetailedData": {
+        "additionalProperties": false,
+        "description": "Detailed tenant alignment results with individual policy information",
+        "properties": {
+          "additionalInSubjectUnaccepted": {
+            "description": "Policies present in subject but missing from baseline",
+            "items": {
+              "$ref": "#/components/schemas/policyComparisonDetail"
+            },
+            "type": "array"
+          },
+          "alignmentScore": {
+            "description": "The alignment score percentage",
+            "format": "decimal",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number"
+          },
+          "baselineDataTimestamp": {
+            "description": "Timestamp of the baseline tenant data",
+            "format": "date-time",
+            "type": "string"
+          },
+          "baselineTenantId": {
+            "description": "The baseline tenant ID",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "deviatedUnaccepted": {
+            "description": "Policies that deviate from baseline and are not accepted",
+            "items": {
+              "$ref": "#/components/schemas/policyComparisonDetail"
+            },
+            "type": "array"
+          },
+          "matchedPolicies": {
+            "description": "Policies that match baseline exactly",
+            "items": {
+              "$ref": "#/components/schemas/policyComparisonDetail"
+            },
+            "type": "array"
+          },
+          "matchedWithAcceptedDeviations": {
+            "description": "Policies that match baseline using accepted deviations",
+            "items": {
+              "$ref": "#/components/schemas/policyComparisonDetail"
+            },
+            "type": "array"
+          },
+          "missingFromSubjectUnaccepted": {
+            "description": "Policies present in baseline but missing from subject",
+            "items": {
+              "$ref": "#/components/schemas/policyComparisonDetail"
+            },
+            "type": "array"
+          },
+          "subjectDataTimestamp": {
+            "description": "Timestamp of the subject tenant data",
+            "format": "date-time",
+            "type": "string"
+          },
+          "subjectTenantId": {
+            "description": "The subject tenant ID",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "baselineTenantId",
+          "subjectTenantId",
+          "subjectDataTimestamp",
+          "baselineDataTimestamp",
+          "alignmentScore",
+          "deviatedUnaccepted",
+          "matchedPolicies",
+          "matchedWithAcceptedDeviations",
+          "additionalInSubjectUnaccepted",
+          "missingFromSubjectUnaccepted"
+        ],
+        "type": "object"
+      },
+      "tenantComparisonData": {
+        "additionalProperties": false,
+        "description": "Tenant comparison results with metrics and policy details",
+        "properties": {
+          "alignment": {
+            "$ref": "#/components/schemas/tenantAlignmentDetailedData",
+            "description": "Detailed policy comparison results with full metadata",
+            "nullable": true
+          },
+          "completedAt": {
+            "description": "When the comparison was completed",
+            "format": "date-time",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/alignmentMetricsData"
+          }
+        },
+        "required": [
+          "metrics",
+          "completedAt"
+        ],
+        "type": "object"
+      },
+      "tenantComparisonResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/tenantComparisonData"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "description": "Response from tenant policy comparison with alignment metrics",
+        "type": "object"
+      },
+      "tenantControlCategoryScore": {
+        "additionalProperties": false,
+        "properties": {
+          "controlCategory": {
+            "description": "The category of the secure score",
+            "type": "string"
+          },
+          "currentScore": {
+            "description": "The current score for this category",
+            "type": "number"
+          },
+          "currentScorePercentage": {
+            "description": "The current score as a percentage",
+            "type": "number"
+          },
+          "historicScores": {
+            "items": {
+              "$ref": "#/components/schemas/tenantControlCategoryScoreHistoric"
+            },
+            "type": "array"
+          },
+          "maxScore": {
+            "description": "The max score for this category",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "tenantControlCategoryScoreHistoric": {
+        "additionalProperties": false,
+        "properties": {
+          "createdDateTime": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "currentScore": {
+            "type": "number"
+          },
+          "currentScorePercentage": {
+            "type": "number"
+          },
+          "maxScore": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "tenantGroupDetails": {
+        "additionalProperties": false,
+        "description": "Detailed information about an Entra group",
+        "properties": {
+          "createdDateTime": {
+            "description": "The date and time when the group was created",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "description": {
+            "description": "The description of the group",
+            "nullable": true,
+            "type": "string"
+          },
+          "displayName": {
+            "description": "The display name of the group",
+            "type": "string"
+          },
+          "groupTypes": {
+            "description": "The types of the group",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "The group ID",
+            "format": "guid",
+            "type": "string"
+          },
+          "mail": {
+            "description": "The email address of the group",
+            "nullable": true,
+            "type": "string"
+          },
+          "mailEnabled": {
+            "description": "Whether the group is mail-enabled",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "mailNickname": {
+            "description": "The mail nickname of the group",
+            "nullable": true,
+            "type": "string"
+          },
+          "members": {
+            "description": "The members of the group",
+            "items": {
+              "$ref": "#/components/schemas/tenantGroupMember"
+            },
+            "type": "array"
+          },
+          "membershipRule": {
+            "description": "The dynamic membership rule (if applicable)",
+            "nullable": true,
+            "type": "string"
+          },
+          "onPremisesSyncEnabled": {
+            "description": "Whether the group is synchronized with on-premises",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "visibility": {
+            "description": "The visibility of the group (e.g., Public, Private)",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "groupTypes"
+        ],
+        "type": "object"
+      },
+      "tenantGroupMember": {
+        "additionalProperties": false,
+        "description": "A member of an Entra group",
+        "properties": {
+          "displayName": {
+            "description": "The display name of the member",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "The member ID",
+            "type": "string"
+          },
+          "type": {
+            "description": "The OData type of the member (e.g., #microsoft.graph.user, #microsoft.graph.group, #microsoft.graph.servicePrincipal)",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "tenantGroupResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/tenantGroupDetails"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "tenantGroupSummary": {
+        "additionalProperties": false,
+        "description": "A summary of an Entra group",
+        "properties": {
+          "description": {
+            "description": "The description of the group",
+            "nullable": true,
+            "type": "string"
+          },
+          "displayName": {
+            "description": "The display name of the group",
+            "type": "string"
+          },
+          "groupTypes": {
+            "description": "The types of the group",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "The group ID",
+            "format": "guid",
+            "type": "string"
+          },
+          "mail": {
+            "description": "The email address of the group",
+            "nullable": true,
+            "type": "string"
+          },
+          "visibility": {
+            "description": "The visibility of the group (e.g., Public, Private)",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "groupTypes"
+        ],
+        "type": "object"
+      },
+      "tenantGroupsResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "continuationToken": {
+                "description": "A token that can be used to continue the search if there are more results",
+                "nullable": true,
+                "type": "string"
+              },
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/tenantGroupSummary"
+                },
+                "type": "array"
+              },
+              "totalCount": {
+                "description": "The total number of groups matching the search criteria",
+                "format": "int64",
+                "nullable": false,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "totalCount",
+              "data"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "tenantLicense": {
+        "additionalProperties": false,
+        "description": "A license associated with a tenant",
+        "properties": {
+          "sku": {
+            "description": "The SKU of the license",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tenantPoliciesResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/policy"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "tenantResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/tenant"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "tenantRole": {
+        "additionalProperties": false,
+        "description": "A directory role definition for a tenant",
+        "properties": {
+          "description": {
+            "description": "The description of the role definition",
+            "type": "string"
+          },
+          "displayName": {
+            "description": "The display name of the role definition",
+            "type": "string"
+          },
+          "id": {
+            "description": "The unique identifier of the role definition",
+            "format": "guid",
+            "type": "string"
+          },
+          "isBuiltIn": {
+            "description": "Whether the role definition is built-in",
+            "type": "boolean"
+          },
+          "isEnabled": {
+            "description": "Whether the role definition is enabled",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isPrivileged": {
+            "description": "Whether the role definition is privileged",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "templateId": {
+            "description": "The unique identifier of the role definition template",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "description"
+        ],
+        "type": "object"
+      },
+      "tenantRolesResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/tenantRole"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "tenantSecureScore": {
+        "additionalProperties": false,
+        "properties": {
+          "createdDateTime": {
+            "description": "The date the secure score was created",
+            "format": "date-time",
+            "type": "string"
+          },
+          "currentScore": {
+            "description": "The score at this date",
+            "type": "number"
+          },
+          "currentScorePercentage": {
+            "description": "The current score expressed as a percentage",
+            "type": "number"
+          },
+          "maxScore": {
+            "description": "The maximum possible secure score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "currentScore",
+          "maxScore",
+          "createdDateTime"
+        ],
+        "type": "object"
+      },
+      "tenantSecureScoreControlProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "actionUrl": {
+            "description": "The URL for the action to take",
+            "nullable": true,
+            "type": "string"
+          },
+          "controlCategory": {
+            "description": "The category of the control profile",
+            "type": "string"
+          },
+          "currentScore": {
+            "description": "The current score for this control",
+            "type": "number"
+          },
+          "currentScorePercentage": {
+            "description": "The current score as a percentage of total",
+            "type": "number"
+          },
+          "id": {
+            "description": "The ID of the control profile",
+            "type": "string"
+          },
+          "maxScore": {
+            "description": "The maximum score for this control",
+            "type": "number"
+          },
+          "maxScorePercentage": {
+            "description": "The maximum score as a percentage of total",
+            "type": "number"
+          },
+          "remediation": {
+            "description": "The remediation steps",
+            "nullable": true,
+            "type": "string"
+          },
+          "remediationImpact": {
+            "description": "The impact of the remediation",
+            "nullable": true,
+            "type": "string"
+          },
+          "scoreDifference": {
+            "description": "The difference between current and max score",
+            "type": "number"
+          },
+          "scoreDifferencePercentage": {
+            "description": "The score difference as a percentage of total",
+            "type": "number"
+          },
+          "service": {
+            "description": "The associated service",
+            "nullable": true,
+            "type": "string"
+          },
+          "title": {
+            "description": "The title of the control profile",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tenantSecureScoreDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "controlCategoryScores": {
+            "description": "Control category secure scores and history",
+            "items": {
+              "$ref": "#/components/schemas/tenantControlCategoryScore"
+            },
+            "type": "array"
+          },
+          "controlProfiles": {
+            "description": "The actionable secure score control profiles",
+            "items": {
+              "$ref": "#/components/schemas/tenantSecureScoreControlProfile"
+            },
+            "type": "array"
+          },
+          "currentScore": {
+            "description": "The current secure score",
+            "type": "number"
+          },
+          "currentScorePercentage": {
+            "description": "The current score expressed as a percentage",
+            "type": "number"
+          },
+          "enabledServices": {
+            "description": "The enabled services for this tenant",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "licensedUserCount": {
+            "description": "The total number of licensed users",
+            "type": "integer"
+          },
+          "maxScore": {
+            "description": "The maximum possible secure score",
+            "type": "number"
+          },
+          "scores": {
+            "description": "The list of historic secure scores",
+            "items": {
+              "$ref": "#/components/schemas/tenantSecureScore"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "tenantSecureScoresResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/tenantSecureScoreDetails"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "tenantTag": {
+        "additionalProperties": false,
+        "description": "A tag associated with a tenant",
+        "properties": {
+          "description": {
+            "description": "A description of the tag",
+            "type": "string"
+          },
+          "id": {
+            "description": "The ID of the tag",
+            "format": "guid",
+            "type": "string"
+          },
+          "name": {
+            "description": "The name of the tag",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tenantsResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/tenant"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "triggerReportData": {
+        "additionalProperties": false,
+        "description": "Identifiers returned when a report run is queued",
+        "properties": {
+          "runId": {
+            "description": "The unique identifier for the queued run; use with the `listReportRuns` operation to poll status. Matches the `runId` field returned by `listReportRuns`.",
+            "format": "guid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId"
+        ],
+        "type": "object"
+      },
+      "triggerReportItem": {
+        "additionalProperties": false,
+        "properties": {
+          "collate": {
+            "default": false,
+            "description": "When true, combine outputs across all tenants into a single document",
+            "type": "boolean"
+          },
+          "outputFormat": {
+            "description": "Output format for this report item",
+            "enum": [
+              "pdf",
+              "csv",
+              "html",
+              "json"
+            ],
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Optional key/value parameters specific to the report type",
+            "type": "object"
+          },
+          "type": {
+            "description": "The report type key, matching `reportType.key` from the `getReportTypes` operation (e.g. copilotadoption, activeusercount).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "outputFormat"
+        ],
+        "type": "object"
+      },
+      "triggerReportRequest": {
+        "additionalProperties": false,
+        "description": "Body for queueing a report run",
+        "properties": {
+          "reports": {
+            "description": "One or more reports to generate as part of this run",
+            "items": {
+              "$ref": "#/components/schemas/triggerReportItem"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "tenants": {
+            "$ref": "#/components/schemas/triggerReportTenants"
+          }
+        },
+        "required": [
+          "reports",
+          "tenants"
+        ],
+        "type": "object"
+      },
+      "triggerReportResponse": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/baseResponseEnvelope"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/triggerReportData"
+              }
+            },
+            "required": [
+              "data"
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      },
+      "triggerReportTenants": {
+        "additionalProperties": false,
+        "description": "Tenant scope for the report run",
+        "properties": {
+          "includeTenants": {
+            "description": "Tenant IDs the run should cover. Must be a non-empty subset of the\ntenants the calling API key has access to.\n",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "includeTenants"
+        ],
+        "type": "object"
+      },
+      "user": {
+        "additionalProperties": false,
+        "properties": {
+          "accountEnabled": {
+            "description": "Whether the user account is enabled",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "appRoleAssignments": {
+            "description": "App role assignments for the user",
+            "items": {
+              "$ref": "#/components/schemas/appRoleAssignment"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "assignedLicenses": {
+            "description": "Licenses assigned to the user",
+            "items": {
+              "$ref": "#/components/schemas/userLicense"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "businessPhones": {
+            "description": "List of business phone numbers",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "city": {
+            "description": "The user's city",
+            "nullable": true,
+            "type": "string"
+          },
+          "companyName": {
+            "description": "The user's company name",
+            "nullable": true,
+            "type": "string"
+          },
+          "country": {
+            "description": "The user's country",
+            "nullable": true,
+            "type": "string"
+          },
+          "createdDateTime": {
+            "description": "When the user was created",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "creationType": {
+            "description": "The type of user creation",
+            "nullable": true,
+            "type": "string"
+          },
+          "department": {
+            "description": "The user's department",
+            "nullable": true,
+            "type": "string"
+          },
+          "devices": {
+            "description": "Devices owned by the user",
+            "items": {
+              "$ref": "#/components/schemas/userDevice"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "displayName": {
+            "description": "The display name of the user",
+            "nullable": true,
+            "type": "string"
+          },
+          "employeeHireDate": {
+            "description": "The user's hire date",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "employeeId": {
+            "description": "The user's employee ID",
+            "nullable": true,
+            "type": "string"
+          },
+          "employeeType": {
+            "description": "The user's employee type",
+            "nullable": true,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "The user's first name",
+            "nullable": true,
+            "type": "string"
+          },
+          "groups": {
+            "description": "Groups the user is a transitive member of",
+            "items": {
+              "$ref": "#/components/schemas/userGroup"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "id": {
+            "description": "The user ID",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "imAddresses": {
+            "description": "Instant messaging addresses",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "isAllDevicesCompliant": {
+            "description": "Whether all devices owned by the user are compliant",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isCloudOnly": {
+            "description": "Whether the user is a cloud-only user",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isGlobalAdmin": {
+            "description": "Whether the user is a global administrator",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isHybrid": {
+            "description": "Whether the user is a hybrid user",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isMfaCapable": {
+            "description": "Whether the user is capable of MFA. Null if not licensed.",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isMfaRegistered": {
+            "description": "Whether the user is registered for MFA. Null if not licensed.",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "jobTitle": {
+            "description": "The user's job title",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastPasswordChangeDateTime": {
+            "description": "When the user last changed their password",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastSignInDateTime": {
+            "description": "When the user last signed in",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "legalAgeGroupClassification": {
+            "description": "Legal age group classification",
+            "nullable": true,
+            "type": "string"
+          },
+          "mail": {
+            "description": "The user's email address",
+            "nullable": true,
+            "type": "string"
+          },
+          "mailNickname": {
+            "description": "The user's mail alias",
+            "nullable": true,
+            "type": "string"
+          },
+          "manager": {
+            "$ref": "#/components/schemas/directoryObject",
+            "description": "The user's manager",
+            "nullable": true
+          },
+          "mobilePhone": {
+            "description": "The user's mobile phone number",
+            "nullable": true,
+            "type": "string"
+          },
+          "officeLocation": {
+            "description": "The user's office location",
+            "nullable": true,
+            "type": "string"
+          },
+          "onPremisesDistinguishedName": {
+            "description": "The on-premises distinguished name",
+            "nullable": true,
+            "type": "string"
+          },
+          "onPremisesDomainName": {
+            "description": "The on-premises domain name",
+            "nullable": true,
+            "type": "string"
+          },
+          "onPremisesImmutableId": {
+            "description": "The on-premises immutable ID",
+            "nullable": true,
+            "type": "string"
+          },
+          "onPremisesLastSyncDateTime": {
+            "description": "Last on-premises sync date and time",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "onPremisesSamAccountName": {
+            "description": "The on-premises SAM account name",
+            "nullable": true,
+            "type": "string"
+          },
+          "onPremisesSecurityIdentifier": {
+            "description": "The on-premises security identifier",
+            "nullable": true,
+            "type": "string"
+          },
+          "onPremisesSyncEnabled": {
+            "description": "Whether the user is synced from on-premises",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "onPremisesUserPrincipalName": {
+            "description": "The on-premises user principal name",
+            "nullable": true,
+            "type": "string"
+          },
+          "otherMails": {
+            "description": "Other email addresses for the user",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "passwordPolicies": {
+            "description": "Password policies applied to the user",
+            "nullable": true,
+            "type": "string"
+          },
+          "postalCode": {
+            "description": "The user's postal code",
+            "nullable": true,
+            "type": "string"
+          },
+          "preferredDataLocation": {
+            "description": "The user's preferred data location",
+            "nullable": true,
+            "type": "string"
+          },
+          "preferredLanguage": {
+            "description": "The user's preferred language",
+            "nullable": true,
+            "type": "string"
+          },
+          "proxyAddresses": {
+            "description": "Proxy addresses for the user",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "riskDetail": {
+            "description": "The risk detail of the user. Null if not licensed.",
+            "nullable": true,
+            "type": "string"
+          },
+          "riskLevel": {
+            "description": "The risk level of the user. Null if not licensed.",
+            "nullable": true,
+            "type": "string"
+          },
+          "riskState": {
+            "description": "The risk state of the user. Null if not licensed.",
+            "nullable": true,
+            "type": "string"
+          },
+          "roles": {
+            "description": "Directory roles assigned to the user",
+            "items": {
+              "$ref": "#/components/schemas/role"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "signInSessionsValidFromDateTime": {
+            "description": "Date and time from which sign-in sessions are valid",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "state": {
+            "description": "The user's state",
+            "nullable": true,
+            "type": "string"
+          },
+          "streetAddress": {
+            "description": "The user's street address",
+            "nullable": true,
+            "type": "string"
+          },
+          "surname": {
+            "description": "The user's last name",
+            "nullable": true,
+            "type": "string"
+          },
+          "usageLocation": {
+            "description": "The user's usage location",
+            "nullable": true,
+            "type": "string"
+          },
+          "userPrincipalName": {
+            "description": "The user principal name (UPN)",
+            "nullable": true,
+            "type": "string"
+          },
+          "userType": {
+            "description": "The user type (e.g. Member or Guest)",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "userDevice": {
+        "additionalProperties": false,
+        "description": "A device owned by the user",
+        "properties": {
+          "complianceExpiryDateTime": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "deviceCategory": {
+            "nullable": true,
+            "type": "string"
+          },
+          "deviceOwnership": {
+            "nullable": true,
+            "type": "string"
+          },
+          "displayName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "The unique identifier of the device",
+            "format": "guid",
+            "type": "string"
+          },
+          "isCompliant": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isManaged": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isManagementRestricted": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isRooted": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "managementType": {
+            "nullable": true,
+            "type": "string"
+          },
+          "manufacturer": {
+            "nullable": true,
+            "type": "string"
+          },
+          "model": {
+            "nullable": true,
+            "type": "string"
+          },
+          "operatingSystem": {
+            "nullable": true,
+            "type": "string"
+          },
+          "operatingSystemVersion": {
+            "nullable": true,
+            "type": "string"
+          },
+          "profileType": {
+            "nullable": true,
+            "type": "string"
+          },
+          "registrationDateTime": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "trustType": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "userGroup": {
+        "additionalProperties": false,
+        "description": "A group the user is a member of",
+        "properties": {
+          "description": {
+            "description": "The description of the group",
+            "nullable": true,
+            "type": "string"
+          },
+          "displayName": {
+            "description": "The display name of the group",
+            "type": "string"
+          },
+          "groupTypes": {
+            "description": "A string list of the types of groups",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "The unique identifier of the group",
+            "format": "guid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "groupTypes"
+        ],
+        "type": "object"
+      },
+      "userLicense": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilityStatus": {
+            "description": "The capability status of the license",
+            "nullable": true,
+            "type": "string"
+          },
+          "isCancelled": {
+            "description": "Is the license cancelled",
+            "type": "boolean"
+          },
+          "isExpired": {
+            "description": "Is the license expired",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "The display-friendly SKU name e.g. \"Exchange Online (Plan 1)\" or \"Microsoft 365 Business Standard (no Teams)\". May be null if a display name mapping could not be found.",
+            "nullable": true,
+            "type": "string"
+          },
+          "sku": {
+            "description": "The unique string identifier for the SKU, also known as the part number e.g. \"EXCHANGESTANDARD\" or \"Microsoft_365_E3_(no_Teams)\".",
+            "type": "string"
+          },
+          "skuId": {
+            "description": "The unique identifier of the license SKU",
+            "format": "guid",
+            "type": "string"
+          },
+          "state": {
+            "description": "The state of the license assignment",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "userSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "assignedLicenses": {
+            "description": "List of licenses assigned to the user",
+            "items": {
+              "$ref": "#/components/schemas/userLicense"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "department": {
+            "description": "The user's department",
+            "nullable": true,
+            "type": "string"
+          },
+          "displayName": {
+            "description": "The display name of the user",
+            "nullable": true,
+            "type": "string"
+          },
+          "groups": {
+            "description": "The number of groups the user is a member of",
+            "nullable": false,
+            "type": "integer"
+          },
+          "id": {
+            "description": "The user ID",
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "isAccountEnabled": {
+            "description": "Indicates whether the user account is enabled",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isGlobalAdmin": {
+            "description": "Indicates whether the user is a global administrator",
+            "type": "boolean"
+          },
+          "isMfaCapable": {
+            "description": "Indicates whether the user is capable of MFA. Null if not licensed.",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "isMfaRegistered": {
+            "description": "Indicates whether the user is registered for MFA. Null if not licensed.",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "jobTitle": {
+            "description": "The user's job title",
+            "nullable": true,
+            "type": "string"
+          },
+          "roles": {
+            "description": "The number of roles assigned to the user",
+            "nullable": false,
+            "type": "integer"
+          },
+          "userPrincipalName": {
+            "description": "The user principal name (UPN)",
+            "nullable": true,
+            "type": "string"
+          },
+          "userType": {
+            "description": "The user type (e.g. Member or Guest)",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "variableSubstitutionDetail": {
+        "additionalProperties": false,
+        "description": "Details of a variable substitution found during policy comparison",
+        "properties": {
+          "baselineValue": {
+            "description": "The baseline tenant's variable value (null if missing from baseline)",
+            "nullable": true,
+            "type": "string"
+          },
+          "description": {
+            "description": "The optional description of the client variable",
+            "nullable": true,
+            "type": "string"
+          },
+          "isBaselineOnly": {
+            "description": "Whether this variable was found by scanning the baseline policy JSON (true) or by matching a diff between baseline and subject (false). Baseline-only variables are useful for deployment but don't explain a specific diff.",
+            "type": "boolean"
+          },
+          "isHidden": {
+            "description": "Whether or not the variable is marked as hidden, and so the values will be unavailable",
+            "type": "boolean"
+          },
+          "propertyPath": {
+            "description": "The JSON path where this variable substitution occurs in the policy",
+            "type": "string"
+          },
+          "subjectValue": {
+            "description": "The subject tenant's variable value (null if missing from subject)",
+            "nullable": true,
+            "type": "string"
+          },
+          "variableId": {
+            "description": "The id of the client variable",
+            "format": "guid",
+            "type": "string"
+          },
+          "variableName": {
+            "description": "The name of the client variable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "variableId",
+          "variableName",
+          "propertyPath",
+          "isBaselineOnly"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "description": "The API key for authentication.",
+        "in": "header",
+        "name": "Inf-Api-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "email": "engineering@inforcer.com",
+      "name": "Engineering",
+      "url": "https://inforcer.com"
+    },
+    "description": "The inforcer Public API built for developers",
+    "title": "inforcer | Public API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.1",
+  "paths": {
+    "/beta/alignmentScores": {
+      "get": {
+        "description": "Retrieves a list of alignment scores for all tenants",
+        "operationId": "getAlignmentScores",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/alignmentScoresResponse"
+                }
+              }
+            },
+            "description": "A list of alignment scores"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get alignment scores",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/assessments": {
+      "get": {
+        "description": "Retrieves a list of available assessments",
+        "operationId": "getAssessments",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/assessmentsResponse"
+                }
+              }
+            },
+            "description": "A list of assessments"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get assessments",
+        "tags": [
+          "Assessments"
+        ]
+      }
+    },
+    "/beta/auditEvents/eventTypes": {
+      "get": {
+        "description": "Retrieves a list of the types of events returned by the activity log",
+        "operationId": "getEventTypes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/eventTypesResponse"
+                }
+              }
+            },
+            "description": "A list of event types"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get event types",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/beta/auditEvents/search": {
+      "post": {
+        "description": "Searches the activity log based on the provided criteria. Returns a list of matching activity log events.",
+        "operationId": "searchAuditEvents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "dateFrom": "2026-02-01T00:00:00Z",
+                "dateTo": "2026-02-26T23:59:59Z",
+                "eventTypes": [
+                  "authentication",
+                  "failedAuthentication"
+                ],
+                "pageSize": 50
+              },
+              "schema": {
+                "$ref": "#/components/schemas/searchAuditEventsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/searchAuditEventsResponse"
+                }
+              }
+            },
+            "description": "The activity log events that were retrieved successfully"
+          },
+          "400": {
+            "$ref": "#/components/responses/invalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Search activity log",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/beta/baselines": {
+      "get": {
+        "description": "Retrieves a list of baseline groups and the member tenants",
+        "operationId": "getBaselineGroups",
+        "parameters": [
+          {
+            "description": "The id of a baseline tenant to filter baseline groups by. If not provided, all baseline groups will be returned.",
+            "in": "query",
+            "name": "baselineTenantId",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/baselineGroupsResponse"
+                }
+              }
+            },
+            "description": "A list of baseline groups and their members"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get baseline groups",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/reports/runs": {
+      "get": {
+        "description": "Retrieves all report runs for the calling client within the last 7 days, newest first",
+        "operationId": "listReportRuns",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/reportRunsResponse"
+                }
+              }
+            },
+            "description": "A list of recent report runs"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "List recent report runs",
+        "tags": [
+          "Reports"
+        ]
+      },
+      "post": {
+        "description": "Queues a report run for the requested tenants. The response contains the\ncanonical `runId` which the caller can use to poll the `listReportRuns`\noperation for status. The run is processed asynchronously.\nThe run is not idempotent so calling it twice will result in two runs.\n",
+        "operationId": "queueReportRun",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "reports": [
+                  {
+                    "outputFormat": "pdf",
+                    "type": "copilotadoption"
+                  }
+                ],
+                "tenants": {
+                  "includeTenants": [
+                    1234,
+                    5678
+                  ]
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/triggerReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/triggerReportResponse"
+                }
+              }
+            },
+            "description": "The report run was queued"
+          },
+          "400": {
+            "$ref": "#/components/responses/invalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Queue a report run",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/beta/reports/runs/{reportRunId}/outputs": {
+      "get": {
+        "description": "Returns metadata for the rendered output(s) of a terminal report run, filtered to the\napi key's tenant scope. Tenant-specific outputs are included when the output's tenant\nis in the api key's scope; collated outputs (covering multiple tenants) are included\nonly when the api key covers every tenant the run targeted.\n\nTo download the bytes for a single output, call the `getReportRunOutput` operation\nusing the `id` returned here.\n\nReturns 404 if the run does not exist, belongs to a different client, or is not in\na terminal state (`completed` or `completedWithErrors`) — these cases are deliberately\nindistinguishable to avoid leaking run existence across clients. Returns 200 with an\nempty `outputs` array when the run is visible to the api key but no outputs are within\nscope.\n",
+        "operationId": "listReportRunOutputs",
+        "parameters": [
+          {
+            "description": "The unique identifier for the report run, as returned by the `queueReportRun` operation.",
+            "in": "path",
+            "name": "reportRunId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/reportRunOutputsResponse"
+                }
+              }
+            },
+            "description": "Metadata for the rendered outputs"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/notFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "List rendered outputs for a report run",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/beta/reports/runs/{reportRunId}/outputs/{outputId}": {
+      "get": {
+        "description": "Streams the bytes of a single rendered output for a terminal report run. The\nresponse `Content-Type` reflects the report's output format (`application/json`,\n`text/csv`, `text/html` or `application/pdf`) and a `Content-Disposition` header\nsuggests a filename.\n\nReturns 404 if the run does not exist, belongs to a different client, is not in a\nterminal state (`completed` or `completedWithErrors`), the output ID does not\nbelong to the run, or the output's tenant is outside the api key's tenant scope —\nall cases are deliberately indistinguishable to avoid leaking run/output existence.\nCollated outputs (covering multiple tenants) are only served when the api key covers\nevery tenant the run targeted.\n",
+        "operationId": "getReportRunOutput",
+        "parameters": [
+          {
+            "description": "The unique identifier for the report run.",
+            "in": "path",
+            "name": "reportRunId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Opaque identifier of the output, as returned by the `listReportRunOutputs` operation.",
+            "in": "path",
+            "name": "outputId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The rendered output bytes"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/notFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Download a single rendered output for a report run",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/beta/reports/types": {
+      "get": {
+        "description": "Retrieves the list of report types that can be triggered, including their supported output formats and any required parameters.",
+        "operationId": "getReportTypes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/reportTypesResponse"
+                }
+              }
+            },
+            "description": "A list of available report types"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get available report types",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/beta/tenants": {
+      "get": {
+        "description": "Retrieves a list of all tenants in the system",
+        "operationId": "getAllTenants",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenantsResponse"
+                }
+              }
+            },
+            "description": "A list of tenants"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get all tenants",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}": {
+      "get": {
+        "description": "Retrieves a single tenant by its unique identifier",
+        "operationId": "getTenantById",
+        "parameters": [
+          {
+            "description": "The unique identifier for the tenant",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenantResponse"
+                }
+              }
+            },
+            "description": "The tenant details"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/notFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get tenant by ID",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/alignmentDetails": {
+      "get": {
+        "description": "Compare policies between baseline and the target tenant with alignment calculation",
+        "operationId": "getAlignmentDetails",
+        "parameters": [
+          {
+            "description": "ID of the target tenant",
+            "example": 285,
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "ID of the baseline (in GUID format) to compare against. Must be a custom baseline that includes the target tenant as a member.",
+            "example": "84b2262f-6fb9-45b7-8856-7903b89749b2",
+            "in": "query",
+            "name": "customBaselineId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenantComparisonResponse"
+                }
+              }
+            },
+            "description": "Comparison completed successfully"
+          },
+          "400": {
+            "$ref": "#/components/responses/invalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/notFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get alignment details",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/assessments/{assessmentId}/runs": {
+      "post": {
+        "description": "Runs an assessment against a specific tenant and returns compliance results",
+        "operationId": "runAssessment",
+        "parameters": [
+          {
+            "description": "The unique identifier for the tenant",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The unique identifier for the assessment",
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/assessmentRunResponse"
+                }
+              }
+            },
+            "description": "Assessment run completed successfully"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Run an assessment",
+        "tags": [
+          "Assessments"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/groups": {
+      "get": {
+        "description": "Searches the specified tenant for Entra groups. Supports optional search filtering by display name.",
+        "operationId": "searchGroups",
+        "parameters": [
+          {
+            "description": "inforcer tenant ID (Int).",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The search term to filter groups",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A token to continue a previous search in another page",
+            "in": "query",
+            "name": "continuationToken",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenantGroupsResponse"
+                }
+              }
+            },
+            "description": "Returns the list of groups"
+          },
+          "400": {
+            "$ref": "#/components/responses/invalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Search groups",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/groups/{groupId}": {
+      "get": {
+        "description": "Retrieves a single group for the specified tenant",
+        "operationId": "getGroup",
+        "parameters": [
+          {
+            "description": "inforcer tenant ID (Int).",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The group ID (GUID).",
+            "in": "path",
+            "name": "groupId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenantGroupResponse"
+                }
+              }
+            },
+            "description": "Returns the group"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/notFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get group by ID",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/policies": {
+      "get": {
+        "description": "Retrieves a list of policies for a specific tenant",
+        "operationId": "getTenantPolicies",
+        "parameters": [
+          {
+            "description": "The unique identifier for the tenant",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenantPoliciesResponse"
+                }
+              }
+            },
+            "description": "A list of policies for the tenant"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/notFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get policies for a tenant",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/roles": {
+      "get": {
+        "description": "Retrieves the directory role definitions for the specified tenant.",
+        "operationId": "getTenantRoles",
+        "parameters": [
+          {
+            "description": "inforcer tenant ID (Int).",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenantRolesResponse"
+                }
+              }
+            },
+            "description": "Returns the list of role definitions"
+          },
+          "400": {
+            "$ref": "#/components/responses/invalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get tenant roles",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/secureScores": {
+      "get": {
+        "description": "Retrieves the current and historic secure score data for the specified tenant. Returns up to 90 days of daily score history.",
+        "operationId": "getTenantSecureScores",
+        "parameters": [
+          {
+            "description": "inforcer tenant ID (Int).",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenantSecureScoresResponse"
+                }
+              }
+            },
+            "description": "Returns the secure score details"
+          },
+          "400": {
+            "$ref": "#/components/responses/invalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get secure scores",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/users": {
+      "get": {
+        "description": "Searches the specified tenant for users",
+        "operationId": "searchUsers",
+        "parameters": [
+          {
+            "description": "inforcer tenant ID (Int).",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The search term to filter users",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A token to continue a previous search in another page",
+            "in": "query",
+            "name": "continuationToken",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getUserSummariesResponse"
+                }
+              }
+            },
+            "description": "Returns the list of users"
+          },
+          "400": {
+            "$ref": "#/components/responses/invalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Search users",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    },
+    "/beta/tenants/{tenantId}/users/{userId}": {
+      "get": {
+        "description": "Retrieves a single user for the specified tenant",
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "description": "inforcer tenant ID (Int).",
+            "in": "path",
+            "name": "tenantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The user ID (GUID).",
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getUserResponse"
+                }
+              }
+            },
+            "description": "Returns the user"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/notFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/internalServerError"
+          }
+        },
+        "summary": "Get user by ID",
+        "tags": [
+          "Tenants"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:7072/api"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Test endpoints for the public API",
+      "name": "Testing"
+    },
+    {
+      "description": "Endpoints for managing tenants in the system",
+      "name": "Tenants"
+    },
+    {
+      "description": "Endpoints for viewing activity log events in the system",
+      "name": "Audit"
+    },
+    {
+      "description": "Endpoints for managing assessments",
+      "name": "Assessments"
+    },
+    {
+      "description": "Endpoints for triggering and managing reports",
+      "name": "Reports"
+    }
+  ]
+}

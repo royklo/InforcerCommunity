@@ -58,8 +58,6 @@ function Get-InforcerPolicyDisplayInfo {
     param(
         [Parameter(Mandatory)][string]$PolicyName,
         [Parameter()][string]$Product,
-        [Parameter()][string]$PrimaryGroup,
-        [Parameter()][string]$SecondaryGroup,
         [Parameter()][int]$PolicyTypeId
     )
 
@@ -289,8 +287,7 @@ function ConvertTo-InforcerDocModel {
 
         # Map to friendly display name and Microsoft admin portal category
         $displayInfo = Get-InforcerPolicyDisplayInfo -PolicyName $policyName `
-            -Product $prod -PrimaryGroup $policy.primaryGroup `
-            -SecondaryGroup $policy.secondaryGroup -PolicyTypeId $policy.policyTypeId
+            -Product $prod -PolicyTypeId $policy.policyTypeId
         if ($displayInfo.FriendlyName) { $policyName = $displayInfo.FriendlyName }
 
         $catKey = if ($displayInfo.Category) {

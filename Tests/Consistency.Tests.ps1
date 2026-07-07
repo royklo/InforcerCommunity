@@ -804,6 +804,16 @@ Describe 'Private helpers (via module scope)' {
                     controlProfiles = @(
                         [PSCustomObject]@{ id = 'mfa-admins'; title = 'Require MFA for admins'; controlCategory = 'Identity'; currentScore = 0; maxScore = 10; scoreDifference = 10 }
                     )
+                    controlCategoryScores = @(
+                        [PSCustomObject]@{
+                            controlCategory = 'Identity'
+                            currentScore    = 1
+                            maxScore        = 5
+                            historicScores  = @(
+                                [PSCustomObject]@{ createdDateTime = '2026-07-01'; currentScore = 1; maxScore = 5 }
+                            )
+                        }
+                    )
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $secure -ObjectType SecureScore
                 $secure.CurrentScore | Should -Be 412.5
@@ -814,6 +824,10 @@ Describe 'Private helpers (via module scope)' {
                 $secure.Scores[0].CurrentScore | Should -Be 410
                 $secure.ControlProfiles[0].Title | Should -Be 'Require MFA for admins'
                 $secure.ControlProfiles[0].ScoreDifference | Should -Be 10
+                $secure.ControlCategoryScores[0].ControlCategory | Should -Be 'Identity'
+                $secure.ControlCategoryScores[0].CurrentScore | Should -Be 1
+                $secure.ControlCategoryScores[0].HistoricScores[0].CreatedDateTime | Should -Be '2026-07-01'
+                $secure.ControlCategoryScores[0].HistoricScores[0].CurrentScore | Should -Be 1
             }
         }
 

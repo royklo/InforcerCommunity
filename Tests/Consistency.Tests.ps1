@@ -1675,7 +1675,7 @@ Describe 'Private helpers (via module scope)' {
 
         It 'Invoke-InforcerReport -WhatIf does not call Invoke-InforcerApiRequest with POST' {
             $null = Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 14436 -WhatIf -ErrorAction SilentlyContinue
-            Assert-MockCalled -ModuleName InforcerCommunity Invoke-InforcerApiRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'POST' }
+            Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-InforcerApiRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'POST' }
         }
 
         AfterEach {
@@ -1711,7 +1711,7 @@ Describe 'Private helpers (via module scope)' {
                 -WarningVariable w -WarningAction SilentlyContinue
             @($w).Count | Should -BeGreaterThan 0
             ($w -join ' ') | Should -Match '-Open is ignored'
-            Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 0 -Exactly
+            Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 0 -Exactly
         }
 
         It '-Open with one saved file calls Invoke-Item once on the file' {
@@ -1734,7 +1734,7 @@ Describe 'Private helpers (via module scope)' {
             }
             try {
                 $null = Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 14436 -OutputPath $tempDir -Open
-                Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 1 -Exactly
+                Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 1 -Exactly
             } finally {
                 Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
             }
@@ -1867,7 +1867,7 @@ Describe 'Private helpers (via module scope)' {
             try {
                 $null = Invoke-InforcerReport -ReportType X -OutputFormat csv -TenantId 14436 -OutputPath $tempDir -Open
                 # Invoke-Item should have been called exactly once on the .csv file
-                Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 1 -Exactly -ParameterFilter { $LiteralPath -eq (Join-Path $tempDir 'safe.csv') }
+                Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 1 -Exactly -ParameterFilter { $LiteralPath -eq (Join-Path $tempDir 'safe.csv') }
             } finally {
                 Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
             }
@@ -1897,9 +1897,9 @@ Describe 'Private helpers (via module scope)' {
                     -WarningVariable w -WarningAction SilentlyContinue
                 ($w -join ' ') | Should -Match 'non-allowlisted extension'
                 # Invoke-Item should NOT have been called on the .command file
-                Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 0 -Exactly -ParameterFilter { $LiteralPath -eq (Join-Path $tempDir 'evil.command') }
+                Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 0 -Exactly -ParameterFilter { $LiteralPath -eq (Join-Path $tempDir 'evil.command') }
                 # But SHOULD have been called once on the directory
-                Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 1 -Exactly -ParameterFilter { $LiteralPath -eq $tempDir }
+                Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 1 -Exactly -ParameterFilter { $LiteralPath -eq $tempDir }
             } finally {
                 Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
             }

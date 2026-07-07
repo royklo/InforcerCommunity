@@ -31,6 +31,7 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
 - **Dropped `Get-InforcerReportTypeStaticKeys` wrapper.** Argument completers already read `$script:InforcerReportTypeStaticKeys` directly at 5 sites; the wrapper was called only by Pester tests, which now target the `$script:` array in the module scope for the same coverage. Function was not exported.
 - **`Get-InforcerPolicyDisplayInfo` moved next to its sibling helpers.** Had exactly one caller (`ConvertTo-InforcerDocModel`) and zero direct test invocations, so it now lives inside `ConvertTo-InforcerDocModel.ps1` alongside `Get-InforcerCategoryKey` and `Get-InforcerPolicyName`. Net: -1 private file, -31 lines. Behaviour unchanged (DocModel 66/66, Consistency 162/162).
 - **Dropped two dead parameters from `Get-InforcerPolicyDisplayInfo`.** `-PrimaryGroup` and `-SecondaryGroup` were declared but never referenced in the body (surfaced by PSScriptAnalyzer `PSReviewUnusedParameter`). The single caller stopped passing them too.
+- **Pester 6 compatibility for the test suite.** Replaced 6 `Assert-MockCalled` calls (removed in Pester 6) with `Should -Invoke`. Suite is now green on both Pester 5.7 and Pester 6.0 (397 passed, 2 skipped).
 
 ## [0.5.0] - 2026-06-30
 

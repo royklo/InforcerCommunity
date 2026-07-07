@@ -25,14 +25,6 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
 - **`Get-InforcerUser -UserId` was returning the wrong shape.** Live-API verification exposed this: without `-PreserveStructure`, `Invoke-InforcerApiRequest`'s "unwrap first array property of `.data`" convenience was unwrapping the user object's nested arrays (e.g. `groups`, `assignedLicenses`), so the cmdlet returned an array of group memberships instead of the user detail. `PSTypeName` was never applied. Fix: added `-PreserveStructure` to the API call.
 - **New `Get-InforcerSecureScore` needed the same fix on first flight** — same root cause, same defense (`-PreserveStructure` added). Live-verified: cmdlet now returns a single `InforcerCommunity.SecureScore` object with 90-day history, control profiles, and category scores populated as documented.
 
-### Internal (no user-facing behaviour change)
-
-- **`ConvertFrom-InforcerSecureString` shrunk** to `[System.Net.NetworkCredential]::new('', $s).Password` (was a 6-line `SecureStringToBSTR` / `PtrToStringBSTR` / `ZeroFreeBSTR` marshal). Equivalent defence — both paths zero the unmanaged buffer — verified byte-identical across 8 samples (empty, unicode, newline, tab, 512-char, standard secrets).
-- **Dropped `Get-InforcerReportTypeStaticKeys` wrapper.** Argument completers already read `$script:InforcerReportTypeStaticKeys` directly at 5 sites; the wrapper was called only by Pester tests, which now target the `$script:` array in the module scope for the same coverage. Function was not exported.
-- **`Get-InforcerPolicyDisplayInfo` moved next to its sibling helpers.** Had exactly one caller (`ConvertTo-InforcerDocModel`) and zero direct test invocations, so it now lives inside `ConvertTo-InforcerDocModel.ps1` alongside `Get-InforcerCategoryKey` and `Get-InforcerPolicyName`. Net: -1 private file, -31 lines. Behaviour unchanged (DocModel 66/66, Consistency 162/162).
-- **Dropped two dead parameters from `Get-InforcerPolicyDisplayInfo`.** `-PrimaryGroup` and `-SecondaryGroup` were declared but never referenced in the body (surfaced by PSScriptAnalyzer `PSReviewUnusedParameter`). The single caller stopped passing them too.
-- **Pester 6 compatibility for the test suite.** Replaced 6 `Assert-MockCalled` calls (removed in Pester 6) with `Should -Invoke`. Suite is now green on both Pester 5.7 and Pester 6.0 (397 passed, 2 skipped).
-
 ## [0.5.0] - 2026-06-30
 
 ### Features

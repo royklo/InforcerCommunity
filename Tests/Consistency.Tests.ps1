@@ -1410,23 +1410,22 @@ Describe 'Private helpers (via module scope)' {
                     Content    = '{"message":"Internal Server Error"}'
                 }
             }
-            $err = $null
             $r = & (Get-Module InforcerCommunity) {
                 param($ev)
                 Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') -ErrorVariable ev -ErrorAction SilentlyContinue
                 $ev
             } ([ref]$null)
             # The error stream captured the failure
-            $err = $r | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }
-            (Test-Path variable:r) | Should -BeTrue
+            ($r | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) | Should -Not -BeNullOrEmpty
         }
 
         It 'Returns NotConnected error when no session' {
             & (Get-Module InforcerCommunity) { $script:InforcerSession = $null }
-            $err = $null
-            & (Get-Module InforcerCommunity) {
-                Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') -ErrorVariable err -ErrorAction SilentlyContinue
+            $err = & (Get-Module InforcerCommunity) {
+                Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') -ErrorVariable innerErr -ErrorAction SilentlyContinue
+                $innerErr
             }
+            $err | Should -Not -BeNullOrEmpty -Because 'should emit an error when no session is active'
             # Restore session for subsequent tests
             & (Get-Module InforcerCommunity) {
                 $secKey = ConvertTo-SecureString 'fake' -AsPlainText -Force

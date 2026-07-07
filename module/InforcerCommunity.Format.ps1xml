@@ -596,8 +596,21 @@
               <ListItem><Label>CurrentScorePercentage</Label><PropertyName>CurrentScorePercentage</PropertyName></ListItem>
               <ListItem><Label>LicensedUserCount</Label><PropertyName>LicensedUserCount</PropertyName></ListItem>
               <ListItem><Label>EnabledServices</Label><ScriptBlock>if ($_.enabledServices) { ($_.enabledServices) -join ', ' } else { '' }</ScriptBlock></ListItem>
-              <ListItem><Label>ScoreHistoryDays</Label><ScriptBlock>if ($_.scores) { @($_.scores).Count } else { 0 }</ScriptBlock></ListItem>
+              <ListItem><Label>ScoreHistory</Label><ScriptBlock>
+                $s = @($_.scores)
+                if ($s.Count -eq 0) { return '(none)' }
+                $sorted = $s | Sort-Object { [datetime]$_.createdDateTime }
+                $first = $sorted[0].createdDateTime -replace 'T.*$',''
+                $last  = $sorted[-1].createdDateTime -replace 'T.*$',''
+                "$($s.Count) day(s), $first → $last (latest $($sorted[-1].currentScore) / $($sorted[-1].maxScore))"
+              </ScriptBlock></ListItem>
+              <ListItem><Label>ControlCategoryScores</Label><ScriptBlock>
+                $c = @($_.controlCategoryScores)
+                if ($c.Count -eq 0) { return '(none)' }
+                ($c | ForEach-Object { "$($_.controlCategory): $($_.currentScore)/$($_.maxScore)" }) -join ', '
+              </ScriptBlock></ListItem>
               <ListItem><Label>ControlProfilesCount</Label><ScriptBlock>if ($_.controlProfiles) { @($_.controlProfiles).Count } else { 0 }</ScriptBlock></ListItem>
+              <ListItem><Label>Hint</Label><ScriptBlock>'Use $obj.Scores / .ControlCategoryScores[0].HistoricScores / .ControlProfiles to drill in'</ScriptBlock></ListItem>
             </ListItems>
           </ListEntry>
         </ListEntries>

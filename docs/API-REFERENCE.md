@@ -825,9 +825,11 @@ Actionable control profile in the `controlProfiles` array of `TenantSecureScoreD
 | maxScorePercentage | number | No | Maximum score as a percentage. |
 | scoreDifference | number | No | Gap between current and max score (higher = larger remediation opportunity). |
 | scoreDifferencePercentage | number | No | Score difference as a percentage. |
-| remediation | string | No | Recommended remediation steps. |
+| remediation | string | No | Recommended remediation steps (HTML). |
 | remediationImpact | string | No | Impact description of the remediation. |
 | actionUrl | string | No | URL to take the recommended action. |
+
+**PSTypeName:** `InforcerCommunity.SecureScoreControlProfile`. Each item in `.ControlProfiles` on a `TenantSecureScoreDetails` gets this PSTypeName inserted so the default `Format-List` view renders `Title`, `ControlCategory`, `Service`, current/max score with potential gain, `RemediationImpact`, `ActionUrl`, `Id` — the full HTML `remediation` string stays accessible via `.remediation`.
 
 ### ReportType
 

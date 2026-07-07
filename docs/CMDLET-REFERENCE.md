@@ -560,15 +560,38 @@ Retrieves the current and historic Microsoft Secure Score for a tenant, includin
 
 ```powershell
 # Summary view for one tenant
-Get-InforcerSecureScore -TenantId 139
+$s = Get-InforcerSecureScore -TenantId 139
+$s
 
-# 90-day score history
-(Get-InforcerSecureScore -TenantId 139).Scores
+# Full recommendation list, biggest wins first
+$s.ControlProfiles | Sort-Object ScoreDifference -Descending
 
-# Top 10 controls with the biggest score gap (highest-value remediation targets)
-(Get-InforcerSecureScore -TenantId 139).ControlProfiles |
-    Sort-Object ScoreDifference -Descending |
-    Select-Object Title, Service, CurrentScore, MaxScore, Remediation -First 10
+# Top 10 quick wins as a compact table
+$s.ControlProfiles | Sort-Object ScoreDifference -Descending | Select-Object -First 10 |
+    Format-Table Title, ControlCategory, Service, ScoreDifference -AutoSize
+
+# One specific recommendation with full detail (including HTML remediation)
+$s.ControlProfiles | Where-Object Id -eq 'AdminMFAV2' | Select-Object *
+
+# Unfinished work grouped by category with total potential gain
+$s.ControlProfiles | Where-Object ScoreDifference -gt 0 |
+    Group-Object ControlCategory |
+    Select-Object Name, Count, @{n='TotalGain';e={($_.Group | Measure-Object ScoreDifference -Sum).Sum}}
+
+# Score trend for the last 30 days
+$s.Scores | Select-Object -First 30 CreatedDateTime, CurrentScore, CurrentScorePercentage
+
+# Category history — Identity's daily scores
+($s.ControlCategoryScores | Where-Object ControlCategory -eq 'Identity').HistoricScores |
+    Format-Table CreatedDateTime, CurrentScore, MaxScore, CurrentScorePercentage -AutoSize
+
+# Export the recommendations to CSV for a ticket
+$s.ControlProfiles | Sort-Object ScoreDifference -Descending |
+    Select-Object Title, ControlCategory, Service, CurrentScore, MaxScore, ScoreDifference, ActionUrl |
+    Export-Csv ./secure-score-actions.csv -NoTypeInformation
+
+# Open the fix page for the top recommendation
+Start-Process ($s.ControlProfiles | Sort-Object ScoreDifference -Descending | Select-Object -First 1).ActionUrl
 
 # Pipeline from Get-InforcerTenant
 Get-InforcerTenant -TenantId 139 | Get-InforcerSecureScore
@@ -577,16 +600,23 @@ Get-InforcerTenant -TenantId 139 | Get-InforcerSecureScore
 ### Example output (default list view)
 
 ```
-CurrentScore           : 412.5
-MaxScore               : 640
-CurrentScorePercentage : 64.45
-LicensedUserCount      : 275
-EnabledServices        : AzureAD, Exchange, SharePoint, Defender
-ScoreHistoryDays       : 90
-ControlProfilesCount   : 128
+CurrentScore           : 1002.88
+MaxScore               : 1267
+CurrentScorePercentage : 79.15
+LicensedUserCount      : 0
+EnabledServices        : HasAADP1, HasCASD, HasMDOP1, HasDLP, HasAIPP1, HasMDB, HasSPOP1
+ScoreHistory           : 90 day(s), 2026-04-09 → 2026-07-07 (latest 1002.88 / 1267)
+ControlCategoryScores  : Identity: 49.13/71, Apps: 177/198, Data: 7/9, Device: 769.75/989
+ControlProfilesCount   : 64
+TopRecommendations     : +10 Ensure multifactor authentication is enabled for all users in administrative roles
+                         +8.75 Fix Microsoft Defender for Endpoint sensor data collection in macOS
+                         +8.75 Fix Microsoft Defender for Endpoint impaired communications in macOS
+Hint                   : Use $obj.ControlProfiles | Sort-Object ScoreDifference -Descending for the full list. .Scores / .ControlCategoryScores[0].HistoricScores for the history.
 ```
 
-Use `| Select-Object *` to see all properties including `Scores`, `ControlProfiles`, and `ControlCategoryScores`.
+Each nested item in `.ControlProfiles` carries the PSTypeName `InforcerCommunity.SecureScoreControlProfile` and renders as a compact list (`Title`, `ControlCategory`, `Service`, current/max score with potential gain, `RemediationImpact`, `ActionUrl`, `Id`) — the full HTML `remediation` string is still on the object as `.remediation` when needed.
+
+Use `| Select-Object *` to see all properties on any level.
 
 ---
 

@@ -33,6 +33,21 @@ function Get-InforcerSecureScore {
         Lists the 10 controls with the largest gap between current and max score.
 
     .EXAMPLE
+        $s = Get-InforcerSecureScore -TenantId 139
+        $s.ControlProfiles | Where-Object ScoreDifference -gt 0 |
+            Group-Object ControlCategory |
+            Select-Object Name, Count, @{n='TotalGain';e={($_.Group | Measure-Object ScoreDifference -Sum).Sum}}
+
+        Groups open recommendations by category with total potential score gain per category.
+
+    .EXAMPLE
+        $s = Get-InforcerSecureScore -TenantId 139
+        ($s.ControlCategoryScores | Where-Object ControlCategory -eq 'Identity').HistoricScores |
+            Format-Table CreatedDateTime, CurrentScore, MaxScore, CurrentScorePercentage -AutoSize
+
+        Shows the daily Identity category history for the tenant.
+
+    .EXAMPLE
         Get-InforcerTenant -TenantId 139 | Get-InforcerSecureScore
 
         Retrieves secure scores for the piped tenant.

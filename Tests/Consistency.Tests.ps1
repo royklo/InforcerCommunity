@@ -1516,24 +1516,22 @@ Describe 'Private helpers (via module scope)' {
         }
     }
 
-    Context 'Get-InforcerReportTypeStaticKeys' {
-        It 'Returns a non-empty string array' {
-            $keys = & (Get-Module InforcerCommunity) { Get-InforcerReportTypeStaticKeys } | ForEach-Object { $_ }
+    Context '$script:InforcerReportTypeStaticKeys (completer fallback list)' {
+        It 'Is a non-empty string array' {
+            $keys = & (Get-Module InforcerCommunity) { $script:InforcerReportTypeStaticKeys }
             ($keys | Measure-Object).Count | Should -BeGreaterThan 0
             $keys | ForEach-Object { $_ | Should -BeOfType [string] }
         }
 
         It 'Includes the well-known report types used in completer fallback' {
-            $keys = & (Get-Module InforcerCommunity) { Get-InforcerReportTypeStaticKeys } | ForEach-Object { $_ }
+            $keys = & (Get-Module InforcerCommunity) { $script:InforcerReportTypeStaticKeys }
             foreach ($expected in 'ActiveUserCount','CopilotAdoption','Assessment','TenantAuditReport','SecureScores') {
                 $keys | Should -Contain $expected
             }
         }
 
-        It 'Returns distinct values (no duplicates)' {
-            # Helper returns the array via unary comma to preserve identity; flatten with the
-            # pipeline so we get the real string array rather than a nested wrapper.
-            $keys = & (Get-Module InforcerCommunity) { Get-InforcerReportTypeStaticKeys } | ForEach-Object { $_ }
+        It 'Contains distinct values (no duplicates)' {
+            $keys = & (Get-Module InforcerCommunity) { $script:InforcerReportTypeStaticKeys }
             ($keys | Sort-Object -Unique).Count | Should -Be ($keys | Measure-Object).Count
         }
     }

@@ -831,6 +831,74 @@ Describe 'Private helpers (via module scope)' {
             }
         }
 
+        It 'SecureScore ControlProfiles: drill-in patterns from CMDLET-REFERENCE examples' {
+            & (Get-Module InforcerCommunity) {
+                # Fixture with 4 recommendations across 2 categories
+                $secure = [PSCustomObject]@{
+                    controlProfiles = @(
+                        [PSCustomObject]@{ id = 'AdminMFAV2'; title = 'Require MFA for admins'; controlCategory = 'Identity'; service = 'AzureAD'; currentScore = 0; maxScore = 10; scoreDifference = 10; actionUrl = 'https://example/adminmfa' }
+                        [PSCustomObject]@{ id = 'scid_5001'; title = 'Fix MDE macOS';           controlCategory = 'Device';   service = 'MDATP';   currentScore = 1.25; maxScore = 10; scoreDifference = 8.75; actionUrl = 'https://example/mde' }
+                        [PSCustomObject]@{ id = 'MFARegistrationV2'; title = 'MFA for all users'; controlCategory = 'Identity'; service = 'AzureAD'; currentScore = 5.63; maxScore = 9;  scoreDifference = 3.37; actionUrl = 'https://example/mfa' }
+                        [PSCustomObject]@{ id = 'zero-gap';   title = 'Already done';           controlCategory = 'Device';   service = 'MDATP';   currentScore = 5;  maxScore = 5;  scoreDifference = 0;    actionUrl = 'https://example/done' }
+                    )
+                    controlCategoryScores = @(
+                        [PSCustomObject]@{ controlCategory = 'Identity'; currentScore = 5.63; maxScore = 19; historicScores = @(
+                            [PSCustomObject]@{ createdDateTime = '2026-07-01'; currentScore = 5.63; maxScore = 19 }
+                            [PSCustomObject]@{ createdDateTime = '2026-06-30'; currentScore = 4.63; maxScore = 19 }
+                        ) }
+                    )
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $secure -ObjectType SecureScore
+
+                # #2 in the docs: full list, biggest-gain first
+                $ranked = $secure.ControlProfiles | Sort-Object ScoreDifference -Descending
+                $ranked[0].Id | Should -Be 'AdminMFAV2'
+                $ranked[-1].Id | Should -Be 'zero-gap'
+
+                # #3: top-3 with Format-Table columns
+                $top3 = $ranked | Select-Object -First 3
+                @($top3).Count | Should -Be 3
+                $top3[0].ScoreDifference | Should -Be 10
+
+                # #4: pick one recommendation by Id
+                $one = $secure.ControlProfiles | Where-Object Id -eq 'AdminMFAV2'
+                @($one).Count | Should -Be 1
+                $one.Title | Should -Be 'Require MFA for admins'
+
+                # #5: group unfinished work by category with total gain per category
+                $byCat = $secure.ControlProfiles |
+                    Where-Object ScoreDifference -gt 0 |
+                    Group-Object ControlCategory |
+                    Select-Object Name, Count, @{n='TotalGain';e={($_.Group | Measure-Object ScoreDifference -Sum).Sum}}
+                [Math]::Round(($byCat | Where-Object Name -eq 'Identity').TotalGain, 2) | Should -Be 13.37
+                [Math]::Round(($byCat | Where-Object Name -eq 'Device').TotalGain, 2)   | Should -Be 8.75
+
+                # #7: category history drill-in via PascalCase alias
+                $identityHistory = ($secure.ControlCategoryScores | Where-Object ControlCategory -eq 'Identity').HistoricScores
+                @($identityHistory).Count | Should -Be 2
+                $identityHistory[0].CreatedDateTime | Should -Be '2026-07-01'
+            }
+        }
+
+        It 'SecureScore ControlProfile: nested objects carry PSTypeName for the format view' {
+            & (Get-Module InforcerCommunity) {
+                # Simulate what Get-InforcerSecureScore does after the API call
+                $response = [PSCustomObject]@{
+                    currentScore = 1; maxScore = 10; currentScorePercentage = 10; licensedUserCount = 0
+                    enabledServices = @(); scores = @(); controlCategoryScores = @()
+                    controlProfiles = @(
+                        [PSCustomObject]@{ id = 'a'; title = 't'; controlCategory = 'Identity'; service = 'AzureAD'; currentScore = 0; maxScore = 10; scoreDifference = 10; actionUrl = 'x' }
+                    )
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $response -ObjectType SecureScore
+                $response.PSObject.TypeNames.Insert(0, 'InforcerCommunity.SecureScore')
+                foreach ($cp in @($response.controlProfiles)) {
+                    $cp.PSObject.TypeNames.Insert(0, 'InforcerCommunity.SecureScoreControlProfile')
+                }
+                $response.ControlProfiles[0].PSObject.TypeNames | Should -Contain 'InforcerCommunity.SecureScoreControlProfile'
+            }
+        }
+
         It 'AuditEvent: adds Id alias' {
             & (Get-Module InforcerCommunity) {
                 $ev = [PSCustomObject]@{
@@ -1484,11 +1552,12 @@ Describe 'Private helpers (via module scope)' {
                     Content    = ([System.Text.Encoding]::UTF8.GetBytes('{"success":false,"message":"Forbidden"}'))
                 }
             }
-            $err = $null
-            & (Get-Module InforcerCommunity) {
-                Invoke-InforcerRawDownload -Endpoint '/x' -ErrorVariable err -ErrorAction SilentlyContinue
+            $err = & (Get-Module InforcerCommunity) {
+                Invoke-InforcerRawDownload -Endpoint '/x' -ErrorVariable innerErr -ErrorAction SilentlyContinue
+                $innerErr
             }
-            # The mock should fire — caller gets no bytes back
+            $err | Should -Not -BeNullOrEmpty -Because 'a 4xx response should surface an error record'
+            "$err" | Should -Match 'Forbidden' -Because 'API message should be extracted into the error text'
         }
 
         It 'Streams to disk when -DestinationDirectory is set (no Bytes in output)' {

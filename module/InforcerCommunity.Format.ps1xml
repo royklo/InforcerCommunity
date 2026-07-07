@@ -600,8 +600,9 @@
                 $s = @($_.scores)
                 if ($s.Count -eq 0) { return '(none)' }
                 $sorted = $s | Sort-Object { [datetime]$_.createdDateTime }
-                $first = $sorted[0].createdDateTime -replace 'T.*$',''
-                $last  = $sorted[-1].createdDateTime -replace 'T.*$',''
+                $inv = [System.Globalization.CultureInfo]::InvariantCulture
+                $first = ([datetime]$sorted[0].createdDateTime).ToString('yyyy-MM-dd', $inv)
+                $last  = ([datetime]$sorted[-1].createdDateTime).ToString('yyyy-MM-dd', $inv)
                 "$($s.Count) day(s), $first → $last (latest $($sorted[-1].currentScore) / $($sorted[-1].maxScore))"
               </ScriptBlock></ListItem>
               <ListItem><Label>ControlCategoryScores</Label><ScriptBlock>

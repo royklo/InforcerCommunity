@@ -611,7 +611,34 @@
                 ($c | ForEach-Object { "$($_.controlCategory): $($_.currentScore)/$($_.maxScore)" }) -join ', '
               </ScriptBlock></ListItem>
               <ListItem><Label>ControlProfilesCount</Label><ScriptBlock>if ($_.controlProfiles) { @($_.controlProfiles).Count } else { 0 }</ScriptBlock></ListItem>
-              <ListItem><Label>Hint</Label><ScriptBlock>'Use $obj.Scores / .ControlCategoryScores[0].HistoricScores / .ControlProfiles to drill in'</ScriptBlock></ListItem>
+              <ListItem><Label>TopRecommendations</Label><ScriptBlock>
+                $cp = @($_.controlProfiles) | Where-Object { $_.scoreDifference -gt 0 } | Sort-Object -Property @{ Expression = 'scoreDifference'; Descending = $true } | Select-Object -First 3
+                if (-not $cp) { return '(none - all controls maxed out)' }
+                ($cp | ForEach-Object { "+$($_.scoreDifference) $($_.title)" }) -join "`n"
+              </ScriptBlock></ListItem>
+              <ListItem><Label>Hint</Label><ScriptBlock>'Use $obj.ControlProfiles | Sort-Object ScoreDifference -Descending for the full list. .Scores / .ControlCategoryScores[0].HistoricScores for the history.'</ScriptBlock></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <View>
+      <Name>InforcerCommunity.SecureScoreControlProfile.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.SecureScoreControlProfile</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>Title</Label><PropertyName>title</PropertyName></ListItem>
+              <ListItem><Label>ControlCategory</Label><PropertyName>controlCategory</PropertyName></ListItem>
+              <ListItem><Label>Service</Label><PropertyName>service</PropertyName></ListItem>
+              <ListItem><Label>Score</Label><ScriptBlock>"$($_.currentScore) / $($_.maxScore) (+$($_.scoreDifference) if fixed)"</ScriptBlock></ListItem>
+              <ListItem><Label>RemediationImpact</Label><PropertyName>remediationImpact</PropertyName></ListItem>
+              <ListItem><Label>ActionUrl</Label><PropertyName>actionUrl</PropertyName></ListItem>
+              <ListItem><Label>Id</Label><PropertyName>id</PropertyName></ListItem>
             </ListItems>
           </ListEntry>
         </ListEntries>

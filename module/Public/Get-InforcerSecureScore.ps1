@@ -94,6 +94,9 @@ function Get-InforcerSecureScore {
         if ($response -is [PSObject]) {
             $null = Add-InforcerPropertyAliases -InputObject $response -ObjectType SecureScore
             $response.PSObject.TypeNames.Insert(0, 'InforcerCommunity.SecureScore')
+            foreach ($cp in @($response.controlProfiles)) {
+                if ($cp -is [PSObject]) { $cp.PSObject.TypeNames.Insert(0, 'InforcerCommunity.SecureScoreControlProfile') }
+            }
         }
         $response
     }

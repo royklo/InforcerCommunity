@@ -582,5 +582,68 @@
       </ListControl>
     </View>
 
+    <View>
+      <Name>InforcerCommunity.SecureScore.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.SecureScore</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>CurrentScore</Label><PropertyName>CurrentScore</PropertyName></ListItem>
+              <ListItem><Label>MaxScore</Label><PropertyName>MaxScore</PropertyName></ListItem>
+              <ListItem><Label>CurrentScorePercentage</Label><ScriptBlock>if ($null -ne $_.currentScorePercentage) { '{0:F2}' -f [double]$_.currentScorePercentage } else { '' }</ScriptBlock></ListItem>
+              <ListItem><Label>LicensedUserCount</Label><PropertyName>LicensedUserCount</PropertyName></ListItem>
+              <ListItem><Label>EnabledServices</Label><ScriptBlock>if ($_.enabledServices) { ($_.enabledServices) -join ', ' } else { '' }</ScriptBlock></ListItem>
+              <ListItem><Label>ScoreHistory</Label><ScriptBlock>
+                $s = @($_.scores)
+                if ($s.Count -eq 0) { return '(none)' }
+                $sorted = $s | Sort-Object { [datetime]$_.createdDateTime }
+                $inv = [System.Globalization.CultureInfo]::InvariantCulture
+                $first = ([datetime]$sorted[0].createdDateTime).ToString('yyyy-MM-dd', $inv)
+                $last  = ([datetime]$sorted[-1].createdDateTime).ToString('yyyy-MM-dd', $inv)
+                "$($s.Count) day(s), $first → $last (latest $($sorted[-1].currentScore) / $($sorted[-1].maxScore))"
+              </ScriptBlock></ListItem>
+              <ListItem><Label>ControlCategoryScores</Label><ScriptBlock>
+                $c = @($_.controlCategoryScores)
+                if ($c.Count -eq 0) { return '(none)' }
+                ($c | ForEach-Object { "$($_.controlCategory): $($_.currentScore)/$($_.maxScore)" }) -join ', '
+              </ScriptBlock></ListItem>
+              <ListItem><Label>ControlProfilesCount</Label><ScriptBlock>if ($_.controlProfiles) { @($_.controlProfiles).Count } else { 0 }</ScriptBlock></ListItem>
+              <ListItem><Label>TopRecommendations</Label><ScriptBlock>
+                $cp = @($_.controlProfiles) | Where-Object { $_.scoreDifference -gt 0 } | Sort-Object -Property @{ Expression = 'scoreDifference'; Descending = $true } | Select-Object -First 3
+                if (-not $cp) { return '(none - all controls maxed out)' }
+                ($cp | ForEach-Object { "+$($_.scoreDifference) $($_.title)" }) -join "`n"
+              </ScriptBlock></ListItem>
+              <ListItem><Label>Hint</Label><ScriptBlock>'Use $obj.ControlProfiles | Sort-Object ScoreDifference -Descending for the full list. .Scores / .ControlCategoryScores[0].HistoricScores for the history.'</ScriptBlock></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <View>
+      <Name>InforcerCommunity.SecureScoreControlProfile.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.SecureScoreControlProfile</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>Title</Label><PropertyName>title</PropertyName></ListItem>
+              <ListItem><Label>ControlCategory</Label><PropertyName>controlCategory</PropertyName></ListItem>
+              <ListItem><Label>Service</Label><PropertyName>service</PropertyName></ListItem>
+              <ListItem><Label>Score</Label><ScriptBlock>"$($_.currentScore) / $($_.maxScore) (+$($_.scoreDifference) if fixed)"</ScriptBlock></ListItem>
+              <ListItem><Label>RemediationImpact</Label><PropertyName>remediationImpact</PropertyName></ListItem>
+              <ListItem><Label>ActionUrl</Label><PropertyName>actionUrl</PropertyName></ListItem>
+              <ListItem><Label>Id</Label><PropertyName>id</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

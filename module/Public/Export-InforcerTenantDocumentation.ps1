@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
     Generates comprehensive tenant documentation across all M365 products managed via Inforcer.
+
+    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read
 .DESCRIPTION
     Export-InforcerTenantDocumentation collects configuration data for the specified tenant by calling
     Get-InforcerBaseline, Get-InforcerTenant, and Get-InforcerTenantPolicies (each using

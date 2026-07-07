@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
     Compares the Intune policy configuration of two tenants and generates an HTML report.
+
+    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read
 .DESCRIPTION
     Fetches all policies from two tenants via Get-InforcerTenantPolicies, compares Intune
     Settings Catalog settings at the settingDefinitionId level, and produces a self-contained

@@ -104,7 +104,7 @@ When not connected, an error is written (e.g. "Not connected. To connect, run: C
 
 ## Get-InforcerTenant
 
-Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; PolicyDiff and PolicyDiffFormatted show policy change info when the API provides it.
+Retrieves tenant information. Optionally filter by `-TenantId` (numeric ID, Microsoft Tenant ID GUID, or tenant name). Licenses are shown as a comma-separated string; `PolicyDiff` shows policy change info when the API provides it.
 
 **Endpoints called**: `GET /beta/tenants`
 **Required API scope(s)**: `Tenants.Read`
@@ -324,7 +324,7 @@ A JSON string (array of objects) with properties such as `tenantId`, `tenantFrie
 
 ## Get-InforcerAuditEvent
 
-Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-DateFrom`, `-DateTo`, `-PageSize`, and `-MaxResults`.
+Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-DateFrom`, `-DateTo`, `-User`, `-PageSize`, and `-MaxResults`.
 
 **Endpoints called**: `POST /beta/auditEvents/search`
 **Required API scope(s)**: `Audit.Read` *(not in the API team's published scope→route mapping — the route `/beta/auditEvents/search` is unmapped; `Audit.Read` is the assumed scope based on naming. Confirm with Inforcer API team.)*
@@ -336,6 +336,7 @@ Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-
 | **EventType** | String[] | No | Event types to include. Tab completion with supported event types. Omit for all types. |
 | **DateFrom** | DateTime | No | Start of date/time range (inclusive). |
 | **DateTo** | DateTime | No | End of date/time range (inclusive). |
+| **User** | String | No | Filter events server-side by this user (matches the `user` field in the API request body). |
 | **PageSize** | Int | No | Page size per API request. Default: 100. |
 | **MaxResults** | Int | No | Max events to return. 0 = no limit. Default: 0. |
 | **Format** | String | No | `Raw` (default). |
@@ -347,6 +348,7 @@ Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-
 Get-InforcerAuditEvent
 Get-InforcerAuditEvent -DateFrom (Get-Date).AddDays(-7) -DateTo (Get-Date)
 Get-InforcerAuditEvent -EventType authentication,failedAuthentication -DateFrom $from -DateTo $to
+Get-InforcerAuditEvent -User admin@contoso.com -DateFrom (Get-Date).AddDays(-30)
 Get-InforcerAuditEvent -OutputType JsonObject
 ```
 
@@ -537,6 +539,84 @@ IsBuiltIn    : True
 IsEnabled    : True
 IsPrivileged : True
 ```
+
+---
+
+## Get-InforcerSecureScore
+
+Retrieves the current and historic Microsoft Secure Score for a tenant, including up to 90 days of daily score history, per-category breakdown, and actionable control profiles with remediation guidance.
+
+**Endpoints called**: `GET /beta/tenants/{tenantId}/secureScores` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
+**Required API scope(s)**: `Tenants.SecureScores.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
+
+**Output schema**: [TenantSecureScore](./API-REFERENCE.md#tenantsecurescoredetails) — includes `Scores` (90-day history), `ControlProfiles` (actionable recommendations), and `ControlCategoryScores`.
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|--------------|
+| **TenantId** | Object | Yes | Inforcer tenant ID (numeric ID, GUID, or tenant name). Alias: `ClientTenantId`. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
+
+### Examples
+
+```powershell
+# Summary view for one tenant
+$s = Get-InforcerSecureScore -TenantId 139
+$s
+
+# Full recommendation list, biggest wins first
+$s.ControlProfiles | Sort-Object ScoreDifference -Descending
+
+# Top 10 quick wins as a compact table
+$s.ControlProfiles | Sort-Object ScoreDifference -Descending | Select-Object -First 10 |
+    Format-Table Title, ControlCategory, Service, ScoreDifference -AutoSize
+
+# One specific recommendation with full detail (including HTML remediation)
+$s.ControlProfiles | Where-Object Id -eq 'AdminMFAV2' | Select-Object *
+
+# Unfinished work grouped by category with total potential gain
+$s.ControlProfiles | Where-Object ScoreDifference -gt 0 |
+    Group-Object ControlCategory |
+    Select-Object Name, Count, @{n='TotalGain';e={($_.Group | Measure-Object ScoreDifference -Sum).Sum}}
+
+# Score trend for the last 30 days
+$s.Scores | Select-Object -First 30 CreatedDateTime, CurrentScore, CurrentScorePercentage
+
+# Category history — Identity's daily scores
+($s.ControlCategoryScores | Where-Object ControlCategory -eq 'Identity').HistoricScores |
+    Format-Table CreatedDateTime, CurrentScore, MaxScore, CurrentScorePercentage -AutoSize
+
+# Export the recommendations to CSV for a ticket
+$s.ControlProfiles | Sort-Object ScoreDifference -Descending |
+    Select-Object Title, ControlCategory, Service, CurrentScore, MaxScore, ScoreDifference, ActionUrl |
+    Export-Csv ./secure-score-actions.csv -NoTypeInformation
+
+# Open the fix page for the top recommendation
+Start-Process ($s.ControlProfiles | Sort-Object ScoreDifference -Descending | Select-Object -First 1).ActionUrl
+
+# Pipeline from Get-InforcerTenant
+Get-InforcerTenant -TenantId 139 | Get-InforcerSecureScore
+```
+
+### Example output (default list view)
+
+```
+CurrentScore           : 1002.88
+MaxScore               : 1267
+CurrentScorePercentage : 79.15
+LicensedUserCount      : 0
+EnabledServices        : HasAADP1, HasCASD, HasMDOP1, HasDLP, HasAIPP1, HasMDB, HasSPOP1
+ScoreHistory           : 90 day(s), 2026-04-09 → 2026-07-07 (latest 1002.88 / 1267)
+ControlCategoryScores  : Identity: 49.13/71, Apps: 177/198, Data: 7/9, Device: 769.75/989
+ControlProfilesCount   : 64
+TopRecommendations     : +10 Ensure multifactor authentication is enabled for all users in administrative roles
+                         +8.75 Fix Microsoft Defender for Endpoint sensor data collection in macOS
+                         +8.75 Fix Microsoft Defender for Endpoint impaired communications in macOS
+Hint                   : Use $obj.ControlProfiles | Sort-Object ScoreDifference -Descending for the full list. .Scores / .ControlCategoryScores[0].HistoricScores for the history.
+```
+
+Each nested item in `.ControlProfiles` carries the PSTypeName `InforcerCommunity.SecureScoreControlProfile` and renders as a compact list (`Title`, `ControlCategory`, `Service`, current/max score with potential gain, `RemediationImpact`, `ActionUrl`, `Id`) — the full HTML `remediation` string is still on the object as `.remediation` when needed.
+
+Use `| Select-Object *` to see all properties on any level.
 
 ---
 

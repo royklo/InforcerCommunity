@@ -86,3 +86,6 @@ api-feedback-evidence/
 *api-feedback*.md
 .planning-archive/
 scripts/Test-ApiFeedbackItems.ps1
+
+# Local API key for live-* scripts (never commit)
+.inforcer-key.local

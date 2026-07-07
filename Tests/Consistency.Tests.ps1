@@ -30,12 +30,12 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 20
+        $script:expectedCount = 21
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
-            'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole',
+            'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore',
             'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
             'Get-InforcerAssessment', 'Invoke-InforcerAssessment',
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
@@ -48,11 +48,12 @@ Describe 'Consistency contract' {
             'Get-InforcerBaseline'          = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerTenantPolicies'    = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerAlignmentDetails'    = @('Format', 'TenantId', 'BaselineId', 'Tag', 'OutputType')
-            'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'PageSize', 'MaxResults', 'Format', 'OutputType')
+            'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'User', 'PageSize', 'MaxResults', 'Format', 'OutputType')
             'Get-InforcerSupportedEventType'    = @()
             'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'OutputType')
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
+            'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')
             'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
             'Compare-InforcerEnvironments'  = @('SourceTenantId', 'DestinationTenantId', 'SourceSession', 'DestinationSession', 'SourceBaselineId', 'DestinationBaselineId', 'IncludingAssignments', 'SettingsCatalogPath', 'FetchGraphData', 'ExcludeOS', 'PolicyNameFilter', 'OutputPath')
             'Get-InforcerAssessment'        = @('Format', 'OutputType')
@@ -84,7 +85,7 @@ Describe 'Consistency contract' {
     }
 
     It 'Get-* cmdlets that return API data have -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole')
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'OutputType'
@@ -192,6 +193,12 @@ Describe 'No-silent-failure contract' {
     It 'Get-InforcerRole produces an error when not connected' {
         $err = $null
         Get-InforcerRole -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Get-InforcerSecureScore produces an error when not connected' {
+        $err = $null
+        Get-InforcerSecureScore -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
         $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
     }
 
@@ -782,6 +789,129 @@ Describe 'Private helpers (via module scope)' {
                 $role.IsPrivileged | Should -BeTrue
             }
         }
+
+        It 'SecureScore: adds top-level and nested aliases' {
+            & (Get-Module InforcerCommunity) {
+                $secure = [PSCustomObject]@{
+                    currentScore = 412.5
+                    currentScorePercentage = 64.45
+                    maxScore = 640
+                    licensedUserCount = 275
+                    enabledServices = @('AzureAD','Exchange')
+                    scores = @(
+                        [PSCustomObject]@{ createdDateTime = '2026-07-01'; currentScore = 410; maxScore = 640 }
+                    )
+                    controlProfiles = @(
+                        [PSCustomObject]@{ id = 'mfa-admins'; title = 'Require MFA for admins'; controlCategory = 'Identity'; currentScore = 0; maxScore = 10; scoreDifference = 10 }
+                    )
+                    controlCategoryScores = @(
+                        [PSCustomObject]@{
+                            controlCategory = 'Identity'
+                            currentScore    = 1
+                            maxScore        = 5
+                            historicScores  = @(
+                                [PSCustomObject]@{ createdDateTime = '2026-07-01'; currentScore = 1; maxScore = 5 }
+                            )
+                        }
+                    )
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $secure -ObjectType SecureScore
+                $secure.CurrentScore | Should -Be 412.5
+                $secure.MaxScore | Should -Be 640
+                $secure.LicensedUserCount | Should -Be 275
+                $secure.EnabledServices | Should -Be @('AzureAD','Exchange')
+                $secure.Scores[0].CreatedDateTime | Should -Be '2026-07-01'
+                $secure.Scores[0].CurrentScore | Should -Be 410
+                $secure.ControlProfiles[0].Title | Should -Be 'Require MFA for admins'
+                $secure.ControlProfiles[0].ScoreDifference | Should -Be 10
+                $secure.ControlCategoryScores[0].ControlCategory | Should -Be 'Identity'
+                $secure.ControlCategoryScores[0].CurrentScore | Should -Be 1
+                $secure.ControlCategoryScores[0].HistoricScores[0].CreatedDateTime | Should -Be '2026-07-01'
+                $secure.ControlCategoryScores[0].HistoricScores[0].CurrentScore | Should -Be 1
+            }
+        }
+
+        It 'SecureScore ControlProfiles: drill-in patterns from CMDLET-REFERENCE examples' {
+            & (Get-Module InforcerCommunity) {
+                # Fixture with 4 recommendations across 2 categories
+                $secure = [PSCustomObject]@{
+                    controlProfiles = @(
+                        [PSCustomObject]@{ id = 'AdminMFAV2'; title = 'Require MFA for admins'; controlCategory = 'Identity'; service = 'AzureAD'; currentScore = 0; maxScore = 10; scoreDifference = 10; actionUrl = 'https://example/adminmfa' }
+                        [PSCustomObject]@{ id = 'scid_5001'; title = 'Fix MDE macOS';           controlCategory = 'Device';   service = 'MDATP';   currentScore = 1.25; maxScore = 10; scoreDifference = 8.75; actionUrl = 'https://example/mde' }
+                        [PSCustomObject]@{ id = 'MFARegistrationV2'; title = 'MFA for all users'; controlCategory = 'Identity'; service = 'AzureAD'; currentScore = 5.63; maxScore = 9;  scoreDifference = 3.37; actionUrl = 'https://example/mfa' }
+                        [PSCustomObject]@{ id = 'zero-gap';   title = 'Already done';           controlCategory = 'Device';   service = 'MDATP';   currentScore = 5;  maxScore = 5;  scoreDifference = 0;    actionUrl = 'https://example/done' }
+                    )
+                    controlCategoryScores = @(
+                        [PSCustomObject]@{ controlCategory = 'Identity'; currentScore = 5.63; maxScore = 19; historicScores = @(
+                            [PSCustomObject]@{ createdDateTime = '2026-07-01'; currentScore = 5.63; maxScore = 19 }
+                            [PSCustomObject]@{ createdDateTime = '2026-06-30'; currentScore = 4.63; maxScore = 19 }
+                        ) }
+                    )
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $secure -ObjectType SecureScore
+
+                # #2 in the docs: full list, biggest-gain first
+                $ranked = $secure.ControlProfiles | Sort-Object ScoreDifference -Descending
+                $ranked[0].Id | Should -Be 'AdminMFAV2'
+                $ranked[-1].Id | Should -Be 'zero-gap'
+
+                # #3: top-3 with Format-Table columns
+                $top3 = $ranked | Select-Object -First 3
+                @($top3).Count | Should -Be 3
+                $top3[0].ScoreDifference | Should -Be 10
+
+                # #4: pick one recommendation by Id
+                $one = $secure.ControlProfiles | Where-Object Id -eq 'AdminMFAV2'
+                @($one).Count | Should -Be 1
+                $one.Title | Should -Be 'Require MFA for admins'
+
+                # #5: group unfinished work by category with total gain per category
+                $byCat = $secure.ControlProfiles |
+                    Where-Object ScoreDifference -gt 0 |
+                    Group-Object ControlCategory |
+                    Select-Object Name, Count, @{n='TotalGain';e={($_.Group | Measure-Object ScoreDifference -Sum).Sum}}
+                [Math]::Round(($byCat | Where-Object Name -eq 'Identity').TotalGain, 2) | Should -Be 13.37
+                [Math]::Round(($byCat | Where-Object Name -eq 'Device').TotalGain, 2)   | Should -Be 8.75
+
+                # #7: category history drill-in via PascalCase alias
+                $identityHistory = ($secure.ControlCategoryScores | Where-Object ControlCategory -eq 'Identity').HistoricScores
+                @($identityHistory).Count | Should -Be 2
+                $identityHistory[0].CreatedDateTime | Should -Be '2026-07-01'
+            }
+        }
+
+        It 'SecureScore ControlProfile: nested objects carry PSTypeName for the format view' {
+            & (Get-Module InforcerCommunity) {
+                # Simulate what Get-InforcerSecureScore does after the API call
+                $response = [PSCustomObject]@{
+                    currentScore = 1; maxScore = 10; currentScorePercentage = 10; licensedUserCount = 0
+                    enabledServices = @(); scores = @(); controlCategoryScores = @()
+                    controlProfiles = @(
+                        [PSCustomObject]@{ id = 'a'; title = 't'; controlCategory = 'Identity'; service = 'AzureAD'; currentScore = 0; maxScore = 10; scoreDifference = 10; actionUrl = 'x' }
+                    )
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $response -ObjectType SecureScore
+                $response.PSObject.TypeNames.Insert(0, 'InforcerCommunity.SecureScore')
+                foreach ($cp in @($response.controlProfiles)) {
+                    $cp.PSObject.TypeNames.Insert(0, 'InforcerCommunity.SecureScoreControlProfile')
+                }
+                $response.ControlProfiles[0].PSObject.TypeNames | Should -Contain 'InforcerCommunity.SecureScoreControlProfile'
+            }
+        }
+
+        It 'AuditEvent: adds Id alias' {
+            & (Get-Module InforcerCommunity) {
+                $ev = [PSCustomObject]@{
+                    id = 'e1a5-1234'
+                    eventType = 'authentication'
+                    timestamp = '2026-07-01T00:00:00Z'
+                    user = 'admin@contoso.com'
+                }
+                $null = Add-InforcerPropertyAliases -InputObject $ev -ObjectType AuditEvent
+                $ev.Id | Should -Be 'e1a5-1234'
+                $ev.EventType | Should -Be 'authentication'
+            }
+        }
     }
 
     Context 'Filter-InforcerResponse' {
@@ -1348,23 +1478,22 @@ Describe 'Private helpers (via module scope)' {
                     Content    = '{"message":"Internal Server Error"}'
                 }
             }
-            $err = $null
             $r = & (Get-Module InforcerCommunity) {
                 param($ev)
                 Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') -ErrorVariable ev -ErrorAction SilentlyContinue
                 $ev
             } ([ref]$null)
             # The error stream captured the failure
-            $err = $r | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }
-            (Test-Path variable:r) | Should -BeTrue
+            ($r | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) | Should -Not -BeNullOrEmpty
         }
 
         It 'Returns NotConnected error when no session' {
             & (Get-Module InforcerCommunity) { $script:InforcerSession = $null }
-            $err = $null
-            & (Get-Module InforcerCommunity) {
-                Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') -ErrorVariable err -ErrorAction SilentlyContinue
+            $err = & (Get-Module InforcerCommunity) {
+                Test-InforcerReportRunTerminal -RunId ([guid]'11111111-2222-3333-4444-555555555555') -ErrorVariable innerErr -ErrorAction SilentlyContinue
+                $innerErr
             }
+            $err | Should -Not -BeNullOrEmpty -Because 'should emit an error when no session is active'
             # Restore session for subsequent tests
             & (Get-Module InforcerCommunity) {
                 $secKey = ConvertTo-SecureString 'fake' -AsPlainText -Force
@@ -1423,11 +1552,12 @@ Describe 'Private helpers (via module scope)' {
                     Content    = ([System.Text.Encoding]::UTF8.GetBytes('{"success":false,"message":"Forbidden"}'))
                 }
             }
-            $err = $null
-            & (Get-Module InforcerCommunity) {
-                Invoke-InforcerRawDownload -Endpoint '/x' -ErrorVariable err -ErrorAction SilentlyContinue
+            $err = & (Get-Module InforcerCommunity) {
+                Invoke-InforcerRawDownload -Endpoint '/x' -ErrorVariable innerErr -ErrorAction SilentlyContinue
+                $innerErr
             }
-            # The mock should fire — caller gets no bytes back
+            $err | Should -Not -BeNullOrEmpty -Because 'a 4xx response should surface an error record'
+            "$err" | Should -Match 'Forbidden' -Because 'API message should be extracted into the error text'
         }
 
         It 'Streams to disk when -DestinationDirectory is set (no Bytes in output)' {
@@ -1468,24 +1598,22 @@ Describe 'Private helpers (via module scope)' {
         }
     }
 
-    Context 'Get-InforcerReportTypeStaticKeys' {
-        It 'Returns a non-empty string array' {
-            $keys = & (Get-Module InforcerCommunity) { Get-InforcerReportTypeStaticKeys } | ForEach-Object { $_ }
+    Context '$script:InforcerReportTypeStaticKeys (completer fallback list)' {
+        It 'Is a non-empty string array' {
+            $keys = & (Get-Module InforcerCommunity) { $script:InforcerReportTypeStaticKeys }
             ($keys | Measure-Object).Count | Should -BeGreaterThan 0
             $keys | ForEach-Object { $_ | Should -BeOfType [string] }
         }
 
         It 'Includes the well-known report types used in completer fallback' {
-            $keys = & (Get-Module InforcerCommunity) { Get-InforcerReportTypeStaticKeys } | ForEach-Object { $_ }
+            $keys = & (Get-Module InforcerCommunity) { $script:InforcerReportTypeStaticKeys }
             foreach ($expected in 'ActiveUserCount','CopilotAdoption','Assessment','TenantAuditReport','SecureScores') {
                 $keys | Should -Contain $expected
             }
         }
 
-        It 'Returns distinct values (no duplicates)' {
-            # Helper returns the array via unary comma to preserve identity; flatten with the
-            # pipeline so we get the real string array rather than a nested wrapper.
-            $keys = & (Get-Module InforcerCommunity) { Get-InforcerReportTypeStaticKeys } | ForEach-Object { $_ }
+        It 'Contains distinct values (no duplicates)' {
+            $keys = & (Get-Module InforcerCommunity) { $script:InforcerReportTypeStaticKeys }
             ($keys | Sort-Object -Unique).Count | Should -Be ($keys | Measure-Object).Count
         }
     }
@@ -1629,7 +1757,7 @@ Describe 'Private helpers (via module scope)' {
 
         It 'Invoke-InforcerReport -WhatIf does not call Invoke-InforcerApiRequest with POST' {
             $null = Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 14436 -WhatIf -ErrorAction SilentlyContinue
-            Assert-MockCalled -ModuleName InforcerCommunity Invoke-InforcerApiRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'POST' }
+            Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-InforcerApiRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'POST' }
         }
 
         AfterEach {
@@ -1665,7 +1793,7 @@ Describe 'Private helpers (via module scope)' {
                 -WarningVariable w -WarningAction SilentlyContinue
             @($w).Count | Should -BeGreaterThan 0
             ($w -join ' ') | Should -Match '-Open is ignored'
-            Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 0 -Exactly
+            Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 0 -Exactly
         }
 
         It '-Open with one saved file calls Invoke-Item once on the file' {
@@ -1688,7 +1816,7 @@ Describe 'Private helpers (via module scope)' {
             }
             try {
                 $null = Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 14436 -OutputPath $tempDir -Open
-                Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 1 -Exactly
+                Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 1 -Exactly
             } finally {
                 Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
             }
@@ -1821,7 +1949,7 @@ Describe 'Private helpers (via module scope)' {
             try {
                 $null = Invoke-InforcerReport -ReportType X -OutputFormat csv -TenantId 14436 -OutputPath $tempDir -Open
                 # Invoke-Item should have been called exactly once on the .csv file
-                Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 1 -Exactly -ParameterFilter { $LiteralPath -eq (Join-Path $tempDir 'safe.csv') }
+                Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 1 -Exactly -ParameterFilter { $LiteralPath -eq (Join-Path $tempDir 'safe.csv') }
             } finally {
                 Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
             }
@@ -1851,9 +1979,9 @@ Describe 'Private helpers (via module scope)' {
                     -WarningVariable w -WarningAction SilentlyContinue
                 ($w -join ' ') | Should -Match 'non-allowlisted extension'
                 # Invoke-Item should NOT have been called on the .command file
-                Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 0 -Exactly -ParameterFilter { $LiteralPath -eq (Join-Path $tempDir 'evil.command') }
+                Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 0 -Exactly -ParameterFilter { $LiteralPath -eq (Join-Path $tempDir 'evil.command') }
                 # But SHOULD have been called once on the directory
-                Assert-MockCalled -ModuleName InforcerCommunity Invoke-Item -Times 1 -Exactly -ParameterFilter { $LiteralPath -eq $tempDir }
+                Should -Invoke -ModuleName InforcerCommunity -CommandName Invoke-Item -Times 1 -Exactly -ParameterFilter { $LiteralPath -eq $tempDir }
             } finally {
                 Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
             }

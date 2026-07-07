@@ -3,6 +3,8 @@ function Get-InforcerGroup {
     .SYNOPSIS
         Retrieves groups from an Inforcer tenant.
 
+        Required API scope(s): Tenants.Groups.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+
     .DESCRIPTION
         Gets a list of groups or a single group from the Inforcer API.
         When called without -Group, returns all groups (GroupSummary objects) with optional filtering and auto-pagination.

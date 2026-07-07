@@ -19,6 +19,7 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [Users](#users)
   - [Groups](#groups)
   - [Roles](#roles)
+  - [Secure Scores](#secure-scores)
   - [Reports](#reports)
 - [Schemas](#schemas)
   - [BaselineGroup](#baselinegroup)
@@ -39,6 +40,9 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [TenantGroupSummary](#tenantgroupsummary)
   - [TenantGroup](#tenantgroup)
   - [TenantRole](#tenantrole)
+  - [TenantSecureScoreDetails](#tenantsecurescoredetails)
+  - [TenantSecureScoreHistoryPoint](#tenantsecurescorehistorypoint)
+  - [TenantSecureScoreControlProfile](#tenantsecurescorecontrolprofile)
   - [ReportType](#reporttype)
   - [ReportRun](#reportrun)
   - [ReportOutput](#reportoutput)
@@ -95,6 +99,7 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Users.Read` + `Tenants.Read`† |
 | `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
 | `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
+| `Get-InforcerSecureScore` | `GET /beta/tenants/{tenantId}/secureScores` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.SecureScores.Read` + `Tenants.Read`† |
 | `Get-InforcerAssessment` | `GET /beta/assessments` | `Assessments.Read` |
 | `Invoke-InforcerAssessment` | `GET /beta/tenants`, `GET /beta/assessments`, `POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Tenants.Read` + `Assessments.Read` + `Assessments.Run` |
 | `Export-InforcerTenantDocumentation` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
@@ -310,6 +315,20 @@ Returns the list of Entra ID directory role definitions for a tenant.
 | `tenantId` | path | integer | Yes | Inforcer tenant ID. |
 
 **Response**: Array of [TenantRole](#tenantrole) objects.
+
+### Secure Scores
+
+#### `GET /beta/tenants/{tenantId}/secureScores`
+
+Returns the current and historic Microsoft Secure Score for a tenant. Includes up to 90 days of daily score history, per-category scores, and actionable control profiles.
+
+**Required scope**: `Tenants.SecureScores.Read` (or `Tenants.Read`)
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+
+**Response**: A single [TenantSecureScoreDetails](#tenantsecurescoredetails) object.
 
 ### Reports
 
@@ -761,6 +780,56 @@ An Entra ID directory role definition.
 | isPrivileged | boolean | No | Whether the role is privileged. |
 
 **PSTypeName:** `InforcerCommunity.Role`
+
+### TenantSecureScoreDetails
+
+Top-level response object for `GET /beta/tenants/{tenantId}/secureScores`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| currentScore | number | Yes | Current Microsoft Secure Score. |
+| currentScorePercentage | number | No | Current score as a percentage of `maxScore`. |
+| maxScore | number | Yes | Maximum possible Secure Score. |
+| licensedUserCount | integer | No | Number of licensed users. |
+| enabledServices | array\<string\> | No | Services enabled for this tenant (e.g. `AzureAD`, `Exchange`). |
+| scores | array\<[TenantSecureScoreHistoryPoint](#tenantsecurescorehistorypoint)\> | No | Up to 90 days of daily score history. |
+| controlProfiles | array\<[TenantSecureScoreControlProfile](#tenantsecurescorecontrolprofile)\> | No | Actionable control profiles with remediation guidance. |
+| controlCategoryScores | array\<object\> | No | Per-category scores and history (e.g. Identity, Data, Device). |
+
+**PSTypeName:** `InforcerCommunity.SecureScore`
+
+### TenantSecureScoreHistoryPoint
+
+Single daily score entry in the `scores` array of `TenantSecureScoreDetails`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| createdDateTime | string (datetime) | Yes | Date the score was recorded (UTC). |
+| currentScore | number | Yes | Score at this date. |
+| currentScorePercentage | number | No | Score expressed as a percentage. |
+| maxScore | number | Yes | Maximum possible score at this date. |
+
+### TenantSecureScoreControlProfile
+
+Actionable control profile in the `controlProfiles` array of `TenantSecureScoreDetails`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| id | string | Yes | Control profile identifier. |
+| title | string | Yes | Human-readable title. |
+| controlCategory | string | No | Category (e.g. Identity, Data). |
+| service | string | No | Associated service (e.g. Azure AD, Exchange). |
+| currentScore | number | No | Current score for this control. |
+| currentScorePercentage | number | No | Current score as a percentage. |
+| maxScore | number | No | Maximum score for this control. |
+| maxScorePercentage | number | No | Maximum score as a percentage. |
+| scoreDifference | number | No | Gap between current and max score (higher = larger remediation opportunity). |
+| scoreDifferencePercentage | number | No | Score difference as a percentage. |
+| remediation | string | No | Recommended remediation steps (HTML). |
+| remediationImpact | string | No | Impact description of the remediation. |
+| actionUrl | string | No | URL to take the recommended action. |
+
+**PSTypeName:** `InforcerCommunity.SecureScoreControlProfile`. Each item in `.ControlProfiles` on a `TenantSecureScoreDetails` gets this PSTypeName inserted so the default `Format-List` view renders `Title`, `ControlCategory`, `Service`, current/max score with potential gain, `RemediationImpact`, `ActionUrl`, `Id` — the full HTML `remediation` string stays accessible via `.remediation`.
 
 ### ReportType
 

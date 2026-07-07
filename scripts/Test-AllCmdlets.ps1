@@ -57,6 +57,9 @@ foreach ($name in $exported) {
             'Get-InforcerRole' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }
+            'Get-InforcerSecureScore' {
+                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
             'Get-InforcerSupportedEventType' {
                 $out = & $name -ErrorVariable err -ErrorAction SilentlyContinue
             }

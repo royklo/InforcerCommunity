@@ -3,6 +3,8 @@ function Get-InforcerRole {
     .SYNOPSIS
         Retrieves directory role definitions from an Inforcer tenant.
 
+        Required API scope(s): Tenants.Roles.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+
     .DESCRIPTION
         Gets the list of Entra ID directory role definitions for a tenant from the Inforcer API.
         Returns role definitions including display name, description, and whether the role is

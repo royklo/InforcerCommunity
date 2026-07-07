@@ -14,10 +14,5 @@ function ConvertFrom-InforcerSecureString {
         [System.Security.SecureString]$SecureString
     )
     if (-not $SecureString) { return '' }
-    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString)
-    try {
-        [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-    } finally {
-        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-    }
+    [System.Net.NetworkCredential]::new('', $SecureString).Password
 }

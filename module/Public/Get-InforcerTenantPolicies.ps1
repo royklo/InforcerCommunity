@@ -41,6 +41,8 @@ function EnrichPolicyObject {
 <#
 .SYNOPSIS
     Retrieves policies for a tenant from the Inforcer API.
+
+    Required API scope(s): tenants.policies.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
 .DESCRIPTION
     Gets all policies for the specified tenant. TenantId accepts a numeric ID, GUID, or tenant name.
     Output is normalized to use PolicyName (from displayName or name) so properties are consistent across all rows.

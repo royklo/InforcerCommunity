@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/). Versioning deviates from strict SemVer: every shipped change (feat / fix / perf / non-breaking refactor) bumps MINOR; only breaking changes bump MAJOR; docs/tests/chore-only commits don't bump. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
+## [0.6.0] - 2026-07-06
+
+### Features
+
+- **New cmdlet: `Get-InforcerSecureScore`** — retrieves the current and historic Microsoft Secure Score for a tenant from `GET /beta/tenants/{tenantId}/secureScores`. Returns the current score, max score, licensed user count, enabled services, up to 90 days of daily score history, per-category scores, and actionable control profiles with remediation guidance. `-TenantId` accepts numeric ID, GUID, or tenant name (name/GUID resolution via `Resolve-InforcerTenantId`). Supports `-OutputType JsonObject`. Required scopes: `Tenants.SecureScores.Read` + `Tenants.Read` (only when `-TenantId` is a GUID or tenant name). PSTypeName `InforcerCommunity.SecureScore` with a ListControl default view showing:
+  - `CurrentScore` / `MaxScore` / `CurrentScorePercentage` (capped at 2 decimals for display) / `LicensedUserCount` / `EnabledServices` (joined).
+  - `ScoreHistory` — day count + `first → last` ISO 8601 date range + latest score. Culture-safe: dates use InvariantCulture so nl-NL / de-DE etc. all read the same as en-US.
+  - `ControlCategoryScores` — every category inline, e.g. `Identity: 49.13/71, Apps: 177/198, Data: 7/9, Device: 769.75/989`.
+  - `ControlProfilesCount` and `TopRecommendations` — the 3 highest-`scoreDifference` open controls, so "what do I fix next" is on-screen without drilling.
+  - `Hint` — points to `.ControlProfiles | Sort-Object ScoreDifference -Descending`, `.Scores`, and `.ControlCategoryScores[0].HistoricScores` for the full data.
+- **New nested PSTypeName: `InforcerCommunity.SecureScoreControlProfile`** — every item in `.ControlProfiles` gets this type inserted, so `$s.ControlProfiles | Format-List` renders a compact view (`Title`, `ControlCategory`, `Service`, current/max score with potential gain, `RemediationImpact`, `ActionUrl`, `Id`) instead of dumping the giant HTML `remediation` blob. The full remediation HTML is still on the object as `.remediation` when needed.
+- **`Get-InforcerAuditEvent -User <string>`** — new parameter that server-side filters audit events by the specified user (matches the `user` field in the `POST /beta/auditEvents/search` request body). Previously users had to fetch all events and filter client-side.
+- **`Id` alias on audit event output** — `AuditEvent` objects now expose the raw `id` field as PascalCase `Id`, consistent with every other object type in the module.
+- **Dynamic `-EventType` tab completion** — the completer on `Get-InforcerAuditEvent -EventType` now reads `$global:InforcerCachedEventTypes`, which `Get-InforcerSupportedEventType` refreshes with the live server-side list on any authenticated call. New event types the API adds appear in tab completion automatically after the next `Get-InforcerSupportedEventType` call — no module release required. A static fallback list (currently 80 event types) covers the pre-connect case.
+- **`Get-InforcerSecureScore` nested aliasing extended** — `.ControlCategoryScores` and its inner `.historicScores` now get PascalCase aliases too (previously only top-level, `.Scores`, and `.ControlProfiles` were aliased).
+
+### Documentation
+
+- **`Required API scope(s):` line added to `Get-Help` output for 13 cmdlets** — `Compare-InforcerEnvironments`, `Export-InforcerTenantDocumentation`, `Get-InforcerAlignmentDetails`, `Get-InforcerAssessment`, `Get-InforcerAuditEvent`, `Get-InforcerBaseline`, `Get-InforcerGroup`, `Get-InforcerRole`, `Get-InforcerSupportedEventType`, `Get-InforcerTenant`, `Get-InforcerTenantPolicies`, `Get-InforcerUser`, `Invoke-InforcerAssessment`. Users no longer need to leave PowerShell and open `docs/API-REFERENCE.md` to learn which scope a cmdlet needs. Follows the pattern already used by the Reports cmdlets.
+- **Removed stale `PolicyDiffFormatted` mention** in `docs/CMDLET-REFERENCE.md` — the property was removed from the module in an earlier version (see FINDINGS #63) but one line in the docs was missed.
+- Added `Get-InforcerSecureScore` section to `docs/CMDLET-REFERENCE.md`; endpoint description, schemas (`TenantSecureScoreDetails`, `TenantSecureScoreHistoryPoint`, `TenantSecureScoreControlProfile`), and scope-mapping row added to `docs/API-REFERENCE.md`; cmdlet added to the README public-surface table.
+- Expanded the `Get-InforcerSecureScore` docs and `Get-Help` examples with 10 drill-in patterns: sort recommendations by score gap, filter by control `Id`, group open work by category with total potential gain, drill into a category's daily history, `Export-Csv` for a remediation ticket, `Start-Process` on the top `ActionUrl`, etc.
+
+### Bug Fixes
+
+- **`Get-InforcerUser -UserId` was returning the wrong shape.** Live-API verification exposed this: without `-PreserveStructure`, `Invoke-InforcerApiRequest`'s "unwrap first array property of `.data`" convenience was unwrapping the user object's nested arrays (e.g. `groups`, `assignedLicenses`), so the cmdlet returned an array of group memberships instead of the user detail. `PSTypeName` was never applied. Fix: added `-PreserveStructure` to the API call.
+- **New `Get-InforcerSecureScore` needed the same fix on first flight** — same root cause, same defense (`-PreserveStructure` added). Live-verified: cmdlet now returns a single `InforcerCommunity.SecureScore` object with 90-day history, control profiles, and category scores populated as documented.
+
 ## [0.5.0] - 2026-06-30
 
 ### Features

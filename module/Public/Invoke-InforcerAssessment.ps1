@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
     Runs an assessment against one or more tenants via the Inforcer API.
+
+    Required API scope(s): Tenants.Read + Assessments.Read + Assessments.Run
 .DESCRIPTION
     Triggers an assessment run and returns detailed results including per-check scores,
     passes, violations, warnings, and framework metadata.

@@ -593,7 +593,7 @@
             <ListItems>
               <ListItem><Label>CurrentScore</Label><PropertyName>CurrentScore</PropertyName></ListItem>
               <ListItem><Label>MaxScore</Label><PropertyName>MaxScore</PropertyName></ListItem>
-              <ListItem><Label>CurrentScorePercentage</Label><PropertyName>CurrentScorePercentage</PropertyName></ListItem>
+              <ListItem><Label>CurrentScorePercentage</Label><ScriptBlock>if ($null -ne $_.currentScorePercentage) { '{0:F2}' -f [double]$_.currentScorePercentage } else { '' }</ScriptBlock></ListItem>
               <ListItem><Label>LicensedUserCount</Label><PropertyName>LicensedUserCount</PropertyName></ListItem>
               <ListItem><Label>EnabledServices</Label><ScriptBlock>if ($_.enabledServices) { ($_.enabledServices) -join ', ' } else { '' }</ScriptBlock></ListItem>
               <ListItem><Label>ScoreHistory</Label><ScriptBlock>

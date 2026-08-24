@@ -2,7 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
-The format follows [Conventional Commits](https://www.conventionalcommits.org/). Versioning deviates from strict SemVer: every shipped change (feat / fix / perf / non-breaking refactor) bumps MINOR; only breaking changes bump MAJOR; docs/tests/chore-only commits don't bump. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
+The format follows [Conventional Commits](https://www.conventionalcommits.org/). Versioning deviates from strict SemVer: every shipped change (feat / fix / perf / non-breaking refactor) bumps MINOR; docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
+
+## [0.7.0] - 2026-08-24
+
+### Breaking Changes
+
+- **`Compare-InforcerEnvironments` and `Export-InforcerTenantDocumentation` no longer write files by default, and no longer open a browser.** Both had `$OutputPath = '.'` plus an unconditional `Start-Process` on the rendered HTML, so neither could run without dropping a file into the caller's working directory and spawning a browser window. In a CI pipeline or a container that is wrong twice over: the file is litter, and there is nothing to open it with.
+  - Writing now happens only when `-OutputPath` is given. There is no default. `-OutputPath`'s presence *is* the opt-in — a separate `-Export` switch would carry no information the path does not already carry.
+  - Opening a browser now requires the new `-Show` switch.
+  - **Without `-OutputPath` the cmdlets return the model instead of `System.IO.FileInfo`** — the comparison hashtable from `Compare-InforcerEnvironments`, the DocModel hashtable from `Export-InforcerTenantDocumentation`. This makes it possible to read alignment scores or tenant configuration without producing artefacts.
+  - **Migration:** add `-OutputPath <dir>` to any call that relied on files appearing in the working directory, and `-Show` to any call that relied on the browser opening. Scripts consuming the `FileInfo` return value need `-OutputPath` to keep that return type.
+
+### Bug Fixes
+
+- **`Invoke-InforcerAssessment` could never reach the API.** Every call failed with `400 ValidationFailure — "Unspecified content type application/json is not allowed."` `POST /beta/tenants/{id}/assessments/{assessmentId}/runs` accepts no request body and rejects *any* `Content-Type`. Removing the header from the hashtable was not enough: `Invoke-RestMethod` supplies `application/x-www-form-urlencoded` on a bodyless POST, which is rejected the same way. Now sends `-ContentType ''`, which suppresses it entirely.
+- **`Invoke-InforcerAssessment -MultiTenant` crashed instead of reporting when every tenant failed.** The run loop fell through to renderers whose `-TenantResults` is mandatory, producing `Cannot bind argument to parameter 'TenantResults' because it is an empty collection` — a parameter-binding error that said nothing about why the runs failed. A single guard after the loop now covers the JSON, HTML and CSV paths and emits `NoAssessmentResults`.
+- **`Compare-InforcerEnvironments -SourceBaselineId` reported a meaningless alignment score.** Scoping the source left the destination at its full policy set, so N baseline policies were compared against the destination's entire estate and every destination-only policy counted as a deviation: a 3-policy baseline against a 756-policy tenant scored **0.2%** where Inforcer's own alignment for the same pair is 100%. The docstring advertised exactly that one-sided form as an example. The destination now inherits `-SourceBaselineId` unless `-DestinationBaselineId` overrides it (same pair now scores 100% over 3 items). When the destination genuinely is not a member of the baseline it falls back to its full policy set with a warning naming the consequence, rather than erroring; an explicitly passed `-DestinationBaselineId` that fails is still an error.
+- **`Compare-InforcerEnvironments -ExcludeOS` was a no-op for every value its own documentation gave as an example.** It matched only the product name (`Entra`, `Intune`, `Defender`, …), while the OS lives in the category key built from `primaryGroup` (`Windows`, `macOS`, `iOS/iPadOS`, `Android`). `-ExcludeOS 'macOS','iOS'` removed 0 of 2229 items while reporting success. It now matches the category key as well as the product name, so `-ExcludeOS 'macOS','iOS'` removes 720 items and passing a product name still works.
+- **`Export-InforcerTenantDocumentation -Tag` rendered an empty document when nothing matched.** A 0.1 KB file and exit 0 reads as "nothing in this tenant is tagged that way" when the likelier cause is a tag name that does not exist. It now emits `TagMatchedNothing` and names the tags that do exist, writing no file.
+
+### Documentation
+
+- `-OutputPath`, the new `-Show` switch, and the changed return types documented in `Get-Help` and `docs/CMDLET-REFERENCE.md` for both affected cmdlets.
+- `-ExcludeOS` help now states that matching applies to both product names and platform category keys.
+- `-SourceBaselineId` help documents destination inheritance and the non-member fallback; the stale example claiming a one-sided comparison against "all Fabrikam policies" corrected.
+- Versioning note above clarified: pre-1.0, breaking changes bump MINOR under a **Breaking Changes** heading rather than MAJOR.
 
 ## [0.6.0] - 2026-07-06
 

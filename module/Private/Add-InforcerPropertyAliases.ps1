@@ -1,15 +1,33 @@
 function Add-InforcerPropertyAliases {
     <#
     .SYNOPSIS
-        Adds PascalCase alias properties to API response objects (Private helper).
+        Normalises an API response object: real property renames plus per-type shape fixes (Private helper).
     .DESCRIPTION
-        Adds PascalCase alias properties to API response objects (Private helper).
-        Adds aliases only when the source property exists and the alias does not.
-        See -ObjectType ValidateSet for supported types.
+        Adds an alias only where the API's own name is ambiguous or awkward — `id` on a baseline
+        becomes `BaselineId`, `sizeBytes` becomes `FileSize`. Nine such renames exist.
+
+        It deliberately does NOT add PascalCase aliases for properties that differ from the API
+        name only by case. There used to be 229 of those calls and every one of them was a no-op:
+        `$o.PSObject.Properties['ClientTenantId']` is a case-INSENSITIVE lookup, so it found the
+        existing `clientTenantId` and the "does the alias already exist" guard bailed every time.
+
+        That turned out to be the right behaviour arrived at by accident, so the calls were removed
+        rather than repaired:
+          - PowerShell member access is already case-insensitive. `$tenant.ClientTenantId` and even
+            `$tenant.TENANTFRIENDLYNAME` resolve today with no alias present. There is nothing to fix.
+          - An alias IS serialised. The nine real renames already emit both `"id"` and `"BaselineId"`
+            in ConvertTo-Json and as two separate Export-Csv columns. Adding 229 more would have
+            doubled every key and column in two casings — the same value, twice.
+          - `-OutputType JsonObject` returns before this helper runs, on purpose, so the JSON surface
+            is the raw API shape and never carried PascalCase in the first place.
+
+        Some -ObjectType values now have no branch at all. That is intentional: the type needs no
+        normalisation, and a missing branch is a no-op. Keep passing the type from the cmdlet so
+        there is somewhere obvious to put a rename if the API ever needs one.
     .PARAMETER InputObject
-        The PSObject to add aliases to (e.g. from API).
+        The PSObject to normalise (e.g. from API).
     .PARAMETER ObjectType
-        Type of object for alias mapping.
+        Type of object, selecting which normalisation to apply.
     #>
     [CmdletBinding()]
     param(
@@ -38,15 +56,6 @@ function Add-InforcerPropertyAliases {
 
         switch ($ObjectType) {
             'Tenant' {
-                AddAliasIfExists $obj 'ClientTenantId' 'clientTenantId'
-                AddAliasIfExists $obj 'MsTenantId' 'msTenantId'
-                AddAliasIfExists $obj 'TenantFriendlyName' 'tenantFriendlyName'
-                AddAliasIfExists $obj 'TenantDnsName' 'tenantDnsName'
-                AddAliasIfExists $obj 'SecureScore' 'secureScore'
-                AddAliasIfExists $obj 'IsBaseline' 'isBaseline'
-                AddAliasIfExists $obj 'LastBackupTimestamp' 'lastBackupTimestamp'
-                AddAliasIfExists $obj 'RecentChanges' 'recentChanges'
-                AddAliasIfExists $obj 'PolicyDiff' 'policyDiff'
                 # Licenses: replace array with comma-separated string (e.g. sku values or item ToString())
                 $licensesProp = $obj.PSObject.Properties['licenses']
                 if ($licensesProp -and $null -ne $licensesProp.Value) {
@@ -69,40 +78,12 @@ function Add-InforcerPropertyAliases {
                 }
             }
             'Baseline' {
-                AddAliasIfExists $obj 'BaselineClientTenantId' 'baselineClientTenantId'
+                # 'id' and 'name' are ambiguous on an object that also carries baselineTenant* fields.
                 AddAliasIfExists $obj 'BaselineId' 'id'
                 AddAliasIfExists $obj 'BaselineName' 'name'
-                AddAliasIfExists $obj 'BaselineTenantFriendlyName' 'baselineTenantFriendlyName'
-                AddAliasIfExists $obj 'BaselineTenantDnsName' 'baselineTenantDnsName'
-                AddAliasIfExists $obj 'BaselineMsTenantId' 'baselineMsTenantId'
-                AddAliasIfExists $obj 'AlignedThreshold' 'alignedThreshold'
-                AddAliasIfExists $obj 'SemiAlignedThreshold' 'semiAlignedThreshold'
-                $membersProp = $obj.PSObject.Properties['members']
-                if ($membersProp -and $membersProp.Value -is [object[]]) {
-                    foreach ($member in $membersProp.Value) {
-                        if ($member -is [PSObject]) {
-                            AddAliasIfExists $member 'ClientTenantId' 'clientTenantId'
-                            AddAliasIfExists $member 'MsTenantId' 'msTenantId'
-                            AddAliasIfExists $member 'TenantFriendlyName' 'tenantFriendlyName'
-                            AddAliasIfExists $member 'TenantDnsName' 'tenantDnsName'
-                            AddAliasIfExists $member 'SecureScore' 'secureScore'
-                            AddAliasIfExists $member 'IsBaseline' 'isBaseline'
-                            AddAliasIfExists $member 'LastBackupTimestamp' 'lastBackupTimestamp'
-                            AddAliasIfExists $member 'RecentChanges' 'recentChanges'
-                        }
-                    }
-                }
             }
             'Policy' {
                 AddAliasIfExists $obj 'PolicyId' 'id'
-                AddAliasIfExists $obj 'PolicyTypeId' 'policyTypeId'
-                AddAliasIfExists $obj 'FriendlyName' 'friendlyName'
-                AddAliasIfExists $obj 'ReadOnly' 'readOnly'
-                AddAliasIfExists $obj 'Product' 'product'
-                AddAliasIfExists $obj 'PrimaryGroup' 'primaryGroup'
-                AddAliasIfExists $obj 'SecondaryGroup' 'secondaryGroup'
-                AddAliasIfExists $obj 'Platform' 'platform'
-                AddAliasIfExists $obj 'PolicyCategoryId' 'policyCategoryId'
                 # PolicyName: always set from displayName, name, or friendlyName (in that order); fallback "Policy {id}"
                 $policyNameVal = $obj.PSObject.Properties['displayName'].Value -as [string]
                 if ([string]::IsNullOrWhiteSpace($policyNameVal)) { $policyNameVal = $obj.PSObject.Properties['name'].Value -as [string] }
@@ -123,70 +104,7 @@ function Add-InforcerPropertyAliases {
                     $obj.PSObject.Properties.Add([System.Management.Automation.PSAliasProperty]::new('FriendlyName', 'PolicyName'))
                 }
             }
-            'AlignmentScore' {
-                AddAliasIfExists $obj 'TenantId' 'tenantId'
-                AddAliasIfExists $obj 'TenantFriendlyName' 'tenantFriendlyName'
-                AddAliasIfExists $obj 'Score' 'score'
-                AddAliasIfExists $obj 'BaselineGroupId' 'baselineGroupId'
-                AddAliasIfExists $obj 'BaselineGroupName' 'baselineGroupName'
-                AddAliasIfExists $obj 'LastComparisonDateTime' 'lastComparisonDateTime'
-            }
-            'AlignmentDetail' {
-                # Top-level alignment properties
-                AddAliasIfExists $obj 'AlignmentScore' 'alignmentScore'
-                AddAliasIfExists $obj 'BaselineTenantId' 'baselineTenantId'
-                AddAliasIfExists $obj 'SubjectTenantId' 'subjectTenantId'
-                AddAliasIfExists $obj 'SubjectDataTimestamp' 'subjectDataTimestamp'
-                AddAliasIfExists $obj 'BaselineDataTimestamp' 'baselineDataTimestamp'
-                AddAliasIfExists $obj 'CompletedAt' 'completedAt'
-                # Metrics
-                $metricsProp = $obj.PSObject.Properties['metrics']
-                if ($metricsProp -and $null -ne $metricsProp.Value -and $metricsProp.Value -is [PSObject]) {
-                    $m = $metricsProp.Value
-                    AddAliasIfExists $m 'TotalPolicies' 'totalPolicies'
-                    AddAliasIfExists $m 'MatchedPolicies' 'matchedPolicies'
-                    AddAliasIfExists $m 'MatchedWithAcceptedDeviations' 'matchedWithAcceptedDeviations'
-                    AddAliasIfExists $m 'DeviatedPolicies' 'deviatedPolicies'
-                    AddAliasIfExists $m 'RecommendedPoliciesFromBaseline' 'recommendedPoliciesFromBaseline'
-                    AddAliasIfExists $m 'CustomerOnlyPolicies' 'customerOnlyPolicies'
-                }
-                # Per-policy aliases (matchedPolicies and deviatedUnaccepted arrays)
-                $alignPropCached = $obj.PSObject.Properties['alignment']
-                if ($alignPropCached -and $null -ne $alignPropCached.Value) {
-                    $alignVal = $alignPropCached.Value
-                }
-                foreach ($arrayName in @('matchedPolicies', 'matchedWithAcceptedDeviations', 'deviatedUnaccepted', 'missingFromSubjectUnaccepted', 'additionalInSubjectUnaccepted')) {
-                    if ($null -eq $alignVal) { continue }
-                    $policyArrayProp = $alignVal.PSObject.Properties[$arrayName]
-                    if (-not $policyArrayProp -or $null -eq $policyArrayProp.Value) { continue }
-                    foreach ($policy in @($policyArrayProp.Value)) {
-                        if (-not ($policy -is [PSObject])) { continue }
-                        AddAliasIfExists $policy 'PolicyName' 'policyName'
-                        AddAliasIfExists $policy 'Product' 'product'
-                        AddAliasIfExists $policy 'PrimaryGroup' 'primaryGroup'
-                        AddAliasIfExists $policy 'SecondaryGroup' 'secondaryGroup'
-                        AddAliasIfExists $policy 'Platform' 'platform'
-                        AddAliasIfExists $policy 'PolicyTypeId' 'policyTypeId'
-                        AddAliasIfExists $policy 'InforcerPolicyTypeName' 'inforcerPolicyTypeName'
-                        AddAliasIfExists $policy 'PolicyCategoryId' 'policyCategoryId'
-                        AddAliasIfExists $policy 'IsDeviation' 'isDeviation'
-                        AddAliasIfExists $policy 'IsMissingFromSubject' 'isMissingFromSubject'
-                        AddAliasIfExists $policy 'IsAdditionalInSubject' 'isAdditionalInSubject'
-                        AddAliasIfExists $policy 'ReadOnly' 'readOnly'
-                    }
-                }
-            }
             'AuditEvent' {
-                AddAliasIfExists $obj 'Id' 'id'
-                AddAliasIfExists $obj 'CorrelationId' 'correlationId'
-                AddAliasIfExists $obj 'ClientId' 'clientId'
-                AddAliasIfExists $obj 'RelType' 'relType'
-                AddAliasIfExists $obj 'RelId' 'relId'
-                AddAliasIfExists $obj 'EventType' 'eventType'
-                AddAliasIfExists $obj 'Message' 'message'
-                AddAliasIfExists $obj 'Code' 'code'
-                AddAliasIfExists $obj 'User' 'user'
-                AddAliasIfExists $obj 'Timestamp' 'timestamp'
                 # Flatten metadata onto the event so it works directly in the cmdlet output (no need to pipe .metadata)
                 $meta = $obj.PSObject.Properties['metadata'].Value
                 if ($null -ne $meta -and $meta -is [PSObject]) {
@@ -226,235 +144,28 @@ function Add-InforcerPropertyAliases {
                 # Metadata contains event-type-specific data (e.g. alertRuleCreate has createAlertRuleConfigCommand)
                 # accessible via $event.metadata or Select-Object *.
             }
-            'UserSummary' {
-                AddAliasIfExists $obj 'Id' 'id'
-                AddAliasIfExists $obj 'DisplayName' 'displayName'
-                AddAliasIfExists $obj 'UserPrincipalName' 'userPrincipalName'
-                AddAliasIfExists $obj 'UserType' 'userType'
-                AddAliasIfExists $obj 'JobTitle' 'jobTitle'
-                AddAliasIfExists $obj 'Department' 'department'
-                AddAliasIfExists $obj 'Groups' 'groups'
-                AddAliasIfExists $obj 'Roles' 'roles'
-                AddAliasIfExists $obj 'AssignedLicenses' 'assignedLicenses'
-                AddAliasIfExists $obj 'IsGlobalAdmin' 'isGlobalAdmin'
-                AddAliasIfExists $obj 'IsAccountEnabled' 'isAccountEnabled'
-                AddAliasIfExists $obj 'IsMfaRegistered' 'isMfaRegistered'
-                AddAliasIfExists $obj 'IsMfaCapable' 'isMfaCapable'
-            }
-            'User' {
-                # Shared with UserSummary
-                AddAliasIfExists $obj 'Id' 'id'
-                AddAliasIfExists $obj 'DisplayName' 'displayName'
-                AddAliasIfExists $obj 'UserPrincipalName' 'userPrincipalName'
-                AddAliasIfExists $obj 'UserType' 'userType'
-                AddAliasIfExists $obj 'JobTitle' 'jobTitle'
-                AddAliasIfExists $obj 'Department' 'department'
-                AddAliasIfExists $obj 'AssignedLicenses' 'assignedLicenses'
-                AddAliasIfExists $obj 'IsGlobalAdmin' 'isGlobalAdmin'
-                AddAliasIfExists $obj 'IsMfaRegistered' 'isMfaRegistered'
-                AddAliasIfExists $obj 'IsMfaCapable' 'isMfaCapable'
-
-                # Detail-only properties
-                AddAliasIfExists $obj 'GivenName' 'givenName'
-                AddAliasIfExists $obj 'Surname' 'surname'
-                AddAliasIfExists $obj 'Mail' 'mail'
-                AddAliasIfExists $obj 'MobilePhone' 'mobilePhone'
-                AddAliasIfExists $obj 'BusinessPhones' 'businessPhones'
-                AddAliasIfExists $obj 'OfficeLocation' 'officeLocation'
-                AddAliasIfExists $obj 'StreetAddress' 'streetAddress'
-                AddAliasIfExists $obj 'City' 'city'
-                AddAliasIfExists $obj 'State' 'state'
-                AddAliasIfExists $obj 'PostalCode' 'postalCode'
-                AddAliasIfExists $obj 'Country' 'country'
-                AddAliasIfExists $obj 'PreferredLanguage' 'preferredLanguage'
-                AddAliasIfExists $obj 'AccountEnabled' 'accountEnabled'
-                AddAliasIfExists $obj 'UsageLocation' 'usageLocation'
-                AddAliasIfExists $obj 'CreatedDateTime' 'createdDateTime'
-                AddAliasIfExists $obj 'LastPasswordChangeDateTime' 'lastPasswordChangeDateTime'
-                AddAliasIfExists $obj 'LastSignInDateTime' 'lastSignInDateTime'
-                AddAliasIfExists $obj 'CompanyName' 'companyName'
-                AddAliasIfExists $obj 'EmployeeId' 'employeeId'
-                AddAliasIfExists $obj 'EmployeeType' 'employeeType'
-                AddAliasIfExists $obj 'EmployeeHireDate' 'employeeHireDate'
-                AddAliasIfExists $obj 'MailNickname' 'mailNickname'
-                AddAliasIfExists $obj 'PreferredDataLocation' 'preferredDataLocation'
-                AddAliasIfExists $obj 'OnPremisesSyncEnabled' 'onPremisesSyncEnabled'
-                AddAliasIfExists $obj 'OtherMails' 'otherMails'
-                AddAliasIfExists $obj 'ProxyAddresses' 'proxyAddresses'
-                AddAliasIfExists $obj 'CreationType' 'creationType'
-                AddAliasIfExists $obj 'PasswordPolicies' 'passwordPolicies'
-                AddAliasIfExists $obj 'SignInSessionsValidFromDateTime' 'signInSessionsValidFromDateTime'
-                AddAliasIfExists $obj 'ImAddresses' 'imAddresses'
-                AddAliasIfExists $obj 'LegalAgeGroupClassification' 'legalAgeGroupClassification'
-                AddAliasIfExists $obj 'OnPremisesLastSyncDateTime' 'onPremisesLastSyncDateTime'
-                AddAliasIfExists $obj 'OnPremisesDistinguishedName' 'onPremisesDistinguishedName'
-                AddAliasIfExists $obj 'OnPremisesDomainName' 'onPremisesDomainName'
-                AddAliasIfExists $obj 'OnPremisesImmutableId' 'onPremisesImmutableId'
-                AddAliasIfExists $obj 'OnPremisesSecurityIdentifier' 'onPremisesSecurityIdentifier'
-                AddAliasIfExists $obj 'OnPremisesSamAccountName' 'onPremisesSamAccountName'
-                AddAliasIfExists $obj 'OnPremisesUserPrincipalName' 'onPremisesUserPrincipalName'
-                AddAliasIfExists $obj 'Manager' 'manager'
-                AddAliasIfExists $obj 'Groups' 'groups'
-                AddAliasIfExists $obj 'Devices' 'devices'
-                AddAliasIfExists $obj 'Roles' 'roles'
-                AddAliasIfExists $obj 'AppRoleAssignments' 'appRoleAssignments'
-                AddAliasIfExists $obj 'IsCloudOnly' 'isCloudOnly'
-                AddAliasIfExists $obj 'IsHybrid' 'isHybrid'
-                AddAliasIfExists $obj 'IsAllDevicesCompliant' 'isAllDevicesCompliant'
-                AddAliasIfExists $obj 'RiskState' 'riskState'
-                AddAliasIfExists $obj 'RiskDetail' 'riskDetail'
-                AddAliasIfExists $obj 'RiskLevel' 'riskLevel'
-            }
-            'GroupSummary' {
-                AddAliasIfExists $obj 'Id' 'id'
-                AddAliasIfExists $obj 'DisplayName' 'displayName'
-                AddAliasIfExists $obj 'Description' 'description'
-                AddAliasIfExists $obj 'Mail' 'mail'
-                AddAliasIfExists $obj 'Visibility' 'visibility'
-                AddAliasIfExists $obj 'GroupTypes' 'groupTypes'
-            }
-            'Group' {
-                AddAliasIfExists $obj 'Id' 'id'
-                AddAliasIfExists $obj 'DisplayName' 'displayName'
-                AddAliasIfExists $obj 'Description' 'description'
-                AddAliasIfExists $obj 'Mail' 'mail'
-                AddAliasIfExists $obj 'MailNickname' 'mailNickname'
-                AddAliasIfExists $obj 'Visibility' 'visibility'
-                AddAliasIfExists $obj 'MembershipRule' 'membershipRule'
-                AddAliasIfExists $obj 'GroupTypes' 'groupTypes'
-                AddAliasIfExists $obj 'CreatedDateTime' 'createdDateTime'
-                AddAliasIfExists $obj 'MailEnabled' 'mailEnabled'
-                AddAliasIfExists $obj 'OnPremisesSyncEnabled' 'onPremisesSyncEnabled'
-                AddAliasIfExists $obj 'Members' 'members'
-            }
-            'Role' {
-                AddAliasIfExists $obj 'Id' 'id'
-                AddAliasIfExists $obj 'TemplateId' 'templateId'
-                AddAliasIfExists $obj 'DisplayName' 'displayName'
-                AddAliasIfExists $obj 'Description' 'description'
-                AddAliasIfExists $obj 'IsBuiltIn' 'isBuiltIn'
-                AddAliasIfExists $obj 'IsEnabled' 'isEnabled'
-                AddAliasIfExists $obj 'IsPrivileged' 'isPrivileged'
-            }
-            'Assessment' {
-                AddAliasIfExists $obj 'Id' 'id'
-                AddAliasIfExists $obj 'Name' 'name'
-                AddAliasIfExists $obj 'Description' 'description'
-                AddAliasIfExists $obj 'AssessmentType' 'assessmentType'
-                AddAliasIfExists $obj 'LastUpdated' 'lastUpdated'
-                AddAliasIfExists $obj 'Created' 'created'
-                # Keep raw 'tags' shape intact (array OR comma-separated string from the API);
-                # downstream filters (e.g. Get-InforcerReportType -Tag) rely on the raw shape,
-                # and the Format.ps1xml view joins for display.
-                AddAliasIfExists $obj 'Tags' 'tags'
-            }
             'ReportType' {
-                AddAliasIfExists $obj 'Key' 'key'
-                AddAliasIfExists $obj 'Name' 'name'
-                AddAliasIfExists $obj 'Description' 'description'
-                AddAliasIfExists $obj 'Collatable' 'collatable'
                 # API uses 'supportedOutputFormats' (confirmed against api-uk.inforcer.com beta).
-                AddAliasIfExists $obj 'SupportedOutputFormats' 'supportedOutputFormats'
                 AddAliasIfExists $obj 'OutputFormats' 'supportedOutputFormats'
-                AddAliasIfExists $obj 'RequiredParameters' 'requiredParameters'
                 AddAliasIfExists $obj 'Parameters' 'requiredParameters'
-                # Keep raw 'tags' shape intact (array OR comma-separated string from the API);
-                # downstream filters (e.g. Get-InforcerReportType -Tag) rely on the raw shape,
+                # Note: raw 'tags' shape is left intact (array OR comma-separated string from the
+                # API); downstream filters (e.g. Get-InforcerReportType -Tag) rely on the raw shape,
                 # and the Format.ps1xml view joins for display.
-                AddAliasIfExists $obj 'Tags' 'tags'
             }
             'ReportRun' {
-                # API uses 'runId' (confirmed). Each run can batch multiple report types
-                # and output formats — hence the plurals. Field set verified against api-uk.inforcer.com.
-                AddAliasIfExists $obj 'RunId' 'runId'
+                # API uses 'runId'. 'Id' is what every other object type calls its identifier, so
+                # the alias keeps `$run.Id` working across types.
                 AddAliasIfExists $obj 'Id' 'runId'
-                AddAliasIfExists $obj 'Status' 'status'
-                AddAliasIfExists $obj 'ReportTypes' 'reportTypes'
-                AddAliasIfExists $obj 'OutputFormats' 'outputFormats'
-                AddAliasIfExists $obj 'TriggeredByType' 'triggeredByType'
-                AddAliasIfExists $obj 'CreatedAt' 'createdAt'
-                AddAliasIfExists $obj 'StartedAt' 'startedAt'
-                AddAliasIfExists $obj 'CompletedAt' 'completedAt'
-                AddAliasIfExists $obj 'OutputCount' 'outputCount'
             }
             'ReportOutput' {
                 # Output record uses: id (output id), reportType, tenantId, format, sizeBytes
                 AddAliasIfExists $obj 'OutputId' 'id'
-                AddAliasIfExists $obj 'Id' 'id'
-                AddAliasIfExists $obj 'RunId' 'runId'
-                AddAliasIfExists $obj 'TenantId' 'tenantId'
-                AddAliasIfExists $obj 'ReportType' 'reportType'
                 AddAliasIfExists $obj 'OutputFormat' 'format'
                 AddAliasIfExists $obj 'FileSize' 'sizeBytes'
             }
-            'SecureScore' {
-                AddAliasIfExists $obj 'CurrentScore' 'currentScore'
-                AddAliasIfExists $obj 'CurrentScorePercentage' 'currentScorePercentage'
-                AddAliasIfExists $obj 'MaxScore' 'maxScore'
-                AddAliasIfExists $obj 'LicensedUserCount' 'licensedUserCount'
-                AddAliasIfExists $obj 'EnabledServices' 'enabledServices'
-                AddAliasIfExists $obj 'Scores' 'scores'
-                AddAliasIfExists $obj 'ControlProfiles' 'controlProfiles'
-                AddAliasIfExists $obj 'ControlCategoryScores' 'controlCategoryScores'
-                # Nested historic score points
-                $scoresProp = $obj.PSObject.Properties['scores']
-                if ($scoresProp -and $null -ne $scoresProp.Value) {
-                    foreach ($s in @($scoresProp.Value)) {
-                        if ($s -is [PSObject]) {
-                            AddAliasIfExists $s 'CreatedDateTime' 'createdDateTime'
-                            AddAliasIfExists $s 'CurrentScore' 'currentScore'
-                            AddAliasIfExists $s 'CurrentScorePercentage' 'currentScorePercentage'
-                            AddAliasIfExists $s 'MaxScore' 'maxScore'
-                        }
-                    }
-                }
-                # Nested control profiles
-                $cpProp = $obj.PSObject.Properties['controlProfiles']
-                if ($cpProp -and $null -ne $cpProp.Value) {
-                    foreach ($c in @($cpProp.Value)) {
-                        if ($c -is [PSObject]) {
-                            AddAliasIfExists $c 'Id' 'id'
-                            AddAliasIfExists $c 'Title' 'title'
-                            AddAliasIfExists $c 'ControlCategory' 'controlCategory'
-                            AddAliasIfExists $c 'Service' 'service'
-                            AddAliasIfExists $c 'CurrentScore' 'currentScore'
-                            AddAliasIfExists $c 'CurrentScorePercentage' 'currentScorePercentage'
-                            AddAliasIfExists $c 'MaxScore' 'maxScore'
-                            AddAliasIfExists $c 'MaxScorePercentage' 'maxScorePercentage'
-                            AddAliasIfExists $c 'ScoreDifference' 'scoreDifference'
-                            AddAliasIfExists $c 'ScoreDifferencePercentage' 'scoreDifferencePercentage'
-                            AddAliasIfExists $c 'Remediation' 'remediation'
-                            AddAliasIfExists $c 'RemediationImpact' 'remediationImpact'
-                            AddAliasIfExists $c 'ActionUrl' 'actionUrl'
-                        }
-                    }
-                }
-                # Nested per-category scores
-                $ccsProp = $obj.PSObject.Properties['controlCategoryScores']
-                if ($ccsProp -and $null -ne $ccsProp.Value) {
-                    foreach ($cc in @($ccsProp.Value)) {
-                        if ($cc -is [PSObject]) {
-                            AddAliasIfExists $cc 'ControlCategory' 'controlCategory'
-                            AddAliasIfExists $cc 'CurrentScore' 'currentScore'
-                            AddAliasIfExists $cc 'CurrentScorePercentage' 'currentScorePercentage'
-                            AddAliasIfExists $cc 'MaxScore' 'maxScore'
-                            AddAliasIfExists $cc 'HistoricScores' 'historicScores'
-                            # Historic score points inside each category
-                            $hsProp = $cc.PSObject.Properties['historicScores']
-                            if ($hsProp -and $null -ne $hsProp.Value) {
-                                foreach ($h in @($hsProp.Value)) {
-                                    if ($h -is [PSObject]) {
-                                        AddAliasIfExists $h 'CreatedDateTime' 'createdDateTime'
-                                        AddAliasIfExists $h 'CurrentScore' 'currentScore'
-                                        AddAliasIfExists $h 'CurrentScorePercentage' 'currentScorePercentage'
-                                        AddAliasIfExists $h 'MaxScore' 'maxScore'
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            # AlignmentScore, AlignmentDetail, UserSummary, User, GroupSummary, Group, Role,
+            # Assessment and SecureScore need no normalisation: every property they carry is
+            # already reachable case-insensitively under the API's own name.
         }
 
         $obj

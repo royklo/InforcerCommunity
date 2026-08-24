@@ -22,6 +22,17 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
 - **`Compare-InforcerEnvironments -ExcludeOS` was a no-op for every value its own documentation gave as an example.** It matched only the product name (`Entra`, `Intune`, `Defender`, …), while the OS lives in the category key built from `primaryGroup` (`Windows`, `macOS`, `iOS/iPadOS`, `Android`). `-ExcludeOS 'macOS','iOS'` removed 0 of 2229 items while reporting success. It now matches the category key as well as the product name, so `-ExcludeOS 'macOS','iOS'` removes 720 items and passing a product name still works.
 - **`Export-InforcerTenantDocumentation -Tag` rendered an empty document when nothing matched.** A 0.1 KB file and exit 0 reads as "nothing in this tenant is tagged that way" when the likelier cause is a tag name that does not exist. It now emits `TagMatchedNothing` and names the tags that do exist, writing no file.
 
+### Refactor
+
+- **Removed 229 no-op property-alias calls from `Add-InforcerPropertyAliases`.** Every call whose alias differed from the API name only by case did nothing: the "does this alias already exist" guard uses `$o.PSObject.Properties[$aliasName]`, which is a case-**insensitive** lookup, so `ClientTenantId` found the existing `clientTenantId` and bailed. 229 of 238 calls were affected; the 9 genuine renames (`BaselineId<-id`, `BaselineName<-name`, `PolicyId<-id`, `OutputFormats<-supportedOutputFormats`, `Parameters<-requiredParameters`, `Id<-runId`, `OutputId<-id`, `OutputFormat<-format`, `FileSize<-sizeBytes`) are unaffected and still fire.
+
+  They were deleted rather than repaired, because making them work would have been worse than leaving them broken:
+  - PowerShell member access is already case-insensitive. `$tenant.ClientTenantId` — and `$tenant.TENANTFRIENDLYNAME` — resolve today with no alias present.
+  - An alias **is** serialised. The 9 real renames already emit both `"id"` and `"BaselineId"` in `ConvertTo-Json`, and two separate `Export-Csv` columns. Adding 229 more would have doubled every key and column, the same value in two casings.
+  - `-OutputType JsonObject` returns before the helper runs, deliberately, so the JSON surface is the raw API shape and never carried PascalCase to begin with.
+
+  **No behaviour change.** Property access, `Select-Object`, `ConvertTo-Json`, `Export-Csv` and every `Format.ps1xml` view produce identical output before and after. The `-ObjectType` ValidateSet is unchanged so all 13 call sites still work; types needing no normalisation simply have no branch.
+
 ### Documentation
 
 - `-OutputPath`, the new `-Show` switch, and the changed return types documented in `Get-Help` and `docs/CMDLET-REFERENCE.md` for both affected cmdlets.

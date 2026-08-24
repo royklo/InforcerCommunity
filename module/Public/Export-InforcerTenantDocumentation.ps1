@@ -141,6 +141,17 @@ if (-not [string]::IsNullOrWhiteSpace($Baseline)) {
 if (-not [string]::IsNullOrWhiteSpace($Tag)) {
     Write-Host "Filtering to tag: $Tag" -ForegroundColor Cyan
     $originalCount = @($docData.Policies).Count
+
+    # Collected before the filter so a no-match can name the tags that do exist.
+    $availableTags = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($pol in @($docData.Policies)) {
+        foreach ($t in @($pol.tags)) {
+            if ($null -eq $t) { continue }
+            $n = if ($t -is [PSObject] -and $t.PSObject.Properties['name']) { $t.name } else { $t.ToString() }
+            if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$availableTags.Add($n) }
+        }
+    }
+
     $docData.Policies = @($docData.Policies | Where-Object {
         $policyTags = $_.tags
         if ($null -eq $policyTags -or @($policyTags).Count -eq 0) { return $false }
@@ -151,6 +162,17 @@ if (-not [string]::IsNullOrWhiteSpace($Tag)) {
         return $false
     })
     Write-Host "  Filtered to $(@($docData.Policies).Count) of $originalCount policies with tag '$Tag'" -ForegroundColor Gray
+
+    # No match used to render anyway: a 0.1 KB document and exit 0, which reads as "nothing in
+    # this tenant is tagged that way" when the likelier cause is a tag name that does not exist.
+    # Naming the real tags is the difference between a dead end and a correctable mistake.
+    if (@($docData.Policies).Count -eq 0) {
+        $known = if ($availableTags.Count -gt 0) { $availableTags -join "', '" } else { $null }
+        $detail = if ($known) { "Tags present in this tenant: '$known'." } else { 'No policy in this tenant carries any tag.' }
+        Write-Error -Message "No policy matched tag '$Tag', so there is nothing to document. $detail" `
+            -ErrorId 'TagMatchedNothing' -Category ObjectNotFound
+        return
+    }
 }
 
 # Load Settings Catalog only if there are Settings Catalog policies (policyTypeId 10)

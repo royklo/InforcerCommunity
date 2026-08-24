@@ -26,9 +26,16 @@
 .PARAMETER SourceBaselineId
     Optional baseline GUID or friendly name for the source tenant. When specified, the comparison
     is scoped to only policies belonging to this baseline instead of all tenant policies.
+
+    The destination is scoped to the same baseline unless -DestinationBaselineId says otherwise.
+    Scoping one side only would compare a handful of baseline policies against the destination's
+    entire estate, counting every destination-only policy as a deviation. If the destination
+    tenant is not a member of the baseline it cannot be scoped, and the comparison falls back to
+    its full policy set with a warning.
 .PARAMETER DestinationBaselineId
     Optional baseline GUID or friendly name for the destination tenant. When specified, the comparison
-    is scoped to only policies belonging to this baseline instead of all tenant policies.
+    is scoped to only policies belonging to this baseline instead of all tenant policies. Defaults
+    to -SourceBaselineId when that is given; pass it explicitly to compare across two baselines.
 .PARAMETER IncludingAssignments
     When specified, fetches and displays Graph assignment data in the report.
     Assignments are informational only and do not affect the alignment score.

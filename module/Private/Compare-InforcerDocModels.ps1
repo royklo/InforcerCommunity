@@ -420,6 +420,21 @@ function Compare-InforcerDocModels {
             # Exclude Custom Indicators category entirely (noise — per-tenant unique data)
             if ($categoryName -match 'Custom Indicators') { continue }
 
+            # -ExcludeOS also applies here, not only to product names. The OS lives in the
+            # category key (built from primaryGroup: Windows, macOS, iOS/iPadOS, Android), never
+            # in the product name (Entra, Intune, Defender, ...). Matching products alone made
+            # every documented example value - 'macOS', 'iOS', 'Android', 'Windows' - a silent
+            # no-op that removed zero items while reporting success. Products are still matched
+            # above, so passing a product name keeps working.
+            if ($ExcludeOS) {
+                $catLower = $categoryName.ToLowerInvariant()
+                $skipCategory = $false
+                foreach ($ep in $ExcludeOS) {
+                    if ($catLower -match [regex]::Escape($ep.ToLowerInvariant())) { $skipCategory = $true; break }
+                }
+                if ($skipCategory) { continue }
+            }
+
             $srcPolicies = @()
             $dstPolicies = @()
             if ($srcProduct -and $srcProduct.Categories -and $srcProduct.Categories.Contains($categoryName)) {

@@ -18,7 +18,8 @@
     Before calling this cmdlet, you must be connected via Connect-Inforcer. If no active session
     exists, the cmdlet emits a non-terminating error and returns immediately.
 
-    Output files are written to the specified OutputPath directory and auto-named as
+    Nothing is written unless -OutputPath is given: without it the DocModel is returned so a
+    caller can read the configuration without producing files. With it, output is auto-named
     {TenantName}-Documentation.{ext} (e.g., Contoso-Documentation.html).
 .PARAMETER Format
     Output format(s) to generate. Accepted values: Html, Markdown, Excel. Multiple formats
@@ -29,7 +30,11 @@
 .PARAMETER OutputPath
     Directory to write output files to. Files are auto-named {TenantName}-Documentation.{ext}.
     When a single format is specified and this path has a file extension, it is treated as an
-    explicit output file path. Defaults to the current directory.
+    explicit output file path. Omit it and no files are written: the DocModel is returned instead.
+    There is no default - writing is always something you asked for.
+.PARAMETER Show
+    Open the generated HTML in the default browser. Requires -OutputPath and -Format Html. Off by
+    default so the cmdlet is safe in pipelines and containers, where there is no browser to open.
 .PARAMETER SettingsCatalogPath
     Path to a local settings.json file for Settings Catalog resolution. When omitted, the cmdlet
     automatically downloads and caches the latest data from the IntuneSettingsCatalogData GitHub
@@ -51,11 +56,16 @@
     Filter to only policies that have a specific Inforcer tag (e.g., "IAM - Core", "Tier 1").
     Matches against the tag name property on each policy (case-insensitive, contains match).
 .OUTPUTS
-    System.IO.FileInfo. Returns FileInfo objects for each exported file.
+    The DocModel (hashtable) when -OutputPath is omitted, otherwise System.IO.FileInfo for each
+    exported file.
 .EXAMPLE
     Export-InforcerTenantDocumentation -TenantId 482 -Format Html
 
-    Writes Contoso-Documentation.html to the current directory.
+    Returns the DocModel. No file is written - pass -OutputPath for that.
+.EXAMPLE
+    Export-InforcerTenantDocumentation -TenantId 482 -Format Html -OutputPath ./docs -Show
+
+    Writes Contoso-Documentation.html to ./docs and opens it.
 .EXAMPLE
     Export-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Excel -OutputPath C:\Reports
 
@@ -75,7 +85,7 @@
 #>
 function Export-InforcerTenantDocumentation {
 [CmdletBinding()]
-[OutputType([System.IO.FileInfo])]
+[OutputType([hashtable], [System.IO.FileInfo])]
 param(
     [Parameter(Mandatory = $false)]
     [ValidateSet('Html', 'Markdown', 'Excel')]
@@ -86,7 +96,10 @@ param(
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath = '.',
+    [string]$OutputPath,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$Show,
 
     [Parameter(Mandatory = $false)]
     [string]$SettingsCatalogPath,
@@ -383,6 +396,15 @@ foreach ($product in $docModel.Products.Values) {
 }
 Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
 
+# ── No -OutputPath: hand back the DocModel and touch nothing ───────────────────
+# Writing is opt-in even here, where the verb promises a file. The old default put documents in
+# whatever directory you happened to be standing in and opened a browser for them, which is
+# wrong in a pipeline and wrong for a caller that only wants the model to read.
+if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+    Write-Host 'Done. Pass -OutputPath to write files, -Show to open the HTML.' -ForegroundColor Cyan
+    return $docModel
+}
+
 # Render each requested format and write to disk
 $extensionMap = @{ Html = 'html'; Markdown = 'md'; Excel = 'xlsx' }
 $formatIndex = 0
@@ -423,16 +445,19 @@ foreach ($fmt in $Format) {
     $fileInfo
 }
 
-# Auto-open HTML output in the default browser (cross-platform)
-$htmlFile = $Format | Where-Object { $_ -eq 'Html' } | ForEach-Object {
-    if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) { $OutputPath }
-    else { Join-Path $OutputPath "$safeName-Documentation.html" }
-}
-if ($htmlFile -and (Test-Path -LiteralPath $htmlFile)) {
-    $fullHtmlPath = (Resolve-Path -LiteralPath $htmlFile).Path
-    if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullHtmlPath }
-    elseif ($IsWindows) { Start-Process $fullHtmlPath }
-    elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullHtmlPath }
+# Opening a browser is opt-in via -Show. Doing it on every run spawned a window even inside CI
+# containers, where there is nothing to open it with.
+if ($Show) {
+    $htmlFile = $Format | Where-Object { $_ -eq 'Html' } | ForEach-Object {
+        if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) { $OutputPath }
+        else { Join-Path $OutputPath "$safeName-Documentation.html" }
+    }
+    if ($htmlFile -and (Test-Path -LiteralPath $htmlFile)) {
+        $fullHtmlPath = (Resolve-Path -LiteralPath $htmlFile).Path
+        if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullHtmlPath }
+        elseif ($IsWindows) { Start-Process $fullHtmlPath }
+        elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullHtmlPath }
+    }
 }
 
 Write-Host "Done. $($Format.Count) file(s) exported for tenant '$($docModel.TenantName)'." -ForegroundColor Cyan

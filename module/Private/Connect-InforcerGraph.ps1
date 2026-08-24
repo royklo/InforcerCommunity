@@ -21,11 +21,21 @@ function Connect-InforcerGraph {
         [string]$TenantId
     )
 
-    # Auto-install Microsoft.Graph.Authentication if missing
-    $graphModule = Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication'
-    if (-not $graphModule) {
-        Write-Host '  Installing Microsoft.Graph.Authentication module...' -ForegroundColor Yellow
-        Install-Module -Name 'Microsoft.Graph.Authentication' -Scope CurrentUser -Force -AllowClobber
+    # Ask, don't install. This used to run Install-Module -Force -AllowClobber with no consent:
+    # -Force suppresses the untrusted-repository prompt and -AllowClobber lets it overwrite
+    # commands belonging to other modules. A read-only reporting module has no business mutating
+    # the machine's module state, and on a locked-down or offline host it failed with a
+    # PowerShellGet error instead of saying what was missing. Matches how the ImportExcel
+    # dependency is already handled in Export-InforcerDocExcel.
+    if (-not (Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication')) {
+        # A warning, not an error: every caller already handles a null context by falling back to
+        # raw ObjectIDs, and Write-Error here would terminate that graceful path for anyone running
+        # with $ErrorActionPreference = 'Stop'. The ImportExcel dependency uses Write-Error because
+        # Excel export has no fallback - this does.
+        Write-Warning ('Microsoft.Graph.Authentication is not installed, so Graph enrichment is unavailable. ' +
+            'Install it with: Install-Module Microsoft.Graph.Authentication -Scope CurrentUser')
+        $script:InforcerGraphConnected = $false
+        return $null
     }
 
     if (-not (Get-Module -Name 'Microsoft.Graph.Authentication')) {

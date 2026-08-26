@@ -89,3 +89,10 @@ scripts/Test-ApiFeedbackItems.ps1
 
 # Local API key for live-* scripts (never commit)
 .inforcer-key.local
+
+# API feedback for the Inforcer API team, and the raw captures behind it.
+# Untracked on purpose: the evidence carries tenant ids, policy names and live
+# response bodies from real customer tenants.
+api-feedback.md
+Reports-API-Feedback.md
+api-feedback-evidence/

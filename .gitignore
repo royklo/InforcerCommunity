@@ -96,3 +96,8 @@ scripts/Test-ApiFeedbackItems.ps1
 api-feedback.md
 Reports-API-Feedback.md
 api-feedback-evidence/
+
+# Pester's default TestResult output path, produced by Invoke-Pester -CI. Nothing
+# reads it: build-and-test.yml takes the result from -PassThru in memory and there
+# is no test-result publisher in the pipeline.
+testResults.xml

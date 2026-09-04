@@ -2309,6 +2309,11 @@
             "nullable": true,
             "type": "string"
           },
+          "membershipRule": {
+            "description": "The dynamic membership rule (only populated for groups whose groupTypes contains DynamicMembership)",
+            "nullable": true,
+            "type": "string"
+          },
           "visibility": {
             "description": "The visibility of the group (e.g., Public, Private)",
             "nullable": true,

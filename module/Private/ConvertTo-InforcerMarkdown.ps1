@@ -70,7 +70,8 @@ function ConvertTo-InforcerMarkdown {
         No file I/O, no API calls. Returns the Markdown string only.
     .PARAMETER DocModel
         Hashtable from ConvertTo-InforcerDocModel containing TenantName, TenantId,
-        GeneratedAt, BaselineName, and Products (OrderedDictionary).
+        GeneratedAt, Products (OrderedDictionary), and the optional FilterBaseline /
+        FilterTag metadata set by Export-InforcerTenantDocumentation.
     .OUTPUTS
         [string] Complete GFM Markdown document.
     #>
@@ -90,8 +91,14 @@ function ConvertTo-InforcerMarkdown {
     [void]$sb.AppendLine("*Generated: $($DocModel.GeneratedAt.ToString('yyyy-MM-dd HH:mm:ss')) UTC*")
     [void]$sb.AppendLine()
 
-    if (-not [string]::IsNullOrWhiteSpace($DocModel.BaselineName)) {
-        [void]$sb.AppendLine("*Baseline: $($DocModel.BaselineName)*")
+    # FilterBaseline, not BaselineName: BaselineName is just the tenant's first attached
+    # baseline, so it named the wrong baseline (or any baseline at all) when -Baseline filtered.
+    if (-not [string]::IsNullOrWhiteSpace($DocModel.FilterBaseline)) {
+        [void]$sb.AppendLine("*Baseline: $($DocModel.FilterBaseline)*")
+        [void]$sb.AppendLine()
+    }
+    if (-not [string]::IsNullOrWhiteSpace($DocModel.FilterTag)) {
+        [void]$sb.AppendLine("*Tag: $($DocModel.FilterTag)*")
         [void]$sb.AppendLine()
     }
 

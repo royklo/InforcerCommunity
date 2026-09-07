@@ -1861,6 +1861,41 @@ Describe 'Private helpers (via module scope)' {
             $result.Status | Should -Be 'Connected'
         }
 
+        It 'Rejects an expired key even though it uses the Inforcer 403 envelope' {
+            # Verbatim body from api-uk.dev with an expired key. errorCode is 'forbidden' —
+            # identical to a scope denial — so only errors[] distinguishes the two.
+            # Must NOT report Connected.
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [PSCustomObject]@{
+                    StatusCode = 403
+                    Content    = '{"data":null,"errorCode":"forbidden","success":false,"message":"A valid API key is required to access this endpoint.","errors":["API key has expired."]}'
+                    Headers    = @{}
+                }
+            }
+            $secure = ConvertTo-SecureString 'expired-key' -AsPlainText -Force
+            $err = $null
+            $result = Connect-Inforcer -ApiKey $secure -Region uk -ErrorAction SilentlyContinue -ErrorVariable err
+            $result | Should -BeNullOrEmpty
+            @($err).Count | Should -BeGreaterThan 0
+            $err[0].Exception.Message | Should -Match 'API key has expired'
+        }
+
+        It 'Connects a narrow-scope key whose 403 carries the same generic key message' {
+            # Same top-level message as the expired key above — the API serves it for scope
+            # denials too — but errors[] names a scope, not the key. Must still connect, or
+            # the expired-key fix would lock out every key that lacks Baselines.Read.
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [PSCustomObject]@{
+                    StatusCode = 403
+                    Content    = '{"data":null,"errorCode":"forbidden","success":false,"message":"A valid API key is required to access this endpoint.","errors":["Insufficient scope: Baselines.Read is required."]}'
+                    Headers    = @{}
+                }
+            }
+            $secure = ConvertTo-SecureString 'reports-only-key' -AsPlainText -Force
+            $result = Connect-Inforcer -ApiKey $secure -Region uk -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+            $result.Status | Should -Be 'Connected'
+        }
+
         It 'Treats APIM 401 envelope as a real auth failure' {
             # APIM gateway rejects the subscription: {statusCode, message} with no Inforcer markers.
             Mock -ModuleName InforcerCommunity Invoke-WebRequest {

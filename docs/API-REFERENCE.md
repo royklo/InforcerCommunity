@@ -740,6 +740,7 @@ Summary of an Entra ID group (returned from list endpoint).
 | description | string | No | Description of the group. |
 | mail | string | No | Email address of the group. |
 | visibility | string | No | Visibility (e.g. Public, Private). |
+| membershipRule | string | No | Dynamic membership rule. Only populated for groups whose `groupTypes` contains `DynamicMembership`. |
 | groupTypes | array\<string\> | Yes | Types of the group (e.g. Unified, DynamicMembership). |
 
 **PSTypeName:** `InforcerCommunity.GroupSummary`

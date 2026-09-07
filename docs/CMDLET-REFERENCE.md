@@ -10,7 +10,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ## Connect-Inforcer
 
-Establishes a secure connection to the Inforcer REST API. The API key is stored as a SecureString. A minimal API call validates the key before returning; on failure (e.g. wrong key or endpoint), the connection is not established.
+Establishes a secure connection to the Inforcer REST API. The API key is stored as a SecureString. A minimal API call validates the key before returning; on failure (e.g. wrong key or endpoint, or an expired/revoked key), the connection is not established. A key that is valid but lacks the scope for the probe endpoint still connects — no single scope is privileged for validation — but it warns that the key's scopes are unverified, so a later 403 reads as a scope gap rather than a bad session.
 
 **Required API scope(s)**: None (session management only)
 
@@ -662,7 +662,7 @@ Export-InforcerTenantDocumentation -Format Html -TenantId 482 -Tag "Tier 1"
 
 ### Output
 
-Returns `FileInfo` objects for the exported file(s). HTML output auto-opens in the default browser.
+With `-OutputPath`: returns `FileInfo` objects for the exported file(s). Without it: no files are written and the DocModel (hashtable) is returned instead, so the tenant configuration can be read without producing artefacts. HTML output opens in the default browser only when `-Show` is passed.
 
 ### HTML features
 
@@ -720,7 +720,7 @@ Compares the Intune policy configuration of two tenants and generates an interac
 | **DestinationBaselineId** | String | No | Baseline GUID or friendly name for the destination tenant. Scopes comparison to only policies in this baseline. |
 | **IncludingAssignments** | Switch | No | Include assignment data in the report (informational only, does not affect score). |
 | **FetchGraphData** | Switch | No | Connect to Microsoft Graph to resolve group names, assignment filters, scope tags, and compliance rules. Requires `Directory.Read.All` and `DeviceManagementConfiguration.Read.All` scopes. |
-| **ExcludeOS** | String[] | No | Exclude platforms from comparison (e.g., `'macOS'`, `'iOS'`). Case-insensitive contains matching. |
+| **ExcludeOS** | String[] | No | OS/platform or product names to exclude. Case-insensitive contains matching, applied to both the product name (`Entra`, `Intune`, `Defender`, `Exchange`, `SharePoint`) and the category key, which is where the OS actually lives (`Windows`, `macOS`, `iOS/iPadOS`, `Android`). Examples: `'macOS'`, `'iOS'`, `'Android'`, `'Windows'`. |
 | **PolicyNameFilter** | String | No | Only include policies whose name contains this string (case-insensitive). |
 | **SettingsCatalogPath** | String | No | Path to local `settings.json`. Auto-discovers if omitted. |
 | **OutputPath** | String | No | Directory for the HTML report. **No default** — omit it and no file is written; the comparison model is returned instead. |
@@ -757,7 +757,7 @@ Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1
 
 ### Output
 
-Returns a `FileInfo` object for the exported HTML report. Auto-opens in the default browser.
+With `-OutputPath`: returns a `FileInfo` object for the exported HTML report. Without it: no file is written and the comparison model (hashtable) is returned instead, so alignment scores can be read without producing artefacts. The report opens in the default browser only when `-Show` is passed.
 
 ### HTML report features
 

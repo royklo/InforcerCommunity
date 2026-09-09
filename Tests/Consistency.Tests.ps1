@@ -2258,25 +2258,52 @@ Describe 'Writing files and opening a browser stay opt-in (0.7.0 breaking change
     # -Show auto-detects: on for a human, off on a build agent. The detection is the whole
     # safety story now that auto-open is back, so it gets tested directly rather than through
     # the cmdlets (which would need a live tenant and two minutes per case).
+    #
+    # These tests MUST neutralise every detector variable before exercising one, because the suite
+    # itself runs on a build agent. Setting only the variable under test leaves the runner's own
+    # GITHUB_ACTIONS=true in place: the "false" assertions then pass for the wrong reason, and the
+    # empty-value assertion fails outright. That is exactly how this failed in CI the first time.
+    BeforeAll {
+        $script:CiVars = 'CI', 'TF_BUILD', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_URL', 'TEAMCITY_VERSION', 'BUILDKITE'
+        function script:Invoke-WithCiEnv {
+            param([hashtable]$Set, [scriptblock]$Body)
+            $saved = @{}
+            foreach ($v in $script:CiVars) {
+                $saved[$v] = [Environment]::GetEnvironmentVariable($v)
+                [Environment]::SetEnvironmentVariable($v, $null)
+            }
+            try {
+                foreach ($k in $Set.Keys) { [Environment]::SetEnvironmentVariable($k, $Set[$k]) }
+                & $Body
+            } finally {
+                foreach ($v in $script:CiVars) { [Environment]::SetEnvironmentVariable($v, $saved[$v]) }
+            }
+        }
+    }
+
     It 'Test-InforcerInteractiveHost returns false when <Var> is set' -ForEach @(
         @{ Var = 'CI' }, @{ Var = 'TF_BUILD' }, @{ Var = 'GITHUB_ACTIONS' }
         @{ Var = 'GITLAB_CI' }, @{ Var = 'JENKINS_URL' }, @{ Var = 'TEAMCITY_VERSION' }, @{ Var = 'BUILDKITE' }
     ) {
-        $saved = [Environment]::GetEnvironmentVariable($Var)
-        try {
-            [Environment]::SetEnvironmentVariable($Var, 'true')
-            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost } |
-                Should -BeFalse -Because "a build agent must never have a browser launched at it"
-        } finally { [Environment]::SetEnvironmentVariable($Var, $saved) }
+        # Only $Var is set — every other detector is cleared, so a false result can only come from
+        # this one variable. Without the clearing this assertion would be vacuous on any CI runner.
+        script:Invoke-WithCiEnv -Set @{ $Var = 'true' } -Body {
+            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost }
+        } | Should -BeFalse -Because "a build agent must never have a browser launched at it"
     }
 
     It 'Test-InforcerInteractiveHost ignores an empty CI variable' {
-        $saved = $env:CI
-        try {
-            $env:CI = ''
-            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost } |
-                Should -Be ([Environment]::UserInteractive) -Because 'an empty value is not "in CI"'
-        } finally { $env:CI = $saved }
+        # With every detector cleared and CI set to empty string, the answer must fall through to
+        # UserInteractive — an empty value is not "in CI".
+        script:Invoke-WithCiEnv -Set @{ 'CI' = '' } -Body {
+            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost }
+        } | Should -Be ([Environment]::UserInteractive) -Because 'an empty value is not "in CI"'
+    }
+
+    It 'Test-InforcerInteractiveHost returns true when no CI variable is set at all' {
+        script:Invoke-WithCiEnv -Set @{} -Body {
+            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost }
+        } | Should -Be ([Environment]::UserInteractive) -Because 'with nothing set it is the host that decides'
     }
 
     It '<Name> resolves -Show from the interactive check, not a hardcoded default' -ForEach $script:OptInCmdlets {

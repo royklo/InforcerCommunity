@@ -740,7 +740,7 @@ Summary of an Entra ID group (returned from list endpoint).
 | description | string | No | Description of the group. |
 | mail | string | No | Email address of the group. |
 | visibility | string | No | Visibility (e.g. Public, Private). |
-| membershipRule | string | No | Dynamic membership rule. **Always `null` on this endpoint** — the key is emitted but never filled, including for groups whose `groupTypes` contains `DynamicMembership`. Verified against a live tenant 2026-09-09. Use the by-ID endpoint to read the rule. |
+| membershipRule | string | No | Dynamic membership rule. **Always `null` on this endpoint**, despite the upstream OpenAPI schema (added by the 2026-09-04 drift sync in #39) describing it as *"only populated for groups whose groupTypes contains DynamicMembership"*. The key is emitted and never filled — verified live on 2026-09-09 against two unrelated tenants, where 0 of 10 and 0 of 7 `DynamicMembership` groups carried a rule on the list while the by-ID endpoint returned one for each. Use the by-ID endpoint to read the rule. See API feedback item 26. |
 | groupTypes | array\<string\> | Yes | Types of the group (e.g. Unified, DynamicMembership). |
 
 **PSTypeName:** `InforcerCommunity.GroupSummary`

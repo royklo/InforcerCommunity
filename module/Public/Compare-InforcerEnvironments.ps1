@@ -350,8 +350,8 @@ $fileInfo = Get-Item -LiteralPath $filePath
 $sizeKb   = [math]::Round($fileInfo.Length / 1KB, 1)
 Write-Host "  Exported: $filePath ($sizeKb KB)" -ForegroundColor Green
 
-# -Show defaults to on interactively, off in CI (Test-InforcerInteractiveHost). Doing it
-# run, including inside CI containers where there is nothing to open it with.
+# -Show defaults to on interactively and off in CI (Test-InforcerInteractiveHost), so a human
+# who asked for a report sees it while a build agent is never handed a browser to open.
 if ($Show) {
     $fullPath = (Resolve-Path -LiteralPath $filePath).Path
     if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullPath }

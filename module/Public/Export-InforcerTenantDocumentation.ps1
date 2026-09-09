@@ -451,8 +451,8 @@ foreach ($fmt in $Format) {
     $fileInfo
 }
 
-# -Show defaults to on interactively, off in CI (Test-InforcerInteractiveHost). Doing it
-# containers, where there is nothing to open it with.
+# -Show defaults to on interactively and off in CI (Test-InforcerInteractiveHost), so a human
+# who asked for a report sees it while a build agent is never handed a browser to open.
 if ($Show) {
     $htmlFile = $Format | Where-Object { $_ -eq 'Html' } | ForEach-Object {
         if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) { $OutputPath }

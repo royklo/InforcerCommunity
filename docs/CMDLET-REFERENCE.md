@@ -692,7 +692,7 @@ Export-InforcerTenantDocumentation -Format Html -TenantId 482 -Tag "Tier 1"
 
 ### Output
 
-With `-OutputPath`: returns `FileInfo` objects for the exported file(s). Without it: no files are written and the DocModel (hashtable) is returned instead, so the tenant configuration can be read without producing artefacts. HTML output opens in the default browser only when `-Show` is passed.
+With `-OutputPath`: returns `FileInfo` objects for the exported file(s). Without it: no files are written and the DocModel (hashtable) is returned instead, so the tenant configuration can be read without producing artefacts. HTML output opens in the default browser automatically in an interactive session, and not on a CI runner — see `-Show`.
 
 ### HTML features
 
@@ -787,7 +787,7 @@ Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1
 
 ### Output
 
-With `-OutputPath`: returns a `FileInfo` object for the exported HTML report. Without it: no file is written and the comparison model (hashtable) is returned instead, so alignment scores can be read without producing artefacts. The report opens in the default browser only when `-Show` is passed.
+With `-OutputPath`: returns a `FileInfo` object for the exported HTML report. Without it: no file is written and the comparison model (hashtable) is returned instead, so alignment scores can be read without producing artefacts. The report opens in the default browser automatically in an interactive session, and not on a CI runner — see `-Show`.
 
 ### HTML report features
 

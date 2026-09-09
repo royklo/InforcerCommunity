@@ -333,6 +333,8 @@ Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
+| **Id** | String | No | Retrieve a specific audit event by its event ID (GUID). Searches all event types and filters client-side. |
+| **CorrelationId** | String | No | Retrieve all audit events sharing this correlation ID. Searches all event types and filters client-side. |
 | **EventType** | String[] | No | Event types to include. Tab completion with supported event types. Omit for all types. |
 | **DateFrom** | DateTime | No | Start of date/time range (inclusive). |
 | **DateTo** | DateTime | No | End of date/time range (inclusive). |

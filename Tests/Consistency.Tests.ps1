@@ -2308,3 +2308,179 @@ Describe 'Writing files and opening a browser stay opt-in (0.7.0 breaking change
         }
     }
 }
+
+Describe '0.7.0 bug fixes that only live runs covered' {
+    # These three shipped verified by hand and by a live smoke, with nothing in CI to catch a
+    # regression. Each targets the smallest seam that actually encodes the fix.
+
+    Context 'Invoke-InforcerAssessmentRun sends no Content-Type' {
+        # POST /beta/tenants/{id}/assessments/{id}/runs takes no body and rejects ANY Content-Type
+        # with 400 ValidationFailure. Dropping the header is not enough — Invoke-RestMethod supplies
+        # application/x-www-form-urlencoded on a bodyless POST, which is rejected identically.
+        # The call runs in a separate runspace via AddScript, so a module-scoped Mock cannot reach
+        # it; the script text IS the contract, so that is what gets asserted.
+        BeforeAll {
+            $script:RunnerSrc = Get-Content (Join-Path $PSScriptRoot '../module/Private/Invoke-InforcerAssessmentRun.ps1') -Raw
+        }
+
+        It 'passes -ContentType "" on the run POST' {
+            $script:RunnerSrc | Should -Match 'Invoke-RestMethod[^\r\n]*-ContentType\s*""'
+        }
+
+        It 'never sets a Content-Type header on the runs endpoint' {
+            # A 'Content-Type' = 'application/json' entry anywhere in this file would reintroduce the 400.
+            $script:RunnerSrc | Should -Not -Match "(?i)['\`"]Content-Type['\`"]\s*=" 
+        }
+    }
+
+    Context '-ExcludeOS matches the category key, not just the product name' {
+        # The OS lives in the category key built from primaryGroup (Windows, macOS, iOS/iPadOS,
+        # Android) and never in the product name (Entra, Intune, Defender). Matching products alone
+        # made every documented example value a silent no-op that removed 0 items and reported success.
+        BeforeAll {
+            function script:New-TestPolicy ([string]$Name, [string]$DefId, [string]$Value) {
+                @{
+                    Basics       = @{ Name = $Name; Id = $DefId; Description = ''; ProfileType = 'Test'
+                                      Platform = ''; Created = ''; Modified = ''; ScopeTags = ''; Tags = '' }
+                    Settings     = @(@{ Name = $Name; SettingPath = $Name; Value = $Value; DefinitionId = $DefId })
+                    Assignments  = @()
+                    PolicyTypeId = 10
+                }
+            }
+            function script:New-TestModel ([string]$TenantName, [string]$Value) {
+                @{
+                    TenantName = $TenantName
+                    TenantId   = 1
+                    Products   = [ordered]@{
+                        'Intune' = @{
+                            Categories = [ordered]@{
+                                'Windows / Configuration Profiles'    = @(script:New-TestPolicy 'WinSetting' 'def-win' $Value)
+                                'macOS / Configuration Profiles'      = @(script:New-TestPolicy 'MacSetting' 'def-mac' $Value)
+                                'iOS/iPadOS / App Protection Policies' = @(script:New-TestPolicy 'IosSetting' 'def-ios' $Value)
+                            }
+                        }
+                    }
+                }
+            }
+            function script:Get-CategoryKeys ($Result) {
+                $keys = [System.Collections.Generic.List[string]]::new()
+                foreach ($p in $Result.Products.Keys) {
+                    foreach ($c in $Result.Products[$p].Categories.Keys) { [void]$keys.Add("$p / $c") }
+                }
+                $keys
+            }
+        }
+
+        It 'removes nothing when -ExcludeOS is not passed' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($s, $d) Compare-InforcerDocModels -SourceModel $s -DestinationModel $d
+            } (script:New-TestModel 'Src' 'A') (script:New-TestModel 'Dst' 'A')
+            (script:Get-CategoryKeys $r).Count | Should -Be 3
+        }
+
+        It 'removes a category whose KEY contains the excluded OS' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($s, $d) Compare-InforcerDocModels -SourceModel $s -DestinationModel $d -ExcludeOS @('macOS')
+            } (script:New-TestModel 'Src' 'A') (script:New-TestModel 'Dst' 'A')
+            $keys = script:Get-CategoryKeys $r
+            $keys | Should -Not -Contain 'Intune / macOS / Configuration Profiles'
+            $keys | Should -Contain 'Intune / Windows / Configuration Profiles' -Because 'only the named OS goes'
+        }
+
+        It 'removes several OSes at once' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($s, $d) Compare-InforcerDocModels -SourceModel $s -DestinationModel $d -ExcludeOS @('macOS', 'iOS')
+            } (script:New-TestModel 'Src' 'A') (script:New-TestModel 'Dst' 'A')
+            $keys = script:Get-CategoryKeys $r
+            @($keys).Count | Should -Be 1
+            $keys | Should -Contain 'Intune / Windows / Configuration Profiles'
+        }
+
+        It 'still matches a PRODUCT name, which was the only thing that ever worked' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($s, $d) Compare-InforcerDocModels -SourceModel $s -DestinationModel $d -ExcludeOS @('Intune')
+            } (script:New-TestModel 'Src' 'A') (script:New-TestModel 'Dst' 'A')
+            (script:Get-CategoryKeys $r).Count | Should -Be 0 -Because 'excluding the product drops all its categories'
+        }
+    }
+
+    Context 'The destination inherits -SourceBaselineId' {
+        # Scoping one side only compared N baseline policies against the destination's whole estate,
+        # so every destination-only policy counted as a deviation: 0.2% where Inforcer says 100%.
+        BeforeAll {
+            $script:MinimalDocData = @{ TenantId = 1; TenantName = 'T'; Policies = @(@{ id = 'p1' }) }
+        }
+
+        It 'scopes the destination to the source baseline when no destination baseline is given' {
+            $calls = & (Get-Module InforcerCommunity) {
+                param($docData)
+                $script:seen = [System.Collections.Generic.List[string]]::new()
+                Mock Get-InforcerDocData { $docData } -ModuleName InforcerCommunity
+                Mock Select-InforcerBaselinePolicies { [void]$script:seen.Add($BaselineId); 'BaselineName' } -ModuleName InforcerCommunity
+                Mock Write-Host {} -ModuleName InforcerCommunity
+                $null = Get-InforcerComparisonData -SourceTenantId 1 -DestinationTenantId 2 -SourceBaselineId 'Tier 0'
+                $script:seen
+            } $script:MinimalDocData
+            @($calls).Count | Should -Be 2 -Because 'both sides must be scoped'
+            $calls[0] | Should -Be 'Tier 0'
+            $calls[1] | Should -Be 'Tier 0' -Because 'the destination inherits the source baseline'
+        }
+
+        It 'does not override an explicit -DestinationBaselineId' {
+            $calls = & (Get-Module InforcerCommunity) {
+                param($docData)
+                $script:seen = [System.Collections.Generic.List[string]]::new()
+                Mock Get-InforcerDocData { $docData } -ModuleName InforcerCommunity
+                Mock Select-InforcerBaselinePolicies { [void]$script:seen.Add($BaselineId); 'BaselineName' } -ModuleName InforcerCommunity
+                Mock Write-Host {} -ModuleName InforcerCommunity
+                $null = Get-InforcerComparisonData -SourceTenantId 1 -DestinationTenantId 2 `
+                    -SourceBaselineId 'Tier 0' -DestinationBaselineId 'Tier 2'
+                $script:seen
+            } $script:MinimalDocData
+            $calls[0] | Should -Be 'Tier 0'
+            $calls[1] | Should -Be 'Tier 2'
+        }
+
+        # An INHERITED baseline that will not resolve is legitimate — the destination simply may not
+        # be a member — so it falls back to the full policy set with a warning. An EXPLICIT one that
+        # fails is still an error. The mock fails only the second call, which is the destination.
+        It 'warns and falls back when the destination is not a member of the inherited baseline' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($docData)
+                $script:n = 0
+                Mock Get-InforcerDocData { $docData } -ModuleName InforcerCommunity
+                Mock Select-InforcerBaselinePolicies {
+                    $script:n++
+                    if ($script:n -eq 1) { 'SourceBaseline' } else { $null }
+                } -ModuleName InforcerCommunity
+                Mock Write-Host {} -ModuleName InforcerCommunity
+                $out = Get-InforcerComparisonData -SourceTenantId 1 -DestinationTenantId 2 -SourceBaselineId 'Tier 0' -WarningVariable w -WarningAction SilentlyContinue -ErrorVariable e -ErrorAction SilentlyContinue
+                @{ Result = $out; Warnings = $w; Errors = $e }
+            } $script:MinimalDocData
+
+            $r.Warnings | Should -Not -BeNullOrEmpty -Because 'the fallback must announce that the score is understated'
+            ($r.Warnings -join ' ') | Should -Match 'full policy set'
+            $r.Errors | Should -BeNullOrEmpty -Because 'a non-member destination is a legitimate comparison, not an error'
+            $r.Result | Should -Not -BeNullOrEmpty -Because 'it must still return data to compare'
+        }
+
+        It 'errors when an EXPLICIT -DestinationBaselineId cannot be resolved' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($docData)
+                $script:n = 0
+                Mock Get-InforcerDocData { $docData } -ModuleName InforcerCommunity
+                Mock Select-InforcerBaselinePolicies {
+                    $script:n++
+                    if ($script:n -eq 1) { 'SourceBaseline' } else { $null }
+                } -ModuleName InforcerCommunity
+                Mock Write-Host {} -ModuleName InforcerCommunity
+                $out = Get-InforcerComparisonData -SourceTenantId 1 -DestinationTenantId 2 -SourceBaselineId 'Tier 0' -DestinationBaselineId 'Tier 2' -ErrorVariable e -ErrorAction SilentlyContinue
+                @{ Result = $out; Errors = $e }
+            } $script:MinimalDocData
+
+            $r.Errors | Should -Not -BeNullOrEmpty -Because 'an explicitly named baseline that does not resolve is a mistake worth surfacing'
+            "$($r.Errors[0].FullyQualifiedErrorId)" | Should -Match 'DestBaselineFilterFailed'
+            $r.Result | Should -BeNullOrEmpty
+        }
+    }
+}

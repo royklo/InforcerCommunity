@@ -54,8 +54,8 @@ Describe 'Consistency contract' {
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')
-            'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
-            'Compare-InforcerEnvironments'  = @('SourceTenantId', 'DestinationTenantId', 'SourceSession', 'DestinationSession', 'SourceBaselineId', 'DestinationBaselineId', 'IncludingAssignments', 'SettingsCatalogPath', 'FetchGraphData', 'ExcludeOS', 'PolicyNameFilter', 'OutputPath')
+            'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'Show', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
+            'Compare-InforcerEnvironments'  = @('SourceTenantId', 'DestinationTenantId', 'SourceSession', 'DestinationSession', 'SourceBaselineId', 'DestinationBaselineId', 'IncludingAssignments', 'SettingsCatalogPath', 'FetchGraphData', 'ExcludeOS', 'PolicyNameFilter', 'OutputPath', 'Show')
             'Get-InforcerAssessment'        = @('Format', 'OutputType')
             'Invoke-InforcerAssessment'     = @('TenantId', 'AssessmentId', 'OutputType')
             'Get-InforcerReportType'        = @('Key', 'Tag', 'OutputFormat', 'Force', 'Format', 'OutputType')
@@ -2224,6 +2224,55 @@ Describe 'Private helpers (via module scope)' {
             $p.onPremisesSyncEnabled = $Value
             $out = script:Format-Group $p 'InforcerCommunity.Group'
             $out | Should -Match "OnPremisesSyncEnabled\s+:\s+$Expected"
+        }
+    }
+}
+
+Describe 'Writing files and opening a browser stay opt-in (0.7.0 breaking change)' {
+    # Both cmdlets used to carry $OutputPath = '.' plus an unconditional Start-Process, so neither
+    # could run without dropping a file in the caller's working directory and spawning a browser.
+    # Reintroducing either default is invisible to every other test in this suite: nothing else
+    # asserts on where files land. These parse the param() block directly so no API call is needed.
+    BeforeDiscovery {
+        $script:OptInCmdlets = @(
+            @{ Name = 'Export-InforcerTenantDocumentation' }
+            @{ Name = 'Compare-InforcerEnvironments' }
+        )
+    }
+
+    It '<Name> declares -OutputPath with no default value' -ForEach $script:OptInCmdlets {
+        $path = Join-Path $PSScriptRoot "../module/Public/$Name.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+        $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
+        $p = $fn.Body.ParamBlock.Parameters |
+            Where-Object { $_.Name.VariablePath.UserPath -eq 'OutputPath' }
+        $p | Should -Not -BeNullOrEmpty -Because "$Name must still expose -OutputPath"
+        $p.DefaultValue | Should -BeNullOrEmpty -Because "a default -OutputPath writes files into the caller's working directory without being asked"
+    }
+
+    It '<Name> declares -Show as a switch defaulting to off' -ForEach $script:OptInCmdlets {
+        $cmd = Get-Command $Name
+        $cmd.Parameters['Show'].ParameterType | Should -Be ([switch]) -Because 'opening a browser must be opt-in, not a valued parameter'
+    }
+
+    It '<Name> opens a browser only inside an if ($Show) block' -ForEach $script:OptInCmdlets {
+        $path = Join-Path $PSScriptRoot "../module/Public/$Name.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+        $launchers = $ast.FindAll({
+                param($n)
+                $n -is [System.Management.Automation.Language.CommandAst] -and
+                $n.GetCommandName() -in @('Start-Process', 'Invoke-Item')
+            }, $true)
+        foreach ($l in $launchers) {
+            # Walk up to the enclosing if-statement and confirm $Show gates it.
+            $guarded = $false
+            $node = $l.Parent
+            while ($node) {
+                if ($node -is [System.Management.Automation.Language.IfStatementAst] -and
+                    $node.Clauses[0].Item1.Extent.Text -match '\$Show') { $guarded = $true; break }
+                $node = $node.Parent
+            }
+            $guarded | Should -BeTrue -Because "$($l.GetCommandName()) at line $($l.Extent.StartLineNumber) must be gated by -Show"
         }
     }
 }

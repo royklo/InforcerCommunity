@@ -2250,9 +2250,41 @@ Describe 'Writing files and opening a browser stay opt-in (0.7.0 breaking change
         $p.DefaultValue | Should -BeNullOrEmpty -Because "a default -OutputPath writes files into the caller's working directory without being asked"
     }
 
-    It '<Name> declares -Show as a switch defaulting to off' -ForEach $script:OptInCmdlets {
+    It '<Name> declares -Show as a switch' -ForEach $script:OptInCmdlets {
         $cmd = Get-Command $Name
-        $cmd.Parameters['Show'].ParameterType | Should -Be ([switch]) -Because 'opening a browser must be opt-in, not a valued parameter'
+        $cmd.Parameters['Show'].ParameterType | Should -Be ([switch])
+    }
+
+    # -Show auto-detects: on for a human, off on a build agent. The detection is the whole
+    # safety story now that auto-open is back, so it gets tested directly rather than through
+    # the cmdlets (which would need a live tenant and two minutes per case).
+    It 'Test-InforcerInteractiveHost returns false when <Var> is set' -ForEach @(
+        @{ Var = 'CI' }, @{ Var = 'TF_BUILD' }, @{ Var = 'GITHUB_ACTIONS' }
+        @{ Var = 'GITLAB_CI' }, @{ Var = 'JENKINS_URL' }, @{ Var = 'TEAMCITY_VERSION' }, @{ Var = 'BUILDKITE' }
+    ) {
+        $saved = [Environment]::GetEnvironmentVariable($Var)
+        try {
+            [Environment]::SetEnvironmentVariable($Var, 'true')
+            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost } |
+                Should -BeFalse -Because "a build agent must never have a browser launched at it"
+        } finally { [Environment]::SetEnvironmentVariable($Var, $saved) }
+    }
+
+    It 'Test-InforcerInteractiveHost ignores an empty CI variable' {
+        $saved = $env:CI
+        try {
+            $env:CI = ''
+            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost } |
+                Should -Be ([Environment]::UserInteractive) -Because 'an empty value is not "in CI"'
+        } finally { $env:CI = $saved }
+    }
+
+    It '<Name> resolves -Show from the interactive check, not a hardcoded default' -ForEach $script:OptInCmdlets {
+        $path = Join-Path $PSScriptRoot "../module/Public/$Name.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+        $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
+        $p = $fn.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Show' }
+        $p.DefaultValue.Extent.Text | Should -Match 'Test-InforcerInteractiveHost'
     }
 
     It '<Name> opens a browser only inside an if ($Show) block' -ForEach $script:OptInCmdlets {

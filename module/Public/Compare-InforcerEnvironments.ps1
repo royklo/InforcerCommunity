@@ -67,8 +67,13 @@
     comparison model is returned instead, so a caller can read the numbers without touching disk.
     There is no default - writing is always something you asked for.
 .PARAMETER Show
-    Open the generated HTML in the default browser. Requires -OutputPath. Off by default so the
-    cmdlet is safe in pipelines and containers, where there is no browser to open.
+    Open the generated HTML in the default browser. Requires -OutputPath — there is nothing to
+    open when no file is written.
+
+    Defaults to ON in an interactive session and OFF on a CI runner (CI, TF_BUILD, GITHUB_ACTIONS
+    and similar), so a human who asked for a report gets to look at it while a build agent does
+    not try to launch a browser. Pass -Show to force it, -Show:$false to suppress it; an explicit
+    value always wins over the detection.
 .OUTPUTS
     The comparison model (hashtable) when -OutputPath is omitted, otherwise System.IO.FileInfo for
     the exported HTML report.
@@ -142,8 +147,9 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$OutputPath,
 
+    # Defaults ON for a human at a prompt, OFF on a CI runner. -Show / -Show:$false always wins.
     [Parameter(Mandatory = $false)]
-    [switch]$Show
+    [switch]$Show = (Test-InforcerInteractiveHost)
 )
 
 # Session guard: require an active session unless both explicit sessions are provided
@@ -302,7 +308,7 @@ Write-Host "  Total items:     $($model.TotalItems)" -ForegroundColor Gray
 # browser for it - wrong in a pipeline, wrong in a container, and wrong for any caller that
 # just wanted the numbers.
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    Write-Host "Done. Pass -OutputPath to write an HTML report, -Show to open it." -ForegroundColor Cyan
+    Write-Host "Done. Pass -OutputPath to write an HTML report." -ForegroundColor Cyan
     return $model
 }
 
@@ -344,7 +350,7 @@ $fileInfo = Get-Item -LiteralPath $filePath
 $sizeKb   = [math]::Round($fileInfo.Length / 1KB, 1)
 Write-Host "  Exported: $filePath ($sizeKb KB)" -ForegroundColor Green
 
-# Opening a browser is opt-in via -Show. Doing it unconditionally spawned a window on every
+# -Show defaults to on interactively, off in CI (Test-InforcerInteractiveHost). Doing it
 # run, including inside CI containers where there is nothing to open it with.
 if ($Show) {
     $fullPath = (Resolve-Path -LiteralPath $filePath).Path

@@ -33,8 +33,13 @@
     explicit output file path. Omit it and no files are written: the DocModel is returned instead.
     There is no default - writing is always something you asked for.
 .PARAMETER Show
-    Open the generated HTML in the default browser. Requires -OutputPath and -Format Html. Off by
-    default so the cmdlet is safe in pipelines and containers, where there is no browser to open.
+    Open the generated HTML in the default browser. Requires -OutputPath and -Format Html — there
+    is nothing to open when no file is written.
+
+    Defaults to ON in an interactive session and OFF on a CI runner (CI, TF_BUILD, GITHUB_ACTIONS
+    and similar), so a human who asked for a report gets to look at it while a build agent does
+    not try to launch a browser. Pass -Show to force it, -Show:$false to suppress it; an explicit
+    value always wins over the detection.
 .PARAMETER SettingsCatalogPath
     Path to a local settings.json file for Settings Catalog resolution. When omitted, the cmdlet
     automatically downloads and caches the latest data from the IntuneSettingsCatalogData GitHub
@@ -98,8 +103,9 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$OutputPath,
 
+    # Defaults ON for a human at a prompt, OFF on a CI runner. -Show / -Show:$false always wins.
     [Parameter(Mandatory = $false)]
-    [switch]$Show,
+    [switch]$Show = (Test-InforcerInteractiveHost),
 
     [Parameter(Mandatory = $false)]
     [string]$SettingsCatalogPath,
@@ -401,7 +407,7 @@ Write-Host "  Found $policyCount policies across $($docModel.Products.Count) pro
 # whatever directory you happened to be standing in and opened a browser for them, which is
 # wrong in a pipeline and wrong for a caller that only wants the model to read.
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    Write-Host 'Done. Pass -OutputPath to write files, -Show to open the HTML.' -ForegroundColor Cyan
+    Write-Host 'Done. Pass -OutputPath to write files.' -ForegroundColor Cyan
     return $docModel
 }
 
@@ -445,7 +451,7 @@ foreach ($fmt in $Format) {
     $fileInfo
 }
 
-# Opening a browser is opt-in via -Show. Doing it on every run spawned a window even inside CI
+# -Show defaults to on interactively, off in CI (Test-InforcerInteractiveHost). Doing it
 # containers, where there is nothing to open it with.
 if ($Show) {
     $htmlFile = $Format | Where-Object { $_ -eq 'Html' } | ForEach-Object {

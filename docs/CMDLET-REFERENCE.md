@@ -664,7 +664,7 @@ The HTML output features a modern admin dashboard design with a collapsible side
 | **Format** | String | No | Output format: `Html` (default), `Markdown`, `Excel`. Excel creates an .xlsx workbook with one sheet per product (requires `ImportExcel` module). |
 | **TenantId** | Object | Yes | Tenant to document (numeric ID, GUID, or tenant name). |
 | **OutputPath** | String | No | Directory to write the output file. **No default** — omit it and no files are written; the DocModel is returned instead. |
-| **Show** | Switch | No | Open the generated HTML in the default browser. Requires `-OutputPath` and `-Format Html`. Off by default, so the cmdlet is safe in pipelines and containers. |
+| **Show** | Switch | No | Open the generated HTML in the default browser. Requires `-OutputPath` and `-Format Html`. **Defaults to on interactively, off in CI** (`CI`, `TF_BUILD`, `GITHUB_ACTIONS`, `GITLAB_CI`, `JENKINS_URL`, `TEAMCITY_VERSION`, `BUILDKITE`). `-Show` forces it, `-Show:$false` suppresses it; an explicit value always wins. |
 | **SettingsCatalogPath** | String | No | Path to a local `settings.json` file for Intune Settings Catalog name resolution. When omitted, automatically downloads and caches the latest data from the [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub repository (~65 MB, cached at `~/.inforcercommunity/data/settings.json` with a 24-hour TTL). |
 | **FetchGraphData** | Switch | No | When set, resolves group/role/location/application GUIDs to display names across assignments and Conditional Access policies via Microsoft Graph. Also resolves assignment filter and scope tag IDs. Requires a Graph connection (use `Connect-Inforcer -FetchGraphData` or `Connect-InforcerGraph`). |
 | **Baseline** | String | No | Filter to policies belonging to a specific baseline (name or ID). |
@@ -754,7 +754,7 @@ Compares the Intune policy configuration of two tenants and generates an interac
 | **PolicyNameFilter** | String | No | Only include policies whose name contains this string (case-insensitive). |
 | **SettingsCatalogPath** | String | No | Path to local `settings.json`. Auto-discovers if omitted. |
 | **OutputPath** | String | No | Directory for the HTML report. **No default** — omit it and no file is written; the comparison model is returned instead. |
-| **Show** | Switch | No | Open the generated HTML in the default browser. Requires `-OutputPath`. Off by default, so the cmdlet is safe in pipelines and containers. |
+| **Show** | Switch | No | Open the generated HTML in the default browser. Requires `-OutputPath`. **Defaults to on interactively, off in CI** (`CI`, `TF_BUILD`, `GITHUB_ACTIONS`, `GITLAB_CI`, `JENKINS_URL`, `TEAMCITY_VERSION`, `BUILDKITE`). `-Show` forces it, `-Show:$false` suppresses it; an explicit value always wins. |
 
 ### Examples
 

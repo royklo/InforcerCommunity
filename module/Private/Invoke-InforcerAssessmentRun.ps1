@@ -30,10 +30,14 @@ function Invoke-InforcerAssessmentRun {
     $endpoint = "/beta/tenants/$ClientTenantId/assessments/$ResolvedAssessmentId/runs"
     $uri = $script:InforcerSession.BaseUrl + $endpoint
     $apiKey = ConvertFrom-InforcerSecureString -SecureString $script:InforcerSession.ApiKey
-    $headers = @{ 'Inf-Api-Key' = $apiKey; 'Content-Type' = 'application/json' }
+    $headers = @{ 'Inf-Api-Key' = $apiKey }
 
+    # This endpoint takes no request body and rejects ANY Content-Type with
+    # 400 ValidationFailure ("Unspecified content type <x> is not allowed"). Omitting the
+    # header is not enough: Invoke-RestMethod supplies application/x-www-form-urlencoded on a
+    # bodyless POST, which is rejected the same way. -ContentType '' suppresses it entirely.
     $ps = [PowerShell]::Create()
-    $null = $ps.AddScript('param($Uri, $Headers); Invoke-RestMethod -Uri $Uri -Method POST -Headers $Headers')
+    $null = $ps.AddScript('param($Uri, $Headers); Invoke-RestMethod -Uri $Uri -Method POST -Headers $Headers -ContentType ""')
     $null = $ps.AddParameter('Uri', $uri)
     $null = $ps.AddParameter('Headers', $headers)
     $asyncResult = $ps.BeginInvoke()

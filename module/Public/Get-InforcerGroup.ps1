@@ -13,6 +13,11 @@ function Get-InforcerGroup {
         Use -Search for server-side prefix filtering (fast, sent to API).
         Use -Filter for client-side wildcard filtering (supports contains, e.g. *comp*).
 
+        -Group additionally shows MembershipRule (only when the group has one) and
+        OnPremisesSyncEnabled. MembershipRule is NOT available from the list: the API returns the
+        field but leaves it null on every group, dynamic ones included, so reading a dynamic group's
+        rule requires a -Group call per group.
+
     .PARAMETER TenantId
         The Inforcer tenant ID. Accepts numeric ID, GUID, or tenant name. Supports pipeline input.
 

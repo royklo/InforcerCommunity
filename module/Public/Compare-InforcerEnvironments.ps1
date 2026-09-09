@@ -26,9 +26,16 @@
 .PARAMETER SourceBaselineId
     Optional baseline GUID or friendly name for the source tenant. When specified, the comparison
     is scoped to only policies belonging to this baseline instead of all tenant policies.
+
+    The destination is scoped to the same baseline unless -DestinationBaselineId says otherwise.
+    Scoping one side only would compare a handful of baseline policies against the destination's
+    entire estate, counting every destination-only policy as a deviation. If the destination
+    tenant is not a member of the baseline it cannot be scoped, and the comparison falls back to
+    its full policy set with a warning.
 .PARAMETER DestinationBaselineId
     Optional baseline GUID or friendly name for the destination tenant. When specified, the comparison
-    is scoped to only policies belonging to this baseline instead of all tenant policies.
+    is scoped to only policies belonging to this baseline instead of all tenant policies. Defaults
+    to -SourceBaselineId when that is given; pass it explicitly to compare across two baselines.
 .PARAMETER IncludingAssignments
     When specified, fetches and displays Graph assignment data in the report.
     Assignments are informational only and do not affect the alignment score.
@@ -47,19 +54,38 @@
     - Scope tag resolution (tag ID to display name)
     - Compliance rules for custom compliance policies (rulesContent via $expand)
 .PARAMETER ExcludeOS
-    Array of OS/platform names to exclude from the comparison. Matching is case-insensitive
-    and uses contains logic. Examples: 'macOS', 'iOS', 'Android', 'Windows'.
+    Array of OS/platform or product names to exclude from the comparison. Matching is
+    case-insensitive contains logic, applied to both the product name (Entra, Intune, Defender,
+    Exchange, SharePoint) and the category key, which is where the OS actually lives
+    (Windows, macOS, iOS/iPadOS, Android). Examples: 'macOS', 'iOS', 'Android', 'Windows'.
     Excluded platforms do not affect the alignment score.
 .PARAMETER PolicyNameFilter
     Only include policies whose name contains this string (case-insensitive).
     Non-matching policies are excluded from both the report and the alignment score.
 .PARAMETER OutputPath
-    Directory where the HTML report will be written. Defaults to current directory.
+    Directory where the HTML report will be written. Omit it and no file is written: the
+    comparison model is returned instead, so a caller can read the numbers without touching disk.
+    There is no default - writing is always something you asked for.
+.PARAMETER Show
+    Open the generated HTML in the default browser. Requires -OutputPath — there is nothing to
+    open when no file is written.
+
+    Defaults to ON in an interactive session and OFF on a CI runner (CI, TF_BUILD, GITHUB_ACTIONS
+    and similar), so a human who asked for a report gets to look at it while a build agent does
+    not try to launch a browser. Pass -Show to force it, -Show:$false to suppress it; an explicit
+    value always wins over the detection.
 .OUTPUTS
-    System.IO.FileInfo. Returns a FileInfo object for the exported HTML report.
+    The comparison model (hashtable) when -OutputPath is omitted, otherwise System.IO.FileInfo for
+    the exported HTML report.
 .EXAMPLE
     Connect-Inforcer -ApiKey $key
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam'
+
+    Returns the comparison model. No file is written and no browser opens.
+.EXAMPLE
+    Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -OutputPath ./reports -Show
+
+    Writes the HTML report to ./reports and opens it.
 .EXAMPLE
     $src = Connect-Inforcer -ApiKey $key1 -Region uk -PassThru
     $dst = Connect-Inforcer -ApiKey $key2 -Region eu -PassThru
@@ -68,7 +94,8 @@
     Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 -IncludingAssignments
 .EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' -DestinationTenantId 'Fabrikam'
-    # Compares only policies in the 'Tier 1 Foundations' baseline from Contoso against all Fabrikam policies.
+    # Compares the 'Tier 1 Foundations' baseline policies on both sides. Fabrikam is scoped to the
+    # same baseline unless -DestinationBaselineId says otherwise.
 .EXAMPLE
     Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' -DestinationTenantId 14506
     # Compares the baseline (auto-resolves owner tenant) against a specific tenant.
@@ -82,7 +109,7 @@
 #>
 function Compare-InforcerEnvironments {
 [CmdletBinding()]
-[OutputType([System.IO.FileInfo])]
+[OutputType([hashtable], [System.IO.FileInfo])]
 param(
     [Parameter(Position = 0)]
     [object]$SourceTenantId,
@@ -118,7 +145,11 @@ param(
     [string]$PolicyNameFilter,
 
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath = '.'
+    [string]$OutputPath,
+
+    # Defaults ON for a human at a prompt, OFF on a CI runner. -Show / -Show:$false always wins.
+    [Parameter(Mandatory = $false)]
+    [switch]$Show = (Test-InforcerInteractiveHost)
 )
 
 # Session guard: require an active session unless both explicit sessions are provided
@@ -250,7 +281,7 @@ $compareParams = @{
 }
 if ($ExcludeOS) {
     $compareParams['ExcludeOS'] = $ExcludeOS
-    Write-Host "  Excluding products: $($ExcludeOS -join ', ')" -ForegroundColor Gray
+    Write-Host "  Excluding products/platforms: $($ExcludeOS -join ', ')" -ForegroundColor Gray
 }
 if ($PolicyNameFilter) {
     $compareParams['PolicyNameFilter'] = $PolicyNameFilter
@@ -270,6 +301,16 @@ if ($null -eq $model) {
 
 Write-Host "  Alignment score: $($model.AlignmentScore)%" -ForegroundColor Gray
 Write-Host "  Total items:     $($model.TotalItems)" -ForegroundColor Gray
+
+# ── No -OutputPath: hand back the model and touch nothing ─────────────────────
+# Rendering and writing are opt-in. Comparing two tenants is a question, not a request for a
+# file, and the old default wrote HTML into the caller's working directory and launched a
+# browser for it - wrong in a pipeline, wrong in a container, and wrong for any caller that
+# just wanted the numbers.
+if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+    Write-Host "Done. Pass -OutputPath to write an HTML report." -ForegroundColor Cyan
+    return $model
+}
 
 # ── Stage 3: Render HTML report ───────────────────────────────────────────────
 Write-Host 'Stage 3: Rendering HTML report...' -ForegroundColor Cyan
@@ -309,11 +350,14 @@ $fileInfo = Get-Item -LiteralPath $filePath
 $sizeKb   = [math]::Round($fileInfo.Length / 1KB, 1)
 Write-Host "  Exported: $filePath ($sizeKb KB)" -ForegroundColor Green
 
-# Auto-open HTML output in the default browser (cross-platform)
-$fullPath = (Resolve-Path -LiteralPath $filePath).Path
-if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullPath }
-elseif ($IsWindows) { Start-Process $fullPath }
-elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullPath }
+# -Show defaults to on interactively and off in CI (Test-InforcerInteractiveHost), so a human
+# who asked for a report sees it while a build agent is never handed a browser to open.
+if ($Show) {
+    $fullPath = (Resolve-Path -LiteralPath $filePath).Path
+    if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullPath }
+    elseif ($IsWindows) { Start-Process $fullPath }
+    elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullPath }
+}
 
 Write-Host "Done. Comparison report generated for '$($compData.SourceName)' vs '$($compData.DestinationName)'." -ForegroundColor Cyan
 

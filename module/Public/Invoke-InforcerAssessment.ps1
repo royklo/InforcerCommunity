@@ -274,6 +274,15 @@ if ($isMultiTenant) {
     Write-Host ""
     Write-Host "All assessments complete. $($allTenantResults.Count) tenant(s) processed in $totalTimeStr." -ForegroundColor Green
 
+    # Every tenant failed. Bail before the summary and every export path: the HTML and CSV
+    # renderers take a mandatory -TenantResults, so falling through binds an empty collection
+    # and throws a parameter-binding error that says nothing about why the runs failed.
+    # One guard here covers the Json, Html and Csv paths below.
+    if ($allTenantResults.Count -eq 0) {
+        Write-Error -Message 'No assessment results were returned for any tenant, so there is nothing to report. See the errors above for the per-tenant failures.' -ErrorId 'NoAssessmentResults' -Category InvalidResult
+        return
+    }
+
     # Summary per tenant
     foreach ($tr in $allTenantResults) {
         $color = if ($tr.Score -ge 90) { 'Green' } elseif ($tr.Score -ge 70) { 'Yellow' } else { 'Red' }

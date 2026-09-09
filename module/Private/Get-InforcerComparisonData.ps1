@@ -108,13 +108,35 @@ function Get-InforcerComparisonData {
         }
 
         # ── Destination baseline filtering (while dest session is active) ──
-        if (-not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) {
-            Write-Host "  Filtering destination to baseline: $DestinationBaselineId" -ForegroundColor Gray
-            $destBaselineName = Select-InforcerBaselinePolicies -DocData $destDocData -BaselineId $DestinationBaselineId
+        # The destination inherits the source's baseline when none was given. Scoping one side
+        # only compares N baseline policies against the destination's ENTIRE estate, so every
+        # destination-only policy scores as a deviation: 3-policy baseline vs 756-policy tenant
+        # reported 0.2% where Inforcer itself reports 100% for the same pair. "How aligned is
+        # this tenant to this baseline" means comparing like with like on both sides.
+        $effectiveDestBaseline = $DestinationBaselineId
+        $baselineInherited = $false
+        if ([string]::IsNullOrWhiteSpace($effectiveDestBaseline) -and -not [string]::IsNullOrWhiteSpace($SourceBaselineId)) {
+            $effectiveDestBaseline = $SourceBaselineId
+            $baselineInherited = $true
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($effectiveDestBaseline)) {
+            Write-Host "  Filtering destination to baseline: $effectiveDestBaseline" -ForegroundColor Gray
+            $destBaselineName = Select-InforcerBaselinePolicies -DocData $destDocData -BaselineId $effectiveDestBaseline
             if ($null -eq $destBaselineName) {
-                Write-Error -Message "Failed to filter destination tenant to baseline '$DestinationBaselineId'." `
-                    -ErrorId 'DestBaselineFilterFailed' -Category InvalidResult
-                return $null
+                # An explicit -DestinationBaselineId that fails is an error. An inherited one is
+                # not: the destination simply may not be a member of the source's baseline, which
+                # is a legitimate comparison to want. Select-InforcerBaselinePolicies returns
+                # $null before it mutates DocData, so the unfiltered destination is still intact.
+                if (-not $baselineInherited) {
+                    Write-Error -Message "Failed to filter destination tenant to baseline '$DestinationBaselineId'." `
+                        -ErrorId 'DestBaselineFilterFailed' -Category InvalidResult
+                    return $null
+                }
+                Write-Warning ("Destination tenant '$DestinationTenantId' could not be scoped to baseline '$SourceBaselineId' " +
+                    'so the comparison runs against its full policy set. Every destination-only policy then counts as a ' +
+                    'deviation, which understates the alignment score. Pass -DestinationBaselineId to scope it explicitly.')
+                $effectiveDestBaseline = $null
             }
         }
     } finally {

@@ -230,7 +230,10 @@ Describe 'ConvertTo-InforcerMarkdown' -Tag 'Markdown' {
             TenantName   = 'Test Tenant'
             TenantId     = 12345
             GeneratedAt  = [datetime]'2026-01-15 10:30:00'
-            BaselineName = 'TestBaseline'
+            # BaselineName is the tenant's first attached baseline and must never reach the header;
+            # only FilterBaseline (set when -Baseline is used) may.
+            BaselineName   = 'WrongBaseline'
+            FilterBaseline = 'TestBaseline'
             Products     = [ordered]@{
                 'Intune' = @{
                     Categories = [ordered]@{
@@ -304,8 +307,23 @@ Describe 'ConvertTo-InforcerMarkdown' -Tag 'Markdown' {
         $script:MarkdownOutput | Should -Match 'Generated: 2026-01-15'
     }
 
-    It 'contains baseline name' {
+    It 'contains the filtered baseline name, not the tenant''s first baseline' {
         $script:MarkdownOutput | Should -Match 'Baseline: TestBaseline'
+        $script:MarkdownOutput | Should -Not -Match 'WrongBaseline'
+    }
+
+    It 'omits the baseline header when no baseline filter was applied' {
+        $unfiltered = @{
+            TenantName   = 'Test Tenant'
+            TenantId     = 12345
+            GeneratedAt  = [datetime]'2026-01-15 10:30:00'
+            BaselineName = 'WrongBaseline'
+            Products     = [ordered]@{}
+        }
+        $result = InModuleScope InforcerCommunity -Parameters @{ M = $unfiltered } {
+            ConvertTo-InforcerMarkdown -DocModel $M
+        }
+        $result | Should -Not -Match 'Baseline:'
     }
 
     It 'contains TOC with product anchor links' {

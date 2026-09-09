@@ -54,8 +54,8 @@ Describe 'Consistency contract' {
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')
-            'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
-            'Compare-InforcerEnvironments'  = @('SourceTenantId', 'DestinationTenantId', 'SourceSession', 'DestinationSession', 'SourceBaselineId', 'DestinationBaselineId', 'IncludingAssignments', 'SettingsCatalogPath', 'FetchGraphData', 'ExcludeOS', 'PolicyNameFilter', 'OutputPath')
+            'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'Show', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
+            'Compare-InforcerEnvironments'  = @('SourceTenantId', 'DestinationTenantId', 'SourceSession', 'DestinationSession', 'SourceBaselineId', 'DestinationBaselineId', 'IncludingAssignments', 'SettingsCatalogPath', 'FetchGraphData', 'ExcludeOS', 'PolicyNameFilter', 'OutputPath', 'Show')
             'Get-InforcerAssessment'        = @('Format', 'OutputType')
             'Invoke-InforcerAssessment'     = @('TenantId', 'AssessmentId', 'OutputType')
             'Get-InforcerReportType'        = @('Key', 'Tag', 'OutputFormat', 'Force', 'Format', 'OutputType')
@@ -1861,6 +1861,41 @@ Describe 'Private helpers (via module scope)' {
             $result.Status | Should -Be 'Connected'
         }
 
+        It 'Rejects an expired key even though it uses the Inforcer 403 envelope' {
+            # Verbatim body from api-uk.dev with an expired key. errorCode is 'forbidden' —
+            # identical to a scope denial — so only errors[] distinguishes the two.
+            # Must NOT report Connected.
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [PSCustomObject]@{
+                    StatusCode = 403
+                    Content    = '{"data":null,"errorCode":"forbidden","success":false,"message":"A valid API key is required to access this endpoint.","errors":["API key has expired."]}'
+                    Headers    = @{}
+                }
+            }
+            $secure = ConvertTo-SecureString 'expired-key' -AsPlainText -Force
+            $err = $null
+            $result = Connect-Inforcer -ApiKey $secure -Region uk -ErrorAction SilentlyContinue -ErrorVariable err
+            $result | Should -BeNullOrEmpty
+            @($err).Count | Should -BeGreaterThan 0
+            $err[0].Exception.Message | Should -Match 'API key has expired'
+        }
+
+        It 'Connects a narrow-scope key whose 403 carries the same generic key message' {
+            # Same top-level message as the expired key above — the API serves it for scope
+            # denials too — but errors[] names a scope, not the key. Must still connect, or
+            # the expired-key fix would lock out every key that lacks Baselines.Read.
+            Mock -ModuleName InforcerCommunity Invoke-WebRequest {
+                [PSCustomObject]@{
+                    StatusCode = 403
+                    Content    = '{"data":null,"errorCode":"forbidden","success":false,"message":"A valid API key is required to access this endpoint.","errors":["Insufficient scope: Baselines.Read is required."]}'
+                    Headers    = @{}
+                }
+            }
+            $secure = ConvertTo-SecureString 'reports-only-key' -AsPlainText -Force
+            $result = Connect-Inforcer -ApiKey $secure -Region uk -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+            $result.Status | Should -Be 'Connected'
+        }
+
         It 'Treats APIM 401 envelope as a real auth failure' {
             # APIM gateway rejects the subscription: {statusCode, message} with no Inforcer markers.
             Mock -ModuleName InforcerCommunity Invoke-WebRequest {
@@ -2138,6 +2173,341 @@ Describe 'Private helpers (via module scope)' {
                     $v | Should -BeNullOrEmpty -Because "$n must be cleared on disconnect"
                 }
             }
+        }
+    }
+
+    Context 'Group Format.ps1xml views' {
+        # The group views carry the only conditional display logic in the module: MembershipRule is
+        # suppressed when empty, and OnPremisesSyncEnabled renders three API states that a plain
+        # boolean would collapse to two. Both are easy to "simplify" into a wrong answer.
+        BeforeAll {
+            function script:Format-Group ([hashtable]$Props, [string]$TypeName) {
+                $g = [PSCustomObject]$Props
+                $g.PSObject.TypeNames.Insert(0, $TypeName)
+                ($g | Format-List | Out-String)
+            }
+            $script:GroupBase = @{
+                id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'; displayName = 'G'; description = 'd'
+                mail = $null; visibility = $null; groupTypes = @(); membershipRule = $null
+                mailEnabled = $false; createdDateTime = '2026-01-01'; onPremisesSyncEnabled = $null
+                members = @()
+            }
+        }
+
+        It 'Detail view shows MembershipRule when the group has one' {
+            $p = $script:GroupBase.Clone()
+            $p.groupTypes = @('DynamicMembership')
+            $p.membershipRule = '(user.userType -eq "Member")'
+            $out = script:Format-Group $p 'InforcerCommunity.Group'
+            $out | Should -Match 'MembershipRule\s+:\s+\(user\.userType -eq "Member"\)'
+        }
+
+        It 'Detail view omits the MembershipRule row entirely for a static group' {
+            $out = script:Format-Group $script:GroupBase.Clone() 'InforcerCommunity.Group'
+            $out | Should -Not -Match 'MembershipRule'
+        }
+
+        It 'Summary view omits the MembershipRule row entirely for a static group' {
+            $out = script:Format-Group $script:GroupBase.Clone() 'InforcerCommunity.GroupSummary'
+            $out | Should -Not -Match 'MembershipRule'
+        }
+
+        # null and $false both mean "not syncing now" but they are NOT the same fact: null is
+        # "never synced" (cloud-only), $false is "was synced, no longer". Collapsing them mislabels
+        # a de-synced group as cloud-editable.
+        It 'Detail view distinguishes all three OnPremisesSyncEnabled states' -ForEach @(
+            @{ Value = $true;  Expected = 'True' }
+            @{ Value = $null;  Expected = 'False \(cloud-only\)' }
+            @{ Value = $false; Expected = 'False \(no longer syncing\)' }
+        ) {
+            $p = $script:GroupBase.Clone()
+            $p.onPremisesSyncEnabled = $Value
+            $out = script:Format-Group $p 'InforcerCommunity.Group'
+            $out | Should -Match "OnPremisesSyncEnabled\s+:\s+$Expected"
+        }
+    }
+}
+
+Describe 'Writing files and opening a browser stay opt-in (0.7.0 breaking change)' {
+    # Both cmdlets used to carry $OutputPath = '.' plus an unconditional Start-Process, so neither
+    # could run without dropping a file in the caller's working directory and spawning a browser.
+    # Reintroducing either default is invisible to every other test in this suite: nothing else
+    # asserts on where files land. These parse the param() block directly so no API call is needed.
+    BeforeDiscovery {
+        $script:OptInCmdlets = @(
+            @{ Name = 'Export-InforcerTenantDocumentation' }
+            @{ Name = 'Compare-InforcerEnvironments' }
+        )
+    }
+
+    It '<Name> declares -OutputPath with no default value' -ForEach $script:OptInCmdlets {
+        $path = Join-Path $PSScriptRoot "../module/Public/$Name.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+        $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
+        $p = $fn.Body.ParamBlock.Parameters |
+            Where-Object { $_.Name.VariablePath.UserPath -eq 'OutputPath' }
+        $p | Should -Not -BeNullOrEmpty -Because "$Name must still expose -OutputPath"
+        $p.DefaultValue | Should -BeNullOrEmpty -Because "a default -OutputPath writes files into the caller's working directory without being asked"
+    }
+
+    It '<Name> declares -Show as a switch' -ForEach $script:OptInCmdlets {
+        $cmd = Get-Command $Name
+        $cmd.Parameters['Show'].ParameterType | Should -Be ([switch])
+    }
+
+    # -Show auto-detects: on for a human, off on a build agent. The detection is the whole
+    # safety story now that auto-open is back, so it gets tested directly rather than through
+    # the cmdlets (which would need a live tenant and two minutes per case).
+    #
+    # These tests MUST neutralise every detector variable before exercising one, because the suite
+    # itself runs on a build agent. Setting only the variable under test leaves the runner's own
+    # GITHUB_ACTIONS=true in place: the "false" assertions then pass for the wrong reason, and the
+    # empty-value assertion fails outright. That is exactly how this failed in CI the first time.
+    BeforeAll {
+        $script:CiVars = 'CI', 'TF_BUILD', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_URL', 'TEAMCITY_VERSION', 'BUILDKITE'
+        function script:Invoke-WithCiEnv {
+            param([hashtable]$Set, [scriptblock]$Body)
+            $saved = @{}
+            foreach ($v in $script:CiVars) {
+                $saved[$v] = [Environment]::GetEnvironmentVariable($v)
+                [Environment]::SetEnvironmentVariable($v, $null)
+            }
+            try {
+                foreach ($k in $Set.Keys) { [Environment]::SetEnvironmentVariable($k, $Set[$k]) }
+                & $Body
+            } finally {
+                foreach ($v in $script:CiVars) { [Environment]::SetEnvironmentVariable($v, $saved[$v]) }
+            }
+        }
+    }
+
+    It 'Test-InforcerInteractiveHost returns false when <Var> is set' -ForEach @(
+        @{ Var = 'CI' }, @{ Var = 'TF_BUILD' }, @{ Var = 'GITHUB_ACTIONS' }
+        @{ Var = 'GITLAB_CI' }, @{ Var = 'JENKINS_URL' }, @{ Var = 'TEAMCITY_VERSION' }, @{ Var = 'BUILDKITE' }
+    ) {
+        # Only $Var is set — every other detector is cleared, so a false result can only come from
+        # this one variable. Without the clearing this assertion would be vacuous on any CI runner.
+        script:Invoke-WithCiEnv -Set @{ $Var = 'true' } -Body {
+            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost }
+        } | Should -BeFalse -Because "a build agent must never have a browser launched at it"
+    }
+
+    It 'Test-InforcerInteractiveHost ignores an empty CI variable' {
+        # With every detector cleared and CI set to empty string, the answer must fall through to
+        # UserInteractive — an empty value is not "in CI".
+        script:Invoke-WithCiEnv -Set @{ 'CI' = '' } -Body {
+            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost }
+        } | Should -Be ([Environment]::UserInteractive) -Because 'an empty value is not "in CI"'
+    }
+
+    It 'Test-InforcerInteractiveHost returns true when no CI variable is set at all' {
+        script:Invoke-WithCiEnv -Set @{} -Body {
+            & (Get-Module InforcerCommunity) { Test-InforcerInteractiveHost }
+        } | Should -Be ([Environment]::UserInteractive) -Because 'with nothing set it is the host that decides'
+    }
+
+    It '<Name> resolves -Show from the interactive check, not a hardcoded default' -ForEach $script:OptInCmdlets {
+        $path = Join-Path $PSScriptRoot "../module/Public/$Name.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+        $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
+        $p = $fn.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Show' }
+        $p.DefaultValue.Extent.Text | Should -Match 'Test-InforcerInteractiveHost'
+    }
+
+    It '<Name> opens a browser only inside an if ($Show) block' -ForEach $script:OptInCmdlets {
+        $path = Join-Path $PSScriptRoot "../module/Public/$Name.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+        $launchers = $ast.FindAll({
+                param($n)
+                $n -is [System.Management.Automation.Language.CommandAst] -and
+                $n.GetCommandName() -in @('Start-Process', 'Invoke-Item')
+            }, $true)
+        foreach ($l in $launchers) {
+            # Walk up to the enclosing if-statement and confirm $Show gates it.
+            $guarded = $false
+            $node = $l.Parent
+            while ($node) {
+                if ($node -is [System.Management.Automation.Language.IfStatementAst] -and
+                    $node.Clauses[0].Item1.Extent.Text -match '\$Show') { $guarded = $true; break }
+                $node = $node.Parent
+            }
+            $guarded | Should -BeTrue -Because "$($l.GetCommandName()) at line $($l.Extent.StartLineNumber) must be gated by -Show"
+        }
+    }
+}
+
+Describe '0.7.0 bug fixes that only live runs covered' {
+    # These three shipped verified by hand and by a live smoke, with nothing in CI to catch a
+    # regression. Each targets the smallest seam that actually encodes the fix.
+
+    Context 'Invoke-InforcerAssessmentRun sends no Content-Type' {
+        # POST /beta/tenants/{id}/assessments/{id}/runs takes no body and rejects ANY Content-Type
+        # with 400 ValidationFailure. Dropping the header is not enough — Invoke-RestMethod supplies
+        # application/x-www-form-urlencoded on a bodyless POST, which is rejected identically.
+        # The call runs in a separate runspace via AddScript, so a module-scoped Mock cannot reach
+        # it; the script text IS the contract, so that is what gets asserted.
+        BeforeAll {
+            $script:RunnerSrc = Get-Content (Join-Path $PSScriptRoot '../module/Private/Invoke-InforcerAssessmentRun.ps1') -Raw
+        }
+
+        It 'passes -ContentType "" on the run POST' {
+            $script:RunnerSrc | Should -Match 'Invoke-RestMethod[^\r\n]*-ContentType\s*""'
+        }
+
+        It 'never sets a Content-Type header on the runs endpoint' {
+            # A 'Content-Type' = 'application/json' entry anywhere in this file would reintroduce the 400.
+            $script:RunnerSrc | Should -Not -Match "(?i)['\`"]Content-Type['\`"]\s*=" 
+        }
+    }
+
+    Context '-ExcludeOS matches the category key, not just the product name' {
+        # The OS lives in the category key built from primaryGroup (Windows, macOS, iOS/iPadOS,
+        # Android) and never in the product name (Entra, Intune, Defender). Matching products alone
+        # made every documented example value a silent no-op that removed 0 items and reported success.
+        BeforeAll {
+            function script:New-TestPolicy ([string]$Name, [string]$DefId, [string]$Value) {
+                @{
+                    Basics       = @{ Name = $Name; Id = $DefId; Description = ''; ProfileType = 'Test'
+                                      Platform = ''; Created = ''; Modified = ''; ScopeTags = ''; Tags = '' }
+                    Settings     = @(@{ Name = $Name; SettingPath = $Name; Value = $Value; DefinitionId = $DefId })
+                    Assignments  = @()
+                    PolicyTypeId = 10
+                }
+            }
+            function script:New-TestModel ([string]$TenantName, [string]$Value) {
+                @{
+                    TenantName = $TenantName
+                    TenantId   = 1
+                    Products   = [ordered]@{
+                        'Intune' = @{
+                            Categories = [ordered]@{
+                                'Windows / Configuration Profiles'    = @(script:New-TestPolicy 'WinSetting' 'def-win' $Value)
+                                'macOS / Configuration Profiles'      = @(script:New-TestPolicy 'MacSetting' 'def-mac' $Value)
+                                'iOS/iPadOS / App Protection Policies' = @(script:New-TestPolicy 'IosSetting' 'def-ios' $Value)
+                            }
+                        }
+                    }
+                }
+            }
+            function script:Get-CategoryKeys ($Result) {
+                $keys = [System.Collections.Generic.List[string]]::new()
+                foreach ($p in $Result.Products.Keys) {
+                    foreach ($c in $Result.Products[$p].Categories.Keys) { [void]$keys.Add("$p / $c") }
+                }
+                $keys
+            }
+        }
+
+        It 'removes nothing when -ExcludeOS is not passed' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($s, $d) Compare-InforcerDocModels -SourceModel $s -DestinationModel $d
+            } (script:New-TestModel 'Src' 'A') (script:New-TestModel 'Dst' 'A')
+            (script:Get-CategoryKeys $r).Count | Should -Be 3
+        }
+
+        It 'removes a category whose KEY contains the excluded OS' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($s, $d) Compare-InforcerDocModels -SourceModel $s -DestinationModel $d -ExcludeOS @('macOS')
+            } (script:New-TestModel 'Src' 'A') (script:New-TestModel 'Dst' 'A')
+            $keys = script:Get-CategoryKeys $r
+            $keys | Should -Not -Contain 'Intune / macOS / Configuration Profiles'
+            $keys | Should -Contain 'Intune / Windows / Configuration Profiles' -Because 'only the named OS goes'
+        }
+
+        It 'removes several OSes at once' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($s, $d) Compare-InforcerDocModels -SourceModel $s -DestinationModel $d -ExcludeOS @('macOS', 'iOS')
+            } (script:New-TestModel 'Src' 'A') (script:New-TestModel 'Dst' 'A')
+            $keys = script:Get-CategoryKeys $r
+            @($keys).Count | Should -Be 1
+            $keys | Should -Contain 'Intune / Windows / Configuration Profiles'
+        }
+
+        It 'still matches a PRODUCT name, which was the only thing that ever worked' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($s, $d) Compare-InforcerDocModels -SourceModel $s -DestinationModel $d -ExcludeOS @('Intune')
+            } (script:New-TestModel 'Src' 'A') (script:New-TestModel 'Dst' 'A')
+            (script:Get-CategoryKeys $r).Count | Should -Be 0 -Because 'excluding the product drops all its categories'
+        }
+    }
+
+    Context 'The destination inherits -SourceBaselineId' {
+        # Scoping one side only compared N baseline policies against the destination's whole estate,
+        # so every destination-only policy counted as a deviation: 0.2% where Inforcer says 100%.
+        BeforeAll {
+            $script:MinimalDocData = @{ TenantId = 1; TenantName = 'T'; Policies = @(@{ id = 'p1' }) }
+        }
+
+        It 'scopes the destination to the source baseline when no destination baseline is given' {
+            $calls = & (Get-Module InforcerCommunity) {
+                param($docData)
+                $script:seen = [System.Collections.Generic.List[string]]::new()
+                Mock Get-InforcerDocData { $docData } -ModuleName InforcerCommunity
+                Mock Select-InforcerBaselinePolicies { [void]$script:seen.Add($BaselineId); 'BaselineName' } -ModuleName InforcerCommunity
+                Mock Write-Host {} -ModuleName InforcerCommunity
+                $null = Get-InforcerComparisonData -SourceTenantId 1 -DestinationTenantId 2 -SourceBaselineId 'Tier 0'
+                $script:seen
+            } $script:MinimalDocData
+            @($calls).Count | Should -Be 2 -Because 'both sides must be scoped'
+            $calls[0] | Should -Be 'Tier 0'
+            $calls[1] | Should -Be 'Tier 0' -Because 'the destination inherits the source baseline'
+        }
+
+        It 'does not override an explicit -DestinationBaselineId' {
+            $calls = & (Get-Module InforcerCommunity) {
+                param($docData)
+                $script:seen = [System.Collections.Generic.List[string]]::new()
+                Mock Get-InforcerDocData { $docData } -ModuleName InforcerCommunity
+                Mock Select-InforcerBaselinePolicies { [void]$script:seen.Add($BaselineId); 'BaselineName' } -ModuleName InforcerCommunity
+                Mock Write-Host {} -ModuleName InforcerCommunity
+                $null = Get-InforcerComparisonData -SourceTenantId 1 -DestinationTenantId 2 `
+                    -SourceBaselineId 'Tier 0' -DestinationBaselineId 'Tier 2'
+                $script:seen
+            } $script:MinimalDocData
+            $calls[0] | Should -Be 'Tier 0'
+            $calls[1] | Should -Be 'Tier 2'
+        }
+
+        # An INHERITED baseline that will not resolve is legitimate — the destination simply may not
+        # be a member — so it falls back to the full policy set with a warning. An EXPLICIT one that
+        # fails is still an error. The mock fails only the second call, which is the destination.
+        It 'warns and falls back when the destination is not a member of the inherited baseline' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($docData)
+                $script:n = 0
+                Mock Get-InforcerDocData { $docData } -ModuleName InforcerCommunity
+                Mock Select-InforcerBaselinePolicies {
+                    $script:n++
+                    if ($script:n -eq 1) { 'SourceBaseline' } else { $null }
+                } -ModuleName InforcerCommunity
+                Mock Write-Host {} -ModuleName InforcerCommunity
+                $out = Get-InforcerComparisonData -SourceTenantId 1 -DestinationTenantId 2 -SourceBaselineId 'Tier 0' -WarningVariable w -WarningAction SilentlyContinue -ErrorVariable e -ErrorAction SilentlyContinue
+                @{ Result = $out; Warnings = $w; Errors = $e }
+            } $script:MinimalDocData
+
+            $r.Warnings | Should -Not -BeNullOrEmpty -Because 'the fallback must announce that the score is understated'
+            ($r.Warnings -join ' ') | Should -Match 'full policy set'
+            $r.Errors | Should -BeNullOrEmpty -Because 'a non-member destination is a legitimate comparison, not an error'
+            $r.Result | Should -Not -BeNullOrEmpty -Because 'it must still return data to compare'
+        }
+
+        It 'errors when an EXPLICIT -DestinationBaselineId cannot be resolved' {
+            $r = & (Get-Module InforcerCommunity) {
+                param($docData)
+                $script:n = 0
+                Mock Get-InforcerDocData { $docData } -ModuleName InforcerCommunity
+                Mock Select-InforcerBaselinePolicies {
+                    $script:n++
+                    if ($script:n -eq 1) { 'SourceBaseline' } else { $null }
+                } -ModuleName InforcerCommunity
+                Mock Write-Host {} -ModuleName InforcerCommunity
+                $out = Get-InforcerComparisonData -SourceTenantId 1 -DestinationTenantId 2 -SourceBaselineId 'Tier 0' -DestinationBaselineId 'Tier 2' -ErrorVariable e -ErrorAction SilentlyContinue
+                @{ Result = $out; Errors = $e }
+            } $script:MinimalDocData
+
+            $r.Errors | Should -Not -BeNullOrEmpty -Because 'an explicitly named baseline that does not resolve is a mistake worth surfacing'
+            "$($r.Errors[0].FullyQualifiedErrorId)" | Should -Match 'DestBaselineFilterFailed'
+            $r.Result | Should -BeNullOrEmpty
         }
     }
 }

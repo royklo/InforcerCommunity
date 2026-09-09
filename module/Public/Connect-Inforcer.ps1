@@ -4,8 +4,10 @@
 .DESCRIPTION
     Creates an authenticated session using an API key. You can specify -Region (uk, eu, us, anz)
     or -BaseUrl for custom endpoints. The API key is stored as a SecureString.
-    Before returning Connected, a minimal API call validates the key; if it fails (e.g. wrong key for the endpoint),
-    the connection is not established and an error is returned.
+    Before returning Connected, a minimal API call validates the key; if it fails (e.g. wrong key for the
+    endpoint, or an expired/revoked key), the connection is not established and an error is returned.
+    A key that is valid but lacks the scope for the probe endpoint still connects — no single scope is
+    privileged for validation.
 .PARAMETER ApiKey
     The Inforcer API key. Can be SecureString or String (converted to SecureString).
 .PARAMETER Region
@@ -104,6 +106,8 @@ if (!$PSCmdlet.ShouldProcess('Inforcer session', 'Connect')) { return }
 #   * 4xx with Inforcer-app error envelope    → key valid; APIM accepted the subscription,
 #                                               the Inforcer app rejected the scope. That's
 #                                               proof the subscription works.
+#   * 4xx whose errors[] names a key-lifecycle
+#     problem ("API key has expired")         → key itself is dead, not a scope gap. Error out.
 #   * 401 with APIM gateway envelope          → APIM rejected the subscription itself. Real
 #                                               auth failure — error out.
 #   * Other 4xx/5xx                           → propagate the message.
@@ -119,6 +123,7 @@ $probeUri = $baseUrlValue.TrimEnd('/') + '/beta/baselines'
 $probeSucceeded = $false
 $probeStatusCode = 0
 $probeApiMessage = $null
+$probeErrorsText = $null        # errors[] only, without the generic top-level message
 $probeEnvelope   = 'unknown'    # 'inforcer' | 'apim' | 'unknown'
 $probeRawError   = $null
 
@@ -156,6 +161,19 @@ if ($probeStatusCode -ge 200 -and $probeStatusCode -lt 300) {
         $msgProp = $json.PSObject.Properties['message']
         if ($msgProp) { $probeApiMessage = $msgProp.Value -as [string] }
 
+        # errors[] carries the actionable detail ("API key has expired."); the top-level
+        # message is the generic auth placeholder ("A valid API key is required to access
+        # this endpoint.") that the API also emits for plain scope denials. Kept in its own
+        # variable because the key-lifecycle test below must read errors[] ONLY — see there.
+        $errorsProp = $json.PSObject.Properties['errors']
+        if ($errorsProp) {
+            $probeErrorsText = Format-InforcerErrorDetail -Errors $errorsProp.Value
+            if (-not [string]::IsNullOrWhiteSpace($probeErrorsText)) {
+                if ([string]::IsNullOrWhiteSpace($probeApiMessage)) { $probeApiMessage = $probeErrorsText }
+                elseif ($probeApiMessage -notlike "*$probeErrorsText*") { $probeApiMessage = "$probeApiMessage — $probeErrorsText" }
+            }
+        }
+
         # Envelope detection: Inforcer app responses carry success / errorCode / errors;
         # APIM gateway responses only carry statusCode + message (no Inforcer markers).
         $hasInforcerMarkers = $json.PSObject.Properties['success'] -or `
@@ -170,9 +188,29 @@ if ($probeStatusCode -ge 200 -and $probeStatusCode -lt 300) {
     }
 }
 
+# An expired / revoked / disabled key comes back in the SAME Inforcer app envelope as a
+# scope denial — measured against api-uk.dev with an expired key, right down to
+# errorCode 'forbidden', which a scope denial also returns:
+#
+#   403 {"data":null,"errorCode":"forbidden","success":false,
+#        "message":"A valid API key is required to access this endpoint.",
+#        "errors":["API key has expired."]}
+#
+# So neither status code, envelope shape nor errorCode can tell "your key is dead" (must
+# not connect) from "your key lacks THIS scope" (must connect — see the validation
+# principle above). The API has no key-introspection endpoint and no way to read a key's
+# scopes, so errors[] is the only signal that exists.
+#
+# Read errors[] ONLY, never the joined message: the top-level "A valid API key is required
+# to access this endpoint." is the generic auth placeholder the API also serves for plain
+# scope denials, so matching it would lock out every narrow-scope key — exactly the
+# any-scope-connects rule this cmdlet exists to protect.
+$keyRejected = $probeErrorsText -match 'expired|revoked|deactivated|disabled|not active'
+
 # Decide validation outcome from status code AND envelope shape.
 $keyValid = switch ($true) {
     $probeSucceeded                                              { $true; break }   # 200 OK
+    $keyRejected                                                 { $false; break }  # key itself is dead
     ($probeStatusCode -eq 403 -and $probeEnvelope -eq 'inforcer'){ $true; break }   # APIM passed, scope denied
     ($probeStatusCode -eq 401 -and $probeEnvelope -eq 'inforcer'){ $true; break }   # Same shape, different code on some routes
     default                                                      { $false }
@@ -180,10 +218,19 @@ $keyValid = switch ($true) {
 
 if ($keyValid -and -not $probeSucceeded) {
     Write-Verbose "Key validated against /beta/baselines via $probeEnvelope envelope (HTTP $probeStatusCode). Subscription is active; scope for /beta/baselines is not granted, but the session is established."
+    # Say this out loud rather than only under -Verbose. Connecting on a denied probe is
+    # correct — a Reports.Read-only key is a legitimate caller — but the key's scopes are
+    # unverified, so 'Connected' promises less here than it does after a 200. Without this
+    # line the next cmdlet's 403 looks like the session lied.
+    Write-Warning ('Connected, but the key''s scopes could not be verified: the probe on /beta/baselines returned HTTP {0}. The API subscription is live and the key is not expired. If a cmdlet now fails with 403, the key is missing that endpoint''s scope.' -f $probeStatusCode)
 }
 
 if (-not $keyValid) {
     $msg = switch ($true) {
+        $keyRejected {
+            "Connection failed: $($probeApiMessage.TrimEnd('.')). Generate a new API key in the Inforcer portal."
+            break
+        }
         ($probeStatusCode -eq 401 -and $probeEnvelope -eq 'apim') {
             if ($probeApiMessage) { "Connection failed: $probeApiMessage" }
             else { 'Connection failed: the API subscription key is invalid (APIM gateway rejection). Verify the key in the Inforcer portal.' }

@@ -82,12 +82,14 @@ Get-InforcerTenantPolicies -TenantId 482
 # Show policy changes (PolicyDiff on each tenant when available)
 Get-InforcerTenant | Select-Object ClientTenantId, TenantFriendlyName, PolicyDiff
 
-# Generate tenant documentation as HTML
+# Generate tenant documentation as HTML. -OutputPath is what writes the file: omit it and the
+# DocModel is returned instead, so you can read the configuration without producing artefacts.
+# The report opens in your browser automatically, unless you are on a CI runner or pass -Show:$false.
 Export-InforcerTenantDocumentation -Format Html -TenantId 482 -OutputPath ./docs
 
 # Generate documentation for a specific baseline with Graph group name resolution
 Connect-Inforcer -ApiKey "your-api-key" -Region uk -FetchGraphData
-Export-InforcerTenantDocumentation -Format Html -TenantId 482 -Baseline "Production" -FetchGraphData
+Export-InforcerTenantDocumentation -Format Html -TenantId 482 -Baseline "Production" -FetchGraphData -OutputPath ./docs
 
 # Disconnect when done
 Disconnect-Inforcer
@@ -111,8 +113,8 @@ Disconnect-Inforcer
 | **Get-InforcerGroup**          | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
 | **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Get-InforcerSecureScore**    | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |
-| **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. |
-| **Compare-InforcerEnvironments** | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` with automatic baseline owner resolution. |
+| **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. Pass `-OutputPath` to write files; without it the DocModel is returned and nothing is written. |
+| **Compare-InforcerEnvironments** | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. Pass `-OutputPath` to write the file; without it the comparison model is returned and nothing is written. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` with automatic baseline owner resolution. |
 | **Get-InforcerAssessment**     | Lists available assessments (CIS, Essential Eight, etc.). |
 | **Invoke-InforcerAssessment**  | Runs an assessment against one or more tenants. Supports HTML/CSV export. |
 | **Get-InforcerReportType**     | Lists the report catalog from the Reports API. Cached after first call; supports `-Key`, `-Tag`, and `-OutputFormat` filters. |

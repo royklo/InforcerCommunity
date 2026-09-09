@@ -10,7 +10,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ## Connect-Inforcer
 
-Establishes a secure connection to the Inforcer REST API. The API key is stored as a SecureString. A minimal API call validates the key before returning; on failure (e.g. wrong key or endpoint), the connection is not established.
+Establishes a secure connection to the Inforcer REST API. The API key is stored as a SecureString. A minimal API call validates the key before returning; on failure (e.g. wrong key or endpoint, or an expired/revoked key), the connection is not established. A key that is valid but lacks the scope for the probe endpoint still connects — no single scope is privileged for validation — but it warns that the key's scopes are unverified, so a later 403 reads as a scope gap rather than a bad session.
 
 **Required API scope(s)**: None (session management only)
 
@@ -333,6 +333,8 @@ Retrieves audit events from the Inforcer API. Supports optional `-EventType`, `-
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
+| **Id** | String | No | Retrieve a specific audit event by its event ID (GUID). Searches all event types and filters client-side. |
+| **CorrelationId** | String | No | Retrieve all audit events sharing this correlation ID. Searches all event types and filters client-side. |
 | **EventType** | String[] | No | Event types to include. Tab completion with supported event types. Omit for all types. |
 | **DateFrom** | DateTime | No | Start of date/time range (inclusive). |
 | **DateTo** | DateTime | No | End of date/time range (inclusive). |
@@ -485,19 +487,49 @@ Visibility  : Public
 GroupTypes  : Unified
 ```
 
+> **`MembershipRule` is not available from the list.** `GET /beta/tenants/{id}/groups` returns the
+> `membershipRule` key but leaves it `null` on every group, including `DynamicMembership` ones. Only
+> the by-ID endpoint fills it, so reading a dynamic group's rule needs `-Group`:
+>
+> ```powershell
+> Get-InforcerGroup -TenantId 139 |
+>     Where-Object { $_.groupTypes -contains 'DynamicMembership' } |
+>     ForEach-Object { Get-InforcerGroup -TenantId 139 -Group $_.id }
+> ```
+>
+> That is one API call per dynamic group. The list view will render `MembershipRule` without code
+> changes if the API starts populating it.
+
 ### Example output (ById)
 
 ```
-DisplayName      : All Company
-Id               : f44f2f5c-3160-420b-900d-5ecbede954fc
-Description      : This is the default group for everyone in the network
-Mail             : allcompany@contoso.onmicrosoft.com
-Visibility       : Public
-GroupTypes       : Unified
-MailEnabled      : True
-CreatedDateTime  : 2026-02-18T21:22:23+00:00
-Members          : Isaiah Langer (user), Adele Vance (user)
+DisplayName           : SG - Entra - DUG - All Internal Users
+Id                    : 163ba0bf-16af-4c6c-84ae-17efe1a839ae
+Description           : This group contains all users in the organization.
+Mail                  :
+Visibility            :
+GroupTypes            : DynamicMembership
+MembershipRule        : (user.userType -eq "Member")
+MailEnabled           : False
+CreatedDateTime       : 2026-02-18T21:22:23+00:00
+OnPremisesSyncEnabled : False (cloud-only)
+Members               : (none)
 ```
+
+`MembershipRule` appears only when the group has one — static groups render exactly as before, with no
+blank row.
+
+`OnPremisesSyncEnabled` is always shown, and distinguishes the API's three states rather than printing
+a bare `True`/blank:
+
+| API value | Rendered | Meaning |
+|-----------|----------|---------|
+| `true` | `True` | Synced from on-premises AD |
+| `null` | `False (cloud-only)` | Never synced — created in the cloud |
+| `false` | `False (no longer syncing)` | Was synced from on-premises AD, no longer is |
+
+Both properties are on the object in raw API form (`membershipRule`, `onPremisesSyncEnabled`) and are
+unaffected by the display formatting — `-OutputType JsonObject` and `Select-Object` see the raw values.
 
 ---
 
@@ -633,7 +665,8 @@ The HTML output features a modern admin dashboard design with a collapsible side
 |-----------|------|-----------|--------------|
 | **Format** | String | No | Output format: `Html` (default), `Markdown`, `Excel`. Excel creates an .xlsx workbook with one sheet per product (requires `ImportExcel` module). |
 | **TenantId** | Object | Yes | Tenant to document (numeric ID, GUID, or tenant name). |
-| **OutputPath** | String | No | Directory to write the output file. Defaults to current directory. |
+| **OutputPath** | String | No | Directory to write the output file. **No default** — omit it and no files are written; the DocModel is returned instead. |
+| **Show** | Switch | No | Open the generated HTML in the default browser. Requires `-OutputPath` and `-Format Html`. **Defaults to on interactively, off in CI** (`CI`, `TF_BUILD`, `GITHUB_ACTIONS`, `GITLAB_CI`, `JENKINS_URL`, `TEAMCITY_VERSION`, `BUILDKITE`). `-Show` forces it, `-Show:$false` suppresses it; an explicit value always wins. |
 | **SettingsCatalogPath** | String | No | Path to a local `settings.json` file for Intune Settings Catalog name resolution. When omitted, automatically downloads and caches the latest data from the [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) GitHub repository (~65 MB, cached at `~/.inforcercommunity/data/settings.json` with a 24-hour TTL). |
 | **FetchGraphData** | Switch | No | When set, resolves group/role/location/application GUIDs to display names across assignments and Conditional Access policies via Microsoft Graph. Also resolves assignment filter and scope tag IDs. Requires a Graph connection (use `Connect-Inforcer -FetchGraphData` or `Connect-InforcerGraph`). |
 | **Baseline** | String | No | Filter to policies belonging to a specific baseline (name or ID). |
@@ -661,7 +694,7 @@ Export-InforcerTenantDocumentation -Format Html -TenantId 482 -Tag "Tier 1"
 
 ### Output
 
-Returns `FileInfo` objects for the exported file(s). HTML output auto-opens in the default browser.
+With `-OutputPath`: returns `FileInfo` objects for the exported file(s). Without it: no files are written and the DocModel (hashtable) is returned instead, so the tenant configuration can be read without producing artefacts. HTML output opens in the default browser automatically in an interactive session, and not on a CI runner — see `-Show`.
 
 ### HTML features
 
@@ -719,10 +752,11 @@ Compares the Intune policy configuration of two tenants and generates an interac
 | **DestinationBaselineId** | String | No | Baseline GUID or friendly name for the destination tenant. Scopes comparison to only policies in this baseline. |
 | **IncludingAssignments** | Switch | No | Include assignment data in the report (informational only, does not affect score). |
 | **FetchGraphData** | Switch | No | Connect to Microsoft Graph to resolve group names, assignment filters, scope tags, and compliance rules. Requires `Directory.Read.All` and `DeviceManagementConfiguration.Read.All` scopes. |
-| **ExcludeOS** | String[] | No | Exclude platforms from comparison (e.g., `'macOS'`, `'iOS'`). Case-insensitive contains matching. |
+| **ExcludeOS** | String[] | No | OS/platform or product names to exclude. Case-insensitive contains matching, applied to both the product name (`Entra`, `Intune`, `Defender`, `Exchange`, `SharePoint`) and the category key, which is where the OS actually lives (`Windows`, `macOS`, `iOS/iPadOS`, `Android`). Examples: `'macOS'`, `'iOS'`, `'Android'`, `'Windows'`. |
 | **PolicyNameFilter** | String | No | Only include policies whose name contains this string (case-insensitive). |
 | **SettingsCatalogPath** | String | No | Path to local `settings.json`. Auto-discovers if omitted. |
-| **OutputPath** | String | No | Directory for the HTML report. Defaults to current directory. |
+| **OutputPath** | String | No | Directory for the HTML report. **No default** — omit it and no file is written; the comparison model is returned instead. |
+| **Show** | Switch | No | Open the generated HTML in the default browser. Requires `-OutputPath`. **Defaults to on interactively, off in CI** (`CI`, `TF_BUILD`, `GITHUB_ACTIONS`, `GITLAB_CI`, `JENKINS_URL`, `TEAMCITY_VERSION`, `BUILDKITE`). `-Show` forces it, `-Show:$false` suppresses it; an explicit value always wins. |
 
 ### Examples
 
@@ -755,7 +789,7 @@ Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1
 
 ### Output
 
-Returns a `FileInfo` object for the exported HTML report. Auto-opens in the default browser.
+With `-OutputPath`: returns a `FileInfo` object for the exported HTML report. Without it: no file is written and the comparison model (hashtable) is returned instead, so alignment scores can be read without producing artefacts. The report opens in the default browser automatically in an interactive session, and not on a CI runner — see `-Show`.
 
 ### HTML report features
 

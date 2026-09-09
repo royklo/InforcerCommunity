@@ -38,17 +38,6 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
 
 - **`Export-InforcerTenantDocumentation -Format Markdown` named the wrong baseline in the header.** The Markdown header printed `DocModel.BaselineName`, which `ConvertTo-InforcerDocModel` fills with the *first baseline attached to the tenant* — unrelated to `-Baseline`. Exporting the Blueprint Library filtered to `Tier 2 - Enhanced` produced a correctly filtered 238-policy document headed `*Baseline: … Tier 0 - Initiate*`, and an unfiltered export named a baseline it was not scoped to at all. The header now reads `FilterBaseline`, the same field the HTML renderer already used, so it names the baseline actually filtered on and is omitted when there is none. `-Tag` is now shown in the Markdown header too, matching HTML.
 
-### Refactor
-
-- **Removed 229 no-op property-alias calls from `Add-InforcerPropertyAliases`.** Every call whose alias differed from the API name only by case did nothing: the "does this alias already exist" guard uses `$o.PSObject.Properties[$aliasName]`, which is a case-**insensitive** lookup, so `ClientTenantId` found the existing `clientTenantId` and bailed. 229 of 238 calls were affected; the 9 genuine renames (`BaselineId<-id`, `BaselineName<-name`, `PolicyId<-id`, `OutputFormats<-supportedOutputFormats`, `Parameters<-requiredParameters`, `Id<-runId`, `OutputId<-id`, `OutputFormat<-format`, `FileSize<-sizeBytes`) are unaffected and still fire.
-
-  They were deleted rather than repaired, because making them work would have been worse than leaving them broken:
-  - PowerShell member access is already case-insensitive. `$tenant.ClientTenantId` — and `$tenant.TENANTFRIENDLYNAME` — resolve today with no alias present.
-  - An alias **is** serialised. The 9 real renames already emit both `"id"` and `"BaselineId"` in `ConvertTo-Json`, and two separate `Export-Csv` columns. Adding 229 more would have doubled every key and column, the same value in two casings.
-  - `-OutputType JsonObject` returns before the helper runs, deliberately, so the JSON surface is the raw API shape and never carried PascalCase to begin with.
-
-  **No behaviour change.** Property access, `Select-Object`, `ConvertTo-Json`, `Export-Csv` and every `Format.ps1xml` view produce identical output before and after. The `-ObjectType` ValidateSet is unchanged so all 13 call sites still work; types needing no normalisation simply have no branch.
-
 ### Documentation
 
 - `-OutputPath`, the new `-Show` switch, and the changed return types documented in `Get-Help` and `docs/CMDLET-REFERENCE.md` for both affected cmdlets. The **Output** sections of both entries in `docs/CMDLET-REFERENCE.md` still promised a `FileInfo` return and an auto-opening browser — the parameter tables had been corrected but the return-type prose had not.
@@ -59,18 +48,6 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
 - Versioning note above clarified: pre-1.0, breaking changes bump MINOR under a **Breaking Changes** heading rather than MAJOR.
 - `-Show`'s interactive/CI default documented in `Get-Help` and the `docs/CMDLET-REFERENCE.md` parameter tables for both cmdlets, and the **Output** sections of both entries corrected — they still said the report "opens in the default browser only when `-Show` is passed", which stopped being true when the default changed.
 - `Get-InforcerGroup` example output in `docs/CMDLET-REFERENCE.md` now shows a real dynamic group with its `MembershipRule` and the `OnPremisesSyncEnabled` three-state table, plus the per-group call needed to read rules in bulk.
-
-### Tests
-
-**424 pass across `Tests/`, 0 failures, 2 legitimate skips** (was 394 at 0.6.0). Three additions, each covering behaviour this release changed that nothing else asserted on:
-
-- **Group `Format.ps1xml` views (6 tests)** — the only conditional display logic in the module. Three assert the `MembershipRule` row appears when a rule exists and is absent otherwise, in both views; three assert `OnPremisesSyncEnabled` renders each of the API's three states distinctly. Verified by mutation: collapsing the three-state ScriptBlock to a plain `if/else` fails 2, and dropping the view rows fails 4.
-- **The opt-in output contract (6 tests)** — AST-level checks that `-OutputPath` declares no default on either cmdlet, that `-Show` is a switch, and that every `Start-Process`/`Invoke-Item` sits inside an `if ($Show)` block. Nothing else in the suite asserted on *where files land*, so reintroducing `$OutputPath = '.'` would previously have gone green. Verified by mutation: restoring the default fails exactly one test. Parsing the param block keeps this offline — no API key, no mocks to drift.
-- **Interactive detection (10 tests)** — one per CI variable, one confirming an empty value does not count as "in CI", and an AST check that `-Show`'s default is `Test-InforcerInteractiveHost` rather than a literal.
-
-`-Show` was also added to `$expectedParameters` for both utility cmdlets. That assertion is a documented *subset* check, so its absence was not failing anything — but the release's headline new parameter belongs in the contract list.
-
-**Pre-merge live smoke** (`Tests/Manual/Live-ApiSmoke.ps1`, gitignored) run against a live tenant with 21 groups, 10 of them dynamic: 12/12 pass. Covers auth including refusal of a bogus key, group list/by-ID PSTypeNames, `MembershipRule` and `OnPremisesSyncEnabled` rendering, JSON raw-camelCase-only, the surviving aliases, and the opt-in output contract end to end — no `-OutputPath` writes nothing and returns the model, with it writes a 2.7 MB HTML and returns `FileInfo`. Separately confirmed live: the assessment `-ContentType ''` fix returns 21 checks with no `400`, `-ExcludeOS 'macOS','iOS'` removes 933 of 2715 items, destination baseline inheritance scores 100% where the bug scored 0.2%, and `CI=true` writes the file while launching nothing.
 
 ## [0.6.0] - 2026-07-06
 

@@ -277,6 +277,18 @@
                 <Label>GroupTypes</Label>
                 <ScriptBlock>if ($_.groupTypes) { ($_.groupTypes) -join ', ' } else { '' }</ScriptBlock>
               </ListItem>
+              <!-- ponytail: dormant today. GET /beta/tenants/{id}/groups emits the membershipRule
+                   key but always null, even for DynamicMembership groups; only the by-ID endpoint
+                   fills it. The condition means this costs a null check and renders nothing, and
+                   lights up on its own if the API starts populating the list. Drop it if the API
+                   removes the key instead. -->
+              <ListItem>
+                <ItemSelectionCondition>
+                  <ScriptBlock>-not [string]::IsNullOrWhiteSpace($_.membershipRule)</ScriptBlock>
+                </ItemSelectionCondition>
+                <Label>MembershipRule</Label>
+                <PropertyName>MembershipRule</PropertyName>
+              </ListItem>
             </ListItems>
           </ListEntry>
         </ListEntries>
@@ -318,12 +330,23 @@
                 <ScriptBlock>if ($_.groupTypes) { ($_.groupTypes) -join ', ' } else { '' }</ScriptBlock>
               </ListItem>
               <ListItem>
+                <ItemSelectionCondition>
+                  <ScriptBlock>-not [string]::IsNullOrWhiteSpace($_.membershipRule)</ScriptBlock>
+                </ItemSelectionCondition>
+                <Label>MembershipRule</Label>
+                <PropertyName>MembershipRule</PropertyName>
+              </ListItem>
+              <ListItem>
                 <Label>MailEnabled</Label>
                 <PropertyName>MailEnabled</PropertyName>
               </ListItem>
               <ListItem>
                 <Label>CreatedDateTime</Label>
                 <PropertyName>CreatedDateTime</PropertyName>
+              </ListItem>
+              <ListItem>
+                <Label>OnPremisesSyncEnabled</Label>
+                <ScriptBlock>if ($_.onPremisesSyncEnabled) { 'True' } elseif ($null -eq $_.onPremisesSyncEnabled) { 'False (cloud-only)' } else { 'False (no longer syncing)' }</ScriptBlock>
               </ListItem>
               <ListItem>
                 <Label>Members</Label>

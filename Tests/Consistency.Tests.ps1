@@ -2175,4 +2175,55 @@ Describe 'Private helpers (via module scope)' {
             }
         }
     }
+
+    Context 'Group Format.ps1xml views' {
+        # The group views carry the only conditional display logic in the module: MembershipRule is
+        # suppressed when empty, and OnPremisesSyncEnabled renders three API states that a plain
+        # boolean would collapse to two. Both are easy to "simplify" into a wrong answer.
+        BeforeAll {
+            function script:Format-Group ([hashtable]$Props, [string]$TypeName) {
+                $g = [PSCustomObject]$Props
+                $g.PSObject.TypeNames.Insert(0, $TypeName)
+                ($g | Format-List | Out-String)
+            }
+            $script:GroupBase = @{
+                id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'; displayName = 'G'; description = 'd'
+                mail = $null; visibility = $null; groupTypes = @(); membershipRule = $null
+                mailEnabled = $false; createdDateTime = '2026-01-01'; onPremisesSyncEnabled = $null
+                members = @()
+            }
+        }
+
+        It 'Detail view shows MembershipRule when the group has one' {
+            $p = $script:GroupBase.Clone()
+            $p.groupTypes = @('DynamicMembership')
+            $p.membershipRule = '(user.userType -eq "Member")'
+            $out = script:Format-Group $p 'InforcerCommunity.Group'
+            $out | Should -Match 'MembershipRule\s+:\s+\(user\.userType -eq "Member"\)'
+        }
+
+        It 'Detail view omits the MembershipRule row entirely for a static group' {
+            $out = script:Format-Group $script:GroupBase.Clone() 'InforcerCommunity.Group'
+            $out | Should -Not -Match 'MembershipRule'
+        }
+
+        It 'Summary view omits the MembershipRule row entirely for a static group' {
+            $out = script:Format-Group $script:GroupBase.Clone() 'InforcerCommunity.GroupSummary'
+            $out | Should -Not -Match 'MembershipRule'
+        }
+
+        # null and $false both mean "not syncing now" but they are NOT the same fact: null is
+        # "never synced" (cloud-only), $false is "was synced, no longer". Collapsing them mislabels
+        # a de-synced group as cloud-editable.
+        It 'Detail view distinguishes all three OnPremisesSyncEnabled states' -ForEach @(
+            @{ Value = $true;  Expected = 'True' }
+            @{ Value = $null;  Expected = 'False \(cloud-only\)' }
+            @{ Value = $false; Expected = 'False \(no longer syncing\)' }
+        ) {
+            $p = $script:GroupBase.Clone()
+            $p.onPremisesSyncEnabled = $Value
+            $out = script:Format-Group $p 'InforcerCommunity.Group'
+            $out | Should -Match "OnPremisesSyncEnabled\s+:\s+$Expected"
+        }
+    }
 }

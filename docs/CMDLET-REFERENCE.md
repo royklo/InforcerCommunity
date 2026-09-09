@@ -485,19 +485,49 @@ Visibility  : Public
 GroupTypes  : Unified
 ```
 
+> **`MembershipRule` is not available from the list.** `GET /beta/tenants/{id}/groups` returns the
+> `membershipRule` key but leaves it `null` on every group, including `DynamicMembership` ones. Only
+> the by-ID endpoint fills it, so reading a dynamic group's rule needs `-Group`:
+>
+> ```powershell
+> Get-InforcerGroup -TenantId 139 |
+>     Where-Object { $_.groupTypes -contains 'DynamicMembership' } |
+>     ForEach-Object { Get-InforcerGroup -TenantId 139 -Group $_.id }
+> ```
+>
+> That is one API call per dynamic group. The list view will render `MembershipRule` without code
+> changes if the API starts populating it.
+
 ### Example output (ById)
 
 ```
-DisplayName      : All Company
-Id               : f44f2f5c-3160-420b-900d-5ecbede954fc
-Description      : This is the default group for everyone in the network
-Mail             : allcompany@contoso.onmicrosoft.com
-Visibility       : Public
-GroupTypes       : Unified
-MailEnabled      : True
-CreatedDateTime  : 2026-02-18T21:22:23+00:00
-Members          : Isaiah Langer (user), Adele Vance (user)
+DisplayName           : SG - Entra - DUG - All Internal Users
+Id                    : 163ba0bf-16af-4c6c-84ae-17efe1a839ae
+Description           : This group contains all users in the organization.
+Mail                  :
+Visibility            :
+GroupTypes            : DynamicMembership
+MembershipRule        : (user.userType -eq "Member")
+MailEnabled           : False
+CreatedDateTime       : 2026-02-18T21:22:23+00:00
+OnPremisesSyncEnabled : False (cloud-only)
+Members               : (none)
 ```
+
+`MembershipRule` appears only when the group has one — static groups render exactly as before, with no
+blank row.
+
+`OnPremisesSyncEnabled` is always shown, and distinguishes the API's three states rather than printing
+a bare `True`/blank:
+
+| API value | Rendered | Meaning |
+|-----------|----------|---------|
+| `true` | `True` | Synced from on-premises AD |
+| `null` | `False (cloud-only)` | Never synced — created in the cloud |
+| `false` | `False (no longer syncing)` | Was synced from on-premises AD, no longer is |
+
+Both properties are on the object in raw API form (`membershipRule`, `onPremisesSyncEnabled`) and are
+unaffected by the display formatting — `-OutputType JsonObject` and `Select-Object` see the raw values.
 
 ---
 

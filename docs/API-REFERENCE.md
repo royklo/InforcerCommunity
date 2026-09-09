@@ -740,7 +740,7 @@ Summary of an Entra ID group (returned from list endpoint).
 | description | string | No | Description of the group. |
 | mail | string | No | Email address of the group. |
 | visibility | string | No | Visibility (e.g. Public, Private). |
-| membershipRule | string | No | Dynamic membership rule. Only populated for groups whose `groupTypes` contains `DynamicMembership`. |
+| membershipRule | string | No | Dynamic membership rule. **Always `null` on this endpoint** — the key is emitted but never filled, including for groups whose `groupTypes` contains `DynamicMembership`. Verified against a live tenant 2026-09-09. Use the by-ID endpoint to read the rule. |
 | groupTypes | array\<string\> | Yes | Types of the group (e.g. Unified, DynamicMembership). |
 
 **PSTypeName:** `InforcerCommunity.GroupSummary`
@@ -761,7 +761,7 @@ Full detail of an Entra ID group (returned from by-ID endpoint).
 | groupTypes | array\<string\> | Yes | Types of the group. |
 | createdDateTime | string (datetime) | No | When the group was created. |
 | mailEnabled | boolean | No | Whether mail is enabled. |
-| onPremisesSyncEnabled | boolean | No | Whether synced from on-premises AD. |
+| onPremisesSyncEnabled | boolean | No | Whether synced from on-premises AD. Three states: `true` = synced, `false` = was synced but no longer, `null` = never synced (cloud-only). Not returned by the list endpoint at all. |
 | members | array\<object\> | No | Group members (id, displayName, type). |
 
 **PSTypeName:** `InforcerCommunity.Group`

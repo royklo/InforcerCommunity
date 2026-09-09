@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/). Versioning deviates from strict SemVer: every shipped change (feat / fix / perf / non-breaking refactor) bumps MINOR; docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
-## [0.7.0] - 2026-08-24
+## [0.7.0] - 2026-09-09
 
 ### Breaking Changes
 
@@ -13,6 +13,12 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
   - Opening a browser now requires the new `-Show` switch.
   - **Without `-OutputPath` the cmdlets return the model instead of `System.IO.FileInfo`** — the comparison hashtable from `Compare-InforcerEnvironments`, the DocModel hashtable from `Export-InforcerTenantDocumentation`. This makes it possible to read alignment scores or tenant configuration without producing artefacts.
   - **Migration:** add `-OutputPath <dir>` to any call that relied on files appearing in the working directory, and `-Show` to any call that relied on the browser opening. Scripts consuming the `FileInfo` return value need `-OutputPath` to keep that return type.
+
+### Features
+
+- **`Get-InforcerGroup -Group` now shows `MembershipRule` and `OnPremisesSyncEnabled` by default.** Both were returned by the by-ID endpoint and dropped by the `Format.ps1xml` view, so the property that says what a dynamic group actually *does*, and the one that says whether a group is even editable in the cloud, were invisible unless you knew to ask for `Select-Object *`. `MembershipRule` is guarded by an `ItemSelectionCondition` and appears only when populated, so static groups render exactly as before instead of gaining a permanently blank line. `OnPremisesSyncEnabled` is always shown and renders the API's three states distinctly — `True`, `False (cloud-only)` for `null`, `False (no longer syncing)` for an explicit `false` — because a bare blank cannot distinguish "never synced" from "de-synced", and the two mean different things when you are deciding where a group can be changed.
+
+  **`MembershipRule` is not obtainable from the group *list*.** `GET /beta/tenants/{id}/groups` emits the `membershipRule` key but leaves it `null` on every group, `DynamicMembership` ones included — verified against a live tenant, where `-Group` on the same group ID returns `(user.userType -eq "Member")` and the list returns `null`. `docs/API-REFERENCE.md` claimed the opposite (added in this release's Documentation section, from the #39 OpenAPI drift snapshot) and has been corrected; `onPremisesSyncEnabled` is absent from the list payload entirely. The `GroupSummary` view carries the same conditional row so it lights up with no code change if the API starts filling it, but today it renders nothing — reading rules across a tenant costs one call per dynamic group. Filed as item 26 in the API feedback document.
 
 ### Bug Fixes
 
@@ -45,9 +51,14 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/).
 
 - `-OutputPath`, the new `-Show` switch, and the changed return types documented in `Get-Help` and `docs/CMDLET-REFERENCE.md` for both affected cmdlets. The **Output** sections of both entries in `docs/CMDLET-REFERENCE.md` still promised a `FileInfo` return and an auto-opening browser — the parameter tables had been corrected but the return-type prose had not.
 - `-ExcludeOS` help now states that matching applies to both product names and platform category keys, in `docs/CMDLET-REFERENCE.md` as well as `Get-Help`.
-- `membershipRule` added to the **TenantGroupSummary** schema in `docs/API-REFERENCE.md`. The API now returns it on the group *list* endpoint as well as by-ID; only the by-ID schema documented it. Picked up from the OpenAPI drift snapshot in #39, which the nightly workflow updates without touching the hand-written reference.
+- `membershipRule` added to the **TenantGroupSummary** schema in `docs/API-REFERENCE.md`, picked up from the OpenAPI drift snapshot in #39, which the nightly workflow updates without touching the hand-written reference. The entry originally read "the API now returns it on the group *list* endpoint as well as by-ID" — the schema says so, the runtime does not: the key is emitted and always `null`. Corrected to say exactly that, with the by-ID endpoint named as the only source. A schema gaining a property is not evidence the property is populated; this one was documented off the snapshot without a live check.
+- `onPremisesSyncEnabled` in the **TenantGroup** schema now documents all three states (`true` / `false` / `null`) rather than "whether synced from on-premises AD", which read as a plain boolean and gave `null` no meaning.
 - `-SourceBaselineId` help documents destination inheritance and the non-member fallback; the stale example claiming a one-sided comparison against "all Fabrikam policies" corrected.
 - Versioning note above clarified: pre-1.0, breaking changes bump MINOR under a **Breaking Changes** heading rather than MAJOR.
+
+### Tests
+
+- 6 new Pester tests covering the group `Format.ps1xml` views — the only conditional display logic in the module. Three assert the `MembershipRule` row appears when a rule exists and is absent otherwise (both views); three assert `OnPremisesSyncEnabled` renders each of the API's three states distinctly. Verified by mutation: collapsing the three-state ScriptBlock to a plain `if/else` fails 2 of them, and dropping the view rows fails 4. 408 tests pass across `Tests/`, 0 failures.
 
 ## [0.6.0] - 2026-07-06
 

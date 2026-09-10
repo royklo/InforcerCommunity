@@ -1862,7 +1862,7 @@ Describe 'Private helpers (via module scope)' {
         }
 
         It 'Rejects an expired key even though it uses the Inforcer 403 envelope' {
-            # Verbatim body from api-uk.dev with an expired key. errorCode is 'forbidden' —
+            # Verbatim body from a live environment with an expired key. errorCode is 'forbidden' —
             # identical to a scope denial — so only errors[] distinguishes the two.
             # Must NOT report Connected.
             Mock -ModuleName InforcerCommunity Invoke-WebRequest {

@@ -189,7 +189,7 @@ if ($probeStatusCode -ge 200 -and $probeStatusCode -lt 300) {
 }
 
 # An expired / revoked / disabled key comes back in the SAME Inforcer app envelope as a
-# scope denial — measured against api-uk.dev with an expired key, right down to
+# scope denial — measured against a live environment with an expired key, right down to
 # errorCode 'forbidden', which a scope denial also returns:
 #
 #   403 {"data":null,"errorCode":"forbidden","success":false,

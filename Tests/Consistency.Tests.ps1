@@ -2562,6 +2562,28 @@ Describe 'Base64 fields decode to text or stay base64, never mojibake' {
             $out | Should -BeNullOrEmpty
         }
 
+        It 'rejects a literal U+FFFD, which strict UTF-8 decoding accepts' {
+            # EF BF BD *is* valid UTF-8 — it encodes U+FFFD — so the strict decoder does not
+            # throw on it. Without an explicit check a digest carrying those bytes comes back
+            # as "text" and the caller renders mojibake, which is the bug this helper exists for.
+            $bytes = [byte[]](0x48,0x69,0xEF,0xBF,0xBD,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69)
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String($bytes))
+            $out | Should -BeNullOrEmpty
+        }
+
+        It 'rejects DEL and the C1 control range, which are also valid UTF-8' {
+            # 0x7F and C2 80..C2 9F decode cleanly but never appear in a plist, script or JSON.
+            $bytes = [byte[]](0x48,0x69,0xC2,0x85,0x48,0x69,0x7F,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69)
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String($bytes))
+            $out | Should -BeNullOrEmpty
+        }
+
+        It 'still accepts text carrying tab, CR and LF' {
+            $sample = "line one`r`n`tindented line two`n`tindented line three`n"
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($sample)))
+            $out | Should -Be $sample
+        }
+
         It 'returns $null for values that are not base64 text' -ForEach @(
             @{ V = '' }, @{ V = '   ' }, @{ V = 'short' },
             @{ V = 'plain text with spaces that is long enough to pass the length floor' },

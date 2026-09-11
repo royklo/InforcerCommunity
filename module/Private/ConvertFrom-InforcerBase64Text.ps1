@@ -31,7 +31,10 @@ function ConvertFrom-InforcerBase64Text {
     try { $text = [System.Text.UTF8Encoding]::new($false, $true).GetString($bytes) } catch { return $null }
 
     $text = $text.TrimStart([char]0xFEFF)
-    if ($text -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') { return $null }
+
+    # Strict decoding is necessary but not sufficient: EF BF BD is *valid* UTF-8 for U+FFFD,
+    # and C2 80..C2 9F are valid encodings of the C1 controls, so a digest can survive it.
+    if ($text.Contains([char]0xFFFD) -or $text -match '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]') { return $null }
 
     $text
 }

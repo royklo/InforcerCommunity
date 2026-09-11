@@ -27,13 +27,11 @@ function ConvertFrom-InforcerBase64Text {
     try { $bytes = [System.Convert]::FromBase64String($Value) } catch { return $null }
     if ($bytes.Length -eq 0) { return $null }
 
-    # Strict decode: invalid UTF-8 throws instead of silently yielding U+FFFD.
     try { $text = [System.Text.UTF8Encoding]::new($false, $true).GetString($bytes) } catch { return $null }
 
     $text = $text.TrimStart([char]0xFEFF)
 
-    # Strict decoding is necessary but not sufficient: EF BF BD is *valid* UTF-8 for U+FFFD,
-    # and C2 80..C2 9F are valid encodings of the C1 controls, so a digest can survive it.
+    # Strict decoding isn't enough: EF BF BD and C2 80..C2 9F are valid UTF-8, so a digest can survive it.
     if ($text.Contains([char]0xFFFD) -or $text -match '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]') { return $null }
 
     $text

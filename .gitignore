@@ -101,3 +101,6 @@ api-feedback-evidence/
 # reads it: build-and-test.yml takes the result from -PassThru in memory and there
 # is no test-result publisher in the pipeline.
 testResults.xml
+
+# Local demo exports — real tenant data, never commit
+demo/

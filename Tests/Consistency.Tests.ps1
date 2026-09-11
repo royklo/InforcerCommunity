@@ -2152,9 +2152,6 @@ Describe 'Private helpers (via module scope)' {
         }
 
         It 'Does not truncate a deeply nested unrecognized entry' {
-            # This branch runs only when the entry shape is unknown, so a display-depth cut
-            # can silently drop the one field that explains the failure. PowerShell also
-            # substitutes "@{...}" for the truncated remainder, which is not even JSON.
             $json = '{"errors":[{"L8":{"L7":{"L6":{"L5":{"L4":{"L3":{"L2":{"L1":{"reason":"tenant not in key scope"}}}}}}}}}]}'
             $parsed = $json | ConvertFrom-Json -Depth 100
             $out = & (Get-Module InforcerCommunity) { param($e) Format-InforcerErrorDetail -Errors $e } $parsed.errors
@@ -2568,23 +2565,19 @@ Describe 'Base64 fields decode to text or stay base64, never mojibake' {
         }
 
         It 'never returns a string containing U+FFFD' {
-            # 256 raw bytes is not valid UTF-8; a lenient decode would hand back replacement chars.
             $bytes = [byte[]](0..255)
             $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String($bytes))
             $out | Should -BeNullOrEmpty
         }
 
         It 'rejects a literal U+FFFD, which strict UTF-8 decoding accepts' {
-            # EF BF BD *is* valid UTF-8 — it encodes U+FFFD — so the strict decoder does not
-            # throw on it. Without an explicit check a digest carrying those bytes comes back
-            # as "text" and the caller renders mojibake, which is the bug this helper exists for.
+            # EF BF BD is valid UTF-8 for U+FFFD, so the strict decoder does not throw on it.
             $bytes = [byte[]](0x48,0x69,0xEF,0xBF,0xBD,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69)
             $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String($bytes))
             $out | Should -BeNullOrEmpty
         }
 
         It 'rejects DEL and the C1 control range, which are also valid UTF-8' {
-            # 0x7F and C2 80..C2 9F decode cleanly but never appear in a plist, script or JSON.
             $bytes = [byte[]](0x48,0x69,0xC2,0x85,0x48,0x69,0x7F,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69)
             $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String($bytes))
             $out | Should -BeNullOrEmpty
@@ -2678,5 +2671,27 @@ Describe 'Base64 fields decode to text or stay base64, never mojibake' {
             # Every table row must stay on one line or the GFM table falls apart.
             ($md -split "`n" | Where-Object { $_ -match '^\|' -and $_ -notmatch '\|\s*$' }) | Should -BeNullOrEmpty
         }
+    }
+}
+
+Describe 'Every -OutputType cmdlet documents the JsonObject path' {
+    # Audit item A3: six cmdlets documented the parameter but never showed it in an example,
+    # so Get-Help <cmdlet> -Examples never surfaced the JSON route.
+
+    It 'has a -OutputType JsonObject example in <Name>' -ForEach @(
+        $publicDir = Join-Path (Split-Path -Parent $PSCommandPath) '../module/Public'
+        Get-ChildItem -Path $publicDir -Filter *.ps1 | ForEach-Object {
+            $src = Get-Content $_.FullName -Raw
+            if ($src -match '(?m)^\s*\[string\]\$OutputType|\$OutputType\s*=|\bOutputType\b\s*\)') {
+                if ($src -match "ValidateSet\('PowerShellObject'\s*,\s*'JsonObject'\)") {
+                    @{ Name = $_.BaseName; Source = $src }
+                }
+            }
+        }
+    ) {
+        $blocks = [regex]::Matches($Source, '(?ms)^\s*\.EXAMPLE\s*$(.*?)(?=^\s*\.[A-Z]+\s*$|#>)')
+        $blocks.Count | Should -BeGreaterThan 0 -Because "$Name should document at least one example"
+        ($blocks | ForEach-Object { $_.Groups[1].Value }) -join "`n" |
+            Should -Match 'OutputType\s+JsonObject' -Because "$Name exposes -OutputType, so its help must show the JsonObject path"
     }
 }

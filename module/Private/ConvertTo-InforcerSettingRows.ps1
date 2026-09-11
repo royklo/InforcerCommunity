@@ -328,8 +328,7 @@ function ConvertTo-FlatSettingRows {
                           $joined = @($val | ForEach-Object { if ($_ -is [string] -or $_ -is [ValueType]) { $_.ToString() } }) -join ', '
                           if ([string]::IsNullOrWhiteSpace($joined) -and $val.Count -gt 0) { "$($val.Count) items" } else { $joined }
                       } else { $val.ToString() }
-            # Decode scripts, rulesContent JSON and .mobileconfig payloads. hashedScriptContent
-            # matches this pattern too but is a digest — the helper rejects it.
+            # hashedScriptContent matches this pattern too, but the helper rejects digests.
             if ($prop.Name -match '(?i)scriptContent|rulesContent|^payload$' -and $strVal -is [string]) {
                 $decoded = ConvertFrom-InforcerBase64Text -Value $strVal
                 if ($decoded) { $strVal = "__SCRIPT_CODE__$decoded" }

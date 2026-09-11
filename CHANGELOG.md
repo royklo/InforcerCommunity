@@ -8,6 +8,7 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 
 ### Bug Fixes
 
+- **`Get-Help` now shows the JSON path for every cmdlet that has one.** `Get-InforcerReportRun`, `Get-InforcerReportType`, `Get-InforcerUser`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` all documented `-OutputType` but never demonstrated it, so `Get-Help <cmdlet> -Examples` gave no hint that JSON output existed. `docs/CMDLET-REFERENCE.md` had covered all six for a while; only the in-shell help was missing them. A test now covers all 15 `-OutputType` cmdlets so the two can't drift apart again.
 - **API validation errors no longer lose the reason that explains them.** When an entry in the API's `errors[]` array doesn't match any known shape, the module falls back to dumping it as JSON so you still see something actionable — but it dumped at `-Depth 5`. That fallback runs *precisely* when the entry's shape is unknown, so there was no basis for assuming the useful field sat above the cut. Past the limit PowerShell substitutes `@{...}`, which isn't JSON, emits a truncation warning into your stream, and drops the rest: a nested `{"reason":"tenant not in key scope"}` came out as `{"L8":{"L7":{"L6":{"L5":{"L4":{"L3":"@{L2=}"}}}}}}`. Now `-Depth 100`, matching every other `ConvertTo-Json` in the module.
 
 ## [0.7.1] - 2026-09-11

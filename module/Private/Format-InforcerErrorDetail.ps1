@@ -54,12 +54,7 @@ function Format-InforcerErrorDetail {
         if ($parts.Count -gt 0) {
             $rendered.Add(($parts -join ' '))
         } else {
-            # Nothing we recognize — dump JSON so the user still sees something useful.
-            # Depth 100, not a display depth: this runs precisely when the entry shape is
-            # unknown, so there is no way to tell that the actionable field isn't below the
-            # cut. Truncation also emits a warning and substitutes "@{...}", which is not JSON.
-            # Serialization can fail for objects with circular refs or COM types; in that case
-            # we drop the entry silently (the top-level message will still surface).
+            # Shape is unknown, so a shallow depth could cut off the only useful field.
             try {
                 $rendered.Add(($e | ConvertTo-Json -Compress -Depth 100))
             } catch {

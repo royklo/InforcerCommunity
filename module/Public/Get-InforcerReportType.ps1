@@ -40,6 +40,10 @@
     Discovers every security-tagged report type and pipes each into Invoke-InforcerReport.
     Works because Get-InforcerReportType emits a 'Key' alias which binds to
     Invoke-InforcerReport's -ReportType (ValueFromPipelineByPropertyName).
+.EXAMPLE
+    Get-InforcerReportType -Key ActiveUserCount -OutputType JsonObject
+    Returns the report type as a JSON string (depth 100) instead of objects.
+
 .OUTPUTS
     PSObject or String
 .LINK

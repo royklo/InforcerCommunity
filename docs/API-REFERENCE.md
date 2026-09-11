@@ -123,7 +123,7 @@ Retrieves baseline groups and their members.
 
 **Cmdlet**: `Get-InforcerBaseline`
 
-**Required scope**: `Baselines.Read` (or `Tenants.Read`)
+**Required API scope(s)**: `Baselines.Read` (or `Tenants.Read`)
 
 | Parameter | Location | Required | Type | Description |
 |-----------|----------|----------|------|-------------|
@@ -141,7 +141,7 @@ Retrieves alignment scores for tenants.
 
 **Cmdlet**: `Get-InforcerAlignmentDetails`
 
-**Required scope**: `AlignmentScores.Read` (or `Tenants.Read`)
+**Required API scope(s)**: `AlignmentScores.Read` (or `Tenants.Read`)
 
 **Response**: Array of [AlignmentScore](#alignmentscore)
 
@@ -155,7 +155,7 @@ Retrieves all tenants.
 
 **Cmdlet**: `Get-InforcerTenant`
 
-**Required scope**: `Tenants.Read`
+**Required API scope(s)**: `Tenants.Read`
 
 **Response**: Array of [Tenant](#tenant)
 
@@ -167,7 +167,7 @@ Retrieves a specific tenant by ID.
 
 **Cmdlet**: `Get-InforcerTenant -TenantId`
 
-**Required scope**: `Tenants.Read`
+**Required API scope(s)**: `Tenants.Read`
 
 | Parameter | Location | Required | Type | Description |
 |-----------|----------|----------|------|-------------|
@@ -187,7 +187,7 @@ Retrieves policies for a specific tenant.
 
 **Cmdlet**: `Get-InforcerTenantPolicies`
 
-**Required scope**: `tenants.policies.Read`
+**Required API scope(s)**: `tenants.policies.Read`
 
 | Parameter | Location | Required | Type | Description |
 |-----------|----------|----------|------|-------------|
@@ -205,7 +205,7 @@ Retrieves available event types for filtering audit events.
 
 **Cmdlet**: Internal use (populates `-EventType` tab completion)
 
-**Required scope**: `Audit.Read` *(needs confirmation — see [API Scopes](#api-scopes))*
+**Required API scope(s)**: `Audit.Read` *(needs confirmation — see [API Scopes](#api-scopes))*
 
 **Response**: Array of [EventType](#eventtype)
 
@@ -217,7 +217,7 @@ Searches the activity log with optional filters.
 
 **Cmdlet**: `Get-InforcerAuditEvent`
 
-**Required scope**: `Audit.Read` *(needs confirmation — see [API Scopes](#api-scopes))*
+**Required API scope(s)**: `Audit.Read` *(needs confirmation — see [API Scopes](#api-scopes))*
 
 **Request Body**:
 
@@ -250,7 +250,7 @@ Searches the activity log with optional filters.
 
 Returns a paginated list of user summaries for a tenant.
 
-**Required scope**: `Tenants.Users.Read` (or `Tenants.Read`)
+**Required API scope(s)**: `Tenants.Users.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
@@ -264,7 +264,7 @@ Returns a paginated list of user summaries for a tenant.
 
 Returns full detail for a single user.
 
-**Required scope**: `Tenants.Users.Read` (or `Tenants.Read`)
+**Required API scope(s)**: `Tenants.Users.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
@@ -279,7 +279,7 @@ Returns full detail for a single user.
 
 Returns a paginated list of Entra ID group summaries for a tenant.
 
-**Required scope**: `Tenants.Groups.Read` (or `Tenants.Read`)
+**Required API scope(s)**: `Tenants.Groups.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
@@ -293,7 +293,7 @@ Returns a paginated list of Entra ID group summaries for a tenant.
 
 Returns full detail for a single group including members.
 
-**Required scope**: `Tenants.Groups.Read` (or `Tenants.Read`)
+**Required API scope(s)**: `Tenants.Groups.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
@@ -308,7 +308,7 @@ Returns full detail for a single group including members.
 
 Returns the list of Entra ID directory role definitions for a tenant.
 
-**Required scope**: `Tenants.Roles.Read` (or `Tenants.Read`)
+**Required API scope(s)**: `Tenants.Roles.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
@@ -322,7 +322,7 @@ Returns the list of Entra ID directory role definitions for a tenant.
 
 Returns the current and historic Microsoft Secure Score for a tenant. Includes up to 90 days of daily score history, per-category scores, and actionable control profiles.
 
-**Required scope**: `Tenants.SecureScores.Read` (or `Tenants.Read`)
+**Required API scope(s)**: `Tenants.SecureScores.Read` (or `Tenants.Read`)
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|

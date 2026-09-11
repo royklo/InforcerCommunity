@@ -707,7 +707,8 @@ With `-OutputPath`: returns `FileInfo` objects for the exported file(s). Without
 - Back-to-top floating button
 - Notch-style status bar showing tenant/baseline name and policy count
 - Collapsible long values with Expand/Collapse button
-- Collapsible code blocks for detection/remediation scripts (PowerShell syntax highlighting) and compliance rules JSON (JSON syntax highlighting)
+- Collapsible code blocks for detection/remediation scripts (PowerShell/Bash syntax highlighting), compliance rules JSON (JSON syntax highlighting), and macOS/iOS `.mobileconfig` payloads (decoded from base64 to the plist XML, with XML syntax highlighting)
+- Binary base64 fields are left as base64 rather than decoded into unreadable text — `hashedScriptContent` is a digest, not a script
 - Friendly setting names — camelCase property names converted to Title Case (e.g., `allowBluetooth` → "Allow Bluetooth")
 - Categories sorted alphabetically, grouped by platform
 - Policy tags shown inline as blue-bordered badges
@@ -794,7 +795,7 @@ With `-OutputPath`: returns a `FileInfo` object for the exported HTML report. Wi
 ### HTML report features
 
 - **Comparison tab**: Flat table with all Settings Catalog settings, sortable columns, status filter pills (Matched/Conflicting/Source Only/Dest Only), category dropdown, advanced column filters with AND/OR logic, search
-- **Manual Review tab**: Non-Settings-Catalog policies (compliance, enrollment, scripts) in a 50/50 source/destination layout grouped by platform. Matching policy names aligned side-by-side. Independent column layout — expanding a policy on one side does not affect the other. Collapsible code blocks with syntax highlighting for scripts (PowerShell/Bash) and compliance rules (JSON)
+- **Manual Review tab**: Non-Settings-Catalog policies (compliance, enrollment, scripts) in a 50/50 source/destination layout grouped by platform. Matching policy names aligned side-by-side. Independent column layout — expanding a policy on one side does not affect the other. Collapsible code blocks with syntax highlighting for scripts (PowerShell/Bash), compliance rules (JSON), and macOS/iOS `.mobileconfig` payloads (decoded plist XML)
 - **Duplicates tab**: Settings configured in 2+ policies with different values, with automated analysis
 - **Deprecated tab**: Settings flagged as deprecated by Microsoft, grouped by source/destination
 - **Configuration Match score**: Animated percentage with color gradient, confetti at 100%

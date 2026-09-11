@@ -328,13 +328,11 @@ function ConvertTo-FlatSettingRows {
                           $joined = @($val | ForEach-Object { if ($_ -is [string] -or $_ -is [ValueType]) { $_.ToString() } }) -join ', '
                           if ([string]::IsNullOrWhiteSpace($joined) -and $val.Count -gt 0) { "$($val.Count) items" } else { $joined }
                       } else { $val.ToString() }
-            # Decode base64-encoded content (scripts and rulesContent JSON)
-            if ($prop.Name -match '(?i)scriptContent|detectionScriptContent|remediationScriptContent|rulesContent' -and
-                $strVal -is [string] -and $strVal.Length -gt 20 -and $strVal -notmatch '\s') {
-                try {
-                    $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($strVal))
-                    $strVal = "__SCRIPT_CODE__$decoded"
-                } catch { <# not valid base64, keep original #> }
+            # Decode scripts, rulesContent JSON and .mobileconfig payloads. hashedScriptContent
+            # matches this pattern too but is a digest — the helper rejects it.
+            if ($prop.Name -match '(?i)scriptContent|rulesContent|^payload$' -and $strVal -is [string]) {
+                $decoded = ConvertFrom-InforcerBase64Text -Value $strVal
+                if ($decoded) { $strVal = "__SCRIPT_CODE__$decoded" }
             }
             # Dotted property names (e.g. Entra settings): emit parent folder rows with indentation
             if ($prop.Name.Contains('.')) {

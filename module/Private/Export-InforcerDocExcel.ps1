@@ -86,7 +86,7 @@ function Export-InforcerDocExcel {
                             Modified     = if ($isFirst) { $basics.Modified } else { '' }
                             ScopeTags    = if ($isFirst) { $basics.ScopeTags } else { '' }
                             SettingName  = $setting.Name
-                            Value        = if ([string]::IsNullOrEmpty($setting.Value)) { '' } else { $setting.Value }
+                            Value        = if ([string]::IsNullOrEmpty($setting.Value)) { '' } else { ("$($setting.Value)" -replace '^__SCRIPT_CODE__', '') }
                             IsConfigured = $setting.IsConfigured
                             Assignments  = if ($isFirst) { $assignStr } else { '' }
                         })

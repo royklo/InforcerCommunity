@@ -451,6 +451,13 @@ td.value-cell:hover .value-copy-btn { opacity: 1; }
 .json-code { background: #1a1b26 !important; color: #a9b1d6; }
 .json-code-summary { color: #7aa2f7; border: 1px solid #7aa2f7; background: rgba(122,162,247,0.1); }
 .json-code-summary:hover { background: #7aa2f7; color: #1a1b26; }
+.xml-code { background: #10161c !important; color: #c9d1d9; }
+.xml-code-summary { color: #56d4dd; border: 1px solid #56d4dd; background: rgba(86,212,221,0.1); }
+.xml-code-summary:hover { background: #56d4dd; color: #10161c; }
+.xml-tag { color: #7aa2f7; }
+.xml-attr { color: #e0af68; }
+.xml-string { color: #9ece6a; }
+.xml-comment { color: #6a9955; font-style: italic; }
 .json-key { color: #7aa2f7; }
 .json-string { color: #9ece6a; }
 .json-bool { color: #ff9e64; font-weight: 600; }
@@ -1341,6 +1348,7 @@ h3:first-child { margin-top: var(--sp-4); }
                         $encCode = [System.Net.WebUtility]::HtmlEncode($scriptCode)
                         $trimmedCode = $scriptCode.TrimStart()
                         if ($trimmedCode -match '^\s*[\{\[]') { $codeClass = 'json-code'; $summaryClass = 'json-code-summary'; $codeLabel = 'View JSON' }
+                        elseif ($trimmedCode -match '^\s*<') { $codeClass = 'xml-code'; $summaryClass = 'xml-code-summary'; $codeLabel = 'View profile' }
                         elseif ($trimmedCode -match '^\s*#!/') { $codeClass = 'sh-code'; $summaryClass = 'sh-code-summary'; $codeLabel = 'View script' }
                         else { $codeClass = 'ps-code'; $summaryClass = 'ps-code-summary'; $codeLabel = 'View script' }
                         [void]$sb.AppendLine("    <div class=`"manual-review-setting`"><span class=`"setting-name`">$encSName</span></div>")
@@ -2237,6 +2245,21 @@ h3:first-child { margin-top: var(--sp-4); }
     [void]$sb.AppendLine('    if (lastIdx < text.length) tokens.push(escHtml(text.substring(lastIdx)));')
     [void]$sb.AppendLine('    code.innerHTML = tokens.join("");')
     [void]$sb.AppendLine('}')
+    [void]$sb.AppendLine('function highlightXML(el) {')
+    [void]$sb.AppendLine('    var text = el.textContent;')
+    [void]$sb.AppendLine('    var tokens = [];')
+    [void]$sb.AppendLine('    var re = /<!--[\s\S]*?-->|<[!?\/]?[A-Za-z_][\w:.\-]*(?:\s[^>]*?)?\/?>/g;')
+    [void]$sb.AppendLine('    var lastIdx = 0, m;')
+    [void]$sb.AppendLine('    while ((m = re.exec(text)) !== null) {')
+    [void]$sb.AppendLine('        if (m.index > lastIdx) tokens.push(escHtml(text.substring(lastIdx, m.index)));')
+    [void]$sb.AppendLine('        var t = m[0];')
+    [void]$sb.AppendLine('        if (t.indexOf("<!--") === 0) tokens.push(''<span class="xml-comment">''+escHtml(t)+''</span>'');')
+    [void]$sb.AppendLine('        else tokens.push(''<span class="xml-tag">''+escHtml(t).replace(/([\w:.\-]+)=("[^"]*")/g, ''<span class="xml-attr">$1</span>=<span class="xml-string">$2</span>'')+''</span>'');')
+    [void]$sb.AppendLine('        lastIdx = m.index + t.length;')
+    [void]$sb.AppendLine('    }')
+    [void]$sb.AppendLine('    if (lastIdx < text.length) tokens.push(escHtml(text.substring(lastIdx)));')
+    [void]$sb.AppendLine('    el.innerHTML = tokens.join("");')
+    [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('function highlightJSON(el) {')
     [void]$sb.AppendLine('    var text = el.textContent;')
     [void]$sb.AppendLine('    var tokens = [];')
@@ -2265,6 +2288,7 @@ h3:first-child { margin-top: var(--sp-4); }
     [void]$sb.AppendLine('    document.querySelectorAll("pre.ps-code").forEach(function(el) { if (!el.querySelector("code")) highlightPS(el); });')
     [void]$sb.AppendLine('    document.querySelectorAll("pre.sh-code").forEach(function(el) { if (!el.querySelector("code")) highlightBash(el); });')
     [void]$sb.AppendLine('    document.querySelectorAll("pre.json-code").forEach(highlightJSON);')
+    [void]$sb.AppendLine('    document.querySelectorAll("pre.xml-code").forEach(highlightXML);')
     [void]$sb.AppendLine('    document.querySelectorAll(".ps-code-wrap").forEach(function(wrap) {')
     [void]$sb.AppendLine('        var btn = document.createElement("button");')
     [void]$sb.AppendLine('        btn.textContent = "Copy";')

@@ -515,6 +515,13 @@ tr:hover td { background: var(--row-hover); }
 .json-code { background: oklch(0.13 0.02 260) !important; color: oklch(0.80 0.02 250); }
 .json-code-summary { color: oklch(0.60 0.10 260); border: 1px solid oklch(0.60 0.10 260 / 0.3); background: oklch(0.60 0.10 260 / 0.1); }
 .json-code-summary:hover { background: oklch(0.60 0.10 260 / 0.2); }
+.xml-code { background: oklch(0.13 0.01 200) !important; color: oklch(0.85 0.01 250); }
+.xml-code-summary { color: oklch(0.65 0.12 190); border: 1px solid oklch(0.65 0.12 190 / 0.3); background: oklch(0.65 0.12 190 / 0.1); }
+.xml-code-summary:hover { background: oklch(0.65 0.12 190 / 0.2); }
+.xml-tag { color: #7aa2f7; }
+.xml-attr { color: #e0af68; }
+.xml-string { color: #9ece6a; }
+.xml-comment { color: #6a9955; font-style: italic; }
 .json-key { color: #7aa2f7; }
 .json-string { color: #9ece6a; }
 .json-bool { color: #ff9e64; font-weight: 600; }
@@ -988,6 +995,7 @@ tr:hover td { background: var(--row-hover); }
                             $encCode = [System.Net.WebUtility]::HtmlEncode($scriptCode)
                             $trimmed = $scriptCode.TrimStart()
                             if ($trimmed -match '^\s*[\{\[]') { $codeClass = 'json-code'; $summaryClass = 'json-code-summary'; $label = 'View JSON' }
+                            elseif ($trimmed -match '^\s*<') { $codeClass = 'xml-code'; $summaryClass = 'xml-code-summary'; $label = 'View profile' }
                             elseif ($trimmed -match '^\s*#!/') { $codeClass = 'sh-code'; $summaryClass = 'sh-code-summary'; $label = 'View script' }
                             else { $codeClass = 'ps-code'; $summaryClass = 'ps-code-summary'; $label = 'View script' }
                             $settingVal = "<details class=`"script-collapsible`"><summary class=`"$summaryClass`">$label</summary><pre class=`"$codeClass`">$encCode</pre></details>"
@@ -1203,9 +1211,11 @@ function navClick(e,targetId){
     [void]$sb.AppendLine('function highlightPS(el){var t=el.textContent,tokens=[],re=/(#[^\n]*|<#[\s\S]*?#>|"[^"]*"|''[^'']*''|\$[\w:]+|\[[\w.]+\]|\b(?:if|else|elseif|foreach|for|while|do|switch|try|catch|finally|throw|return|function|param|begin|process|end|filter|class|enum|using|trap|break|continue|exit)\b|\b[A-Z][a-z]+(?:-[A-Z][a-zA-Z]+)+\b)/gi,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));var s=m[0],c="";if(s[0]==="#"||s.startsWith("<#"))c="ps-comment";else if(s[0]==="\""||s[0]==="''")c="ps-string";else if(s[0]==="$")c="ps-variable";else if(s[0]==="[")c="ps-type";else if(s.indexOf("-")>0&&s[0]===s[0].toUpperCase())c="ps-cmdlet";else c="ps-keyword";tokens.push(''<span class="''+c+''">''+escHtml(s)+''</span>'');last=m.index+s.length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
     [void]$sb.AppendLine('function highlightBash(el){var t=el.textContent,tokens=[],re=/(#[^\n]*|"(?:[^"\\]|\\.)*"|''[^'']*''|\$\{[\w]+\}|\$[\w]+|\b(?:if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|local|export|set|trap|in)\b|\b(?:echo|curl|rm|mkdir|cp|mv|chmod|chown|grep|sed|awk|cat|ls|cd|pwd|source|eval|exec|exit)\b)/g,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));var s=m[0],c="";if(s[0]==="#")c="sh-comment";else if(s[0]==="\""||s[0]==="''")c="sh-string";else if(s[0]==="$")c="sh-variable";else if(/^(if|then|else|elif|fi|for|do|done|while|until|case|esac|function|return|local|export|set|trap|in)$/.test(s))c="sh-keyword";else c="sh-command";tokens.push(''<span class="''+c+''">''+escHtml(s)+''</span>'');last=m.index+s.length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
     [void]$sb.AppendLine('function highlightJSON(el){var t=el.textContent,tokens=[],re=/("(?:[^"\\]|\\.)*")\s*(:)|("(?:[^"\\]|\\.)*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)tokens.push(escHtml(t.substring(last,m.index)));if(m[1])tokens.push(''<span class="json-key">''+escHtml(m[1])+''</span>''+escHtml(m[2]));else if(m[3])tokens.push(''<span class="json-string">''+escHtml(m[3])+''</span>'');else if(m[4])tokens.push(''<span class="json-bool">''+escHtml(m[4])+''</span>'');else if(m[5])tokens.push(''<span class="json-number">''+escHtml(m[5])+''</span>'');last=m.index+m[0].length}if(last<t.length)tokens.push(escHtml(t.substring(last)));el.innerHTML=tokens.join("")}')
+    [void]$sb.AppendLine('function highlightXML(el){var t=el.textContent,out=[],re=/<!--[\s\S]*?-->|<[!?\/]?[A-Za-z_][\w:.\-]*(?:\s[^>]*?)?\/?>/g,last=0,m;while((m=re.exec(t))!==null){if(m.index>last)out.push(escHtml(t.substring(last,m.index)));var s=m[0];if(s.indexOf("<!--")===0)out.push(''<span class="xml-comment">''+escHtml(s)+''</span>'');else out.push(''<span class="xml-tag">''+escHtml(s).replace(/([\w:.\-]+)=("[^"]*")/g,''<span class="xml-attr">$1</span>=<span class="xml-string">$2</span>'')+''</span>'');last=m.index+s.length}if(last<t.length)out.push(escHtml(t.substring(last)));el.innerHTML=out.join("")}')
     [void]$sb.AppendLine('document.querySelectorAll("pre.ps-code").forEach(highlightPS);')
     [void]$sb.AppendLine('document.querySelectorAll("pre.sh-code").forEach(highlightBash);')
     [void]$sb.AppendLine('document.querySelectorAll("pre.json-code").forEach(highlightJSON);')
+    [void]$sb.AppendLine('document.querySelectorAll("pre.xml-code").forEach(highlightXML);')
     # Hide Expand buttons when content doesn't actually overflow
     [void]$sb.AppendLine('document.querySelectorAll(".long-val").forEach(function(el){')
     [void]$sb.AppendLine('    if(el.scrollHeight<=el.clientHeight){')

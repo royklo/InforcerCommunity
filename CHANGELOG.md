@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
+## [0.7.2] - 2026-09-11
+
+### Bug Fixes
+
+- **API validation errors no longer lose the reason that explains them.** When an entry in the API's `errors[]` array doesn't match any known shape, the module falls back to dumping it as JSON so you still see something actionable — but it dumped at `-Depth 5`. That fallback runs *precisely* when the entry's shape is unknown, so there was no basis for assuming the useful field sat above the cut. Past the limit PowerShell substitutes `@{...}`, which isn't JSON, emits a truncation warning into your stream, and drops the rest: a nested `{"reason":"tenant not in key scope"}` came out as `{"L8":{"L7":{"L6":{"L5":{"L4":{"L3":"@{L2=}"}}}}}}`. Now `-Depth 100`, matching every other `ConvertTo-Json` in the module.
+
 ## [0.7.1] - 2026-09-11
 
 ### Bug Fixes

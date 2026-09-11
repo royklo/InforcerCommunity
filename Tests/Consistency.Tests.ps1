@@ -2150,6 +2150,18 @@ Describe 'Private helpers (via module scope)' {
             $out | Should -Match '"weird"'
             $out | Should -Match '"thing"'
         }
+
+        It 'Does not truncate a deeply nested unrecognized entry' {
+            # This branch runs only when the entry shape is unknown, so a display-depth cut
+            # can silently drop the one field that explains the failure. PowerShell also
+            # substitutes "@{...}" for the truncated remainder, which is not even JSON.
+            $json = '{"errors":[{"L8":{"L7":{"L6":{"L5":{"L4":{"L3":{"L2":{"L1":{"reason":"tenant not in key scope"}}}}}}}}}]}'
+            $parsed = $json | ConvertFrom-Json -Depth 100
+            $out = & (Get-Module InforcerCommunity) { param($e) Format-InforcerErrorDetail -Errors $e } $parsed.errors
+
+            $out | Should -Match 'tenant not in key scope'
+            $out | Should -Not -Match '@\{'
+        }
     }
 
     Context 'Disconnect-Inforcer cache clearing' {

@@ -55,10 +55,13 @@ function Format-InforcerErrorDetail {
             $rendered.Add(($parts -join ' '))
         } else {
             # Nothing we recognize — dump JSON so the user still sees something useful.
+            # Depth 100, not a display depth: this runs precisely when the entry shape is
+            # unknown, so there is no way to tell that the actionable field isn't below the
+            # cut. Truncation also emits a warning and substitutes "@{...}", which is not JSON.
             # Serialization can fail for objects with circular refs or COM types; in that case
             # we drop the entry silently (the top-level message will still surface).
             try {
-                $rendered.Add(($e | ConvertTo-Json -Compress -Depth 5))
+                $rendered.Add(($e | ConvertTo-Json -Compress -Depth 100))
             } catch {
                 Write-Verbose "Format-InforcerErrorDetail: skipping unserializable entry ($($_.Exception.Message))"
             }

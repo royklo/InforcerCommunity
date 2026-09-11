@@ -54,11 +54,9 @@ function Format-InforcerErrorDetail {
         if ($parts.Count -gt 0) {
             $rendered.Add(($parts -join ' '))
         } else {
-            # Nothing we recognize — dump JSON so the user still sees something useful.
-            # Serialization can fail for objects with circular refs or COM types; in that case
-            # we drop the entry silently (the top-level message will still surface).
+            # Shape is unknown, so a shallow depth could cut off the only useful field.
             try {
-                $rendered.Add(($e | ConvertTo-Json -Compress -Depth 5))
+                $rendered.Add(($e | ConvertTo-Json -Compress -Depth 100))
             } catch {
                 Write-Verbose "Format-InforcerErrorDetail: skipping unserializable entry ($($_.Exception.Message))"
             }

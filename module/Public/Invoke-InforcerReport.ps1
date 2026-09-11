@@ -87,6 +87,10 @@
 .EXAMPLE
     Invoke-InforcerReport -Key TenantAuditReport -OutputFormat html -TenantId 482 -Open
     Runs the report, saves it, and immediately opens the HTML in the default browser.
+.EXAMPLE
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -OutputType JsonObject
+    Returns the run result as a JSON string (depth 100) instead of objects.
+
 .OUTPUTS
     PSObject or String. The shape depends on the mode:
       -NoWait        → one object per run with { RunId, Status='queued', TenantId, ReportType, ... }

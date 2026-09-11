@@ -40,6 +40,10 @@
 .EXAMPLE
     Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness" -OutputPath ./report.csv
     Exports assessment results to CSV.
+.EXAMPLE
+    Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness" -OutputType JsonObject
+    Returns the assessment results as a JSON string (depth 100) instead of objects.
+
 .OUTPUTS
     PSObject, String, or System.IO.FileInfo
 .LINK

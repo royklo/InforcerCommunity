@@ -46,6 +46,10 @@
 .EXAMPLE
     Get-InforcerReportRun -IncludeOutputs
     Returns every run with its outputs array embedded (1 extra API call per run).
+.EXAMPLE
+    Get-InforcerReportRun -RunId 8842 -OutputType JsonObject
+    Returns the run as a JSON string (depth 100) instead of objects.
+
 .OUTPUTS
     PSObject or String
 .LINK

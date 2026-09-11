@@ -48,6 +48,11 @@ function Get-InforcerUser {
 
         Lists all users in the piped tenant.
 
+    .EXAMPLE
+        Get-InforcerUser -TenantId 482 -OutputType JsonObject
+
+        Returns the users as a JSON string (depth 100) instead of objects.
+
     .LINK
         https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforceruser
 

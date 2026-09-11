@@ -42,6 +42,10 @@
         ForEach-Object { $_.outputs } |
         Save-InforcerReportOutput -OutputPath ./bulk
     Bulk-downloads every output from every visible run.
+.EXAMPLE
+    Save-InforcerReportOutput -RunId 8842 -OutputId 1 -OutputPath ./out -OutputType JsonObject
+    Returns the saved-file result as a JSON string (depth 100) instead of objects.
+
 .OUTPUTS
     PSObject or String — per saved file, with { RunId, OutputId, TenantId, ReportType,
     OutputFormat, FilePath, FileName, FileSize, ContentType, CorrelationId }. TenantId,

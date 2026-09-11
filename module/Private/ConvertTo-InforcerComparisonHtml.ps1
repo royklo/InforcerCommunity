@@ -616,7 +616,7 @@ table.hide-assignments .col-assign { display: none; }
 .script-collapsible summary::-webkit-details-marker { display:none; }
 .script-collapsible summary::after { content:''; display:inline-block; width:6px; height:6px; border-right:2px solid var(--text-muted); border-bottom:2px solid var(--text-muted); transform:rotate(-45deg); transition:transform 0.2s ease; margin-left:auto; flex-shrink:0; }
 .script-collapsible[open] summary::after { transform:rotate(45deg); }
-.script-collapsible pre { max-height:25em; overflow:auto; white-space:pre-wrap; word-break:break-all; font-size:var(--text-xs); line-height:1.5; padding:0.75rem; border-radius:var(--radius-sm); margin:0.5rem 0 0; }
+.script-collapsible pre { max-height:25em; overflow:auto; white-space:pre; word-break:normal; font-size:var(--text-xs); line-height:1.5; padding:0.75rem; border-radius:var(--radius-sm); margin:0.5rem 0 0; }
 /* ── Column resize ───────────────────────────────────────────────── */
 .col-resize-handle { position:absolute; top:0; right:-4px; width:8px; height:100%; cursor:col-resize; z-index:10; display:flex; align-items:center; justify-content:center; user-select:none; }
 .col-resize-handle::after { content:''; display:block; width:2px; height:60%; border-radius:2px; background:transparent; transition:background 0.15s, height 0.15s; }

@@ -504,7 +504,7 @@ tr:hover td { background: var(--row-hover); }
     margin: var(--sp-8) 0 0; padding: var(--sp-12);
     border-radius: var(--radius-sm); font-size: var(--text-xs);
     line-height: 1.5; overflow-x: auto;
-    white-space: pre-wrap; word-break: break-all; max-height: 25em;
+    white-space: pre; word-break: normal; max-height: 25em;
 }
 .ps-code { background: oklch(0.15 0.01 250) !important; color: oklch(0.85 0.01 250); }
 .ps-code-summary { color: oklch(0.60 0.10 250); border: 1px solid oklch(0.60 0.10 250 / 0.3); background: oklch(0.60 0.10 250 / 0.1); }

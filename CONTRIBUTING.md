@@ -16,7 +16,7 @@ Thank you for your interest in contributing. This project is maintained by the c
    git checkout -b feature/your-feature-name
    # or: git checkout -b fix/bug-description
   ```
-4. **Make your changes** in `module/` (see [Development setup](#development-setup) and [Code style](#code-style)).
+4. **Make your changes** in `module/` (see [Development setup](#development-setup) and [Code style](#code-style-and-consistency)).
 5. **Run tests** (see [Testing](#testing)).
 6. **Commit and push** to your fork
   ```powershell

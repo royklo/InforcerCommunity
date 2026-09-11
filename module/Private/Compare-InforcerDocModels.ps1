@@ -354,9 +354,9 @@ function Compare-InforcerDocModels {
                         $sName = "$($s.Name)"
                         $sValue = "$($s.Value)"
                         if ($sName -match '@odata|^hashed|Hash$') { continue }
-                        # Decode base64 script content
-                        if ($sName -match '(?i)script.*content|detection.*script|remediation.*script' -and $sValue.Length -gt 20) {
-                            try { $sValue = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($sValue)) } catch {}
+                        if ($sName -match '(?i)script.*content|detection.*script|remediation.*script|^payload$') {
+                            $decoded = ConvertFrom-InforcerBase64Text -Value $sValue
+                            if ($decoded) { $sValue = $decoded }
                         }
                         [void]$scriptSettings.Add(@{ Name = $sName; Value = $sValue })
                     }
@@ -487,14 +487,9 @@ function Compare-InforcerDocModels {
                             if ($settingName -match '^hashed|Hash$') { continue }
                             if ($settingName -match '@odata') { continue }
                             if ($settingName -match '(?i)^notification\s*template\s*id$' -and $settingValue -match '^0{8}-') { continue }
-                            # Decode base64 content (script content + compliance rules)
-                            if ($settingName -match '(?i)^(script\s*content|detection\s*script\s*content|remediation\s*script\s*content|rules\s*content|scriptContent|detectionScriptContent|remediationScriptContent|rulesContent)$') {
-                                try {
-                                    $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($settingValue))
-                                    $settingValue = $decoded
-                                } catch {
-                                    # Not valid base64 — keep original
-                                }
+                            if ($settingName -match '(?i)^(script\s*content|detection\s*script\s*content|remediation\s*script\s*content|rules\s*content|payload|scriptContent|detectionScriptContent|remediationScriptContent|rulesContent)$') {
+                                $decoded = ConvertFrom-InforcerBase64Text -Value $settingValue
+                                if ($decoded) { $settingValue = $decoded }
                             }
                             [void]$settingsSummary.Add(@{ Name = $settingName; Value = $settingValue })
                             # Embed linked discovery script when we find a Device Compliance Script ID

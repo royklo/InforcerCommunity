@@ -221,8 +221,9 @@ function Get-InforcerComparisonData {
                     $propName = $prop.Name
                     if ($propName -match '@odata|^id$|^createdDateTime|^lastModifiedDateTime|^version|^displayName|^description|^roleScopeTagIds') { continue }
                     $val = $prop.Value
-                    if ($propName -match '(?i)scriptContent|detectionScriptContent|remediationScriptContent' -and $val -is [string] -and $val.Length -gt 20) {
-                        try { $val = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($val)) } catch {}
+                    if ($propName -match '(?i)scriptContent|rulesContent|^payload$' -and $val -is [string]) {
+                        $decoded = ConvertFrom-InforcerBase64Text -Value $val
+                        if ($decoded) { $val = $decoded }
                     }
                     $scriptData[$propName] = $val
                 }

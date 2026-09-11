@@ -11,7 +11,7 @@ module/
 ├── InforcerCommunity.Format.ps1xml  # Default table/list formats
 ├── InforcerCommunity.Types.ps1xml   # Type definitions
 ├── README.md                        # This file
-├── Public/                          # Exported cmdlets (20)
+├── Public/                          # Exported cmdlets (21)
 │   ├── Connect-Inforcer.ps1
 │   ├── Disconnect-Inforcer.ps1
 │   ├── Test-InforcerConnection.ps1
@@ -24,6 +24,7 @@ module/
 │   ├── Get-InforcerUser.ps1
 │   ├── Get-InforcerGroup.ps1
 │   ├── Get-InforcerRole.ps1
+│   ├── Get-InforcerSecureScore.ps1
 │   ├── Export-InforcerTenantDocumentation.ps1
 │   ├── Compare-InforcerEnvironments.ps1
 │   ├── Get-InforcerAssessment.ps1

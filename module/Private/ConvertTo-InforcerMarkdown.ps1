@@ -44,6 +44,8 @@ function ConvertTo-MarkdownTable {
             $val = if ($null -eq $_ -or "$_" -eq '') { [char]0x2014 } else { "$_" }
             # Escape pipe characters (D-20)
             $val = $val -replace '\|', '\|'
+            # Newlines end the row in GFM, so multi-line values (scripts, plists) need <br>
+            $val = $val -replace '\r?\n', '<br>'
             " $val "
         }
         [void]$sb.AppendLine("|$($cells -join '|')|")
@@ -160,7 +162,7 @@ function ConvertTo-InforcerMarkdown {
                         } else {
                             $setting.Name
                         }
-                        $settingsRows += ,@($settingName, $setting.Value)
+                        $settingsRows += ,@($settingName, ("$($setting.Value)" -replace '^__SCRIPT_CODE__', ''))
                     }
                     [void]$sb.AppendLine((ConvertTo-MarkdownTable -Headers @('Setting', 'Value') -Rows $settingsRows))
                     [void]$sb.AppendLine()

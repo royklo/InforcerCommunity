@@ -2511,3 +2511,160 @@ Describe '0.7.0 bug fixes that only live runs covered' {
         }
     }
 }
+
+Describe 'Base64 fields decode to text or stay base64, never mojibake' {
+    # Intune base64-encodes both text (scriptContent, rulesContent, the macOS .mobileconfig
+    # payload plist) and binary (hashedScriptContent digests, signed profiles). Name-matching
+    # alone decoded a SHA digest into "V<FFFD><FFFD>0..." and left macOS payloads as raw base64.
+
+    BeforeAll {
+        Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
+        Import-Module (Get-InforcerCommunityManifestPath) -Force
+
+        $script:PlistXml = @"
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+	<key>PayloadType</key>
+	<string>com.google.Chrome</string>
+</dict>
+</plist>
+"@
+        $script:PlistB64  = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script:PlistXml))
+        $script:ScriptSh  = "#!/usr/bin/env zsh`nset -u`n/usr/bin/defaults write com.apple.controlcenter BatteryShowPercentage -bool true`n"
+        $script:ScriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script:ScriptSh))
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try { $script:HashB64 = [Convert]::ToBase64String($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($script:ScriptSh))) }
+        finally { $sha.Dispose() }
+    }
+
+    Context 'ConvertFrom-InforcerBase64Text' {
+        It 'decodes a .mobileconfig payload plist' {
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } $script:PlistB64
+            $out | Should -Match '^<\?xml'
+            $out | Should -Match 'com\.google\.Chrome'
+        }
+
+        It 'decodes a shell script body' {
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } $script:ScriptB64
+            $out | Should -Match '^#!/usr/bin/env zsh'
+        }
+
+        It 'rejects a SHA-256 digest rather than returning mojibake' {
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } $script:HashB64
+            $out | Should -BeNullOrEmpty
+        }
+
+        It 'never returns a string containing U+FFFD' {
+            # 256 raw bytes is not valid UTF-8; a lenient decode would hand back replacement chars.
+            $bytes = [byte[]](0..255)
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String($bytes))
+            $out | Should -BeNullOrEmpty
+        }
+
+        It 'rejects a literal U+FFFD, which strict UTF-8 decoding accepts' {
+            # EF BF BD *is* valid UTF-8 — it encodes U+FFFD — so the strict decoder does not
+            # throw on it. Without an explicit check a digest carrying those bytes comes back
+            # as "text" and the caller renders mojibake, which is the bug this helper exists for.
+            $bytes = [byte[]](0x48,0x69,0xEF,0xBF,0xBD,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69)
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String($bytes))
+            $out | Should -BeNullOrEmpty
+        }
+
+        It 'rejects DEL and the C1 control range, which are also valid UTF-8' {
+            # 0x7F and C2 80..C2 9F decode cleanly but never appear in a plist, script or JSON.
+            $bytes = [byte[]](0x48,0x69,0xC2,0x85,0x48,0x69,0x7F,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69,0x48,0x69)
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String($bytes))
+            $out | Should -BeNullOrEmpty
+        }
+
+        It 'still accepts text carrying tab, CR and LF' {
+            $sample = "line one`r`n`tindented line two`n`tindented line three`n"
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } ([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($sample)))
+            $out | Should -Be $sample
+        }
+
+        It 'returns $null for values that are not base64 text' -ForEach @(
+            @{ V = '' }, @{ V = '   ' }, @{ V = 'short' },
+            @{ V = 'plain text with spaces that is long enough to pass the length floor' },
+            @{ V = '__SCRIPT_CODE__already-decoded' }
+        ) {
+            $out = & (Get-Module InforcerCommunity) { param($v) ConvertFrom-InforcerBase64Text -Value $v } $V
+            $out | Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'ConvertTo-FlatSettingRows' {
+        It 'decodes payload and marks it as code' {
+            $row = & (Get-Module InforcerCommunity) {
+                param($b64)
+                $pd = [PSCustomObject]@{ payload = $b64; payloadName = 'Chrome' }
+                @(ConvertTo-FlatSettingRows -PolicyData $pd) | Where-Object { $_.Name -eq 'Payload' }
+            } $script:PlistB64
+
+            $row.Value | Should -Match '^__SCRIPT_CODE__<\?xml'
+        }
+
+        It 'leaves hashedScriptContent as base64' {
+            $rows = & (Get-Module InforcerCommunity) {
+                param($hash, $script)
+                $pd = [PSCustomObject]@{ hashedScriptContent = $hash; scriptContent = $script }
+                @(ConvertTo-FlatSettingRows -PolicyData $pd)
+            } $script:HashB64 $script:ScriptB64
+
+            $hashed = $rows | Where-Object { $_.Name -eq 'Hashed Script Content' }
+            $hashed.Value | Should -Be $script:HashB64
+            $hashed.Value | Should -Not -Match "$([char]0xFFFD)"
+
+            $content = $rows | Where-Object { $_.Name -eq 'Script Content' }
+            $content.Value | Should -Match '^__SCRIPT_CODE__#!/usr/bin/env zsh'
+        }
+    }
+
+    Context 'Renderers' {
+        It 'renders a decoded plist in an xml-code block, not as base64' {
+            $html = & (Get-Module InforcerCommunity) {
+                param($b64)
+                $model = @{
+                    TenantName = 'T'; GeneratedAt = (Get-Date); Baselines = @()
+                    Products = [ordered]@{ 'Intune' = @{ Categories = [ordered]@{ 'macOS / Configuration Profiles' = @(@{
+                        Basics       = @{ Name = 'Chrome'; Description = ''; ProfileType = ''; Platform = ''
+                                          Created = ''; Modified = ''; ScopeTags = ''; Tags = '' }
+                        Settings     = @(ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]@{ payload = $b64 }))
+                        Assignments  = @()
+                        PolicyTypeId = 13
+                    }) } } }
+                }
+                ConvertTo-InforcerHtml -DocModel $model
+            } $script:PlistB64
+
+            $html | Should -Match 'class="xml-code"'
+            $html | Should -Match 'View profile'
+            $html | Should -Match 'PayloadType'
+            $html | Should -Not -Match ([regex]::Escape($script:PlistB64))
+            $html | Should -Not -Match '__SCRIPT_CODE__'
+        }
+
+        It 'strips the __SCRIPT_CODE__ marker out of Markdown and escapes newlines' {
+            $md = & (Get-Module InforcerCommunity) {
+                param($b64)
+                $model = @{
+                    TenantName = 'T'; GeneratedAt = (Get-Date); Baselines = @()
+                    Products = [ordered]@{ 'Intune' = @{ Categories = [ordered]@{ 'macOS / Scripts' = @(@{
+                        Basics       = @{ Name = 'Battery'; Description = ''; ProfileType = ''; Platform = ''
+                                          Created = ''; Modified = ''; ScopeTags = ''; Tags = '' }
+                        Settings     = @(ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]@{ scriptContent = $b64 }))
+                        Assignments  = @()
+                        PolicyTypeId = 12
+                    }) } } }
+                }
+                ConvertTo-InforcerMarkdown -DocModel $model
+            } $script:ScriptB64
+
+            $md | Should -Not -Match '__SCRIPT_CODE__'
+            $md | Should -Match 'BatteryShowPercentage'
+            # Every table row must stay on one line or the GFM table falls apart.
+            ($md -split "`n" | Where-Object { $_ -match '^\|' -and $_ -notmatch '\|\s*$' }) | Should -BeNullOrEmpty
+        }
+    }
+}

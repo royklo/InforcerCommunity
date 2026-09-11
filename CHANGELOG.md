@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-The format follows [Conventional Commits](https://www.conventionalcommits.org/). Versioning deviates from strict SemVer: every shipped change (feat / fix / perf / non-breaking refactor) bumps MINOR; docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
+The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
+
+## [0.7.1] - 2026-09-11
+
+### Bug Fixes
+
+- **macOS and iOS configuration profiles now show what is actually in the profile.** The `payload` field of a custom configuration profile is a base64-encoded `.mobileconfig` — a plist XML document — and the reports printed the base64 verbatim. A 2,300-character wall of `PD94bWwgdmVyc2lvbj0iMS4w…` told you a profile existed and nothing about what it configured, so `macOS - Security - D - Google Chrome - Extensions` never revealed which extensions it allowed. `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` now decode it and render the plist in a collapsible, syntax-highlighted block alongside the existing script and JSON blocks.
+- **Script hashes are no longer decoded into mojibake.** `hashedScriptContent` is a raw digest, and the base64 decoder matched it on name alongside `scriptContent`, so macOS and Windows script policies rendered a "Hashed Script Content" block full of replacement characters (`V<FFFD><FFFD>0<FFFD><FFFD>…`) presented as viewable script. The decoder now verifies the decoded bytes really are text and leaves anything else as base64, which also covers signed `.mobileconfig` profiles and any future binary field — the property name alone was never a safe test.
+- **Code blocks scroll horizontally instead of wrapping.** `white-space: pre-wrap` plus `word-break: break-all` re-flowed every code block to the column width and broke lines mid-identifier, which flattened the nesting of a plist and split shell variables in half. Both renderers already declared `overflow-x: auto` — the intent was always horizontal scrolling, it just never took effect. Indentation is now preserved and long lines scroll, for plists, scripts and compliance rules JSON alike.
+- **Multi-line values no longer break the Markdown export.** Decoded scripts and plists contain newlines, and a newline ends the row in a GFM table, so any policy with script content silently destroyed the rest of its settings table. Newlines are now escaped to `<br>`. The Markdown and Excel exports also leaked the internal `__SCRIPT_CODE__` render marker into the value column; both strip it.
 
 ## [0.7.0] - 2026-09-09
 

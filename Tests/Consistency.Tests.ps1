@@ -142,10 +142,73 @@ Describe 'No-silent-failure contract' {
         $output | Should -Not -BeNullOrEmpty
     }
 
-    It 'Test-InforcerConnection produces an error when not connected' {
-        $err = $null
-        Test-InforcerConnection -ErrorVariable err -ErrorAction SilentlyContinue
-        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    It 'Test-InforcerConnection warns and returns $false when not connected' {
+        $warn = $null
+        $result = Test-InforcerConnection -WarningVariable warn -WarningAction SilentlyContinue
+        $result | Should -BeOfType [bool]
+        $result | Should -BeFalse
+        $warn | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+    }
+
+    It 'Test-InforcerConnection answers instead of throwing under -ErrorAction Stop' {
+        # -ErrorAction Stop is the form that reaches a module cmdlet: a caller-scope
+        # $ErrorActionPreference does NOT propagate into module scope, so testing that
+        # would pass no matter which stream the cmdlet writes to.
+        $result = Test-InforcerConnection -ErrorAction Stop -WarningAction SilentlyContinue
+        $result | Should -BeFalse
+    }
+
+    It 'Test-InforcerConnection returns $true when the API responds' {
+        Mock Invoke-RestMethod { [PSCustomObject]@{ data = @() } } -ModuleName InforcerCommunity
+        & (Get-Module InforcerCommunity) {
+            $script:InforcerSession = @{
+                ApiKey  = (ConvertTo-SecureString 'test-key' -AsPlainText -Force)
+                BaseUrl = 'https://api.test.com'
+            }
+        }
+        try {
+            $result = Test-InforcerConnection 6>$null
+            $result | Should -BeOfType [bool]
+            $result | Should -BeTrue
+        } finally {
+            & (Get-Module InforcerCommunity) { $script:InforcerSession = $null }
+        }
+    }
+
+    It 'Test-InforcerConnection returns $false and warns when the API call fails' {
+        Mock Invoke-RestMethod { throw 'HTTP 401 Unauthorized' } -ModuleName InforcerCommunity
+        & (Get-Module InforcerCommunity) {
+            $script:InforcerSession = @{
+                ApiKey  = (ConvertTo-SecureString 'test-key' -AsPlainText -Force)
+                BaseUrl = 'https://api.test.com'
+            }
+        }
+        try {
+            $warn = $null
+            $result = Test-InforcerConnection -WarningVariable warn -WarningAction SilentlyContinue 6>$null
+            $result | Should -BeFalse
+            "$warn" | Should -Match '401'
+        } finally {
+            & (Get-Module InforcerCommunity) { $script:InforcerSession = $null }
+        }
+    }
+
+    It 'Test-InforcerConnection answers instead of throwing when the API call fails under -ErrorAction Stop' {
+        # The failure path is the one that matters: a Write-Error in the catch would throw here
+        # and the predicate would be unusable exactly when the connection is broken.
+        Mock Invoke-RestMethod { throw 'HTTP 500 Server Error' } -ModuleName InforcerCommunity
+        & (Get-Module InforcerCommunity) {
+            $script:InforcerSession = @{
+                ApiKey  = (ConvertTo-SecureString 'test-key' -AsPlainText -Force)
+                BaseUrl = 'https://api.test.com'
+            }
+        }
+        try {
+            $result = Test-InforcerConnection -ErrorAction Stop -WarningAction SilentlyContinue 6>$null
+            $result | Should -BeFalse
+        } finally {
+            & (Get-Module InforcerCommunity) { $script:InforcerSession = $null }
+        }
     }
 
     It 'Get-InforcerTenant produces an error when not connected' {

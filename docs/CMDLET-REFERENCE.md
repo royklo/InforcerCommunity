@@ -77,7 +77,9 @@ No active session to disconnect.
 
 ## Test-InforcerConnection
 
-Tests the current API connection by sending a request to the API. Requires an active session (run `Connect-Inforcer` first).
+Tests the current API connection by sending a request to the API, and returns `$true` or `$false` so the result can be used as a condition. Requires an active session (run `Connect-Inforcer` first).
+
+Failures — including "no session" — are reported as **warnings**, not errors, so the cmdlet keeps answering the question instead of throwing in scripts that run under `$ErrorActionPreference = 'Stop'`.
 
 **Required API scope(s)**: None (session management only)
 
@@ -90,15 +92,24 @@ Connect-Inforcer -ApiKey $env:INFORCER_API_KEY -Region uk
 Test-InforcerConnection
 ```
 
+```powershell
+# Reconnect only when the current session is dead
+if (-not (Test-InforcerConnection)) { Connect-Inforcer -ApiKey $key -Region uk }
+```
+
 ### Example output
 
-Success (written to host):
+Returns `True`; the following is written to the host:
 
 ```
-Connection successful. API is reachable.
+SUCCESS! Connection is working.
 ```
 
-When not connected, an error is written (e.g. "Not connected. To connect, run: Connect-Inforcer ...").
+With no active session it returns `False` and writes a warning:
+
+```
+WARNING: Not connected. To connect, run: Connect-Inforcer -ApiKey <ApiKey> -Region <uk|eu|us|anz>
+```
 
 ---
 

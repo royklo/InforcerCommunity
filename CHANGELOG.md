@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
+## [0.7.3] - 2026-09-14
+
+### Bug Fixes
+
+- **`Test-InforcerConnection` now returns `$true` / `$false`.** It previously wrote to the host and returned nothing at all, so `if (Test-InforcerConnection) { ... }` was always false — the `Test-*` verb promised a predicate the cmdlet never delivered. It now returns a boolean; the host output is unchanged.
+  - **Failures are warnings, not errors.** "Not connected" and a failed API call used to call `Write-Error`. That cannot coexist with a predicate: `Test-InforcerConnection -ErrorAction Stop` would throw instead of returning `$false`, as would any call once `$ErrorActionPreference` is `Stop` at global scope. (A script-scope `$ErrorActionPreference` does *not* reach a module cmdlet, so that case was never affected.) Both paths now use `Write-Warning`.
+  - **Migration.** Anything reading `-ErrorVariable` from this cmdlet should read `-WarningVariable` instead. The sharper edge: a script running under `Stop` that called `Test-InforcerConnection` bare, relying on the throw to abort, now continues past it — check the return value instead, e.g. `if (-not (Test-InforcerConnection)) { throw 'no connection' }`. Nothing inside the module calls this cmdlet and neither does the MCP server, so the blast radius is your own scripts.
+
 ## [0.7.2] - 2026-09-11
 
 ### Bug Fixes

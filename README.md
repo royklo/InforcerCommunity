@@ -102,7 +102,7 @@ Disconnect-Inforcer
 | ------------------------------ | ----------------------------------------------------------- |
 | **Connect-Inforcer**           | Establishes a secure connection to the Inforcer REST API. Supports `-FetchGraphData` to also connect Microsoft Graph. |
 | **Disconnect-Inforcer**        | Disconnects and clears the session (including Graph if connected). |
-| **Test-InforcerConnection**    | Tests the API connection.                                   |
+| **Test-InforcerConnection**    | Tests the API connection; returns `$true` or `$false`.      |
 | **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId). |
 | **Get-InforcerBaseline**       | Retrieves baseline groups and members.                      |
 | **Get-InforcerTenantPolicies** | Retrieves policies for a specified tenant.                  |

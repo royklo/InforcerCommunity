@@ -685,7 +685,7 @@
         "description": "The evaluation outcome for a compliance check against the tenant",
         "properties": {
           "compliant": {
-            "description": "Whether the tenant fully passes this check. True means all evaluated objects meet the required configuration",
+            "description": "Whether the tenant fully passes this check. True means all evaluated objects meet the required configuration. False for a check whose data could not be read; see status",
             "type": "boolean"
           },
           "message": {
@@ -700,6 +700,17 @@
             },
             "nullable": true,
             "type": "array"
+          },
+          "status": {
+            "description": "The outcome of the check. insufficientPermissions and error mean the check was not assessed. May be absent, in which case compliant is the outcome",
+            "enum": [
+              "pass",
+              "fail",
+              "insufficientPermissions",
+              "error"
+            ],
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"

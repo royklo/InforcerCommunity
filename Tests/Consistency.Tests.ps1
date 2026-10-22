@@ -1272,6 +1272,18 @@ Describe 'Private helpers (via module scope)' {
             $json[0].ComplianceScore | Should -Be 50
         }
 
+        It 'writes the assessed counts, score and category percentage to the single-tenant HTML report' {
+            $path = Join-Path $TestDrive 'report.html'
+            Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'a1' -OutputPath $path 6>$null | Out-Null
+            $html = Get-Content -Raw $path
+            $html | Should -Match "setFilter\('pass',this\)"">Passed \(2\)<"
+            $html | Should -Match "setFilter\('fail',this\)"">Failed \(2\)<"
+            $html | Should -Match "setFilter\('na',this\)"">Not Assessed \(2\)<"
+            $html | Should -Match '<span class="pct">50%</span>'
+            $html | Should -Match '<span class="subcat-pct">50%</span>'
+            $html | Should -Match 'subcat-badge badge-warn">2/4<'
+        }
+
         It 'renders not assessed checks with a neutral badge and filter in the single-tenant HTML' {
             & (Get-Module InforcerCommunity) {
                 $checks = @(
@@ -1284,6 +1296,7 @@ Describe 'Private helpers (via module scope)' {
                 $html | Should -Match '>Not Assessed<'
                 $html | Should -Match "setFilter\('na',this\)"
                 $html | Should -Match 'subcat-badge badge-na">0/0<'
+                $html | Should -Match ([regex]::Escape("if(currentFilter==='na'&&(status==='Pass'||status==='Fail'))show=false;"))
             }
         }
 
@@ -1301,6 +1314,8 @@ Describe 'Private helpers (via module scope)' {
                 $html | Should -Match '"na":1'
                 $html | Should -Match "setFilter\('na',this\)"
                 $html | Should -Match "filt==='na'"
+                $html | Should -Match ([regex]::Escape('<span class="st st-u" title="Not assessed: ''+esc(st)+''">?</span>'))
+                $html | Should -Match ([regex]::Escape("(t.passed+t.failed)+' passed"))
 
                 $tr[0].NotAssessed = 0
                 $tr[0].Checks = @($tr[0].Checks[0])

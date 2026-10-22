@@ -6,6 +6,8 @@
 .DESCRIPTION
     Triggers an assessment run and returns detailed results including per-check scores,
     passes, violations, warnings, and framework metadata.
+    Each check's Status is Pass, Fail, InsufficientPermissions or Error. The last two mean the
+    API could not assess the check; they are reported but left out of the compliance score.
     Supports single-tenant, multi-tenant (all tenants), and subset modes.
     Use -MultiTenant to run against all tenants, or pass multiple values to -TenantId.
     When -OutputPath is specified with multi-tenant, generates an HTML matrix report.
@@ -139,14 +141,23 @@ $processResults = {
     foreach ($r in $results) {
         if (-not ($r -is [PSObject])) { continue }
         $fp = $r.PSObject.Properties['findings']
-        $isCompliant = $false; $findingsMessage = ''
+        $isCompliant = $false; $findingsMessage = ''; $apiStatus = $null
         if ($fp -and $fp.Value -is [PSObject]) {
             $cp = $fp.Value.PSObject.Properties['compliant']
             if ($cp) { $isCompliant = $cp.Value -eq $true }
             $mp = $fp.Value.PSObject.Properties['message']
             if ($mp) { $findingsMessage = $mp.Value }
+            $sp = $fp.Value.PSObject.Properties['status']
+            if ($sp) { $apiStatus = $sp.Value }
         }
-        $statusText = if ($isCompliant) { 'Pass' } else { 'Fail' }
+        # The API sends compliant=false for checks it could not assess; status tells them apart
+        $statusText = switch ($apiStatus) {
+            'pass' { 'Pass' }
+            'fail' { 'Fail' }
+            'insufficientPermissions' { 'InsufficientPermissions' }
+            'error' { 'Error' }
+            default { if ($isCompliant) { 'Pass' } else { 'Fail' } }
+        }
 
         $allPasses = [System.Collections.Generic.List[string]]::new()
         $allViolations = [System.Collections.Generic.List[string]]::new()
@@ -183,6 +194,20 @@ $processResults = {
         [void]$checks.Add($r)
     }
     return ,$checks
+}
+
+# Helper: counts and score; checks that were not assessed stay out of the score
+$summarize = {
+    param($checks)
+    $passed = 0; $failed = 0
+    foreach ($c in $checks) { if ($c.Status -eq 'Pass') { $passed++ } elseif ($c.Status -eq 'Fail') { $failed++ } }
+    @{
+        Score       = if ($passed + $failed -gt 0) { [math]::Round(($passed / ($passed + $failed)) * 100, 1) } else { 0 }
+        Passed      = $passed
+        Failed      = $failed
+        NotAssessed = $checks.Count - $passed - $failed
+        TotalChecks = $checks.Count
+    }
 }
 
 # ── MULTI-TENANT MODE ──
@@ -256,20 +281,7 @@ if ($isMultiTenant) {
         $resultsProp = $response.PSObject.Properties['results']
         $results = if ($resultsProp -and $resultsProp.Value -is [array]) { $resultsProp.Value } else { @() }
         $checks = & $processResults $results
-
-        # Compute score
-        $passed = 0; foreach ($c in $checks) { if ($c.Status -eq 'Pass') { $passed++ } }
-        $tScore = if ($checks.Count -gt 0) { [math]::Round(($passed / $checks.Count) * 100, 1) } else { 0 }
-
-        [void]$allTenantResults.Add(@{
-            TenantId    = $tenant.Id
-            TenantName  = $tenant.Name
-            Checks      = @($checks)
-            Score       = $tScore
-            Passed      = $passed
-            Failed      = $checks.Count - $passed
-            TotalChecks = $checks.Count
-        })
+        [void]$allTenantResults.Add(@{ TenantId = $tenant.Id; TenantName = $tenant.Name; Checks = @($checks) } + (& $summarize $checks))
     }
 
     $totalStopwatch.Stop()
@@ -290,7 +302,7 @@ if ($isMultiTenant) {
     # Summary per tenant
     foreach ($tr in $allTenantResults) {
         $color = if ($tr.Score -ge 90) { 'Green' } elseif ($tr.Score -ge 70) { 'Yellow' } else { 'Red' }
-        Write-Host "  $($tr.TenantName) — $($tr.Score)% ($($tr.Passed)/$($tr.TotalChecks))" -ForegroundColor $color
+        Write-Host "  $($tr.TenantName) — $($tr.Score)% ($($tr.Passed)/$($tr.Passed + $tr.Failed)$(if ($tr.NotAssessed) { ", $($tr.NotAssessed) not assessed" }))" -ForegroundColor $color
     }
     Write-Host ""
 
@@ -305,6 +317,7 @@ if ($isMultiTenant) {
                 TotalChecks     = $tr.TotalChecks
                 Passed          = $tr.Passed
                 Failed          = $tr.Failed
+                NotAssessed     = $tr.NotAssessed
                 Checks          = @($tr.Checks | ForEach-Object {
                     [PSCustomObject]@{
                         Name             = $_.name
@@ -406,13 +419,11 @@ if ($OutputType -eq 'JsonObject') {
 $resultsProp = $response.PSObject.Properties['results']
 $results = if ($resultsProp -and $resultsProp.Value -is [array]) { $resultsProp.Value } else { @() }
 $processedChecks = & $processResults $results
-$totalChecks = $processedChecks.Count
-$compliantCount = 0; foreach ($c in $processedChecks) { if ($c.Status -eq 'Pass') { $compliantCount++ } }
-$nonCompliantCount = $totalChecks - $compliantCount
-$score = if ($totalChecks -gt 0) { [math]::Round(($compliantCount / $totalChecks) * 100, 1) } else { 0 }
+$summary = & $summarize $processedChecks
+$score = $summary.Score
 
 Write-Host ""
-Write-Host "  $assessmentDisplayName — ${score}% compliant ($compliantCount/$totalChecks checks passed)" -ForegroundColor $(if ($score -eq 100) { 'Green' } elseif ($score -ge 75) { 'Yellow' } else { 'Red' })
+Write-Host "  $assessmentDisplayName — ${score}% compliant ($($summary.Passed)/$($summary.Passed + $summary.Failed) checks passed$(if ($summary.NotAssessed) { ", $($summary.NotAssessed) not assessed" }))" -ForegroundColor $(if ($score -eq 100) { 'Green' } elseif ($score -ge 75) { 'Yellow' } else { 'Red' })
 Write-Host ""
 
 # Export or emit
@@ -426,9 +437,10 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
             -TenantName $tenantDisplayName `
             -Checks @($processedChecks) `
             -Score $score `
-            -TotalChecks $totalChecks `
-            -Passed $compliantCount `
-            -Failed $nonCompliantCount
+            -TotalChecks $summary.TotalChecks `
+            -Passed $summary.Passed `
+            -Failed $summary.Failed `
+            -NotAssessed $summary.NotAssessed
         $html | Set-Content -Path $resolvedPath -Encoding UTF8
         Write-Host "HTML report saved to: $resolvedPath"
     }

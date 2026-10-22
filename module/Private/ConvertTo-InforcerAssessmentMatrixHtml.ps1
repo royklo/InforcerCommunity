@@ -209,7 +209,7 @@ tbody tr:hover td:first-child{background:#f3f4f6}
     <input class="search" type="text" id="search" placeholder="Search checks, categories..." oninput="applyFilters()">
     <button class="pill-btn active" onclick="setFilter('all',this)">All</button>
     <button class="pill-btn" onclick="setFilter('fail',this)">Has Failures</button>
-    <button class="pill-btn" onclick="setFilter('pass',this)">All Passed</button>
+    <button class="pill-btn" onclick="setFilter('pass',this)">All Passed</button>$(if ($TenantResults | Where-Object { $_.NotAssessed }) { "`n    <button class=`"pill-btn`" onclick=`"setFilter('na',this)`">Not Assessed</button>" })
     <div class="tenant-wrap">
       <button class="tenant-btn" onclick="toggleDrop(event)">&#x1F465; Tenants <span style="opacity:0.5">($($tenantNames.Count))</span></button>
       <div class="t-drop" id="tDrop">
@@ -272,6 +272,7 @@ function applyFilters(){
     if(q&&(n+' '+c).indexOf(q)===-1)show=false;
     if(show&&filt==='fail'){if(!row.querySelector('.st-f'))show=false}
     if(show&&filt==='pass'){if(row.querySelector('.st-f,.st-u'))show=false}
+    if(show&&filt==='na'){if(!row.querySelector('.st-u'))show=false}
     row.style.display=show?'':'none';
   });
   // Hide empty categories

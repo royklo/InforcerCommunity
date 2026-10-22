@@ -16,6 +16,8 @@ function ConvertTo-InforcerAssessmentHtml {
         Number of passed checks.
     .PARAMETER Failed
         Number of failed checks.
+    .PARAMETER NotAssessed
+        Number of checks the API could not assess (InsufficientPermissions or Error).
     #>
     [CmdletBinding()]
     [OutputType([string])]
@@ -26,7 +28,8 @@ function ConvertTo-InforcerAssessmentHtml {
         [Parameter(Mandatory)] [double]$Score,
         [Parameter(Mandatory)] [int]$TotalChecks,
         [Parameter(Mandatory)] [int]$Passed,
-        [Parameter(Mandatory)] [int]$Failed
+        [Parameter(Mandatory)] [int]$Failed,
+        [int]$NotAssessed = 0
     )
 
     $placeholders = @('[Multiple Objects Evaluated]', '[unknown name]', '[unknown id]')
@@ -67,8 +70,9 @@ function ConvertTo-InforcerAssessmentHtml {
     $scoreColor = if ($Score -ge 90) { '#16a34a' } elseif ($Score -ge 70) { '#178BDB' } else { '#dc2626' }
     $circumference = [math]::Round(2 * [math]::PI * 60, 1)
     $dashOffset = [math]::Round($circumference * (1 - $Score / 100), 1)
-    $passBarPct = if ($TotalChecks -gt 0) { [math]::Round($Passed / $TotalChecks * 100) } else { 0 }
-    $failBarPct = if ($TotalChecks -gt 0) { [math]::Round($Failed / $TotalChecks * 100) } else { 0 }
+    $assessed = $Passed + $Failed
+    $passBarPct = if ($assessed -gt 0) { [math]::Round($Passed / $assessed * 100) } else { 0 }
+    $failBarPct = if ($assessed -gt 0) { [math]::Round($Failed / $assessed * 100) } else { 0 }
     $dateStr = Get-Date -Format 'yyyy-MM-dd'
     $timeStr = Get-Date -Format 'HH:mm'
 
@@ -151,7 +155,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .subcat-bar{height:100%;border-radius:3px;background:var(--cyan);transition:width 1.5s cubic-bezier(0.4,0,0.2,1)}
 .subcat-pct{font-size:0.8125rem;font-weight:600;width:40px;text-align:right;color:var(--navy);flex-shrink:0;font-variant-numeric:tabular-nums}
 .subcat-badge{font-size:0.75rem;font-weight:600;padding:0.15rem 0.6rem;border-radius:999px;min-width:52px;text-align:center;flex-shrink:0}
-.badge-pass{background:var(--pass-bg);color:#166534}.badge-fail{background:var(--fail-bg);color:#991b1b}.badge-warn{background:var(--warn-bg);color:#92400e}
+.badge-pass{background:var(--pass-bg);color:#166534}.badge-fail{background:var(--fail-bg);color:#991b1b}.badge-warn{background:var(--warn-bg);color:#92400e}.badge-na{background:#f1f5f9;color:#475569}
 .subcat-body{max-height:0;overflow:hidden;transition:max-height 0.4s cubic-bezier(0.4,0,0.2,1)}
 .subcategory.open .subcat-body{max-height:10000px;transition:max-height 0.6s cubic-bezier(0.4,0,0.2,1)}
 .control-item{border-top:1px solid var(--border-light)}
@@ -248,7 +252,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div class="stats-grid">
       <div class="stat-card stat-pass animate-in" style="animation-delay:0.2s">
         <span class="stat-label">Passed</span><span class="stat-value">$Passed</span>
-        <span class="stat-sub">of $TotalChecks checks</span>
+        <span class="stat-sub">of $assessed checks$(if ($NotAssessed) { " &middot; $NotAssessed not assessed" })</span>
         <div class="stat-bar"><div class="stat-bar-fill" style="width:${passBarPct}%"></div></div>
       </div>
       <div class="stat-card stat-fail animate-in" style="animation-delay:0.3s">
@@ -262,7 +266,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <input type="text" id="searchInput" placeholder="Search checks..." oninput="filterControls()">
     <button class="filter-btn active" onclick="setFilter('all',this)">All ($TotalChecks)</button>
     <button class="filter-btn" onclick="setFilter('pass',this)">Passed ($Passed)</button>
-    <button class="filter-btn" onclick="setFilter('fail',this)">Failed ($Failed)</button>
+    <button class="filter-btn" onclick="setFilter('fail',this)">Failed ($Failed)</button>$(if ($NotAssessed) { "`n    <button class=`"filter-btn`" onclick=`"setFilter('na',this)`">Not Assessed ($NotAssessed)</button>" })
   </div>
   <div class="section-toolbar animate-in" style="animation-delay:0.4s">
     <h2>Results by Category</h2>
@@ -276,9 +280,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     $catIdx = 0
     foreach ($catName in $categories.Keys) {
         $catChecks = $categories[$catName]
-        $catPassed = 0; foreach ($c in $catChecks) { if ($c.Status -eq 'Pass') { $catPassed++ } }
-        $catPct = if ($catChecks.Count -gt 0) { [math]::Round($catPassed / $catChecks.Count * 100) } else { 0 }
-        $badgeClass = if ($catPassed -eq $catChecks.Count) { 'badge-pass' } elseif ($catPassed -ge $catChecks.Count / 2) { 'badge-warn' } else { 'badge-fail' }
+        $catPassed = 0; $catAssessed = 0
+        foreach ($c in $catChecks) { if ($c.Status -eq 'Pass') { $catPassed++; $catAssessed++ } elseif ($c.Status -eq 'Fail') { $catAssessed++ } }
+        $catPct = if ($catAssessed -gt 0) { [math]::Round($catPassed / $catAssessed * 100) } else { 0 }
+        $badgeClass = if ($catAssessed -eq 0) { 'badge-na' } elseif ($catPassed -eq $catAssessed) { 'badge-pass' } elseif ($catPassed -ge $catAssessed / 2) { 'badge-warn' } else { 'badge-fail' }
 
         [void]$sb.Append(@"
 
@@ -291,19 +296,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <div class="subcat-right">
         <div class="subcat-bar-container"><div class="subcat-bar" style="width:${catPct}%"></div></div>
-        <span class="subcat-pct">${catPct}%</span>
-        <span class="subcat-badge $badgeClass">$catPassed/$($catChecks.Count)</span>
+        <span class="subcat-pct">$(if ($catAssessed) { "${catPct}%" } else { '&mdash;' })</span>
+        <span class="subcat-badge $badgeClass">$catPassed/$catAssessed</span>
       </div>
     </div>
     <div class="subcat-body">
 "@)
 
-        # Sort: failed first, then by importance
-        $sorted = $catChecks | Sort-Object { if ($_.Status -eq 'Fail') { 0 } else { 1 } }, { switch (($_.importance).ToLower()) { 'high' { 0 } 'medium' { 1 } default { 2 } } }, name
+        # Sort: failed, not assessed, passed; then by importance
+        $sorted = $catChecks | Sort-Object { switch ($_.Status) { 'Fail' { 0 } 'Pass' { 2 } default { 1 } } }, { switch (($_.importance).ToLower()) { 'high' { 0 } 'medium' { 1 } default { 2 } } }, name
         foreach ($check in $sorted) {
-            $itemClass = if ($check.Status -eq 'Pass') { 'item-pass' } else { 'item-fail' }
-            $badgeStyle = if ($check.Status -eq 'Pass') { 'background:#dcfce7;color:#166534' } else { 'background:#fee2e2;color:#991b1b' }
-            $badgeText = if ($check.Status -eq 'Pass') { 'Compliant' } else { 'Non-Compliant' }
+            $itemClass, $badgeStyle, $badgeText = switch ($check.Status) {
+                'Pass' { 'item-pass', 'background:#dcfce7;color:#166534', 'Compliant' }
+                'Fail' { 'item-fail', 'background:#fee2e2;color:#991b1b', 'Non-Compliant' }
+                default { 'item-na', 'background:#f1f5f9;color:#475569', 'Not Assessed' }
+            }
             $impLower = ($check.importance).ToLower()
             $impClass = switch ($impLower) { 'high' { 'imp-high' } 'medium' { 'imp-medium' } default { 'imp-low' } }
 
@@ -426,6 +433,7 @@ function filterControls(){
     var show=true;
     if(currentFilter==='pass'&&status!=='Pass')show=false;
     if(currentFilter==='fail'&&status!=='Fail')show=false;
+    if(currentFilter==='na'&&(status==='Pass'||status==='Fail'))show=false;
     if(q&&text.indexOf(q)===-1)show=false;
     item.style.display=show?'':'none';
   });

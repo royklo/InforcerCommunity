@@ -1231,6 +1231,78 @@ Describe 'Private helpers (via module scope)' {
         }
     }
 
+    Context 'Invoke-InforcerAssessment not assessed checks' {
+        BeforeAll {
+            $mkResult = {
+                param([string]$Name, $Compliant, $Status)
+                $findings = [ordered]@{ compliant = $Compliant; message = ''; scores = @() }
+                if ($null -ne $Status) { $findings.status = $Status }
+                [PSCustomObject]@{ name = $Name; category = 'Entra'; subCategory = ''; importance = 'High'; findings = [PSCustomObject]$findings }
+            }
+            $script:runResults = @(
+                (& $mkResult 'pass' $true 'pass'),
+                (& $mkResult 'fail' $false 'fail'),
+                (& $mkResult 'perms' $false 'insufficientPermissions'),
+                (& $mkResult 'error' $false 'error'),
+                (& $mkResult 'legacy-pass' $true $null),
+                (& $mkResult 'legacy-fail' $false $null)
+            )
+            Mock -ModuleName InforcerCommunity Test-InforcerSession { $true }
+            Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
+                if ($Endpoint -eq '/beta/tenants') {
+                    @([PSCustomObject]@{ clientTenantId = 1; tenantFriendlyName = 'Contoso' }, [PSCustomObject]@{ clientTenantId = 2; tenantFriendlyName = 'Fabrikam' })
+                } else {
+                    @([PSCustomObject]@{ id = 'a1'; name = 'Test Assessment' })
+                }
+            }
+            Mock -ModuleName InforcerCommunity Invoke-InforcerAssessmentRun { [PSCustomObject]@{ results = $script:runResults } }
+        }
+
+        It 'maps findings.status to Status and falls back to compliant when status is absent' {
+            $checks = @(Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'a1' 6>$null)
+            $checks.Status | Should -Be @('Pass', 'Fail', 'InsufficientPermissions', 'Error', 'Pass', 'Fail')
+        }
+
+        It 'leaves not assessed checks out of the score and reports them separately' {
+            $json = Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputType JsonObject 6>$null | ConvertFrom-Json
+            $json[0].Passed | Should -Be 2
+            $json[0].Failed | Should -Be 2
+            $json[0].NotAssessed | Should -Be 2
+            $json[0].TotalChecks | Should -Be 6
+            $json[0].ComplianceScore | Should -Be 50
+        }
+
+        It 'renders not assessed checks with a neutral badge and filter in the single-tenant HTML' {
+            & (Get-Module InforcerCommunity) {
+                $checks = @(
+                    [PSCustomObject]@{ name = 'Ok'; category = 'Entra'; subCategory = ''; importance = 'High'; Status = 'Pass'; FindingsMessage = ''; description = ''; remediation = ''; impact = ''; rationale = ''; Scores = @() },
+                    [PSCustomObject]@{ name = 'Unread'; category = 'PIM'; subCategory = ''; importance = 'High'; Status = 'Error'; FindingsMessage = 'could not be read'; description = ''; remediation = ''; impact = ''; rationale = ''; Scores = @() }
+                )
+                $html = ConvertTo-InforcerAssessmentHtml -AssessmentName 'T' -TenantName 'T' -Checks $checks `
+                    -Score 100 -TotalChecks 2 -Passed 1 -Failed 0 -NotAssessed 1
+                $html | Should -Match 'data-status="Error"'
+                $html | Should -Match '>Not Assessed<'
+                $html | Should -Match "setFilter\('na',this\)"
+                $html | Should -Match 'subcat-badge badge-na">0/0<'
+            }
+        }
+
+        It 'passes the not assessed status and count to the matrix HTML' {
+            & (Get-Module InforcerCommunity) {
+                $tr = @(@{
+                    TenantName = 'T1'; TenantId = 1; Score = 100; Passed = 1; Failed = 0; NotAssessed = 1; TotalChecks = 2
+                    Checks = @(
+                        [PSCustomObject]@{ name = 'A'; category = 'X'; subCategory = ''; importance = 'High'; Status = 'Pass'; description = ''; impact = ''; rationale = ''; key = '' },
+                        [PSCustomObject]@{ name = 'B'; category = 'X'; subCategory = ''; importance = 'High'; Status = 'InsufficientPermissions'; description = ''; impact = ''; rationale = ''; key = '' }
+                    )
+                })
+                $html = ConvertTo-InforcerAssessmentMatrixHtml -AssessmentName 'T' -TenantResults $tr
+                $html | Should -Match '"T1":"InsufficientPermissions"'
+                $html | Should -Match '"na":1'
+            }
+        }
+    }
+
     Context 'Resolve-InforcerReportOutputFileName' {
         It 'Parses plain filename=' {
             & (Get-Module InforcerCommunity) {

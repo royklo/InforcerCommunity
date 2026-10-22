@@ -5,7 +5,7 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
     .PARAMETER AssessmentName
         Display name of the assessment.
     .PARAMETER TenantResults
-        Array of tenant result hashtables, each with: TenantName, TenantId, Score, Passed, Failed, TotalChecks, Checks.
+        Array of tenant result hashtables, each with: TenantName, TenantId, Score, Passed, Failed, NotAssessed, TotalChecks, Checks.
     #>
     [CmdletBinding()]
     [OutputType([string])]
@@ -42,7 +42,7 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
     $avgScore = if ($TenantResults.Count -gt 0) { [math]::Round(($TenantResults | ForEach-Object { $_.Score } | Measure-Object -Average).Average, 1) } else { 0 }
 
     $tenantsArray = @($TenantResults | ForEach-Object {
-        @{ name = $_.TenantName; id = $_.TenantId; score = $_.Score; passed = $_.Passed; failed = $_.Failed; total = $_.TotalChecks }
+        @{ name = $_.TenantName; id = $_.TenantId; score = $_.Score; passed = $_.Passed; failed = $_.Failed; na = [int]$_.NotAssessed; total = $_.TotalChecks }
     })
     $tenantsJson = ConvertTo-Json -InputObject $tenantsArray -Depth 100 -Compress
 
@@ -151,6 +151,7 @@ tbody tr:hover td:first-child{background:#f3f4f6}
 .st-p{background:var(--pass-bg);color:#166534;border:1px solid rgba(22,163,74,0.2)}
 .st-f{background:var(--fail-bg);color:#991b1b;border:1px solid rgba(220,38,38,0.2)}
 .st-n{color:#d1d5db;font-size:0.65rem}
+.st-u{background:#f1f5f9;color:#475569;border:1px dashed #cbd5e1}
 
 /* Category row — first cell sticky, rest scroll */
 .cat-row td{background:#eef2ff !important;font-weight:700;color:var(--navy);font-size:0.78rem;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);letter-spacing:0.02em}
@@ -270,7 +271,7 @@ function applyFilters(){
     var show=true;
     if(q&&(n+' '+c).indexOf(q)===-1)show=false;
     if(show&&filt==='fail'){if(!row.querySelector('.st-f'))show=false}
-    if(show&&filt==='pass'){if(row.querySelector('.st-f'))show=false}
+    if(show&&filt==='pass'){if(row.querySelector('.st-f,.st-u'))show=false}
     row.style.display=show?'':'none';
   });
   // Hide empty categories
@@ -291,7 +292,7 @@ function render(){
   var th='<tr><th>Check</th>';
   vt.forEach(function(t){
     var c=sCol(t.score);
-    th+='<th>'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span><span class="th-detail">'+t.passed+' / '+t.total+' passed</span></th>';
+    th+='<th>'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span><span class="th-detail">'+t.passed+' / '+(t.passed+t.failed)+' passed</span>'+(t.na?'<span class="th-detail">'+t.na+' not assessed</span>':'')+'</th>';
   });
   th+='</tr>';document.getElementById('mHead').innerHTML=th;
   // Body
@@ -310,6 +311,7 @@ function render(){
       var st=r.statuses[t.name]||'N/A';
       if(st==='Pass')tb+='<td><span class="st st-p">\u2713</span></td>';
       else if(st==='Fail')tb+='<td><span class="st st-f">\u2717</span></td>';
+      else if(st!=='N/A')tb+='<td><span class="st st-u" title="Not assessed: '+esc(st)+'">?</span></td>';
       else tb+='<td><span class="st st-n">\u2014</span></td>';
     });
     tb+='</tr>';

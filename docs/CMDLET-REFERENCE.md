@@ -924,6 +924,10 @@ ObjectsEvaluated : 42
 FindingsMessage  : All users have MFA enabled.
 ```
 
+### Status values
+
+`Status` is `Pass`, `Fail`, `InsufficientPermissions` or `Error`. The last two mean the API could not assess the check (missing permissions, or data that could not be read from the tenant). They are not counted as failures: the compliance score is `Pass ÷ (Pass + Fail)`, and the HTML reports show them as **Not Assessed**. Multi-tenant `-OutputType JsonObject` reports them per tenant as `NotAssessed`, next to `Passed` and `Failed`.
+
 ---
 
 ## Get-InforcerReportType

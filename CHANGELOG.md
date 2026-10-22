@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
+## [0.8.0] - 2026-10-22
+
+### Features
+
+- **Multi-tenant `Invoke-InforcerAssessment -OutputType JsonObject` reports `NotAssessed` per tenant** next to `Passed` and `Failed`, so `TotalChecks` = `Passed` + `Failed` + `NotAssessed`.
+
+### Bug Fixes
+
+- **`Invoke-InforcerAssessment` no longer counts checks it could not assess as failures.** The API now returns `findings.status` per check: `pass`, `fail`, `insufficientPermissions` or `error`. The last two mean the check never ran, but they also carry `compliant: false`. The cmdlet only read `compliant`, so these checks came out as `Fail`, the HTML report marked them Non-Compliant, and the score went down. A live CIS Microsoft 365 L1 + L2 run returned two Privileged Identity Management checks as `error`, which turned 79 of 106 (74.5%) into 79 of 108 (73.1%).
+  - `Status` is now `Pass`, `Fail`, `InsufficientPermissions` or `Error`. When the API sends no `status`, `compliant` decides as before.
+  - The compliance score counts assessed checks only: `Pass ÷ (Pass + Fail)`. `Failed` no longer includes unassessed checks.
+  - Both HTML reports show unassessed checks in grey as **Not Assessed** (a `?` in the matrix), with their own count and filter. The matrix's "All Passed" filter no longer includes rows where a tenant was not assessed. CSV exports carry the new `Status` values.
+  - **Migration:** a script that treats everything other than `Pass` as a failure should compare with `-eq 'Fail'` instead.
+
 ## [0.7.3] - 2026-09-14
 
 ### Bug Fixes

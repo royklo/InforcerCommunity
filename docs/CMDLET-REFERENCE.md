@@ -556,18 +556,8 @@ Visibility  : Public
 GroupTypes  : Unified
 ```
 
-> **`MembershipRule` is not available from the list.** `GET /beta/tenants/{id}/groups` returns the
-> `membershipRule` key but leaves it `null` on every group, including `DynamicMembership` ones. Only
-> the by-ID endpoint fills it, so reading a dynamic group's rule needs `-Group`:
->
-> ```powershell
-> Get-InforcerGroup -TenantId 'Contoso' |
->     Where-Object { $_.groupTypes -contains 'DynamicMembership' } |
->     ForEach-Object { Get-InforcerGroup -TenantId 'Contoso' -Group $_.id }
-> ```
->
-> That is one API call per dynamic group. The list view will render `MembershipRule` without code
-> changes if the API starts populating it.
+> **`MembershipRule` is filled on the list.** Since inforcer fixed ENG-6701 (verified live 2026-11-03),
+> the list returns the rule for every `DynamicMembership` group on both APIs, and the list view shows it.
 
 ### Example output (ById)
 

@@ -215,7 +215,7 @@ Describe 'Invoke-InforcerReport request body' {
     }
 
     It 'lookup failure hint names the API client permission on v1 and the API scope on beta' {
-        Mock -ModuleName InforcerCommunity Get-InforcerTenantList { Write-Error -Message 'denied' -ErrorId 'ApiRequestFailed_403' -Category ConnectionError }
+        Mock -ModuleName InforcerCommunity Get-InforcerTenantList { Write-Error -Message 'denied' -ErrorId 'ApiRequestFailed_403' -Category ConnectionError -ErrorAction Continue }
         Set-ReportsTestSession -Mode v1
         Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 'Contoso Example' -NoWait -ErrorVariable v1Err -ErrorAction SilentlyContinue
         ($v1Err | Where-Object { $_.FullyQualifiedErrorId -like 'TenantLookupUnavailable*' } | Select-Object -First 1).Exception.Message |

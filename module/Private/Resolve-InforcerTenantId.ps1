@@ -34,7 +34,7 @@ function Resolve-InforcerTenantId {
         $parsedInt = 0
         if ([int]::TryParse($tenantIdString, [ref]$parsedInt)) {
             if ($isV1) {
-                $PSCmdlet.ThrowTerminatingError([System.Management.Automation.ErrorRecord]::new(
+                throw ([System.Management.Automation.ErrorRecord]::new(
                     [System.ArgumentException]::new("Numeric tenant id '$tenantIdString' only works when you connect with an API key. With client credentials, pass the Microsoft tenant ID (GUID) or the tenant name; run Get-InforcerTenant to list them."),
                     'TenantIdNumericNotSupportedOnV1',
                     [System.Management.Automation.ErrorCategory]::InvalidArgument,

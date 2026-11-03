@@ -44,14 +44,16 @@ function EnrichPolicyObject {
 
     Required API scope(s): tenants.policies.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
 .DESCRIPTION
-    Gets all policies for the specified tenant. TenantId accepts a numeric ID, GUID, or tenant name.
+    Gets all policies for the specified tenant. TenantId accepts a numeric ID (API-key login only), Microsoft tenant GUID, or tenant name.
+    Works with both login types. With client credentials (v1) the API currently returns no Intune policies;
+    when the result holds none, one warning says so. An API-key login still returns them.
     Output is normalized to use PolicyName (from displayName or name) so properties are consistent across all rows.
 .PARAMETER Format
     Raw (default).
 .PARAMETER TenantId
-    Tenant to get policies for (required). Numeric ID, GUID, or tenant name.
+    Tenant to get policies for (required). Numeric ID (API-key login only), Microsoft tenant GUID, or tenant name.
 .PARAMETER OutputType
-    PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
+    PowerShellObject (default) or JsonObject. JSON output is an array and uses Depth 100.
 .EXAMPLE
     Get-InforcerTenantPolicies -TenantId 482
 .EXAMPLE
@@ -74,7 +76,7 @@ param(
     [string]$Format = 'Raw',
 
     [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
-    [Alias('ClientTenantId')]
+    [Alias('ClientTenantId', 'MsTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -96,7 +98,25 @@ try {
 
 Write-Verbose "Retrieving policies for tenant ID: $clientTenantId"
 
-$endpoint = "/beta/tenants/$clientTenantId/policies"
+$endpoint = "/tenants/$clientTenantId/policies"
+
+if ($script:InforcerSession.ApiVersion -eq 'v1') {
+    $apiErr = $null
+    $policies = @(Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -ObjectType Policy -ErrorVariable apiErr)
+    if ($apiErr) { return }
+
+    if (-not @($policies | Where-Object { $_.product -eq 'Intune' })) {
+        Write-Warning "The v1 API currently returns no Intune policies for this tenant (a known gap in inforcer's v1 API). Connecting with an API key still returns them."
+    }
+    if ($OutputType -eq 'JsonObject') {
+        return ConvertTo-Json -InputObject $policies -Depth 100
+    }
+    foreach ($item in $policies) {
+        if ($item -is [PSObject]) { EnrichPolicyObject $item }
+    }
+    return $policies
+}
+
 $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType $OutputType
 if ($null -eq $response) { return }
 

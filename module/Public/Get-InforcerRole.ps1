@@ -11,7 +11,7 @@ function Get-InforcerRole {
         built-in, enabled, or privileged.
 
     .PARAMETER TenantId
-        The Inforcer tenant ID. Accepts numeric ID, GUID, or tenant name. Supports pipeline input.
+        The Inforcer tenant ID. Accepts numeric ID (API-key login only), Microsoft tenant GUID, or tenant name. Supports pipeline input.
 
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'.
@@ -49,7 +49,7 @@ function Get-InforcerRole {
     [OutputType([PSObject], [string])]
     param(
         [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [Alias('ClientTenantId')]
+        [Alias('ClientTenantId', 'MsTenantId')]
         [object]$TenantId,
 
         [Parameter(Mandatory = $false)]
@@ -70,10 +70,10 @@ function Get-InforcerRole {
             return
         }
 
-        $endpoint = "/beta/tenants/$resolvedTenantId/roles"
+        $endpoint = "/tenants/$resolvedTenantId/roles"
         Write-Verbose "Retrieving role definitions for tenant $resolvedTenantId..."
 
-        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject
+        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -ObjectType Role
         if ($null -eq $response) { return }
         $roleData = @($response)
         if ($roleData.Count -eq 0) { return }

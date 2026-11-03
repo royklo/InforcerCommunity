@@ -10,6 +10,9 @@ function Get-InforcerGroup {
         When called without -Group, returns all groups (GroupSummary objects) with optional filtering and auto-pagination.
         When called with -Group, resolves the group by GUID or display name and returns the full group detail (Group object) including members.
 
+        Works with both login types. With client credentials the members of a single group come from a separate
+        paged members call and are attached as the Members property, so the output matches an API-key login.
+
         Use -Search for server-side prefix filtering (fast, sent to API).
         Use -Filter for client-side wildcard filtering (supports contains, e.g. *comp*).
 
@@ -19,7 +22,7 @@ function Get-InforcerGroup {
         rule requires a -Group call per group.
 
     .PARAMETER TenantId
-        The Inforcer tenant ID. Accepts numeric ID, GUID, or tenant name. Supports pipeline input.
+        The Inforcer tenant ID. Accepts numeric ID (API-key login only), Microsoft tenant GUID, or tenant name. Supports pipeline input.
 
     .PARAMETER Group
         The group to retrieve full details for. Accepts a GUID or a display name.
@@ -96,7 +99,7 @@ function Get-InforcerGroup {
     param(
         [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'List')]
         [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'ById')]
-        [Alias('ClientTenantId')]
+        [Alias('ClientTenantId', 'MsTenantId')]
         [object]$TenantId,
 
         [Parameter(Mandatory, ParameterSetName = 'ById')]
@@ -140,9 +143,9 @@ function Get-InforcerGroup {
                 return
             }
 
-            $endpoint = "/beta/tenants/$resolvedTenantId/groups/$resolvedGroupId"
+            $endpoint = "/tenants/$resolvedTenantId/groups/$resolvedGroupId"
             $err = $null
-            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ErrorVariable err -ErrorAction SilentlyContinue
+            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ObjectType Group -ErrorVariable err -ErrorAction SilentlyContinue
 
             if ($null -eq $response) {
                 if ($err -and $err[0].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
@@ -155,6 +158,11 @@ function Get-InforcerGroup {
                 return
             }
 
+            if ($script:InforcerSession.ApiVersion -eq 'v1') {
+                $members = @(Invoke-InforcerPagedRequest -Endpoint "$endpoint/members" -ObjectType GroupMember)
+                Add-Member -InputObject $response -NotePropertyName 'members' -NotePropertyValue $members -Force
+            }
+
             if ($OutputType -eq 'JsonObject') {
                 return $response | ConvertTo-Json -Depth 100
             }
@@ -165,69 +173,30 @@ function Get-InforcerGroup {
         }
 
         # --- List: paginated group list ---
-        $jsonBuffer = $null
-        if ($OutputType -eq 'JsonObject') { $jsonBuffer = [System.Collections.ArrayList]::new() }
-        $continuationToken = $null
-        $pageCount = 0
-        $itemCount = 0
+        $endpoint = "/tenants/$resolvedTenantId/groups"
+        if ($Search) { $endpoint += '?search=' + [System.Uri]::EscapeDataString($Search) }
 
-        do {
-            $pageCount++
-            $endpoint = "/beta/tenants/$resolvedTenantId/groups"
-            $queryParams = @()
-            if ($Search) { $queryParams += "search=$([System.Uri]::EscapeDataString($Search))" }
-            if ($continuationToken) { $queryParams += "continuationToken=$([System.Uri]::EscapeDataString($continuationToken))" }
-            if ($queryParams.Count -gt 0) { $endpoint += '?' + ($queryParams -join '&') }
+        # -MaxResults counts matches, so with -Filter every page is read before the limit applies.
+        $pagedMax = if ($Filter) { 0 } else { $MaxResults }
+        $groups = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group -MaxResults $pagedMax)
 
-            Write-Verbose "Fetching page $pageCount..."
-            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveFullResponse
-
-            if ($null -eq $response) { break }
-
-            # continuationToken is at the response root level (sibling of .data), not inside .data
-            $items = if ($null -ne $response.PSObject.Properties['data']) { $response.data } else { $null }
-            $newToken = if ($null -ne $response.PSObject.Properties['continuationToken']) { $response.continuationToken } else { $null }
-
-            # Guard against infinite loop: if API returns the same token, stop
-            if ($newToken -and $newToken -eq $continuationToken) {
-                Write-Verbose "API returned duplicate continuationToken. Stopping pagination."
-                break
-            }
-            $continuationToken = $newToken
-
-            if ($null -ne $items) {
-                $itemArray = @($items)
-                Write-Verbose "Page $pageCount returned $($itemArray.Count) items."
-                foreach ($item in $itemArray) {
-                    if ($null -eq $item) { continue }
-                    if ($MaxResults -gt 0 -and $itemCount -ge $MaxResults) {
-                        $continuationToken = $null
-                        break
-                    }
-
-                    # Client-side wildcard filter on displayName
-                    if ($Filter) {
-                        $displayName = $null
-                        $dnProp = $item.PSObject.Properties['displayName']
-                        if ($dnProp) { $displayName = $dnProp.Value }
-                        if (-not $displayName -or $displayName -notlike $Filter) { continue }
-                    }
-
-                    $itemCount++
-
-                    if ($OutputType -eq 'JsonObject') {
-                        [void]$jsonBuffer.Add($item)
-                    } else {
-                        $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType GroupSummary
-                        $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.GroupSummary')
-                        $item
-                    }
-                }
-            }
-        } while ($continuationToken)
+        if ($Filter) {
+            $groups = @($groups | Where-Object {
+                $dn = $_.PSObject.Properties['displayName'].Value
+                $dn -and $dn -like $Filter
+            })
+            if ($MaxResults -gt 0 -and $groups.Count -gt $MaxResults) { $groups = $groups[0..($MaxResults - 1)] }
+        }
 
         if ($OutputType -eq 'JsonObject') {
-            return $jsonBuffer | ConvertTo-Json -Depth 100
+            if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject $groups -Depth 100 }
+            return $groups | ConvertTo-Json -Depth 100
+        }
+
+        foreach ($item in $groups) {
+            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType GroupSummary
+            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.GroupSummary')
+            $item
         }
     }
 }

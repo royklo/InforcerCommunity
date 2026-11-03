@@ -9,7 +9,7 @@ function Resolve-InforcerGroupId {
     .PARAMETER GroupId
         Group GUID or display name.
     .PARAMETER TenantId
-        Resolved Inforcer tenant ID (numeric). Required for API lookup when resolving by name.
+        Resolved tenant ID (numeric on an API-key login, Microsoft tenant GUID string on client credentials). Required for API lookup when resolving by name.
     .OUTPUTS
         System.String - The resolved group GUID.
     #>
@@ -20,7 +20,7 @@ function Resolve-InforcerGroupId {
         [string]$GroupId,
 
         [Parameter(Mandatory = $true)]
-        [int]$TenantId
+        [object]$TenantId
     )
 
     process {
@@ -33,23 +33,14 @@ function Resolve-InforcerGroupId {
         }
 
         Write-Verbose "Group name detected: '$groupIdString'. Searching for group..."
-        $endpoint = "/beta/tenants/$TenantId/groups?search=$([System.Uri]::EscapeDataString($groupIdString))"
+        $endpoint = "/tenants/$TenantId/groups?search=$([System.Uri]::EscapeDataString($groupIdString))"
         $apiErr = @()
-        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveFullResponse -ErrorVariable apiErr -ErrorAction SilentlyContinue
+        $items = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group -ErrorVariable apiErr -ErrorAction SilentlyContinue)
 
-        if ($null -eq $response) {
+        if ($items.Count -eq 0) {
             if ($apiErr.Count -gt 0) {
                 throw [System.InvalidOperationException]::new("Failed to search for group '$groupIdString': $($apiErr[0].Exception.Message)")
             }
-            throw [System.InvalidOperationException]::new("No group found with name: $groupIdString")
-        }
-
-        $items = $null
-        if ($null -ne $response.PSObject.Properties['data']) {
-            $items = @($response.data)
-        }
-
-        if ($null -eq $items -or $items.Count -eq 0) {
             throw [System.InvalidOperationException]::new("No group found with name: $groupIdString")
         }
 

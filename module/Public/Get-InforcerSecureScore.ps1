@@ -6,13 +6,13 @@ function Get-InforcerSecureScore {
         Required API scope(s): Tenants.SecureScores.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
 
     .DESCRIPTION
-        Gets secure score data for a tenant from GET /beta/tenants/{tenantId}/secureScores.
+        Gets secure score data for a tenant from GET /tenants/{tenantId}/secureScores (beta or v1, by login type).
         Returns the current score, max score, licensed user count, enabled services, up to
         90 days of daily score history, per-category scores, and actionable control profiles
         with remediation guidance.
 
     .PARAMETER TenantId
-        The Inforcer tenant ID. Accepts numeric ID, GUID, or tenant name. Supports pipeline input.
+        The Inforcer tenant ID. Accepts numeric ID (API-key login only), Microsoft tenant GUID, or tenant name. Supports pipeline input.
 
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'.
@@ -70,7 +70,7 @@ function Get-InforcerSecureScore {
     [OutputType([PSObject], [string])]
     param(
         [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [Alias('ClientTenantId')]
+        [Alias('ClientTenantId', 'MsTenantId')]
         [object]$TenantId,
 
         [Parameter(Mandatory = $false)]
@@ -91,7 +91,7 @@ function Get-InforcerSecureScore {
             return
         }
 
-        $endpoint = "/beta/tenants/$resolvedTenantId/secureScores"
+        $endpoint = "/tenants/$resolvedTenantId/secureScores"
         Write-Verbose "Retrieving secure score for tenant $resolvedTenantId..."
 
         # -PreserveStructure prevents Invoke-InforcerApiRequest from unwrapping the first array
@@ -99,7 +99,7 @@ function Get-InforcerSecureScore {
         # content sits in its `scores`, `controlProfiles`, and `controlCategoryScores` arrays —
         # without -PreserveStructure the caller would receive one of those inner arrays instead
         # of the top-level tenantSecureScoreDetails object.
-        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure
+        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ObjectType SecureScore
         if ($null -eq $response) { return }
 
         if ($OutputType -eq 'JsonObject') {

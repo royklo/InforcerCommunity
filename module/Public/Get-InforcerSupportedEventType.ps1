@@ -92,7 +92,7 @@ function Get-InforcerSupportedEventType {
     }
 
     try {
-        $response = Invoke-InforcerApiRequest -Endpoint '/beta/auditEvents/eventTypes' -Method GET -OutputType PowerShellObject
+        $response = Invoke-InforcerApiRequest -Endpoint '/auditEvents/eventTypes' -Method GET -OutputType PowerShellObject -ObjectType AuditEventType
         if ($null -eq $response) {
             if ($global:InforcerCachedEventTypes -and $global:InforcerCachedEventTypes.Count -gt 0) {
                 $global:InforcerCachedEventTypes | ForEach-Object { $_ }
@@ -101,12 +101,14 @@ function Get-InforcerSupportedEventType {
         }
 
         function GetEventTypeName($o) {
+            if ($o -is [string]) { return $o }
             if ($o -is [PSObject]) {
-                $n = $o.PSObject.Properties['name'].Value
-                if (-not $n) { $n = $o.PSObject.Properties['Name'].Value }
-                return $n?.ToString()
+                $nameProp = $o.PSObject.Properties['name']
+                if ($nameProp -and $null -ne $nameProp.Value) { return [string]$nameProp.Value }
+                return $null
             }
-            return $o?.ToString()
+            if ($null -ne $o) { return [string]$o }
+            return $null
         }
 
         function ResolveEventTypes($typesObj) {

@@ -6,7 +6,7 @@ function Get-InforcerUser {
         Required API scope(s): Tenants.Users.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
 
     .DESCRIPTION
-        Gets a list of users or a single user by ID from the Inforcer API.
+        Gets a list of users or a single user by ID from the Inforcer API. Works with both login types (API key and client credentials).
         When called without -UserId, returns all users (UserSummary objects) with optional search filtering and auto-pagination.
         When called with -UserId, returns the full user detail (User object) including groups, roles, devices, and risk information.
 
@@ -14,7 +14,7 @@ function Get-InforcerUser {
         Output format. Currently only 'Raw' is supported.
 
     .PARAMETER TenantId
-        The Inforcer tenant ID. Accepts numeric ID, GUID, or tenant name. Supports pipeline input.
+        The Inforcer tenant ID. Accepts numeric ID (API-key login only), Microsoft tenant GUID, or tenant name. Supports pipeline input.
 
     .PARAMETER Search
         Server-side search filter for the user list. Only available in the List parameter set.
@@ -26,7 +26,7 @@ function Get-InforcerUser {
         The user ID (GUID) to retrieve full details for. Only available in the ById parameter set.
 
     .PARAMETER OutputType
-        Output type: 'PowerShellObject' (default) or 'JsonObject'.
+        Output type: 'PowerShellObject' (default) or 'JsonObject'. Depth 100; the v1 list is always a JSON array.
 
     .EXAMPLE
         Get-InforcerUser -TenantId 139
@@ -68,7 +68,7 @@ function Get-InforcerUser {
 
         [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'List')]
         [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'ById')]
-        [Alias('ClientTenantId')]
+        [Alias('ClientTenantId', 'MsTenantId')]
         [object]$TenantId,
 
         [Parameter(ParameterSetName = 'List')]
@@ -101,12 +101,12 @@ function Get-InforcerUser {
 
         if ($PSCmdlet.ParameterSetName -eq 'ById') {
             # --- ById: single user detail ---
-            $endpoint = "/beta/tenants/$resolvedTenantId/users/$UserId"
+            $endpoint = "/tenants/$resolvedTenantId/users/$UserId"
             $err = $null
             # -PreserveStructure: user detail response is a single object with many nested arrays
             # (groups, roles, devices, appRoleAssignments, assignedLicenses, businessPhones, ...).
             # Without it, Invoke-InforcerApiRequest would unwrap to the first array property.
-            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ErrorVariable err -ErrorAction SilentlyContinue
+            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ObjectType User -ErrorVariable err -ErrorAction SilentlyContinue
 
             if ($null -eq $response) {
                 # Only emit UserNotFound if API returned 404; otherwise the API helper already wrote the real error
@@ -128,61 +128,20 @@ function Get-InforcerUser {
         }
 
         # --- List: paginated user list ---
-        $jsonBuffer = if ($OutputType -eq 'JsonObject') { [System.Collections.ArrayList]::new() } else { $null }
-        $continuationToken = $null
-        $pageCount = 0
-        $itemCount = 0
+        $endpoint = "/tenants/$resolvedTenantId/users"
+        if ($Search) { $endpoint += '?search=' + [System.Uri]::EscapeDataString($Search) }
 
-        do {
-            $pageCount++
-            $endpoint = "/beta/tenants/$resolvedTenantId/users"
-            $queryParams = @()
-            if ($Search) { $queryParams += "search=$([System.Uri]::EscapeDataString($Search))" }
-            if ($continuationToken) { $queryParams += "continuationToken=$([System.Uri]::EscapeDataString($continuationToken))" }
-            if ($queryParams.Count -gt 0) { $endpoint += '?' + ($queryParams -join '&') }
-
-            Write-Verbose "Fetching page $pageCount..."
-            $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveFullResponse
-
-            if ($null -eq $response) { break }
-
-            # continuationToken is at the response root level (sibling of .data), not inside .data
-            $items = if ($null -ne $response.PSObject.Properties['data']) { $response.data } else { $null }
-            $newToken = if ($null -ne $response.PSObject.Properties['continuationToken']) { $response.continuationToken } else { $null }
-
-            # Guard against infinite loop: if API returns the same token, stop
-            if ($newToken -and $newToken -eq $continuationToken) {
-                Write-Verbose "API returned duplicate continuationToken. Stopping pagination."
-                break
-            }
-            $continuationToken = $newToken
-
-            if ($null -ne $items) {
-                $itemArray = @($items)
-                Write-Verbose "Page $pageCount returned $($itemArray.Count) items."
-                foreach ($item in $itemArray) {
-                    if ($null -eq $item) { continue }
-                    if ($MaxResults -gt 0 -and $itemCount -ge $MaxResults) {
-                        $continuationToken = $null
-                        break
-                    }
-                    $itemCount++
-
-                    if ($OutputType -eq 'JsonObject') {
-                        # Buffer raw items without aliases for clean JSON
-                        [void]$jsonBuffer.Add($item)
-                    } else {
-                        # Stream to pipeline immediately
-                        $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType UserSummary
-                        $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.UserSummary')
-                        $item
-                    }
-                }
-            }
-        } while ($continuationToken)
+        $users = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType User -MaxResults $MaxResults)
 
         if ($OutputType -eq 'JsonObject') {
-            return $jsonBuffer | ConvertTo-Json -Depth 100
+            if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject $users -Depth 100 }
+            return $users | ConvertTo-Json -Depth 100
+        }
+
+        foreach ($item in $users) {
+            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType UserSummary
+            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.UserSummary')
+            $item
         }
     }
 }

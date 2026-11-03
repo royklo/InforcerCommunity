@@ -1,21 +1,24 @@
 function Resolve-InforcerTenantId {
     <#
     .SYNOPSIS
-        Resolves a tenant identifier to client tenant ID (integer).
+        Resolves a tenant identifier to the id the current API expects.
     .DESCRIPTION
-        Accepts a numeric Client Tenant ID, a Microsoft Tenant ID (GUID), or a tenant name
-        (matched against tenantFriendlyName and tenantDnsName, case-insensitive).
-        Returns the resolved client tenant ID as an integer.
+        API-key session (beta): accepts a numeric Client Tenant ID, a Microsoft Tenant ID (GUID) or a
+        tenant name, and returns the Client Tenant ID as [int].
+        Client-credentials session (v1): accepts a Microsoft Tenant ID (GUID) or a tenant name, and
+        returns the Microsoft Tenant ID as a string. Numeric ids exist only on the beta API and are
+        refused with ErrorId TenantIdNumericNotSupportedOnV1.
+        Names match tenantFriendlyName or tenantDnsName, case-insensitive.
     .PARAMETER TenantId
-        Client Tenant ID (integer), Microsoft Tenant ID (GUID), or tenant name (string).
+        Client Tenant ID (beta only), Microsoft Tenant ID (GUID), or tenant name.
     .PARAMETER TenantData
-        Optional. Pre-fetched array of tenant objects (e.g. from GET /beta/tenants). When provided,
-        resolution is done from this data instead of calling the API.
+        Optional pre-fetched tenant objects. When provided, resolution uses them instead of
+        Get-InforcerTenantList.
     .OUTPUTS
-        System.Int32 - The resolved client tenant ID.
+        System.Int32 (beta) or System.String (v1).
     #>
     [CmdletBinding()]
-    [OutputType([int])]
+    [OutputType([int], [string])]
     param(
         [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
         [object]$TenantId,
@@ -25,26 +28,32 @@ function Resolve-InforcerTenantId {
     )
 
     process {
+        $isV1 = $script:InforcerSession -and $script:InforcerSession.ApiVersion -eq 'v1'
         $tenantIdString = $TenantId.ToString().Trim()
 
-        # Numeric Client Tenant ID — return directly
         $parsedInt = 0
         if ([int]::TryParse($tenantIdString, [ref]$parsedInt)) {
-            $resolved = $parsedInt
-            Write-Verbose "Client Tenant ID detected: $resolved"
-            return $resolved
+            if ($isV1) {
+                $PSCmdlet.ThrowTerminatingError([System.Management.Automation.ErrorRecord]::new(
+                    [System.ArgumentException]::new("Numeric tenant id '$tenantIdString' only works when you connect with an API key. With client credentials, pass the Microsoft tenant ID (GUID) or the tenant name; run Get-InforcerTenant to list them."),
+                    'TenantIdNumericNotSupportedOnV1',
+                    [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                    $TenantId))
+            }
+            Write-Verbose "Client Tenant ID detected: $parsedInt"
+            return $parsedInt
         }
 
-        # GUID or tenant name — both require tenant list lookup
-        $tenantsToUse = $TenantData
-        if ($null -eq $tenantsToUse -or $tenantsToUse.Count -eq 0) {
-            $tenantsToUse = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject)
-        }
-        $tenants = if ($tenantsToUse -is [array]) { $tenantsToUse } else { @($tenantsToUse) }
-
-        # GUID — match on msTenantId
         $guidResult = [guid]::Empty
-        if ([guid]::TryParse($tenantIdString, [ref]$guidResult)) {
+        $isGuid = [guid]::TryParse($tenantIdString, [ref]$guidResult)
+        if ($isGuid -and $isV1) {
+            Write-Verbose "Microsoft Tenant ID (GUID) detected: $guidResult"
+            return $guidResult.ToString()
+        }
+
+        $tenants = if ($null -ne $TenantData -and $TenantData.Count -gt 0) { $TenantData } else { @(Get-InforcerTenantList) }
+
+        if ($isGuid) {
             Write-Verbose "Microsoft Tenant ID (GUID) detected: $tenantIdString. Looking up client tenant ID..."
             foreach ($t in $tenants) {
                 $msId = $t.PSObject.Properties['msTenantId'].Value
@@ -60,35 +69,35 @@ function Resolve-InforcerTenantId {
             throw [System.InvalidOperationException]::new("No tenant found with Microsoft Tenant ID: $tenantIdString")
         }
 
-        # Tenant name — match on tenantFriendlyName or tenantDnsName (case-insensitive)
         Write-Verbose "Tenant name detected: '$tenantIdString'. Looking up by name..."
-        $foundTenants = @()
+        $foundTenants = [System.Collections.Generic.List[object]]::new()
         foreach ($t in $tenants) {
-            $friendlyName = $t.PSObject.Properties['tenantFriendlyName'].Value
-            $dnsName = $t.PSObject.Properties['tenantDnsName'].Value
+            $props = $t.PSObject.Properties
+            $friendlyName = $props['tenantFriendlyName'].Value
+            if ($null -eq $friendlyName) { $friendlyName = $props['name'].Value }
+            $dnsName = $props['tenantDnsName'].Value
+            if ($null -eq $dnsName) { $dnsName = $props['dnsName'].Value }
             if (($friendlyName -and $friendlyName -eq $tenantIdString) -or
                 ($dnsName -and $dnsName -eq $tenantIdString)) {
-                $foundTenants += $t
+                $foundTenants.Add($t)
             }
         }
 
         if ($foundTenants.Count -eq 1) {
-            $clientId = $foundTenants[0].PSObject.Properties['clientTenantId'].Value
-            if ($null -ne $clientId) {
-                $resolved = [int]$clientId
-                Write-Verbose "Found tenant '$tenantIdString'. Client Tenant ID: $resolved"
+            $idProperty = if ($isV1) { 'msTenantId' } else { 'clientTenantId' }
+            $resolvedId = $foundTenants[0].PSObject.Properties[$idProperty].Value
+            if ($null -ne $resolvedId) {
+                $resolved = if ($isV1) { $resolvedId.ToString() } else { [int]$resolvedId }
+                Write-Verbose "Found tenant '$tenantIdString'. Tenant ID: $resolved"
                 return $resolved
             }
         }
 
         if ($foundTenants.Count -gt 1) {
-            # Don't leak the matching tenants' Client Tenant IDs into the error message —
-            # in shared-MSP setups multiple Inforcer customers might share a tenant name and
-            # exposing the integer IDs reveals information about other accounts. Tell the
-            # user the count and require them to list tenants themselves (which is gated by
-            # the Tenants.Read scope they already need for any name-based resolution).
+            # Don't list the matching tenants' ids: in shared-MSP setups that reveals other accounts.
             $count = $foundTenants.Count
-            throw [System.InvalidOperationException]::new("$count tenants match name '$tenantIdString'. Pass the numeric Client Tenant ID for the one you want; run Get-InforcerTenant to list available tenants.")
+            $idHint = if ($isV1) { 'Microsoft tenant ID (GUID)' } else { 'numeric Client Tenant ID' }
+            throw [System.InvalidOperationException]::new("$count tenants match name '$tenantIdString'. Pass the $idHint for the one you want; run Get-InforcerTenant to list available tenants.")
         }
 
         throw [System.InvalidOperationException]::new("No tenant found with name '$tenantIdString'. Use Get-InforcerTenant to list available tenants.")

@@ -41,7 +41,7 @@ Describe 'Consistency contract' {
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
         )
         $script:expectedParameters = @{
-            'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl', 'FetchGraphData', 'PassThru')
+            'Connect-Inforcer'              = @('ApiKey', 'ClientId', 'ClientSecret', 'Region', 'BaseUrl', 'FetchGraphData', 'PassThru')
             'Disconnect-Inforcer'           = @()
             'Test-InforcerConnection'       = @()
             'Get-InforcerTenant'            = @('Format', 'TenantId', 'OutputType')
@@ -1249,7 +1249,7 @@ Describe 'Private helpers (via module scope)' {
             )
             Mock -ModuleName InforcerCommunity Test-InforcerSession { $true }
             Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
-                if ($Endpoint -eq '/beta/tenants') {
+                if (($Endpoint -replace '^/beta', '') -eq '/tenants') {
                     @([PSCustomObject]@{ clientTenantId = 1; tenantFriendlyName = 'Contoso' }, [PSCustomObject]@{ clientTenantId = 2; tenantFriendlyName = 'Fabrikam' })
                 } else {
                     @([PSCustomObject]@{ id = 'a1'; name = 'Test Assessment' })

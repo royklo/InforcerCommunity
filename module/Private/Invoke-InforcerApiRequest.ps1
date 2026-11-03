@@ -3,33 +3,40 @@ function Invoke-InforcerApiRequest {
     .SYNOPSIS
         Sends a request to the Inforcer REST API (Private helper).
     .DESCRIPTION
-        Uses the current session (Inf-Api-Key, BaseUrl), unwraps response.data,
-        and returns PSObjects or JSON string. All JSON serialization uses -Depth 100.
+        Works for both login types. API-key sessions call {BaseUrl}/beta{path}; client-credentials
+        sessions call {ApiHost}/v1{path} with the v1 path renames (see Get-InforcerBaseUrl).
+        Endpoints are version-neutral; a leading '/beta' is stripped.
 
-        Recognizes three error envelope shapes used by the Inforcer API:
+        beta responses: unwraps response.data, then (unless -PreserveStructure) the first array property.
+        v1 responses:   a list response unwraps to its single collection array (metadata such as
+                        continuationToken is ignored); a single object is never unwrapped. -ObjectType maps
+                        v1 property names to the module's canonical names before any JSON conversion.
+                        A non-empty failedPolicyTypes is surfaced as a warning.
+
+        Recognised error envelopes:
+          * problem+json:  { type, title, status, detail, instance, errors{} }  -> "title: detail (field: message)"
           * App-layer:     { success, message, errors[], errorCode }
-          * APIM gateway:  { statusCode, message }            (e.g. 404 on unsupported path)
-          * RFC 9110:      { type, title, status, traceId }   (e.g. 415 Unsupported Media Type)
+          * APIM gateway:  { statusCode, message }
+        ErrorId is ApiRequestFailed_<status>. 429 is retried up to three times honouring Retry-After
+        (seconds or HTTP date); a v1 401 renews the token once and retries.
 
-        The x-correlation-id response header is logged to the verbose stream on every
-        request and included in error messages when present. Surface it to the API team
-        when reporting issues.
+        The x-correlation-id response header is logged to the verbose stream and included in error
+        messages when present.
     .PARAMETER Endpoint
-        API path (e.g. /beta/tenants). Leading slash optional.
+        Version-neutral API path (e.g. /tenants/{id}/policies). Leading slash optional.
     .PARAMETER Method
         HTTP method. Default: GET.
     .PARAMETER Body
-        Optional JSON body for POST/PUT.
+        Optional JSON body for POST/PUT/PATCH.
     .PARAMETER OutputType
         PowerShellObject (return PSObjects) or JsonObject (return JSON string). Default: PowerShellObject.
     .PARAMETER PreserveStructure
-        When set, skips the automatic array-unwrapping step. The .data wrapper is still
-        unwrapped, but inner structure (e.g. items + continuationToken inside .data) is preserved.
-        Use this when the caller needs pagination metadata that lives inside the .data object.
+        beta: unwraps .data but keeps its inner structure (e.g. items + continuationToken).
+        v1: returns the response object as-is (collection mapped), without unwrapping.
     .PARAMETER PreserveFullResponse
-        When set, returns the full parsed API response without any unwrapping. Neither
-        .data nor arrays are unwrapped. Use this when pagination metadata (e.g. continuationToken)
-        lives at the response root level alongside .data, not inside it.
+        Returns the full parsed response without unwrapping (v1: collection mapped via -ObjectType).
+    .PARAMETER ObjectType
+        v1 only: maps the response to canonical property names via ConvertFrom-InforcerV1Response.
     #>
     [CmdletBinding()]
     param(
@@ -51,7 +58,12 @@ function Invoke-InforcerApiRequest {
         [switch]$PreserveStructure,
 
         [Parameter(Mandatory = $false)]
-        [switch]$PreserveFullResponse
+        [switch]$PreserveFullResponse,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('Tenant', 'Policy', 'Baseline', 'AlignmentScore', 'AlignmentDetails', 'User', 'Group', 'GroupMember', 'Role',
+            'SecureScore', 'Assessment', 'AssessmentRun', 'ReportType', 'ReportRun', 'ReportOutput', 'AuditEvent', 'AuditEventType')]
+        [string]$ObjectType
     )
 
     if (-not (Test-InforcerSession)) {
@@ -61,147 +73,133 @@ function Invoke-InforcerApiRequest {
         return
     }
 
-    $endpoint = $Endpoint.Trim()
-    if (-not $endpoint.StartsWith('/')) {
-        $endpoint = '/' + $endpoint
-    }
-
-    $uri = $script:InforcerSession.BaseUrl + $endpoint
-
-    $apiKey = ConvertFrom-InforcerSecureString -SecureString $script:InforcerSession.ApiKey
-
-    if ([string]::IsNullOrWhiteSpace($apiKey)) {
-        Write-Error -Message 'API key is empty or invalid. Please reconnect.' `
-            -ErrorId 'EmptyApiKey' `
-            -Category AuthenticationError
-        return
-    }
+    $session = $script:InforcerSession
+    $isV1 = $session.ApiVersion -eq 'v1'
+    $uri = Get-InforcerBaseUrl -Endpoint $Endpoint -Session $session
 
     Write-Verbose "Making $Method request to: $uri"
 
-    $headers = @{
-        'Inf-Api-Key'    = $apiKey
-        'Accept'         = 'application/json'
-        'Content-Type'   = 'application/json'
-    }
-
-    $responseHeaders = $null
-    $params = @{
-        Uri                     = $uri
-        Method                  = $Method
-        Headers                 = $headers
-        ResponseHeadersVariable = 'responseHeaders'
-    }
+    $request = @{ Uri = $uri; Method = $Method }
     if (-not [string]::IsNullOrWhiteSpace($Body)) {
-        $params['Body'] = $Body
+        $request['Body'] = $Body
     }
 
-    try {
-        $rawResponse = Invoke-RestMethod @params
-        $correlationId = Get-InforcerHeaderValue -Headers $responseHeaders -Name 'x-correlation-id'
+    $retries429 = 0
+    $renewToken = $false
+    $tokenRenewed = $false
+    while ($true) {
+        $headers = Get-InforcerAuthHeader -Session $session -ForceRefresh:$renewToken
+        if (-not $headers) { return }
+        $renewToken = $false
+        $headers['Accept'] = 'application/json'
+        $headers['Content-Type'] = 'application/json'
+        $attempt = $request.Clone()
+        $attempt['Headers'] = $headers
+
+        try {
+            $response = Invoke-InforcerHttpRequest -Request $attempt
+        } catch {
+            $detail = Protect-InforcerApiKeyInText -Text $_.Exception.Message -Session $session
+            Write-Error -Message "Inforcer API request failed: $detail" -ErrorId 'ApiRequestFailed' -Category ConnectionError
+            return
+        }
+
+        $statusCode = $response.StatusCode
+        $correlationId = Get-InforcerHeaderValue -Headers $response.Headers -Name 'x-correlation-id'
         if ($correlationId) {
             Write-Verbose "x-correlation-id: $correlationId"
         }
-    } catch {
-        $statusCode = 0
-        $detail = $_.Exception.Message
-        $correlationId = $null
-
-        if ($_.Exception.Response) {
-            $statusCode = [int]$_.Exception.Response.StatusCode
-            $correlationId = Get-InforcerHeaderValue -Headers $_.Exception.Response.Headers -Name 'x-correlation-id'
+        if ($statusCode -lt 400) {
+            $rawResponse = $response.Body
+            break
         }
 
-        # Response body: PS7 surfaces it via ErrorDetails.Message; PS5.1 needs a stream read.
-        $responseBody = $null
-        if ($_.ErrorDetails.Message) {
-            $responseBody = $_.ErrorDetails.Message
-        } elseif ($_.Exception.Response) {
-            $reader = $null
-            try {
-                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                $responseBody = $reader.ReadToEnd()
-            } catch { } finally {
-                if ($reader) { $reader.Dispose() }
-            }
+        if ($statusCode -eq 429 -and $retries429 -lt 3) {
+            $retries429++
+            $delay = Get-InforcerRetryDelay -Value (Get-InforcerHeaderValue -Headers $response.Headers -Name 'Retry-After') -Attempt $retries429
+            Write-Verbose "Rate limited (HTTP 429). Retrying in $delay second(s) (attempt $retries429 of 3)."
+            Start-Sleep -Seconds $delay
+            continue
+        }
+        if ($statusCode -eq 401 -and $isV1 -and -not $tokenRenewed) {
+            Write-Verbose 'HTTP 401: renewing the access token and retrying once.'
+            $tokenRenewed = $true
+            $renewToken = $true
+            continue
         }
 
-        if (-not [string]::IsNullOrWhiteSpace($responseBody)) {
-            $detail = $responseBody
-            try {
-                $json = $responseBody | ConvertFrom-Json -ErrorAction SilentlyContinue
-            } catch {
-                $json = $null
-            }
+        $detail = "Response status code does not indicate success: $statusCode ($([System.Net.HttpStatusCode]$statusCode))."
+        $json = $response.Body
+        if ($json -is [string]) {
+            if (-not [string]::IsNullOrWhiteSpace($json)) { $detail = $json }
+            try { $json = $json | ConvertFrom-Json -Depth 100 -ErrorAction Stop } catch { $json = $null }
+        }
 
-            if ($json) {
-                # Identify envelope shape and pull out a useful message + errorCode + status.
-                $apiMessage = $null
-                $errorCode  = $null
-                $traceId    = $null
+        if ($json -is [System.Management.Automation.PSCustomObject]) {
+            if ($response.Body -isnot [string]) { $detail = $json | ConvertTo-Json -Depth 100 -Compress }
+            $apiMessage = $null
+            $errorCode  = $null
+            $traceId    = $null
+            $props = $json.PSObject.Properties
+            $isAppEnvelope = $null -ne $props['errorCode'] -or $null -ne $props['success']
 
-                if ($null -ne $json.PSObject.Properties['errorCode'] -or $null -ne $json.PSObject.Properties['errors'] -or $null -ne $json.PSObject.Properties['success']) {
-                    # Shape A: app-layer envelope { success, message, errors[], errorCode }
-                    $errorCode  = ($json.PSObject.Properties['errorCode'].Value -as [string])
-                    $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
-
-                    # Surface structured field-level errors. The top-level message is often a
-                    # generic placeholder ("Validation failed, see errors for details") — the
-                    # useful information lives in the errors[] array.
-                    $errorsProp = $json.PSObject.Properties['errors']
-                    if ($errorsProp -and $errorsProp.Value) {
-                        $errorsJoined = Format-InforcerErrorDetail -Errors $errorsProp.Value
-                        if (-not [string]::IsNullOrWhiteSpace($errorsJoined)) {
-                            if ([string]::IsNullOrWhiteSpace($apiMessage)) {
-                                $apiMessage = $errorsJoined
-                            } elseif ($apiMessage -notlike "*$errorsJoined*") {
-                                $apiMessage = "$apiMessage — $errorsJoined"
-                            }
+            if (-not $isAppEnvelope -and $null -ne $props['title'] -and ($null -ne $props['status'] -or $null -ne $props['type'])) {
+                # problem+json (RFC 9457): v1 errors, and beta framework errors such as 415.
+                $title = ($props['title'].Value -as [string])
+                $problemDetail = ($props['detail'].Value -as [string])
+                $apiMessage = if ($title -and $problemDetail -and $problemDetail -ne $title) { "${title}: $problemDetail" }
+                              elseif ($problemDetail) { $problemDetail } else { $title }
+                $fieldErrors = Format-InforcerProblemError -Errors $props['errors'].Value
+                if ($fieldErrors) { $apiMessage = "$apiMessage ($fieldErrors)" }
+                $traceId = ($props['traceId'].Value -as [string])
+            } elseif ($isAppEnvelope -or $null -ne $props['errors']) {
+                # App-layer envelope { success, message, errors[], errorCode }
+                $errorCode  = ($props['errorCode'].Value -as [string])
+                $apiMessage = ($props['message'].Value -as [string])
+                $errorsProp = $props['errors']
+                if ($errorsProp -and $errorsProp.Value) {
+                    $errorsJoined = Format-InforcerErrorDetail -Errors $errorsProp.Value
+                    if (-not [string]::IsNullOrWhiteSpace($errorsJoined)) {
+                        if ([string]::IsNullOrWhiteSpace($apiMessage)) {
+                            $apiMessage = $errorsJoined
+                        } elseif ($apiMessage -notlike "*$errorsJoined*") {
+                            $apiMessage = "$apiMessage — $errorsJoined"
                         }
                     }
-                } elseif ($null -ne $json.PSObject.Properties['statusCode'] -and $null -ne $json.PSObject.Properties['message']) {
-                    # Shape B: APIM gateway { statusCode, message } — e.g. 404 on unsupported method/path
-                    if ($statusCode -le 0) { $statusCode = [int]$json.statusCode }
-                    $apiMessage = ($json.PSObject.Properties['message'].Value -as [string])
-                } elseif ($null -ne $json.PSObject.Properties['title'] -and ($null -ne $json.PSObject.Properties['status'] -or $null -ne $json.PSObject.Properties['type'])) {
-                    # Shape C: RFC 9110 ProblemDetails { type, title, status, traceId } — e.g. 415
-                    if ($statusCode -le 0 -and $null -ne $json.PSObject.Properties['status']) {
-                        $statusCode = [int]$json.status
-                    }
-                    $apiMessage = ($json.PSObject.Properties['title'].Value -as [string])
-                    $traceId    = ($json.PSObject.Properties['traceId'].Value -as [string])
                 }
+            } elseif ($null -ne $props['statusCode'] -and $null -ne $props['message']) {
+                # APIM gateway { statusCode, message }
+                $apiMessage = ($props['message'].Value -as [string])
+            }
 
-                $detail = switch ($true) {
-                    ($statusCode -eq 429 -or ($apiMessage -and $apiMessage -match 'quota|rate.?limit|throttl')) {
-                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
-                    }
-                    ($errorCode -match '^forbidden$') {
-                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { "You don't have permission to access this tenant or resource." }
-                    }
-                    ($errorCode -match 'notfound|not_found') {
-                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { 'Tenant or resource not found.' }
-                    }
-                    default {
-                        if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage }
-                        elseif ($json.PSObject.Properties['error']) { $json.error -as [string] }
-                        else { $detail }
-                    }
+            $detail = switch ($true) {
+                ($statusCode -eq 429 -or ($apiMessage -and $apiMessage -match 'quota|rate.?limit|throttl')) {
+                    if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { "API rate limit: $apiMessage" } else { 'API rate limit exceeded. Please wait and try again.' }
                 }
+                ($errorCode -match '^forbidden$') {
+                    if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { "You don't have permission to access this tenant or resource." }
+                }
+                ($errorCode -match 'notfound|not_found') {
+                    if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage } else { 'Tenant or resource not found.' }
+                }
+                default {
+                    if (-not [string]::IsNullOrWhiteSpace($apiMessage)) { $apiMessage }
+                    elseif ($props['error']) { $json.error -as [string] }
+                    else { $detail }
+                }
+            }
 
-                if (-not [string]::IsNullOrWhiteSpace($traceId)) {
-                    $detail = "$detail (traceId: $traceId)"
-                }
+            if (-not [string]::IsNullOrWhiteSpace($traceId)) {
+                $detail = "$detail (traceId: $traceId)"
             }
         }
 
-        $detail = Protect-InforcerApiKeyInText -Text $detail -ApiKey $apiKey
-        $msg = if ($statusCode -gt 0) { "Inforcer API request failed (HTTP $statusCode): $detail" } else { "Inforcer API request failed: $detail" }
+        $detail = Protect-InforcerApiKeyInText -Text $detail -Session $session
+        $msg = "Inforcer API request failed (HTTP $statusCode): $detail"
         if ($correlationId) {
             $msg = "$msg [correlation-id: $correlationId]"
         }
-        $errorId = if ($statusCode -gt 0) { "ApiRequestFailed_$statusCode" } else { 'ApiRequestFailed' }
-        Write-Error -Message $msg -ErrorId $errorId -Category ConnectionError
+        Write-Error -Message $msg -ErrorId "ApiRequestFailed_$statusCode" -Category ConnectionError
         return
     }
 
@@ -210,9 +208,7 @@ function Invoke-InforcerApiRequest {
         return
     }
 
-    # Invoke-RestMethod auto-parses JSON to PSObject. If the response is a string, the
-    # API may have returned a non-JSON Content-Type (e.g. text/plain) despite the body
-    # being valid JSON. Try to parse it before reporting as non-JSON.
+    # Invoke-RestMethod auto-parses JSON. A string means a non-JSON Content-Type that may still hold JSON.
     if ($rawResponse -is [string]) {
         try {
             $rawResponse = $rawResponse | ConvertFrom-Json -Depth 100 -ErrorAction Stop
@@ -232,7 +228,40 @@ function Invoke-InforcerApiRequest {
         return
     }
 
-    # API error payload (success: false) — single, clean message; no stack or raw JSON
+    if ($isV1) {
+        $collectionName = Get-InforcerV1CollectionName -Response $rawResponse
+        $failedProp = $rawResponse.PSObject.Properties['failedPolicyTypes']
+        if ($failedProp -and $failedProp.Value -is [System.Management.Automation.PSCustomObject]) {
+            $failed = @($failedProp.Value.PSObject.Properties | ForEach-Object {
+                if ([string]::IsNullOrWhiteSpace([string]$_.Value)) { $_.Name } else { "$($_.Name) ($($_.Value))" }
+            })
+            if ($failed.Count -gt 0) {
+                Write-Warning "inforcer could not retrieve $($failed.Count) policy type(s); their policies are missing from this result: $($failed -join '; ')"
+            }
+        }
+
+        # Plain assignments only: an if-expression would unroll a one-item or empty array.
+        if ($collectionName) {
+            $data = @(@($rawResponse.$collectionName).Where({ $null -ne $_ }))
+            if ($ObjectType) { $data = @(ConvertFrom-InforcerV1Response -InputObject $data -ObjectType $ObjectType) }
+        } else {
+            $data = $rawResponse
+            if ($ObjectType) { $data = ConvertFrom-InforcerV1Response -InputObject $data -ObjectType $ObjectType }
+        }
+
+        $result = $data
+        if ($collectionName -and ($PreserveFullResponse -or $PreserveStructure)) {
+            $full = [ordered]@{}
+            foreach ($p in $rawResponse.PSObject.Properties) { $full[$p.Name] = $p.Value }
+            $full[$collectionName] = $data
+            $result = [PSCustomObject]$full
+        }
+        if ($PreserveFullResponse) { return $result }
+        if ($OutputType -eq 'JsonObject') { return (ConvertTo-Json -InputObject $result -Depth 100) }
+        return $result
+    }
+
+    # beta: API error payload (success: false) — single, clean message; no stack or raw JSON
     $successValue = $rawResponse.PSObject.Properties['success'].Value
     if ($null -ne $rawResponse.PSObject.Properties['success'] -and $successValue -eq $false) {
         $apiMessage = ($rawResponse.PSObject.Properties['message'].Value -as [string])
@@ -282,4 +311,52 @@ function Invoke-InforcerApiRequest {
     }
 
     $data
+}
+
+function Invoke-InforcerHttpRequest {
+    # Invoke-RestMethod that returns HTTP errors instead of throwing them, so a caller's -ErrorVariable
+    # only ever holds the module's own error record. Network failures still throw.
+    param([Parameter(Mandatory = $true)][hashtable]$Request)
+
+    $statusCode = $null
+    $responseHeaders = $null
+    $body = Invoke-RestMethod @Request -SkipHttpErrorCheck -StatusCodeVariable statusCode -ResponseHeadersVariable responseHeaders -Verbose:$false -Debug:$false
+    [PSCustomObject]@{
+        StatusCode = if ($statusCode) { [int]$statusCode } else { 200 }
+        Body       = $body
+        Headers    = $responseHeaders
+    }
+}
+
+function Format-InforcerProblemError {
+    # problem+json errors{}: { "<field>": ["message", ...] } -> "field: message; field: message"
+    param($Errors)
+
+    if ($Errors -isnot [System.Management.Automation.PSCustomObject]) { return Format-InforcerErrorDetail -Errors $Errors }
+    $parts = foreach ($p in $Errors.PSObject.Properties) {
+        $messages = @($p.Value | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }) -join ', '
+        if ($messages) { "$($p.Name): $messages" } else { $p.Name }
+    }
+    if ($parts) { @($parts) -join '; ' }
+}
+
+function Get-InforcerRetryDelay {
+    # Retry-After is either delay-seconds or an HTTP date; falls back to exponential backoff. Capped at 300s.
+    param([string]$Value, [int]$Attempt = 1)
+
+    $seconds = 0
+    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+        $date = [datetimeoffset]::MinValue
+        if ([int]::TryParse($Value.Trim(), [ref]$seconds)) {
+            $seconds = [Math]::Max(0, $seconds)
+        } elseif ([datetimeoffset]::TryParse($Value.Trim(), [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal, [ref]$date)) {
+            $seconds = [int][Math]::Ceiling(($date - [datetimeoffset]::UtcNow).TotalSeconds)
+            $seconds = [Math]::Max(0, $seconds)
+        } else {
+            $seconds = [int][Math]::Pow(2, $Attempt)
+        }
+    } else {
+        $seconds = [int][Math]::Pow(2, $Attempt)
+    }
+    [Math]::Min(300, [Math]::Max(1, $seconds))
 }

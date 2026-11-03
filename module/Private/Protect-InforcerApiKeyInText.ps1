@@ -1,14 +1,19 @@
 function Protect-InforcerApiKeyInText {
     <#
     .SYNOPSIS
-        Replaces every occurrence of the live API key in a text string with [REDACTED] (Private helper).
+        Replaces every credential in a text string with [REDACTED] (Private helper).
     .DESCRIPTION
-        Used by error-message construction in API helpers to ensure that exception text, response
-        bodies, and verbose dumps never leak the active subscription key.
+        Used by error-message construction in API helpers so exception text, response bodies and
+        verbose dumps never leak a credential. Redacts:
+          * the -ApiKey value, when given
+          * the session's API key, client secret and access token
+          * any bearer token or JWT-shaped string
     .PARAMETER Text
-        The input text — may contain the API key anywhere.
+        The input text.
     .PARAMETER ApiKey
-        The plain-text API key to redact. If $null/empty, returns the input unchanged.
+        Optional extra plain-text secret to redact (kept for existing callers).
+    .PARAMETER Session
+        Session whose secrets are redacted. Defaults to the current session.
     #>
     [CmdletBinding()]
     [OutputType([string])]
@@ -16,14 +21,26 @@ function Protect-InforcerApiKeyInText {
         [Parameter(Mandatory = $false, Position = 0)]
         [string]$Text,
 
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$ApiKey
+        [Parameter(Mandatory = $false, Position = 1)]
+        [string]$ApiKey,
+
+        [Parameter(Mandatory = $false)]
+        [hashtable]$Session = $script:InforcerSession
     )
 
-    if ([string]::IsNullOrWhiteSpace($Text) -or [string]::IsNullOrWhiteSpace($ApiKey)) {
-        return $Text
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $Text }
+
+    $secrets = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($ApiKey)) { $secrets.Add($ApiKey) }
+    if ($Session) {
+        foreach ($name in 'ApiKey', 'ClientSecret', 'AccessToken') {
+            $value = $Session[$name]
+            if ($value -is [System.Security.SecureString] -and $value.Length -gt 0) {
+                $secrets.Add([System.Net.NetworkCredential]::new('', $value).Password)
+            }
+        }
     }
-    # No caching here, so a non-compiled regex is faster than building a fresh compiled one
-    # per call — compilation cost only amortizes when the regex object is reused.
-    [regex]::Replace($Text, [regex]::Escape($ApiKey), '[REDACTED]')
+    foreach ($s in $secrets) { $Text = $Text.Replace($s, '[REDACTED]') }
+    $Text = [regex]::Replace($Text, '(?i)\bbearer\s+[A-Za-z0-9\-._~+/]+=*', 'Bearer [REDACTED]')
+    [regex]::Replace($Text, '\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*', '[REDACTED]')
 }

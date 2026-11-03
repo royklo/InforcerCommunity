@@ -130,7 +130,7 @@ Describe 'Get-InforcerTenant' {
         $e1[0].FullyQualifiedErrorId | Should -BeLike 'TenantNotFound*'
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
         $null = Get-InforcerTenant -TenantId 482 -ErrorVariable e2 -ErrorAction SilentlyContinue
-        $e2[0].FullyQualifiedErrorId | Should -BeLike 'InvalidTenantId*'
+        @($e2 | Where-Object { $_.FullyQualifiedErrorId -like 'InvalidTenantId*' }).Count | Should -Be 1
         $e2[0].Exception.Message | Should -Match 'API key'
     }
 
@@ -325,7 +325,7 @@ Describe 'Get-InforcerAlignmentDetails' {
     It 'v1: a numeric -TenantId with -BaselineId is InvalidTenantId and calls no detail endpoint' {
         Set-V1TenantsSession
         $null = Get-InforcerAlignmentDetails -TenantId 139 -BaselineId $script:B1 -ErrorVariable e -ErrorAction SilentlyContinue 6>$null
-        $e[0].FullyQualifiedErrorId | Should -BeLike 'InvalidTenantId*'
+        @($e | Where-Object { $_.FullyQualifiedErrorId -like 'InvalidTenantId*' }).Count | Should -Be 1
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly -ParameterFilter { $Request.Uri -match 'alignmentDetails' }
     }
 }

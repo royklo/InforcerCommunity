@@ -1609,6 +1609,7 @@ Describe 'Private helpers (via module scope)' {
             $r.StatusCode | Should -Be 200
             $r.Outputs.Count | Should -Be 1
             $r.Outputs[0].id | Should -Be 'out-1'
+            $r.Outputs[0].runId | Should -Be '11111111-2222-3333-4444-555555555555'
             $r.CorrelationId | Should -Be 'cor-1'
         }
 

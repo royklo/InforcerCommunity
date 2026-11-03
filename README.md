@@ -133,7 +133,7 @@ inforcer's API keys use the **legacy beta API**, which inforcer says is due to b
 | What | API key (beta) | Client credentials (v1) |
 |------|----------------|--------------------------|
 | Login | `Connect-Inforcer -ApiKey $key -Region uk` | `Connect-Inforcer -ClientId $id -ClientSecret $secret -Region uk` |
-| Tenant ID | numeric Client Tenant ID, Microsoft tenant ID (GUID) or name | Microsoft tenant ID (GUID) or tenant name. A numeric ID fails with `TenantIdNumericNotSupportedOnV1`. |
+| Tenant ID | numeric Client Tenant ID, Microsoft tenant ID (GUID) or name | Microsoft tenant ID (GUID) or tenant name. A numeric ID fails with an `InvalidTenantId` error that says to use the GUID or name. |
 | `ClientTenantId` property | present | **absent** (use `MsTenantId`) |
 | `Get-InforcerTenant` | rich objects | name, DNS name and Microsoft tenant ID; add `-Detailed` (or `-TenantId`) for the rich fields. `-Detailed` is ignored with an API key, so scripts work with both logins. |
 | Permissions | key scopes (`Tenants.Read`, ...) | API client permissions plus optional tenant filters, set in the portal |

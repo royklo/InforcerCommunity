@@ -103,6 +103,9 @@ function Test-InforcerReportRunTerminal {
         if ($isV1 -and $outputs.Count -gt 0) {
             $outputs = @(ConvertFrom-InforcerV1Response -InputObject $outputs -ObjectType ReportOutput)
         }
+        foreach ($o in $outputs) {
+            if ($o -is [PSObject] -and -not $o.PSObject.Properties['runId']) { $o | Add-Member -NotePropertyName 'runId' -NotePropertyValue $RunId.ToString() }
+        }
         return [PSCustomObject]@{
             RunId         = $RunId.ToString()
             IsTerminal    = $true

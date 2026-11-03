@@ -5,7 +5,7 @@
     Required API scope(s): Audit.Read (unconfirmed — see docs/API-REFERENCE.md)
 .DESCRIPTION
     POST /auditEvents/search on both login types (API key: /beta, client credentials: /v1). With client credentials the response has no ClientId, Message, RelId or RelType fields. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
-    When -EventType is not specified: with an API key, sends all event types from the API (the built-in list if that lookup fails); with client credentials (v1), sends no event-type filter and the API searches all types.
+    When -EventType is not specified, no event-type filter is sent and the API searches all types (one search, both login types).
     Use -Id to retrieve a specific event by its event ID. Use -CorrelationId to retrieve all events
     sharing a correlation ID. Both perform a broad search and filter client-side.
 .PARAMETER Id
@@ -121,29 +121,10 @@ if (-not (Test-InforcerSession)) {
     return
 }
 
-# Resolve event types
+# No -EventType: eventTypes is omitted and the API searches every type (both logins; checked live on
+# beta, where it returns the same events as listing all types).
 $isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
-$eventTypes = @()
-if ($null -eq $EventType -or $EventType.Count -eq 0) {
-  if ($isV1) {
-    Write-Verbose 'v1: no -EventType given; omitting eventTypes so the API searches all types.'
-  } else {
-    Write-Verbose 'Fetching all audit event types from API...'
-    try {
-        $eventTypes = @(Get-InforcerSupportedEventType -ErrorAction SilentlyContinue)
-    } catch {
-        $eventTypes = @()
-    }
-    if ($eventTypes.Count -eq 0) {
-        Write-Verbose 'Event types API failed or returned none; using authentication, failedAuthentication.'
-        $eventTypes = @('authentication', 'failedAuthentication')
-    } else {
-        Write-Verbose "Using all $($eventTypes.Count) event type(s)."
-    }
-  }
-} else {
-    $eventTypes = @($EventType)
-}
+$eventTypes = @($EventType | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
 # Date range
 $dateFromVal = $DateFrom
@@ -158,38 +139,21 @@ $dateFromStr = $dateFromVal.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 $dateToStr = $dateToVal.ToUniversalTime().ToString($(if ($isV1) { 'yyyy-MM-ddTHH:mm:ssZ' } else { 'yyyy-MM-ddTHH:mm:ss.fffZ' }))
 
 $allItems = [System.Collections.Generic.List[object]]::new()
-$hasLimit = $MaxResults -gt 0
-$batchSize = 10
 
-$typeBatches = [System.Collections.Generic.List[object]]::new()
-if ($eventTypes.Count -eq 0) {
-    $typeBatches.Add($null)
-} else {
-    for ($i = 0; $i -lt $eventTypes.Count; $i += $batchSize) {
-        $end = [Math]::Min($i + $batchSize, $eventTypes.Count)
-        $typeBatches.Add(@($eventTypes[$i..($end - 1)]))
-    }
+$bodyObj = @{
+    dateFrom = $dateFromStr
+    dateTo   = $dateToStr
+    pageSize = $PageSize
 }
+if ($eventTypes.Count -gt 0) { $bodyObj['eventTypes'] = $eventTypes }
+if ($User) { $bodyObj['user'] = $User }
 
-foreach ($batch in $typeBatches) {
-    $remaining = if ($hasLimit) { $MaxResults - $allItems.Count } else { 0 }
-    if ($hasLimit -and $remaining -le 0) { break }
-
-    $bodyObj = @{
-        dateFrom = $dateFromStr
-        dateTo   = $dateToStr
-        pageSize = $PageSize
-    }
-    if ($batch) { $bodyObj['eventTypes'] = @($batch) }
-    if ($User) { $bodyObj['user'] = $User }
-
-    Write-Verbose 'Searching audit events...'
-    foreach ($item in @(Invoke-InforcerPagedRequest -Endpoint '/auditEvents/search' -Method POST -Body $bodyObj -ObjectType AuditEvent -MaxResults $remaining)) {
-        if ($item -is [PSObject]) {
-            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent
-            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AuditEvent')
-            $allItems.Add($item)
-        }
+Write-Verbose 'Searching audit events...'
+foreach ($item in @(Invoke-InforcerPagedRequest -Endpoint '/auditEvents/search' -Method POST -Body $bodyObj -ObjectType AuditEvent -MaxResults $MaxResults)) {
+    if ($item -is [PSObject]) {
+        $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent
+        $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AuditEvent')
+        $allItems.Add($item)
     }
 }
 

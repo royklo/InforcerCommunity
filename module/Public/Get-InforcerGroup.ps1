@@ -12,6 +12,7 @@ function Get-InforcerGroup {
 
         Works with both login types. With client credentials the members of a single group come from a separate
         paged members call and are attached as the Members property, so the output matches an API-key login.
+        That call reads every member page (100 members per page), so a very large group takes one call per 100 members.
 
         Use -Search for server-side prefix filtering (fast, sent to API).
         Use -Filter for client-side wildcard filtering (supports contains, e.g. *comp*).
@@ -42,6 +43,7 @@ function Get-InforcerGroup {
 
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'.
+        Piped tenants: each group carries TenantId and JsonObject returns one array for all tenants.
 
     .EXAMPLE
         Get-InforcerGroup -TenantId 139
@@ -119,6 +121,8 @@ function Get-InforcerGroup {
         [string]$OutputType = 'PowerShellObject'
     )
 
+    begin { $pipedJson = [System.Collections.Generic.List[object]]::new() }
+
     process {
         if (-not (Test-InforcerSession)) {
             Write-Error -Message "Not connected to Inforcer. Use Connect-Inforcer first." -ErrorId 'NotConnected' -Category ConnectionError
@@ -130,6 +134,14 @@ function Get-InforcerGroup {
         } catch {
             Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
             return
+        }
+
+        $piped = $PSCmdlet.MyInvocation.ExpectingInput
+        $addTenantId = {
+            param($item)
+            if ($piped -and $item -is [PSObject] -and -not $item.PSObject.Properties['TenantId']) {
+                $item.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TenantId', $resolvedTenantId))
+            }
         }
 
         if ($PSCmdlet.ParameterSetName -eq 'ById') {
@@ -166,7 +178,9 @@ function Get-InforcerGroup {
                 Add-Member -InputObject $response -NotePropertyName 'members' -NotePropertyValue $members -Force
             }
 
+            & $addTenantId $response
             if ($OutputType -eq 'JsonObject') {
+                if ($piped) { $pipedJson.Add($response); return }
                 return $response | ConvertTo-Json -Depth 100
             }
 
@@ -191,14 +205,22 @@ function Get-InforcerGroup {
 
         if ($OutputType -eq 'JsonObject') {
             $groups = @(& $listGroups)
+            if ($piped) { foreach ($g in $groups) { & $addTenantId $g; $pipedJson.Add($g) }; return }
             if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject $groups -Depth 100 }
             return $groups | ConvertTo-Json -Depth 100
         }
 
         & $listGroups | ForEach-Object {
+            & $addTenantId $_
             $null = Add-InforcerPropertyAliases -InputObject $_ -ObjectType GroupSummary
             $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.GroupSummary')
             $_
+        }
+    }
+
+    end {
+        if ($PSCmdlet.MyInvocation.ExpectingInput -and $OutputType -eq 'JsonObject' -and (Test-InforcerSession)) {
+            ConvertTo-Json -InputObject @($pipedJson) -Depth 100
         }
     }
 }

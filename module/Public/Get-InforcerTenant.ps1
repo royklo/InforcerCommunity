@@ -13,6 +13,8 @@
     Client-credentials login: the list holds only TenantFriendlyName, TenantDnsName and MsTenantId.
     -Detailed, or -TenantId, loads each tenant's full record (licenses, SecureScore, IsBaseline, tags,
     alignmentSummaries, LastBackupTimestamp, AuthenticationMode) with one extra call per tenant.
+    -TenantId <GUID> makes that one call only; a name is first resolved from the session's tenant list.
+
     ClientTenantId does not exist with client credentials; use MsTenantId or the tenant name.
 .PARAMETER Format
     Output format. Raw = raw API response (default).
@@ -78,35 +80,49 @@ process {
     $isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
 
     # Get-InforcerTenantList objects are a shared cache: filter and copy them, never modify them.
-    $tenantData = @(Get-InforcerTenantList -Refresh:(-not $listRefreshed))
-    $listRefreshed = $true
-    if ($tenantData.Count -eq 0) { return }
-
     if ($null -ne $TenantId) {
         try {
-            $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId -TenantData $tenantData -ErrorAction Stop
+            $singleTenantId = Resolve-InforcerTenantId -TenantId $TenantId -ErrorAction Stop
         } catch {
             Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
             return
         }
-        $tenantData = @(foreach ($t in $tenantData) {
-            if ($isV1) {
-                if ("$($t.PSObject.Properties['msTenantId'].Value)" -eq $singleTenantId) { $t }
-            } else {
-                $id = $t.PSObject.Properties['clientTenantId'].Value
-                if ($null -ne $id -and [int]$id -eq $singleTenantId) { $t }
-            }
-        })
-        if ($tenantData.Count -eq 0) {
-            Write-Error -Message "Tenant or resource not found." -ErrorId 'TenantNotFound' -Category ObjectNotFound
-            return
-        }
         if ($isV1) {
-            $detail = Invoke-InforcerApiRequest -Endpoint "/tenants/$singleTenantId" -Method GET -ObjectType Tenant
-            if ($null -eq $detail) { return }
+            # The v1 record is fetched by id; the list is only needed to resolve a name.
+            $detailErr = $null
+            $detail = Invoke-InforcerApiRequest -Endpoint "/tenants/$singleTenantId" -Method GET -ObjectType Tenant -ErrorAction SilentlyContinue -ErrorVariable detailErr
+            if ($null -eq $detail) {
+                if (-not $detailErr -or $detailErr[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
+                    Write-Error -Message "Tenant or resource not found." -ErrorId 'TenantNotFound' -Category ObjectNotFound
+                } else {
+                    Write-Error -ErrorRecord $detailErr[-1]
+                }
+                return
+            }
             $tenantData = @($detail)
+        } else {
+            $pick = {
+                param($list)
+                foreach ($t in $list) {
+                    $id = $t.PSObject.Properties['clientTenantId'].Value
+                    if ($null -ne $id -and [int]$id -eq $singleTenantId) { $t }
+                }
+            }
+            # Fresh once per call (piped tenants reuse it), so the returned record is never stale.
+            $tenantData = @(& $pick @(Get-InforcerTenantList -Refresh:(-not $listRefreshed)))
+            $listRefreshed = $true
+            if ($tenantData.Count -eq 0) {
+                Write-Error -Message "Tenant or resource not found." -ErrorId 'TenantNotFound' -Category ObjectNotFound
+                return
+            }
         }
-    } elseif ($isV1 -and $Detailed) {
+    } else {
+        $tenantData = @(Get-InforcerTenantList -Refresh:(-not $listRefreshed))
+        $listRefreshed = $true
+        if ($tenantData.Count -eq 0) { return }
+    }
+
+    if ($null -eq $TenantId -and $isV1 -and $Detailed) {
         $seenIds = @{}
         $unique = @(foreach ($t in $tenantData) {
             $id = $t.PSObject.Properties['msTenantId'].Value
@@ -133,6 +149,7 @@ process {
     }
 
     if ($OutputType -eq 'JsonObject') {
+        if ($isV1) { return ConvertTo-Json -InputObject $tenantData -Depth 100 }
         return ($tenantData | ConvertTo-Json -Depth 100)
     }
 

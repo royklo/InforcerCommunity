@@ -124,11 +124,12 @@ Describe 'Get-InforcerTenant' {
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/00000000-0000-0000-0000-000000000002$' }
     }
 
-    It 'v1: an unknown GUID is TenantNotFound without a detail call; a numeric id is InvalidTenantId' {
+    It 'v1: an unknown GUID is TenantNotFound after one detail call and no list call; a numeric id is InvalidTenantId' {
         Set-V1TenantsSession
         $null = Get-InforcerTenant -TenantId '00000000-0000-0000-0000-000000000009' -ErrorVariable e1 -ErrorAction SilentlyContinue
-        $e1[0].FullyQualifiedErrorId | Should -BeLike 'TenantNotFound*'
-        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
+        @($e1)[-1].FullyQualifiedErrorId | Should -BeLike 'TenantNotFound*'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants$' }
         $null = Get-InforcerTenant -TenantId 482 -ErrorVariable e2 -ErrorAction SilentlyContinue
         @($e2 | Where-Object { $_.FullyQualifiedErrorId -like 'InvalidTenantId*' }).Count | Should -Be 1
         $e2[0].Exception.Message | Should -Match 'API key'

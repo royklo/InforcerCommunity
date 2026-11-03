@@ -33,7 +33,9 @@ function Select-InforcerBaselinePolicies {
     if ([guid]::TryParse($BaselineId.Trim(), [ref]$guidTest)) {
         $baselineGuid = $BaselineId.Trim()
     } else {
-        $allBaselines = @(Invoke-InforcerApiRequest -Endpoint '/baselines' -Method GET -OutputType PowerShellObject -ObjectType Baseline)
+        # DocData already holds this session's baselines; the cached list covers callers without them.
+        $allBaselines = @($DocData.Baselines | Where-Object { $null -ne $_ })
+        if ($allBaselines.Count -eq 0) { $allBaselines = @(Get-InforcerBaselineList) }
         $baselineGuid = Resolve-InforcerBaselineId -BaselineId $BaselineId -BaselineData $allBaselines
         foreach ($bl in $allBaselines) {
             if ($bl.id -eq $baselineGuid) { $baselineFilterName = $bl.name; break }

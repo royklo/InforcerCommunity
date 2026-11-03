@@ -54,6 +54,7 @@ function EnrichPolicyObject {
     Tenant to get policies for (required). Numeric ID (API-key login only), Microsoft tenant GUID, or tenant name.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON output is an array and uses Depth 100.
+    Piped tenants: each policy carries TenantId and JsonObject returns one array for all tenants.
 .EXAMPLE
     Get-InforcerTenantPolicies -TenantId 482
 .EXAMPLE
@@ -84,6 +85,8 @@ param(
     [string]$OutputType = 'PowerShellObject'
 )
 
+begin { $pipedJson = [System.Collections.Generic.List[object]]::new() }
+
 process {
 
 if (-not (Test-InforcerSession)) {
@@ -101,6 +104,13 @@ try {
 Write-Verbose "Retrieving policies for tenant ID: $clientTenantId"
 
 $endpoint = "/tenants/$clientTenantId/policies"
+$piped = $PSCmdlet.MyInvocation.ExpectingInput
+$addTenantId = {
+    param($item)
+    if ($piped -and $item -is [PSObject] -and -not $item.PSObject.Properties['TenantId']) {
+        $item.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TenantId', $clientTenantId))
+    }
+}
 
 if ($script:InforcerSession.ApiVersion -eq 'v1') {
     $apiErr = $null
@@ -110,13 +120,23 @@ if ($script:InforcerSession.ApiVersion -eq 'v1') {
     if (-not @($policies | Where-Object { $_.product -eq 'Intune' })) {
         Write-Warning "The v1 API currently returns no Intune policies for this tenant (a known gap in inforcer's v1 API). Connecting with an API key still returns them."
     }
+    foreach ($item in $policies) { & $addTenantId $item }
     if ($OutputType -eq 'JsonObject') {
+        if ($piped) { $pipedJson.AddRange([object[]]$policies); return }
         return ConvertTo-Json -InputObject $policies -Depth 100
     }
     foreach ($item in $policies) {
         if ($item -is [PSObject]) { EnrichPolicyObject $item }
     }
     return $policies
+}
+
+if ($piped -and $OutputType -eq 'JsonObject') {
+    $apiErr = $null
+    $policies = @(Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ErrorVariable apiErr)
+    if ($apiErr) { return }
+    foreach ($item in $policies) { & $addTenantId $item; $pipedJson.Add($item) }
+    return
 }
 
 $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType $OutputType
@@ -129,12 +149,19 @@ if ($OutputType -eq 'JsonObject') {
 $result = $response
 if ($result -is [array]) {
     foreach ($item in $result) {
-        if ($item -is [PSObject]) { EnrichPolicyObject $item }
+        if ($item -is [PSObject]) { & $addTenantId $item; EnrichPolicyObject $item }
     }
 } elseif ($result -is [PSObject]) {
+    & $addTenantId $result
     EnrichPolicyObject $result
 }
 
 $result
+}
+
+end {
+    if ($PSCmdlet.MyInvocation.ExpectingInput -and $OutputType -eq 'JsonObject' -and (Test-InforcerSession)) {
+        ConvertTo-Json -InputObject @($pipedJson) -Depth 100
+    }
 }
 }

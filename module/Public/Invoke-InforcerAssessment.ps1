@@ -21,6 +21,7 @@
     Microsoft tenant GUID, or friendly name. Aliases: -ClientTenantId, -MsTenantId.
     Pass multiple values for subset multi-tenant mode.
     Optional when -MultiTenant is used (defaults to all tenants).
+    Piped tenants are collected into one run; every check then carries TenantId.
 .PARAMETER AssessmentId
     The assessment to run. Accepts an assessment ID string or a friendly assessment name.
 .PARAMETER MultiTenant
@@ -30,6 +31,8 @@
     Optional. File path to export results. Auto-detects format from file extension.
     Single tenant: HTML (.html) report or CSV (.csv).
     Multi-tenant: HTML (.html) matrix report or CSV (.csv) with tenant column.
+    CSV values that start with =, +, -, @, a tab or a carriage return get a leading ' so Excel
+    shows them as text instead of running them as formulas.
     Returns System.IO.FileInfo when specified.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON uses Depth 100.
@@ -128,22 +131,32 @@ foreach ($a in $assessmentData) {
     }
 }
 
-# Helper: resolve tenant friendly name from tenant data
+# Helper: resolve tenant friendly name from tenant data (id -> name, first match wins)
+$tenantNames = @{}
+foreach ($t in $tenantData) {
+    if ($t -isnot [PSObject]) { continue }
+    $cidProp = $t.PSObject.Properties[$tenantIdProperty]
+    if (-not $cidProp -or $null -eq $cidProp.Value -or $tenantNames.ContainsKey("$($cidProp.Value)")) { continue }
+    $fn = $t.PSObject.Properties['tenantFriendlyName']
+    $dn = $t.PSObject.Properties['tenantDnsName']
+    $tenantNames["$($cidProp.Value)"] = if ($fn -and -not [string]::IsNullOrWhiteSpace($fn.Value) -and $fn.Value -ne 'Tenant') { $fn.Value }
+        elseif ($dn -and -not [string]::IsNullOrWhiteSpace($dn.Value)) { $dn.Value }
+        else { "$($cidProp.Value)" }
+}
 $resolveTenantName = {
-    param($cid, [array]$data)
-    foreach ($t in $data) {
-        if ($t -is [PSObject]) {
-            $cidProp = $t.PSObject.Properties[$tenantIdProperty]
-            if ($cidProp -and $null -ne $cidProp.Value -and "$($cidProp.Value)" -ieq "$cid") {
-                $fn = $t.PSObject.Properties['tenantFriendlyName']
-                $dn = $t.PSObject.Properties['tenantDnsName']
-                if ($fn -and -not [string]::IsNullOrWhiteSpace($fn.Value) -and $fn.Value -ne 'Tenant') { return $fn.Value }
-                if ($dn -and -not [string]::IsNullOrWhiteSpace($dn.Value)) { return $dn.Value }
-                return "$cid"
-            }
-        }
-    }
+    param($cid)
+    if ($tenantNames.ContainsKey("$cid")) { return $tenantNames["$cid"] }
     return "$cid"
+}
+
+# CSV cells that start with = + - @ tab or CR are formulas in Excel: prefix them with a quote.
+$csvSafe = {
+    param($row)
+    foreach ($prop in $row.PSObject.Properties) {
+        $v = $prop.Value
+        if ($v -is [string] -and $v.Length -gt 0 -and "=+-@`t`r".IndexOf($v[0]) -ge 0) { $prop.Value = "'" + $v }
+    }
+    $row
 }
 
 # Helper: process raw API results into enriched check objects
@@ -233,7 +246,7 @@ if ($isMultiTenant) {
         foreach ($tid in @($TenantId)) {
             try {
                 $cid = Resolve-InforcerTenantId -TenantId $tid -TenantData $tenantData
-                $tname = & $resolveTenantName $cid $tenantData
+                $tname = & $resolveTenantName $cid
                 [void]$tenantsToRun.Add(@{ Id = $cid; Name = $tname })
             } catch {
                 Write-Warning "Skipping tenant '$tid': $($_.Exception.Message)"
@@ -246,7 +259,7 @@ if ($isMultiTenant) {
                 $cidProp = $t.PSObject.Properties[$tenantIdProperty]
                 if ($cidProp -and $null -ne $cidProp.Value) {
                     $cid = if ($isV1) { "$($cidProp.Value)" } else { [int]$cidProp.Value }
-                    $tname = & $resolveTenantName $cid $tenantData
+                    $tname = & $resolveTenantName $cid
                     [void]$tenantsToRun.Add(@{ Id = $cid; Name = $tname })
                 }
             }
@@ -367,7 +380,7 @@ if ($isMultiTenant) {
             $csvRows = [System.Collections.Generic.List[object]]::new()
             foreach ($tr in $allTenantResults) {
                 foreach ($c in $tr.Checks) {
-                    [void]$csvRows.Add([PSCustomObject]@{
+                    [void]$csvRows.Add((& $csvSafe ([PSCustomObject]@{
                         Tenant           = $tr.TenantName
                         TenantId         = $tr.TenantId
                         Status           = $c.Status
@@ -380,7 +393,7 @@ if ($isMultiTenant) {
                         Violations       = ($c.Violations -join '; ')
                         Warnings         = ($c.Warnings -join '; ')
                         Passes           = ($c.Passes -join '; ')
-                    })
+                    })))
                 }
             }
             $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding utf8NoBOM
@@ -413,7 +426,7 @@ try {
     Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
     return
 }
-$tenantDisplayName = & $resolveTenantName $clientTenantId $tenantData
+$tenantDisplayName = & $resolveTenantName $clientTenantId
 
 $response = Invoke-InforcerAssessmentRun `
     -TenantId $clientTenantId `
@@ -423,7 +436,13 @@ $response = Invoke-InforcerAssessmentRun `
 
 if ($null -eq $response) { return }
 
+# A piped tenant: results carry its id, as in multi-tenant mode.
+$pipedTenantId = if ($PSCmdlet.MyInvocation.ExpectingInput) { $clientTenantId } else { $null }
+
 if ($OutputType -eq 'JsonObject') {
+    if ($null -ne $pipedTenantId -and $response -is [PSObject] -and -not $response.PSObject.Properties['TenantId']) {
+        $response.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TenantId', $pipedTenantId))
+    }
     $response | ConvertTo-Json -Depth 100
     return
 }
@@ -459,7 +478,7 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     }
     elseif ($ext -eq '.csv') {
         $csvRows = foreach ($c in $processedChecks) {
-            [PSCustomObject]@{
+            & $csvSafe ([PSCustomObject]@{
                 Status           = $c.Status
                 Name             = $c.name
                 Category         = $c.category
@@ -470,7 +489,7 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
                 Violations       = ($c.Violations -join '; ')
                 Warnings         = ($c.Warnings -join '; ')
                 Passes           = ($c.Passes -join '; ')
-            }
+            })
         }
         $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding utf8NoBOM
         Write-Host "CSV report saved to: $resolvedPath"
@@ -483,6 +502,9 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     return
 }
 
-foreach ($c in $processedChecks) { $c }
+foreach ($c in $processedChecks) {
+    if ($null -ne $pipedTenantId -and -not $c.PSObject.Properties['TenantId']) { $c | Add-Member -NotePropertyName 'TenantId' -NotePropertyValue $pipedTenantId }
+    $c
+}
 }
 }

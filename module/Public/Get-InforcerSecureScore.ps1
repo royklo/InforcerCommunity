@@ -16,6 +16,7 @@ function Get-InforcerSecureScore {
 
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'.
+        Piped tenants: each result carries TenantId and JsonObject returns one array for all tenants.
 
     .EXAMPLE
         Get-InforcerSecureScore -TenantId 139
@@ -78,6 +79,8 @@ function Get-InforcerSecureScore {
         [string]$OutputType = 'PowerShellObject'
     )
 
+    begin { $pipedJson = [System.Collections.Generic.List[object]]::new() }
+
     process {
         if (-not (Test-InforcerSession)) {
             Write-Error -Message "Not connected to Inforcer. Use Connect-Inforcer first." -ErrorId 'NotConnected' -Category ConnectionError
@@ -102,7 +105,13 @@ function Get-InforcerSecureScore {
         $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ObjectType SecureScore
         if ($null -eq $response) { return }
 
+        $piped = $PSCmdlet.MyInvocation.ExpectingInput
+        if ($piped -and $response -is [PSObject] -and -not $response.PSObject.Properties['TenantId']) {
+            $response.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TenantId', $resolvedTenantId))
+        }
+
         if ($OutputType -eq 'JsonObject') {
+            if ($piped) { $pipedJson.Add($response); return }
             return ($response | ConvertTo-Json -Depth 100)
         }
 
@@ -114,5 +123,11 @@ function Get-InforcerSecureScore {
             }
         }
         $response
+    }
+
+    end {
+        if ($PSCmdlet.MyInvocation.ExpectingInput -and $OutputType -eq 'JsonObject' -and (Test-InforcerSession)) {
+            ConvertTo-Json -InputObject @($pipedJson) -Depth 100
+        }
     }
 }

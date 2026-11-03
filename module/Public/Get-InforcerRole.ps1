@@ -15,6 +15,8 @@ function Get-InforcerRole {
 
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'.
+        JSON is always an array with client credentials. Piped tenants: each role carries TenantId and
+        JsonObject returns one array for all tenants.
 
     .EXAMPLE
         Get-InforcerRole -TenantId 139
@@ -57,6 +59,8 @@ function Get-InforcerRole {
         [string]$OutputType = 'PowerShellObject'
     )
 
+    begin { $pipedJson = [System.Collections.Generic.List[object]]::new() }
+
     process {
         if (-not (Test-InforcerSession)) {
             Write-Error -Message "Not connected to Inforcer. Use Connect-Inforcer first." -ErrorId 'NotConnected' -Category ConnectionError
@@ -73,12 +77,23 @@ function Get-InforcerRole {
         $endpoint = "/tenants/$resolvedTenantId/roles"
         Write-Verbose "Retrieving role definitions for tenant $resolvedTenantId..."
 
-        $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -ObjectType Role
-        if ($null -eq $response) { return }
-        $roleData = @($response)
-        if ($roleData.Count -eq 0) { return }
+        $isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
+        $piped = $PSCmdlet.MyInvocation.ExpectingInput
+        $apiErr = $null
+        $roleData = @(Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -ObjectType Role -ErrorVariable apiErr)
+        if ($apiErr) { return }
+        if ($piped) {
+            foreach ($item in $roleData) {
+                if ($item -is [PSObject] -and -not $item.PSObject.Properties['TenantId']) {
+                    $item.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TenantId', $resolvedTenantId))
+                }
+            }
+        }
 
         if ($OutputType -eq 'JsonObject') {
+            if ($piped) { $pipedJson.AddRange([object[]]$roleData); return }
+            if ($isV1) { return ConvertTo-Json -InputObject $roleData -Depth 100 }
+            if ($roleData.Count -eq 0) { return }
             return ($roleData | ConvertTo-Json -Depth 100)
         }
 
@@ -88,6 +103,12 @@ function Get-InforcerRole {
                 $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Role')
                 $item
             }
+        }
+    }
+
+    end {
+        if ($PSCmdlet.MyInvocation.ExpectingInput -and $OutputType -eq 'JsonObject' -and (Test-InforcerSession)) {
+            ConvertTo-Json -InputObject @($pipedJson) -Depth 100
         }
     }
 }

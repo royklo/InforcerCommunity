@@ -27,6 +27,7 @@ function Get-InforcerUser {
 
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'. Depth 100; the v1 list is always a JSON array.
+        Piped tenants: each user carries TenantId and JsonObject returns one array for all tenants.
 
     .EXAMPLE
         Get-InforcerUser -TenantId 139
@@ -53,6 +54,9 @@ function Get-InforcerUser {
 
         Returns the users as a JSON string (depth 100) instead of objects.
 
+    .OUTPUTS
+        PSObject or String (when -OutputType JsonObject)
+
     .LINK
         https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforceruser
 
@@ -60,6 +64,7 @@ function Get-InforcerUser {
         Connect-Inforcer
     #>
     [CmdletBinding(DefaultParameterSetName = 'List')]
+    [OutputType([PSObject], [string])]
     param(
         [Parameter(ParameterSetName = 'List')]
         [Parameter(ParameterSetName = 'ById')]
@@ -86,6 +91,8 @@ function Get-InforcerUser {
         [string]$OutputType = 'PowerShellObject'
     )
 
+    begin { $pipedJson = [System.Collections.Generic.List[object]]::new() }
+
     process {
         if (-not (Test-InforcerSession)) {
             Write-Error -Message "Not connected to Inforcer. Use Connect-Inforcer first." -ErrorId 'NotConnected' -Category ConnectionError
@@ -97,6 +104,14 @@ function Get-InforcerUser {
         } catch {
             Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
             return
+        }
+
+        $piped = $PSCmdlet.MyInvocation.ExpectingInput
+        $addTenantId = {
+            param($item)
+            if ($piped -and $item -is [PSObject] -and -not $item.PSObject.Properties['TenantId']) {
+                $item.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TenantId', $resolvedTenantId))
+            }
         }
 
         if ($PSCmdlet.ParameterSetName -eq 'ById') {
@@ -118,7 +133,9 @@ function Get-InforcerUser {
                 return
             }
 
+            & $addTenantId $response
             if ($OutputType -eq 'JsonObject') {
+                if ($piped) { $pipedJson.Add($response); return }
                 return $response | ConvertTo-Json -Depth 100
             }
 
@@ -133,14 +150,22 @@ function Get-InforcerUser {
 
         if ($OutputType -eq 'JsonObject') {
             $users = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType User -MaxResults $MaxResults)
+            if ($piped) { foreach ($u in $users) { & $addTenantId $u; $pipedJson.Add($u) }; return }
             if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject $users -Depth 100 }
             return $users | ConvertTo-Json -Depth 100
         }
 
         Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType User -MaxResults $MaxResults | ForEach-Object {
+            & $addTenantId $_
             $null = Add-InforcerPropertyAliases -InputObject $_ -ObjectType UserSummary
             $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.UserSummary')
             $_
+        }
+    }
+
+    end {
+        if ($PSCmdlet.MyInvocation.ExpectingInput -and $OutputType -eq 'JsonObject' -and (Test-InforcerSession)) {
+            ConvertTo-Json -InputObject @($pipedJson) -Depth 100
         }
     }
 }

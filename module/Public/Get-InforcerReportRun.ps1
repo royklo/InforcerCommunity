@@ -2,9 +2,12 @@
 .SYNOPSIS
     Lists report runs from the Inforcer Reports API, with optional polling and outputs embedding.
 
-    Required API scope(s): Reports.Read
+    Required API scope(s): Reports.Read (API key); Reports permission (API client).
 .DESCRIPTION
-    GET /beta/reports/runs returns the most recent runs (server-side cap: 500 items, 7-day window;
+    Works with both login types (API key: legacy API; client ID and secret: v1 API). The run
+    objects have the same properties either way (v1 reportRunId is exposed as runId).
+
+    GET /reports/runs returns the most recent runs (server-side cap: 500 items, 7-day window;
     query parameters are silently ignored at the time of writing — filter client-side).
 
     Two known characteristics worth calling out before relying on this endpoint:
@@ -22,7 +25,8 @@
     Filter to a single run by GUID. Combined with -Wait, polls that run until terminal.
 .PARAMETER Wait
     Poll runs via GET /runs/{id}/outputs until terminal (200) or -TimeoutSeconds elapses.
-    Requires -RunId.
+    Requires -RunId. A 404 means "not ready yet" and, on v1, also "outside the API client's
+    tenant scope", so an unreadable run polls until the timeout.
 .PARAMETER IncludeOutputs
     For each returned run, fetch GET /runs/{id}/outputs and embed the array on .outputs. Adds
     one API call per run; use sparingly on large result sets.
@@ -143,8 +147,8 @@ if ($Wait.IsPresent) {
 
 # --- Fetch list once, reuse for every piped RunId ---
 if (-not $listResponseFetched) {
-    Write-Verbose 'GET /beta/reports/runs'
-    $cachedListResponse = Invoke-InforcerApiRequest -Endpoint '/beta/reports/runs' -Method GET -OutputType PowerShellObject
+    Write-Verbose 'GET /reports/runs'
+    $cachedListResponse = Invoke-InforcerApiRequest -Endpoint '/reports/runs' -Method GET -OutputType PowerShellObject -ObjectType ReportRun
     $listResponseFetched = $true
 }
 $response = $cachedListResponse

@@ -2,9 +2,10 @@
 .SYNOPSIS
     Downloads a report output to disk.
 
-    Required API scope(s): Reports.Read
+    Required API scope(s): Reports.Read (API key); Reports permission (API client).
 .DESCRIPTION
-    GET /beta/reports/runs/{runId}/outputs/{outputId} returns the raw bytes plus a
+    GET /reports/runs/{runId}/outputs/{outputId} (legacy API for an API-key login, v1 API for a
+    client ID and secret login) returns the raw bytes plus a
     Content-Disposition filename. This cmdlet writes those bytes to -OutputPath using the
     server-suggested filename (sanitized) and emits a result object per saved file.
 
@@ -23,6 +24,8 @@
     Pipeline-bindable. Same as ReportType — propagated from the upstream record when piped.
 .PARAMETER TenantId
     Pipeline-bindable. Same as ReportType — propagated from the upstream record when piped.
+    API key: numeric Client Tenant ID; client ID and secret: Microsoft tenant ID (GUID). Collated
+    outputs carry no tenant ($null). Aliases: -ClientTenantId, -MsTenantId.
 .PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
     Created if it doesn't exist.
@@ -78,7 +81,7 @@ param(
     [string]$OutputFormat,
 
     [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
-    [Alias('ClientTenantId')]
+    [Alias('ClientTenantId', 'MsTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -133,7 +136,7 @@ process {
     }
 
     $runIdStr = $RunId.ToString()
-    $endpoint = "/beta/reports/runs/$runIdStr/outputs/$OutputId"
+    $endpoint = "/reports/runs/$runIdStr/outputs/$OutputId"
 
     # When -FileName is supplied the user's choice wins (after filesystem-safety sanitization).
     # Otherwise the server's Content-Disposition filename is used (via Invoke-InforcerRawDownload).

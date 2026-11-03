@@ -2,9 +2,10 @@
 .SYNOPSIS
     Lists available report types from the Inforcer Reports API.
 
-    Required API scope(s): Reports.Read
+    Required API scope(s): Reports.Read (API key); Reports permission (API client).
 .DESCRIPTION
-    Retrieves the catalog of report types from GET /beta/reports/types. Each catalog entry
+    Retrieves the catalog of report types from GET /reports/types (API key: legacy API; client
+    ID and secret: v1 API, whose entries also carry singleTenantOnly). Each catalog entry
     describes a report's key, supported output formats, collatability, accepted parameters,
     and tags. The catalog is cached in the module-scoped variable so subsequent calls
     (and tab-completion lookups) are instant; pass -Force to refetch from the API.
@@ -164,7 +165,7 @@ if (-not (Test-InforcerSession)) {
 # distorted by PSObject mutations applied during alias-adding.
 if ($OutputType -eq 'JsonObject' -or $Force -or $null -eq $script:InforcerReportTypeCache) {
     Write-Verbose 'Retrieving report types catalog...'
-    $response = Invoke-InforcerApiRequest -Endpoint '/beta/reports/types' -Method GET -OutputType $OutputType
+    $response = Invoke-InforcerApiRequest -Endpoint '/reports/types' -Method GET -OutputType $OutputType -ObjectType ReportType
     if ($null -eq $response) { return }
 
     if ($OutputType -eq 'JsonObject') {

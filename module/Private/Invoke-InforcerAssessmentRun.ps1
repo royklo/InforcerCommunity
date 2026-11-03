@@ -3,12 +3,18 @@ function Invoke-InforcerAssessmentRun {
     .SYNOPSIS
         Runs a single assessment against one tenant (internal helper).
     .DESCRIPTION
-        Executes POST /beta/tenants/{id}/assessments/{id}/runs asynchronously
-        with progress updates. Returns the raw API response data or $null on error.
+        Executes POST /tenants/{id}/assessments/{id}/runs in a separate runspace so the caller can
+        show progress. The URI and auth header are built here with Get-InforcerBaseUrl and
+        Get-InforcerAuthHeader (fresh per run, so a long multi-tenant loop never reuses an expired
+        v1 token) and handed to the runspace as parameters; the runspace never sees the session.
+        Returns the raw API response data (beta: .data; v1: the run object, assessmentId mapped to
+        assessment) or $null on error.
+    .PARAMETER TenantId
+        beta: numeric Client Tenant ID. v1: Microsoft tenant ID (GUID).
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)] [int]$ClientTenantId,
+        [Parameter(Mandatory)] [Alias('ClientTenantId')] [string]$TenantId,
         [Parameter(Mandatory)] [string]$ResolvedAssessmentId,
         [Parameter(Mandatory)] [string]$TenantDisplayName,
         [Parameter(Mandatory)] [string]$AssessmentDisplayName
@@ -27,10 +33,26 @@ function Invoke-InforcerAssessmentRun {
 
     Write-Host "Running '$AssessmentDisplayName' against $TenantDisplayName..."
 
-    $endpoint = "/beta/tenants/$ClientTenantId/assessments/$ResolvedAssessmentId/runs"
-    $uri = $script:InforcerSession.BaseUrl + $endpoint
-    $apiKey = ConvertFrom-InforcerSecureString -SecureString $script:InforcerSession.ApiKey
-    $headers = @{ 'Inf-Api-Key' = $apiKey }
+    $isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
+    $uri = Get-InforcerBaseUrl -Endpoint "/tenants/$TenantId/assessments/$ResolvedAssessmentId/runs"
+    $headers = Get-InforcerAuthHeader
+    if (-not $headers) { return $null }
+
+    $formatApiError = {
+        param([string]$errMsg)
+        if ($errMsg -match '<title>([^<]+)</title>') { return "API error: $($Matches[1].Trim())" }
+        if ($isV1 -and $errMsg.TrimStart().StartsWith('{')) {
+            try {
+                $problem = $errMsg | ConvertFrom-Json -ErrorAction Stop
+                $title = $problem.PSObject.Properties['title'].Value -as [string]
+                $detail = $problem.PSObject.Properties['detail'].Value -as [string]
+                if ($title -and $detail -and $detail -ne $title) { return "${title}: $detail" }
+                if ($title) { return $title }
+            } catch { Write-Verbose 'Error body was not JSON; using raw text.' }
+        }
+        if ($errMsg.Length -gt 500) { $errMsg = $errMsg.Substring(0, 200) + '...' }
+        $errMsg
+    }
 
     # This endpoint takes no request body and rejects ANY Content-Type with
     # 400 ValidationFailure ("Unspecified content type <x> is not allowed"). Omitting the
@@ -63,17 +85,13 @@ function Invoke-InforcerAssessmentRun {
             if ($ps.Streams.Error.Count -gt 0) {
                 $hasError = $true
                 foreach ($e in $ps.Streams.Error) {
-                    $errMsg = $e.ToString()
-                    if ($errMsg -match '<title>([^<]+)</title>') { $errMsg = "API error: $($Matches[1].Trim())" }
-                    elseif ($errMsg.Length -gt 500) { $errMsg = $errMsg.Substring(0, 200) + '...' }
+                    $errMsg = Protect-InforcerApiKeyInText -Text (& $formatApiError $e.ToString())
                     Write-Error -Message $errMsg -ErrorId 'AssessmentRunFailed' -Category InvalidResult
                 }
             }
         } catch {
             $hasError = $true
-            $errMsg = $_.Exception.Message
-            if ($errMsg -match '<title>([^<]+)</title>') { $errMsg = "API error: $($Matches[1].Trim())" }
-            elseif ($errMsg.Length -gt 500) { $errMsg = $errMsg.Substring(0, 200) + '...' }
+            $errMsg = Protect-InforcerApiKeyInText -Text (& $formatApiError $_.Exception.Message)
             Write-Error -Message "Assessment run failed: $errMsg" -ErrorId 'AssessmentRunFailed' -Category InvalidResult
         }
     } finally {
@@ -107,5 +125,7 @@ function Invoke-InforcerAssessmentRun {
         return $null
     }
     $dataProp = $responseObj.PSObject.Properties['data']
-    if ($dataProp) { return $dataProp.Value } else { return $responseObj }
+    if ($dataProp) { return $dataProp.Value }
+    if ($isV1) { return ConvertFrom-InforcerV1Response -InputObject $responseObj -ObjectType AssessmentRun }
+    return $responseObj
 }

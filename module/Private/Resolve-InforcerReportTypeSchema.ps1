@@ -5,7 +5,7 @@ function Resolve-InforcerReportTypeSchema {
         and returns the normalized POST /reports/runs entry (Private helper).
     .DESCRIPTION
         Uses the module-scoped $script:InforcerReportTypeCache. If the cache is empty, lazy-fetches
-        the catalog from GET /beta/reports/types via Invoke-InforcerApiRequest.
+        the catalog from GET /reports/types via Invoke-InforcerApiRequest.
 
         Validates client-side (so the user gets a clear error before the API does):
           * ReportType is in the catalog (case-insensitive)
@@ -83,17 +83,12 @@ function Resolve-InforcerReportTypeSchema {
     }
     if ($Force -or $null -eq $script:InforcerReportTypeCache -or $cacheIsStale) {
         try {
-            $catalog = Invoke-InforcerApiRequest -Endpoint '/beta/reports/types' -Method GET -ErrorAction Stop
+            $catalog = Invoke-InforcerApiRequest -Endpoint '/reports/types' -Method GET -ObjectType ReportType -ErrorAction Stop
         } catch {
             $catalog = $null
-            # Defensive re-scrub: even though Invoke-InforcerApiRequest already redacts API
-            # keys, surfacing $_.Exception.Message in our own Write-Warning is safer with one
-            # more pass through Protect-InforcerApiKeyInText.
-            $rawMsg = $_.Exception.Message
-            $catalogFetchError = if ($script:InforcerSession -and $script:InforcerSession.ApiKey) {
-                $maskedKey = ConvertFrom-InforcerSecureString -SecureString $script:InforcerSession.ApiKey
-                Protect-InforcerApiKeyInText -Text $rawMsg -ApiKey $maskedKey
-            } else { $rawMsg }
+            # Defensive re-scrub of credentials (API key, client secret, access token) before the
+            # message reaches our own Write-Warning.
+            $catalogFetchError = Protect-InforcerApiKeyInText -Text $_.Exception.Message
         }
         if ($catalog) {
             $script:InforcerReportTypeCache = @($catalog)
@@ -123,7 +118,7 @@ function Resolve-InforcerReportTypeSchema {
             # surfacing "Unknown report type" — auto-recovery beats forcing the user to disconnect.
             Write-Verbose "Type '$ReportType' not found in cached catalog; refetching once before failing."
             try {
-                $refreshed = Invoke-InforcerApiRequest -Endpoint '/beta/reports/types' -Method GET -ErrorAction Stop
+                $refreshed = Invoke-InforcerApiRequest -Endpoint '/reports/types' -Method GET -ObjectType ReportType -ErrorAction Stop
             } catch {
                 $refreshed = $null
             }

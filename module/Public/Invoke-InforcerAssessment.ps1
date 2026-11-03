@@ -2,7 +2,8 @@
 .SYNOPSIS
     Runs an assessment against one or more tenants via the Inforcer API.
 
-    Required API scope(s): Tenants.Read + Assessments.Read + Assessments.Run
+    Required API scope(s): Tenants.Read + Assessments.Read + Assessments.Run (API key);
+    Tenants (read) + Tenant Assessment (run) permissions (API client).
 .DESCRIPTION
     Triggers an assessment run and returns detailed results including per-check scores,
     passes, violations, warnings, and framework metadata.
@@ -10,9 +11,14 @@
     API could not assess the check; they are reported but left out of the compliance score.
     Supports single-tenant, multi-tenant (all tenants), and subset modes.
     Use -MultiTenant to run against all tenants, or pass multiple values to -TenantId.
+    Works with both login types. With an API key (legacy API) tenants are identified by numeric
+    Client Tenant ID, GUID or name; with a client ID and secret (v1 API) by Microsoft tenant ID
+    (GUID) or name, and the TenantId on the output is the Microsoft tenant ID. v1 runs return
+    when the assessment completes, exactly like the legacy runs.
     When -OutputPath is specified with multi-tenant, generates an HTML matrix report.
 .PARAMETER TenantId
-    Tenant(s) to run the assessment against. Accepts numeric ID, GUID, or friendly name.
+    Tenant(s) to run the assessment against. Accepts numeric Client Tenant ID (API key only),
+    Microsoft tenant GUID, or friendly name. Aliases: -ClientTenantId, -MsTenantId.
     Pass multiple values for subset multi-tenant mode.
     Optional when -MultiTenant is used (defaults to all tenants).
 .PARAMETER AssessmentId
@@ -60,7 +66,7 @@ function Invoke-InforcerAssessment {
 [OutputType([PSObject], [string], [System.IO.FileInfo])]
 param(
     [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
-    [Alias('ClientTenantId')]
+    [Alias('ClientTenantId', 'MsTenantId')]
     [object[]]$TenantId,
 
     [Parameter(Mandatory = $true)]
@@ -90,12 +96,14 @@ if (-not $isMultiTenant -and ($null -eq $TenantId -or @($TenantId).Count -eq 0))
 }
 
 # Fetch tenant list (needed for name resolution and multi-tenant)
-$tenantData = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject)
+$isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
+$tenantIdProperty = if ($isV1) { 'msTenantId' } else { 'clientTenantId' }
+$tenantData = @(Get-InforcerTenantList -Refresh)
 
 # Resolve assessment
 $assessmentData = $null
 try {
-    $assessmentData = @(Invoke-InforcerApiRequest -Endpoint '/beta/assessments' -Method GET -OutputType PowerShellObject)
+    $assessmentData = @(Invoke-InforcerApiRequest -Endpoint '/assessments' -Method GET -OutputType PowerShellObject -ObjectType Assessment)
     $resolvedAssessmentId = Resolve-InforcerAssessmentId -AssessmentId $AssessmentId -AssessmentData $assessmentData
 } catch {
     Write-Error -Message $_.Exception.Message -ErrorId 'InvalidAssessmentId' -Category InvalidArgument
@@ -117,11 +125,11 @@ foreach ($a in $assessmentData) {
 
 # Helper: resolve tenant friendly name from tenant data
 $resolveTenantName = {
-    param([int]$cid, [array]$data)
+    param($cid, [array]$data)
     foreach ($t in $data) {
         if ($t -is [PSObject]) {
-            $cidProp = $t.PSObject.Properties['clientTenantId']
-            if ($cidProp -and [int]$cidProp.Value -eq $cid) {
+            $cidProp = $t.PSObject.Properties[$tenantIdProperty]
+            if ($cidProp -and $null -ne $cidProp.Value -and "$($cidProp.Value)" -ieq "$cid") {
                 $fn = $t.PSObject.Properties['tenantFriendlyName']
                 $dn = $t.PSObject.Properties['tenantDnsName']
                 if ($fn -and -not [string]::IsNullOrWhiteSpace($fn.Value) -and $fn.Value -ne 'Tenant') { return $fn.Value }
@@ -230,9 +238,9 @@ if ($isMultiTenant) {
         # All tenants
         foreach ($t in $tenantData) {
             if ($t -is [PSObject]) {
-                $cidProp = $t.PSObject.Properties['clientTenantId']
-                if ($cidProp) {
-                    $cid = [int]$cidProp.Value
+                $cidProp = $t.PSObject.Properties[$tenantIdProperty]
+                if ($cidProp -and $null -ne $cidProp.Value) {
+                    $cid = if ($isV1) { "$($cidProp.Value)" } else { [int]$cidProp.Value }
                     $tname = & $resolveTenantName $cid $tenantData
                     [void]$tenantsToRun.Add(@{ Id = $cid; Name = $tname })
                 }
@@ -268,7 +276,7 @@ if ($isMultiTenant) {
         $tenantIndex++
         Write-Host "[$tenantIndex/$($tenantsToRun.Count)] " -NoNewline
         $response = Invoke-InforcerAssessmentRun `
-            -ClientTenantId $tenant.Id `
+            -TenantId $tenant.Id `
             -ResolvedAssessmentId $resolvedAssessmentId `
             -TenantDisplayName $tenant.Name `
             -AssessmentDisplayName $assessmentDisplayName
@@ -403,7 +411,7 @@ try {
 $tenantDisplayName = & $resolveTenantName $clientTenantId $tenantData
 
 $response = Invoke-InforcerAssessmentRun `
-    -ClientTenantId $clientTenantId `
+    -TenantId $clientTenantId `
     -ResolvedAssessmentId $resolvedAssessmentId `
     -TenantDisplayName $tenantDisplayName `
     -AssessmentDisplayName $assessmentDisplayName

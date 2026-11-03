@@ -7,13 +7,16 @@ function Invoke-InforcerRawDownload {
         rather than UTF-8-decoded text. Returns the bytes alongside the server-suggested
         filename (parsed from Content-Disposition) and the x-correlation-id for support.
 
-        Used by Save-InforcerReportOutput to fetch /beta/reports/runs/{id}/outputs/{id} —
-        which can be CSV, JSON, HTML, PDF, or other binary content.
+        Used by Save-InforcerReportOutput to fetch /reports/runs/{id}/outputs/{id} — which can be
+        CSV, JSON, HTML, PDF, or other binary content. The URI and auth header come from
+        Get-InforcerBaseUrl / Get-InforcerAuthHeader, so it works for API-key (beta) and
+        client-credentials (v1) sessions; a v1 401 renews the access token and retries once.
 
         Error envelope handling mirrors Invoke-InforcerApiRequest: app-layer, APIM, and
         RFC 9110 ProblemDetails shapes are all parsed for a usable error message.
     .PARAMETER Endpoint
-        API path (e.g. /beta/reports/runs/.../outputs/...). Leading slash optional.
+        Version-neutral API path (e.g. /reports/runs/.../outputs/...). Leading slash optional;
+        a leading /beta is ignored.
     .PARAMETER DefaultFileName
         Suggested filename when the server doesn't return a usable Content-Disposition.
         Defaults to 'output'.
@@ -50,24 +53,7 @@ function Invoke-InforcerRawDownload {
         return
     }
 
-    $endpoint = $Endpoint.Trim()
-    if (-not $endpoint.StartsWith('/')) {
-        $endpoint = '/' + $endpoint
-    }
-
-    $uri = $script:InforcerSession.BaseUrl + $endpoint
-
-    $apiKey = ConvertFrom-InforcerSecureString -SecureString $script:InforcerSession.ApiKey
-    if ([string]::IsNullOrWhiteSpace($apiKey)) {
-        Write-Error -Message 'API key is empty or invalid. Please reconnect.' `
-            -ErrorId 'EmptyApiKey' -Category AuthenticationError
-        return
-    }
-
-    $headers = @{
-        'Inf-Api-Key' = $apiKey
-        'Accept'      = '*/*'
-    }
+    $uri = Get-InforcerBaseUrl -Endpoint $Endpoint
 
     Write-Verbose "Downloading: GET $uri"
 
@@ -84,23 +70,41 @@ function Invoke-InforcerRawDownload {
         $tempStreamPath = Join-Path -Path $DestinationDirectory -ChildPath ('inforcer-download-' + [guid]::NewGuid().ToString('N') + '.partial')
     }
 
-    try {
-        # -SkipHttpErrorCheck lets us inspect status code and body without exception-based flow.
-        if ($tempStreamPath) {
-            $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck `
-                -UseBasicParsing -OutFile $tempStreamPath -PassThru -ErrorAction Stop
-        } else {
-            $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck `
-                -UseBasicParsing -ErrorAction Stop
+    $isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
+    $forceRefresh = $false
+    while ($true) {
+        $headers = Get-InforcerAuthHeader -ForceRefresh:$forceRefresh
+        if (-not $headers) { return }
+        $headers['Accept'] = '*/*'
+
+        try {
+            # -SkipHttpErrorCheck lets us inspect status code and body without exception-based flow.
+            if ($tempStreamPath) {
+                $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck `
+                    -UseBasicParsing -OutFile $tempStreamPath -PassThru -ErrorAction Stop
+            } else {
+                $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck `
+                    -UseBasicParsing -ErrorAction Stop
+            }
+        } catch {
+            if ($tempStreamPath -and (Test-Path -LiteralPath $tempStreamPath)) {
+                Remove-Item -LiteralPath $tempStreamPath -Force -ErrorAction SilentlyContinue
+            }
+            $msg = Protect-InforcerApiKeyInText -Text $_.Exception.Message
+            Write-Error -Message "Download request failed: $msg" `
+                -ErrorId 'DownloadFailed' -Category ConnectionError
+            return
         }
-    } catch {
-        if ($tempStreamPath -and (Test-Path -LiteralPath $tempStreamPath)) {
-            Remove-Item -LiteralPath $tempStreamPath -Force -ErrorAction SilentlyContinue
+
+        if ($isV1 -and -not $forceRefresh -and [int]$response.StatusCode -eq 401) {
+            Write-Verbose 'HTTP 401: renewing the access token and retrying once.'
+            if ($tempStreamPath -and (Test-Path -LiteralPath $tempStreamPath)) {
+                Remove-Item -LiteralPath $tempStreamPath -Force -ErrorAction SilentlyContinue
+            }
+            $forceRefresh = $true
+            continue
         }
-        $msg = Protect-InforcerApiKeyInText -Text $_.Exception.Message -ApiKey $apiKey
-        Write-Error -Message "Download request failed: $msg" `
-            -ErrorId 'DownloadFailed' -Category ConnectionError
-        return
+        break
     }
 
     $statusCode    = [int]$response.StatusCode
@@ -134,6 +138,8 @@ function Invoke-InforcerRawDownload {
                     $apiMessage = $json.PSObject.Properties['message'].Value -as [string]
                 } elseif ($null -ne $json.PSObject.Properties['title']) {
                     $apiMessage = $json.PSObject.Properties['title'].Value -as [string]
+                    $problemDetail = $json.PSObject.Properties['detail'].Value -as [string]
+                    if ($problemDetail -and $problemDetail -ne $apiMessage) { $apiMessage = "${apiMessage}: $problemDetail" }
                     if ($null -ne $json.PSObject.Properties['traceId']) {
                         $traceId = $json.PSObject.Properties['traceId'].Value -as [string]
                     }
@@ -145,7 +151,7 @@ function Invoke-InforcerRawDownload {
             }
         }
         if ([string]::IsNullOrWhiteSpace($detail)) { $detail = "HTTP $statusCode" }
-        $detail = Protect-InforcerApiKeyInText -Text $detail -ApiKey $apiKey
+        $detail = Protect-InforcerApiKeyInText -Text $detail
         $msg = "Inforcer API download failed (HTTP $statusCode): $detail"
         if ($correlationId) { $msg = "$msg [correlation-id: $correlationId]" }
         Write-Error -Message $msg -ErrorId "DownloadFailed_$statusCode" -Category ConnectionError

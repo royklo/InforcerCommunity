@@ -379,10 +379,6 @@ if (-not $skipPrime) { try {
     Write-Verbose "Skipping Reports catalog prime: $(Protect-InforcerApiKeyInText -Text $_.Exception.Message -Session $newSession)"
 } } # end of if (-not $skipPrime) wrapper
 
-if ($PassThru) {
-    # An independent copy; secrets and tokens in it are SecureStrings only.
-    Write-Output $script:InforcerSession.Clone()
-}
 
 # Also connect to Microsoft Graph if requested
 if ($FetchGraphData) {
@@ -399,5 +395,6 @@ $out = [PSCustomObject]@{
     BaseUrl     = $baseUrlValue
     ConnectedAt = $script:InforcerSession.ConnectedAt
 }
+if ($PassThru) { return $script:InforcerSession.Clone() }
 $out
 }

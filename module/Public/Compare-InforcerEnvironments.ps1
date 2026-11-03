@@ -12,12 +12,17 @@
     not return.
 
     For cross-account comparison, use Connect-Inforcer -PassThru to obtain session objects
-    and pass them via -SourceSession / -DestinationSession.
+    and pass them via -SourceSession / -DestinationSession. The two sessions may use different
+    login types (API key and client credentials); each side uses its own session's API.
+
+    With client credentials (v1 API) the API currently returns no Intune policies. A side that
+    receives none gets a warning, and the report and the returned model (Notes) say so; connect
+    that side with an API key to include them.
 .PARAMETER SourceTenantId
-    Source tenant identifier: numeric ID, Microsoft Tenant ID GUID, or friendly name.
+    Source tenant identifier: numeric ID (API-key session only), Microsoft Tenant ID GUID, or friendly name.
     Can be omitted when -SourceBaselineId is specified — the baseline owner tenant is used automatically.
 .PARAMETER DestinationTenantId
-    Destination tenant identifier: numeric ID, Microsoft Tenant ID GUID, or friendly name.
+    Destination tenant identifier: numeric ID (API-key session only), Microsoft Tenant ID GUID, or friendly name.
     Can be omitted when -DestinationBaselineId is specified — the baseline owner tenant is used automatically.
 .PARAMETER SourceSession
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
@@ -91,6 +96,12 @@
     $dst = Connect-Inforcer -ApiKey $key2 -Region eu -PassThru
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -SourceSession $src -DestinationSession $dst
 .EXAMPLE
+    $src = Connect-Inforcer -ApiKey $key -Region uk -PassThru
+    $dst = Connect-Inforcer -ClientId $clientId -ClientSecret $secret -Region uk -PassThru
+    Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId '00000000-0000-0000-0000-000000000000' -SourceSession $src -DestinationSession $dst
+
+    Mixed login types: the source uses the API-key (beta) API, the destination the client-credentials (v1) API.
+.EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 -IncludingAssignments
 .EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' -DestinationTenantId 'Fabrikam'
@@ -161,55 +172,46 @@ if (-not $hasExplicitSessions -and -not (Test-InforcerSession)) {
 }
 
 # ── Resolve baseline owner when tenant ID is omitted ─────────────────────────
-# When -SourceBaselineId is given without -SourceTenantId, resolve the baseline
-# owner tenant automatically. Same for destination.
-$baselineCache = $null  # fetch once, reuse
-if ([string]::IsNullOrWhiteSpace($SourceTenantId) -and -not [string]::IsNullOrWhiteSpace($SourceBaselineId)) {
-    # Temporarily activate source session for API call when explicit sessions are used
+# When -SourceBaselineId is given without -SourceTenantId, resolve the baseline owner tenant
+# automatically. Same for destination. Each side resolves in its own session, so the owner id
+# fits that side's API (beta: numeric client tenant id, v1: Microsoft tenant id).
+$baselineCache = $null  # fetched once per session, reused
+foreach ($side in @(
+    @{ Name = 'source';      TenantVar = 'SourceTenantId';      BaselineId = $SourceBaselineId;      Session = $SourceSession }
+    @{ Name = 'destination'; TenantVar = 'DestinationTenantId'; BaselineId = $DestinationBaselineId; Session = $DestinationSession }
+)) {
+    if (-not [string]::IsNullOrWhiteSpace((Get-Variable -Name $side.TenantVar -ValueOnly)) -or
+        [string]::IsNullOrWhiteSpace($side.BaselineId)) { continue }
+
+    $sideSession = if ($null -ne $side.Session) { $side.Session } else { $script:InforcerSession }
     $savedSession = $script:InforcerSession
-    if ($null -ne $SourceSession) { $script:InforcerSession = $SourceSession }
+    $script:InforcerSession = $sideSession
     try {
-        $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+        if ($null -eq $baselineCache -or -not [object]::ReferenceEquals($baselineCache.Session, $sideSession)) {
+            $baselineCache = @{
+                Session = $sideSession
+                Data    = @(Invoke-InforcerApiRequest -Endpoint '/baselines' -Method GET -OutputType PowerShellObject -ObjectType Baseline)
+            }
+        }
+        $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $side.BaselineId -BaselineData $baselineCache.Data
     } finally {
         $script:InforcerSession = $savedSession
     }
-    $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $SourceBaselineId -BaselineData $baselineCache
-    foreach ($bl in $baselineCache) {
+
+    $ownerId = $null
+    foreach ($bl in $baselineCache.Data) {
         if ($bl.id -eq $resolvedGuid) {
-            $SourceTenantId = $bl.baselineClientTenantId
-            Write-Verbose "Resolved source baseline owner tenant: $SourceTenantId"
+            $ownerId = if ($null -ne $bl.baselineClientTenantId) { $bl.baselineClientTenantId } else { $bl.baselineMsTenantId }
+            Write-Verbose "Resolved $($side.Name) baseline owner tenant: $ownerId"
             break
         }
     }
-    if ([string]::IsNullOrWhiteSpace($SourceTenantId)) {
-        Write-Error -Message "Could not resolve owner tenant for baseline '$SourceBaselineId'." `
+    if ([string]::IsNullOrWhiteSpace($ownerId)) {
+        Write-Error -Message "Could not resolve owner tenant for baseline '$($side.BaselineId)'." `
             -ErrorId 'BaselineOwnerNotFound' -Category InvalidArgument
         return
     }
-}
-if ([string]::IsNullOrWhiteSpace($DestinationTenantId) -and -not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) {
-    if ($null -eq $baselineCache) {
-        $savedSession = $script:InforcerSession
-        if ($null -ne $DestinationSession) { $script:InforcerSession = $DestinationSession }
-        try {
-            $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
-        } finally {
-            $script:InforcerSession = $savedSession
-        }
-    }
-    $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $DestinationBaselineId -BaselineData $baselineCache
-    foreach ($bl in $baselineCache) {
-        if ($bl.id -eq $resolvedGuid) {
-            $DestinationTenantId = $bl.baselineClientTenantId
-            Write-Verbose "Resolved destination baseline owner tenant: $DestinationTenantId"
-            break
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($DestinationTenantId)) {
-        Write-Error -Message "Could not resolve owner tenant for baseline '$DestinationBaselineId'." `
-            -ErrorId 'BaselineOwnerNotFound' -Category InvalidArgument
-        return
-    }
+    Set-Variable -Name $side.TenantVar -Value $ownerId
 }
 
 # Validate we have both tenant identifiers
@@ -298,6 +300,12 @@ if ($null -eq $model) {
         -ErrorId 'ModelBuildFailed' -Category InvalidResult
     return
 }
+
+$notes = @(
+    foreach ($n in @($compData.SourceModel.Notes)) { if ($n) { "Source ($($compData.SourceName)): $n" } }
+    foreach ($n in @($compData.DestinationModel.Notes)) { if ($n) { "Destination ($($compData.DestinationName)): $n" } }
+)
+if ($notes.Count -gt 0) { $model['Notes'] = $notes }
 
 Write-Host "  Alignment score: $($model.AlignmentScore)%" -ForegroundColor Gray
 Write-Host "  Total items:     $($model.TotalItems)" -ForegroundColor Gray

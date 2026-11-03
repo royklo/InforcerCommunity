@@ -7,7 +7,7 @@ function Select-InforcerBaselinePolicies {
         from the Inforcer API, and filters DocData.Policies in place to only those in the baseline.
         Must be called while the correct $script:InforcerSession is active.
     .PARAMETER DocData
-        The DocData hashtable from Get-InforcerDocData. Contains .Tenant.clientTenantId and .Policies.
+        The DocData hashtable from Get-InforcerDocData. Contains .TenantId and .Policies.
         Policies array is modified in place.
     .PARAMETER BaselineId
         Baseline GUID or friendly name.
@@ -24,7 +24,7 @@ function Select-InforcerBaselinePolicies {
         [string]$BaselineId
     )
 
-    $clientTenantId = $DocData.Tenant.clientTenantId
+    $tenantId = $DocData.TenantId
 
     # Resolve baseline name to GUID
     $baselineGuid = $null
@@ -33,7 +33,7 @@ function Select-InforcerBaselinePolicies {
     if ([guid]::TryParse($BaselineId.Trim(), [ref]$guidTest)) {
         $baselineGuid = $BaselineId.Trim()
     } else {
-        $allBaselines = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+        $allBaselines = @(Invoke-InforcerApiRequest -Endpoint '/baselines' -Method GET -OutputType PowerShellObject -ObjectType Baseline)
         $baselineGuid = Resolve-InforcerBaselineId -BaselineId $BaselineId -BaselineData $allBaselines
         foreach ($bl in $allBaselines) {
             if ($bl.id -eq $baselineGuid) { $baselineFilterName = $bl.name; break }
@@ -43,8 +43,8 @@ function Select-InforcerBaselinePolicies {
 
     # Get alignment details
     Write-Host '  Retrieving alignment details...' -ForegroundColor Gray
-    $alignEndpoint = "/beta/tenants/$clientTenantId/alignmentDetails?customBaselineId=$baselineGuid"
-    $alignResponse = Invoke-InforcerApiRequest -Endpoint $alignEndpoint -Method GET -OutputType PowerShellObject -ErrorAction SilentlyContinue
+    $alignEndpoint = "/tenants/$tenantId/alignmentDetails?customBaselineId=$baselineGuid"
+    $alignResponse = Invoke-InforcerApiRequest -Endpoint $alignEndpoint -Method GET -OutputType PowerShellObject -ObjectType AlignmentDetails -ErrorAction SilentlyContinue
 
     if ($null -eq $alignResponse) {
         Write-Warning "Could not retrieve alignment details for baseline '$baselineFilterName'."
@@ -65,8 +65,14 @@ function Select-InforcerBaselinePolicies {
                         if ($p.PSObject.Properties['policyName'] -and $p.policyName) {
                             [void]$baselinePolicyNames.Add($p.policyName)
                         }
-                        if ($p.PSObject.Properties['policyGuid'] -and $p.policyGuid) {
-                            [void]$baselinePolicyGuids.Add($p.policyGuid)
+                        if ($p.PSObject.Properties['policyGuid']) {
+                            if ($p.policyGuid) { [void]$baselinePolicyGuids.Add($p.policyGuid) }
+                        } else {
+                            # v1: ids are Microsoft 365 ids; matchingSubjectPolicies[].id is the subject tenant's own policy.
+                            if ($p.id) { [void]$baselinePolicyGuids.Add($p.id) }
+                            foreach ($m in @($p.matchingSubjectPolicies)) {
+                                if ($m.id) { [void]$baselinePolicyGuids.Add($m.id) }
+                            }
                         }
                     }
                 }

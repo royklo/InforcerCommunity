@@ -142,7 +142,7 @@ function ConvertTo-InforcerDocModel {
         no API calls (per NORM-06).
     .PARAMETER DocData
         Hashtable from Get-InforcerDocData containing:
-        Tenant, Baselines, Policies, TenantId, CollectedAt.
+        Tenant, Baselines, Policies, TenantId, CollectedAt, and optionally Notes (copied to the DocModel).
     .OUTPUTS
         Hashtable representing the DocModel tree (per D-10).
     #>
@@ -255,13 +255,9 @@ function ConvertTo-InforcerDocModel {
     $policies = $DocData.Policies
     $baselines = $DocData.Baselines
 
-    # Tenant metadata
-    $tenantName = ''
-    if ($null -ne $tenant) {
-        $tenantName = $tenant.tenantFriendlyName
-        if ([string]::IsNullOrWhiteSpace($tenantName)) { $tenantName = $tenant.tenantDnsName }
-        if ([string]::IsNullOrWhiteSpace($tenantName)) { $tenantName = "Tenant $($DocData.TenantId)" }
-    }
+    $tenantName = if ($null -ne $tenant) { $tenant.tenantFriendlyName }
+    if ([string]::IsNullOrWhiteSpace($tenantName) -and $null -ne $tenant) { $tenantName = $tenant.tenantDnsName }
+    if ([string]::IsNullOrWhiteSpace($tenantName)) { $tenantName = "Tenant $($DocData.TenantId)" }
 
     # Collect all baseline names for this tenant
     $baselineNames = [System.Collections.Generic.List[string]]::new()
@@ -495,7 +491,7 @@ function ConvertTo-InforcerDocModel {
     }
 
     # Return the DocModel (per D-10, NORM-06)
-    @{
+    $docModel = @{
         TenantName   = $tenantName
         TenantId     = $DocData.TenantId
         GeneratedAt  = $DocData.CollectedAt
@@ -503,4 +499,6 @@ function ConvertTo-InforcerDocModel {
         Baselines    = $baselineNames
         Products     = $products
     }
+    if ($DocData.Notes) { $docModel['Notes'] = @($DocData.Notes) }
+    $docModel
 }

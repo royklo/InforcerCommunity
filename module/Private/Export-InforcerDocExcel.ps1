@@ -44,6 +44,11 @@ function Export-InforcerDocExcel {
         Remove-Item -LiteralPath $FilePath -Force
     }
 
+    $notes = @($DocModel.Notes | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($notes.Count -gt 0) {
+        $notes | ForEach-Object { [PSCustomObject]@{ Note = $_ } } | Export-Excel -Path $FilePath -WorksheetName 'Notes' -BoldTopRow
+    }
+
     foreach ($prodName in $DocModel.Products.Keys) {
         $product = $DocModel.Products[$prodName]
         $rows = [System.Collections.Generic.List[object]]::new()

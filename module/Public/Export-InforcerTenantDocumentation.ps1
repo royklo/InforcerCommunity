@@ -16,7 +16,10 @@
     settingDefinitionId values instead.
 
     Before calling this cmdlet, you must be connected via Connect-Inforcer. If no active session
-    exists, the cmdlet emits a non-terminating error and returns immediately.
+    exists, the cmdlet emits a non-terminating error and returns immediately. Both login types
+    work. With client credentials (v1 API) the API currently returns no Intune policies: a warning
+    says so, and the document (and the returned DocModel's Notes) carry a visible note. Connect
+    with an API key to include them.
 
     Nothing is written unless -OutputPath is given: without it the DocModel is returned so a
     caller can read the configuration without producing files. With it, output is auto-named
@@ -26,7 +29,8 @@
     can be specified as a comma-separated list or array. Defaults to Html. Excel format
     creates an .xlsx workbook with one sheet per product (requires ImportExcel module).
 .PARAMETER TenantId
-    Tenant to document. Accepts a numeric ID, GUID, or tenant name. Required.
+    Tenant to document. Accepts a numeric ID (API-key login only), Microsoft tenant ID (GUID), or
+    tenant name. Required.
 .PARAMETER OutputPath
     Directory to write output files to. Files are auto-named {TenantName}-Documentation.{ext}.
     When a single format is specified and this path has a file extension, it is treated as an
@@ -97,7 +101,7 @@ param(
     [string[]]$Format = @('Html'),
 
     [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
-    [Alias('ClientTenantId')]
+    [Alias('ClientTenantId', 'MsTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -127,7 +131,7 @@ if (-not (Test-InforcerSession)) {
 }
 
 try {
-    $clientTenantId = Resolve-InforcerTenantId -TenantId $TenantId
+    $resolvedTenantId = Resolve-InforcerTenantId -TenantId $TenantId
 } catch {
     Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
     return
@@ -138,7 +142,7 @@ $resolvedCatalogPath = $SettingsCatalogPath
 
 # Collect data from the 3 source cmdlets and build DocModel
 Write-Host 'Collecting tenant data...' -ForegroundColor Cyan
-$docDataParams = @{ TenantId = $clientTenantId }
+$docDataParams = @{ TenantId = $resolvedTenantId }
 if (-not [string]::IsNullOrEmpty($resolvedCatalogPath)) {
     $docDataParams['SettingsCatalogPath'] = $resolvedCatalogPath
 }

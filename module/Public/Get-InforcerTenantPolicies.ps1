@@ -57,7 +57,7 @@ function EnrichPolicyObject {
 .EXAMPLE
     Get-InforcerTenantPolicies -TenantId 482
 .EXAMPLE
-    Get-InforcerTenantPolicies -TenantId "bb3b1f9d-d866-4b5a-abad-69d6a26bc446" -OutputType JsonObject
+    Get-InforcerTenantPolicies -TenantId "00000000-0000-0000-0000-000000000003" -OutputType JsonObject
 .NOTES
     Always use the PolicyName property for the policy display name; it is populated from displayName or name for consistency.
 .OUTPUTS

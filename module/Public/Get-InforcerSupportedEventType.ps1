@@ -111,23 +111,7 @@ function Get-InforcerSupportedEventType {
             return $null
         }
 
-        function ResolveEventTypes($typesObj) {
-            if ($null -eq $typesObj) { return @() }
-            if ($typesObj -is [array]) {
-                return @($typesObj | ForEach-Object { GetEventTypeName $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
-            }
-            if ($typesObj -is [PSObject]) {
-                foreach ($propName in 'eventTypes', 'EventTypes', 'data', 'Data', 'items', 'Items') {
-                    $prop = $typesObj.PSObject.Properties[$propName].Value
-                    if ($prop -is [object[]]) {
-                        return @($prop | ForEach-Object { GetEventTypeName $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
-                    }
-                }
-            }
-            return @()
-        }
-
-        $types = ResolveEventTypes $response
+        $types = @($response | ForEach-Object { GetEventTypeName $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
         if ($types -and $types.Count -gt 0) {
             $global:InforcerCachedEventTypes = @($types)
         }

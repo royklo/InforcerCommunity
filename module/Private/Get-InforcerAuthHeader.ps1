@@ -52,6 +52,18 @@ function Get-InforcerAuthHeader {
     @{ 'Inf-Api-Key' = $apiKey }
 }
 
+function Clear-InforcerRequestCredential {
+    # A failed web cmdlet keeps the sent HttpRequestMessage as the ErrorRecord's TargetObject, and that same
+    # object is referenced from $Error and any -ErrorVariable. Stripping the auth headers cleans every copy.
+    param($ErrorRecord)
+
+    $message = $ErrorRecord.TargetObject
+    if ($message -is [System.Net.Http.HttpRequestMessage]) {
+        $null = $message.Headers.Remove('Authorization')
+        $null = $message.Headers.Remove('Inf-Api-Key')
+    }
+}
+
 function Get-InforcerAccessToken {
     <#
     .SYNOPSIS
@@ -107,6 +119,7 @@ function Get-InforcerAccessToken {
             $errorText = "Token request failed (HTTP $($result.StatusCode)): $reason.$hint"
         }
     } catch {
+        Clear-InforcerRequestCredential -ErrorRecord $_
         $errorText = "Token request failed: $($_.Exception.Message)"
     }
 

@@ -1,12 +1,13 @@
 function Invoke-InforcerPagedRequest {
     <#
     .SYNOPSIS
-        Returns all items of a paged Inforcer API list, following continuationToken (Private helper).
+        Streams the items of a paged Inforcer API list, following continuationToken (Private helper).
     .DESCRIPTION
         Works for both API versions. GET passes continuationToken in the query string; POST passes it in
         the JSON body. Items come from the beta .data array (or the array inside .data, e.g. .data.items)
-        or the v1 collection. Stops when the token is empty or repeats, or when -MaxResults is reached.
-        An API error is written to the error stream and ends paging; items already read are returned.
+        or the v1 collection. Each page's items are written to the pipeline as it arrives, so a downstream
+        Select-Object -First stops paging. Stops when the token is empty or repeats, or when -MaxResults
+        is reached. An API error is written to the error stream and ends paging.
     .PARAMETER Endpoint
         Version-neutral API path, may already contain a query string.
     .PARAMETER Method
@@ -19,7 +20,7 @@ function Invoke-InforcerPagedRequest {
         Stop after this many items. 0 = no limit.
     #>
     [CmdletBinding()]
-    [OutputType([object[]])]
+    [OutputType([object])]
     param(
         [Parameter(Mandatory = $true)]
         [string]$Endpoint,
@@ -41,24 +42,21 @@ function Invoke-InforcerPagedRequest {
         [int]$MaxResults = 0
     )
 
-    $items = [System.Collections.Generic.List[object]]::new()
+    $count = 0
     $seenTokens = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     $token = $null
     $page = 0
 
     do {
         $page++
-        $request = @{ Method = $Method; PreserveFullResponse = $true }
+        $request = @{ Endpoint = $Endpoint; Method = $Method; PreserveFullResponse = $true }
         if ($ObjectType) { $request['ObjectType'] = $ObjectType }
         if ($Method -eq 'POST') {
             $pageBody = if ($Body) { $Body.Clone() } else { @{} }
             if ($token) { $pageBody['continuationToken'] = $token } else { $pageBody.Remove('continuationToken') }
             $request['Body'] = $pageBody | ConvertTo-Json -Depth 100 -Compress
-            $request['Endpoint'] = $Endpoint
-        } else {
-            $request['Endpoint'] = if ($token) {
-                $Endpoint + $(if ($Endpoint.Contains('?')) { '&' } else { '?' }) + 'continuationToken=' + [System.Uri]::EscapeDataString($token)
-            } else { $Endpoint }
+        } elseif ($token) {
+            $request['Endpoint'] = $Endpoint + $(if ($Endpoint.Contains('?')) { '&' } else { '?' }) + 'continuationToken=' + [System.Uri]::EscapeDataString($token)
         }
 
         $response = Invoke-InforcerApiRequest @request
@@ -82,10 +80,11 @@ function Invoke-InforcerPagedRequest {
 
         foreach ($i in @($pageItems)) {
             if ($null -eq $i) { continue }
-            $items.Add($i)
-            if ($MaxResults -gt 0 -and $items.Count -ge $MaxResults) { break }
+            $i
+            $count++
+            if ($MaxResults -gt 0 -and $count -ge $MaxResults) { break }
         }
-        if ($MaxResults -gt 0 -and $items.Count -ge $MaxResults) { break }
+        if ($MaxResults -gt 0 -and $count -ge $MaxResults) { break }
 
         $next = $response.PSObject.Properties['continuationToken'].Value -as [string]
         if ([string]::IsNullOrWhiteSpace($next) -and $container -is [System.Management.Automation.PSCustomObject]) {
@@ -99,6 +98,4 @@ function Invoke-InforcerPagedRequest {
         Write-Verbose "Page $page returned $(@($pageItems).Count) item(s); fetching the next page."
         $token = $next
     } while ($true)
-
-    $items.ToArray()
 }

@@ -137,7 +137,7 @@ inforcer's API keys use the **legacy beta API**, which inforcer says is due to b
 | `ClientTenantId` property | present | **absent** (use `MsTenantId`) |
 | `Get-InforcerTenant` | rich objects | name, DNS name and Microsoft tenant ID; add `-Detailed` (or `-TenantId`) for the rich fields. `-Detailed` is ignored with an API key, so scripts work with both logins. |
 | Permissions | key scopes (`Tenants.Read`, ...) | API client permissions plus optional tenant filters, set in the portal |
-| Rate limit | 400 calls/hour per key | 400 calls/minute per partner; throttled calls are retried using `Retry-After` |
+| Rate limit | 400 calls/hour per key; a throttled (`429`) call fails at once | 400 calls/minute per partner; throttled calls are retried using `Retry-After` (up to 3 times, at most 300 s each) |
 | Output | unchanged | the same property names; v1 responses are mapped to them. v1-only fields are added; fields v1 does not have are missing. |
 
 Steps:
@@ -149,6 +149,10 @@ Steps:
 5. **Intune gap for now:** the v1 tenant policies endpoint currently returns no Intune policies (and no Defender settings-catalog policies, type 10), with no error. `Get-InforcerTenantPolicies` warns about it once per tenant, and `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` add a note to their reports (no second warning). Until inforcer fixes this, use an API key for Intune-centred documentation and comparison. API-key output is unchanged.
 
 The full list of differences per object is in the [API Reference](docs/API-REFERENCE.md#v1-api-client-credentials).
+
+## Personal data
+
+Some output contains personal data (names, UPNs, email addresses, IP addresses, sign-in details): user details (`Get-InforcerUser -UserId`), audit events, report outputs, and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput`. The module caches no user or audit data. It writes files only where you ask: to `-OutputPath`, or for `Invoke-InforcerReport` and `Save-InforcerReportOutput` to the current directory when `-OutputPath` is omitted (`-NoSave` writes nothing). Handle those files as personal data: keep them access-controlled and delete them when no longer needed.
 
 ## Cmdlets
 

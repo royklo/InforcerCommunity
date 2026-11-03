@@ -21,7 +21,7 @@
     Region for production API. Valid: uk, eu, us, anz. Default: uk. Ignored when -BaseUrl is set.
 .PARAMETER BaseUrl
     Optional custom API host, with or without '/api' (e.g. https://api.example.com or
-    https://api.example.com/api). When set, -Region is ignored.
+    https://api.example.com/api). Must use https; an http URL is rejected. When set, -Region is ignored.
 .EXAMPLE
     Connect-Inforcer -ClientId $clientId -ClientSecret (Read-Host -AsSecureString -Prompt 'Client secret') -Region uk
     Connects with an API client (v1 API).
@@ -44,9 +44,10 @@
     When specified, returns the session hashtable to the pipeline in addition to
     storing it in the module-scoped session variable. Use this to capture sessions
     for cross-account comparison with Compare-InforcerEnvironments. Secrets and tokens in it
-    are SecureStrings.
+    are SecureStrings. The captured session stays usable after Disconnect-Inforcer, which
+    clears only the module's session; remove it when done (Remove-Variable src).
 .OUTPUTS
-    PSObject with Status, Region, BaseUrl, ConnectedAt.
+    PSObject with Status, Region, BaseUrl, ConnectedAt; with -PassThru, only the session hashtable.
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#connect-inforcer
 .LINK
@@ -78,6 +79,8 @@ param(
     [string]$Region = 'uk',
 
     [Parameter(Mandatory = $false)]
+    [ValidateScript({ [string]::IsNullOrWhiteSpace($_) -or $_.Trim() -match '^https://' },
+        ErrorMessage = "BaseUrl '{0}' must start with https://. Credentials are never sent over an unencrypted connection.")]
     [string]$BaseUrl,
 
     [Parameter(Mandatory = $false)]
@@ -196,6 +199,7 @@ if ($isClientCredentials) {
     } catch {
         # Only real network errors (DNS, connection refused, TLS) land here; 4xx/5xx are
         # captured via the response object thanks to -SkipHttpErrorCheck.
+        Clear-InforcerRequestCredential -ErrorRecord $_
         $probeRawError = $_
         Write-Error -Message "Connection failed: $(Protect-InforcerApiKeyInText -Text $_.Exception.Message -Session $newSession)" `
             -ErrorId 'ConnectionValidationFailed' -Category ConnectionError
@@ -376,6 +380,7 @@ if (-not $skipPrime) { try {
         Write-Verbose "Skipping Reports catalog prime: HTTP $([int]$catalogProbe.StatusCode) (missing Reports read permission)."
     }
 } catch {
+    Clear-InforcerRequestCredential -ErrorRecord $_
     Write-Verbose "Skipping Reports catalog prime: $(Protect-InforcerApiKeyInText -Text $_.Exception.Message -Session $newSession)"
 } } # end of if (-not $skipPrime) wrapper
 

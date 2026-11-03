@@ -11,7 +11,7 @@ function Protect-InforcerApiKeyInText {
     .PARAMETER Text
         The input text.
     .PARAMETER ApiKey
-        Optional extra plain-text secret to redact (kept for existing callers).
+        Optional plain-text secret not (yet) stored in the session, e.g. during the token request.
     .PARAMETER Session
         Session whose secrets are redacted. Defaults to the current session.
     #>

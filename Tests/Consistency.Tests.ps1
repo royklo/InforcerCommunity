@@ -629,7 +629,7 @@ Describe 'Private helpers (via module scope)' {
     Context 'Resolve-InforcerBaselineId' {
         It 'Passes through a valid GUID' {
             & (Get-Module InforcerCommunity) {
-                $guid = '91e0b0f7-69f1-453f-8d73-5a6f726b5b21'
+                $guid = '00000000-0000-0000-0000-000000000004'
                 $result = Resolve-InforcerBaselineId -BaselineId $guid
                 $result | Should -Be $guid
             }
@@ -676,7 +676,7 @@ Describe 'Private helpers (via module scope)' {
     Context 'Resolve-InforcerGroupId' {
         It 'Passes through a valid GUID' {
             & (Get-Module InforcerCommunity) {
-                $guid = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $guid = '00000000-0000-0000-0000-000000000006'
                 $result = Resolve-InforcerGroupId -GroupId $guid -TenantId 1
                 $result | Should -Be $guid
             }
@@ -684,7 +684,7 @@ Describe 'Private helpers (via module scope)' {
 
         It 'Passes through a GUID with mixed case' {
             & (Get-Module InforcerCommunity) {
-                $guid = 'F44F2F5C-3160-420B-900D-5ECBEDE954FC'
+                $guid = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'
                 $result = Resolve-InforcerGroupId -GroupId $guid -TenantId 1
                 $result | Should -Be $guid
             }
@@ -789,7 +789,7 @@ Describe 'Private helpers (via module scope)' {
         It 'GroupSummary: adds PascalCase aliases' {
             & (Get-Module InforcerCommunity) {
                 $group = [PSCustomObject]@{
-                    id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                    id = '00000000-0000-0000-0000-000000000006'
                     displayName = 'All Company'
                     description = 'Default group'
                     mail = 'allcompany@contoso.com'
@@ -797,7 +797,7 @@ Describe 'Private helpers (via module scope)' {
                     groupTypes = @('Unified')
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $group -ObjectType GroupSummary
-                $group.Id | Should -Be 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $group.Id | Should -Be '00000000-0000-0000-0000-000000000006'
                 $group.DisplayName | Should -Be 'All Company'
                 $group.Description | Should -Be 'Default group'
                 $group.Mail | Should -Be 'allcompany@contoso.com'
@@ -809,7 +809,7 @@ Describe 'Private helpers (via module scope)' {
         It 'Group: adds PascalCase aliases including detail properties' {
             & (Get-Module InforcerCommunity) {
                 $group = [PSCustomObject]@{
-                    id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                    id = '00000000-0000-0000-0000-000000000006'
                     displayName = 'All Company'
                     description = 'Default group'
                     mail = 'allcompany@contoso.com'
@@ -823,7 +823,7 @@ Describe 'Private helpers (via module scope)' {
                     members = @([PSCustomObject]@{ id = 'u1'; displayName = 'John'; type = '#microsoft.graph.user' })
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $group -ObjectType Group
-                $group.Id | Should -Be 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $group.Id | Should -Be '00000000-0000-0000-0000-000000000006'
                 $group.DisplayName | Should -Be 'All Company'
                 $group.MailNickname | Should -Be 'allcompany'
                 $group.MailEnabled | Should -BeTrue
@@ -1541,7 +1541,7 @@ Describe 'Private helpers (via module scope)' {
                 # Source shape verified: runId, status, reportTypes[], outputFormats[],
                 # triggeredByType, createdAt, startedAt, completedAt, outputCount.
                 $obj = [pscustomobject]@{
-                    runId            = '094a49ed-b9b8-492b-870f-0f76fd3b2954'
+                    runId            = '00000000-0000-0000-0000-000000000009'
                     status           = 'completed'
                     reportTypes      = @('activeusercount')
                     outputFormats    = @('csv')
@@ -1552,7 +1552,7 @@ Describe 'Private helpers (via module scope)' {
                     outputCount      = 1
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $obj -ObjectType ReportRun
-                $obj.RunId | Should -Be '094a49ed-b9b8-492b-870f-0f76fd3b2954'
+                $obj.RunId | Should -Be '00000000-0000-0000-0000-000000000009'
                 $obj.Status | Should -Be 'completed'
                 ($obj.ReportTypes -join ',') | Should -Be 'activeusercount'
                 ($obj.OutputFormats -join ',') | Should -Be 'csv'
@@ -1565,14 +1565,14 @@ Describe 'Private helpers (via module scope)' {
             & (Get-Module InforcerCommunity) {
                 # Source shape verified: id, reportType, tenantId, format, sizeBytes.
                 $obj = [pscustomobject]@{
-                    id          = '45c94952-e649-45af-b35e-9cd0e7b1bf45'
+                    id          = '00000000-0000-0000-0000-00000000000c'
                     reportType  = 'ActiveUserCount'
                     tenantId    = 14436
                     format      = 'csv'
                     sizeBytes   = 60
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $obj -ObjectType ReportOutput
-                $obj.OutputId | Should -Be '45c94952-e649-45af-b35e-9cd0e7b1bf45'
+                $obj.OutputId | Should -Be '00000000-0000-0000-0000-00000000000c'
                 $obj.ReportType | Should -Be 'ActiveUserCount'
                 $obj.TenantId | Should -Be 14436
                 $obj.OutputFormat | Should -Be 'csv'
@@ -2352,7 +2352,7 @@ Describe 'Private helpers (via module scope)' {
                 ($g | Format-List | Out-String)
             }
             $script:GroupBase = @{
-                id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'; displayName = 'G'; description = 'd'
+                id = '00000000-0000-0000-0000-000000000006'; displayName = 'G'; description = 'd'
                 mail = $null; visibility = $null; groupTypes = @(); membershipRule = $null
                 mailEnabled = $false; createdDateTime = '2026-01-01'; onPremisesSyncEnabled = $null
                 members = @()

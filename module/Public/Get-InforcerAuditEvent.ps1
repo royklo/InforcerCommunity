@@ -5,7 +5,7 @@
     Required API scope(s): Audit.Read (unconfirmed — see docs/API-REFERENCE.md)
 .DESCRIPTION
     POST /auditEvents/search on both login types (API key: /beta, client credentials: /v1). With client credentials the response has no ClientId, Message, RelId or RelType fields. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
-    When -EventType is not specified, uses all event types from the API (or fallback authentication, failedAuthentication).
+    When -EventType is not specified: with an API key, sends all event types from the API (the built-in list if that lookup fails); with client credentials (v1), sends no event-type filter and the API searches all types.
     Use -Id to retrieve a specific event by its event ID. Use -CorrelationId to retrieve all events
     sharing a correlation ID. Both perform a broad search and filter client-side.
 .PARAMETER Id
@@ -31,10 +31,10 @@
 .EXAMPLE
     Get-InforcerAuditEvent
 .EXAMPLE
-    Get-InforcerAuditEvent -Id "2070eb50-5ac2-4b9b-a157-0003dd3982fe"
+    Get-InforcerAuditEvent -Id "00000000-0000-0000-0000-00000000000a"
     Retrieves a single audit event by its ID.
 .EXAMPLE
-    Get-InforcerAuditEvent -CorrelationId "e7ec6f01-a24b-4012-bab7-e8f0e53e2dab"
+    Get-InforcerAuditEvent -CorrelationId "00000000-0000-0000-0000-00000000000b"
     Retrieves all audit events sharing a correlation ID.
 .EXAMPLE
     Get-InforcerAuditEvent -DateFrom (Get-Date).AddDays(-7) -DateTo (Get-Date)

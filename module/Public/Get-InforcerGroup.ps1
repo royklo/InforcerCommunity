@@ -64,7 +64,7 @@ function Get-InforcerGroup {
         Resolves the group by display name and returns full detail including members.
 
     .EXAMPLE
-        Get-InforcerGroup -TenantId 139 -Group "f44f2f5c-3160-420b-900d-5ecbede954fc"
+        Get-InforcerGroup -TenantId 139 -Group "00000000-0000-0000-0000-000000000006"
 
         Gets full detail for a specific group by GUID including members.
 
@@ -146,10 +146,10 @@ function Get-InforcerGroup {
             $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ObjectType Group -ErrorVariable err -ErrorAction SilentlyContinue
 
             if ($null -eq $response) {
-                if ($err -and $err[0].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
+                if ($err -and $err[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
                     Write-Error -Message "Group '$Group' not found in tenant '$resolvedTenantId'." -ErrorId 'GroupNotFound' -Category ObjectNotFound
                 } elseif ($err) {
-                    Write-Error -ErrorRecord $err[0]
+                    Write-Error -ErrorRecord $err[-1]
                 } else {
                     Write-Error -Message "Group '$Group' not found in tenant '$resolvedTenantId'." -ErrorId 'GroupNotFound' -Category ObjectNotFound
                 }
@@ -157,7 +157,12 @@ function Get-InforcerGroup {
             }
 
             if ($script:InforcerSession.ApiVersion -eq 'v1') {
-                $members = @(Invoke-InforcerPagedRequest -Endpoint "$endpoint/members" -ObjectType GroupMember)
+                $memberErr = $null
+                $members = @(Invoke-InforcerPagedRequest -Endpoint "$endpoint/members" -ObjectType GroupMember -ErrorVariable memberErr -ErrorAction SilentlyContinue)
+                if ($memberErr) {
+                    Write-Warning "Could not read the members of group '$Group', so members is null: $($memberErr[-1].Exception.Message)"
+                    $members = $null
+                }
                 Add-Member -InputObject $response -NotePropertyName 'members' -NotePropertyValue $members -Force
             }
 
@@ -174,27 +179,26 @@ function Get-InforcerGroup {
         $endpoint = "/tenants/$resolvedTenantId/groups"
         if ($Search) { $endpoint += '?search=' + [System.Uri]::EscapeDataString($Search) }
 
-        # -MaxResults counts matches, so with -Filter every page is read before the limit applies.
-        $pagedMax = if ($Filter) { 0 } else { $MaxResults }
-        $groups = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group -MaxResults $pagedMax)
-
-        if ($Filter) {
-            $groups = @($groups | Where-Object {
+        # Streams; -MaxResults counts matches, so with -Filter it applies after filtering.
+        $listGroups = {
+            if (-not $Filter) { return Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group -MaxResults $MaxResults }
+            $first = if ($MaxResults -gt 0) { $MaxResults } else { [int]::MaxValue }
+            Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group | Where-Object {
                 $dn = $_.PSObject.Properties['displayName'].Value
                 $dn -and $dn -like $Filter
-            })
-            if ($MaxResults -gt 0 -and $groups.Count -gt $MaxResults) { $groups = $groups[0..($MaxResults - 1)] }
+            } | Select-Object -First $first
         }
 
         if ($OutputType -eq 'JsonObject') {
+            $groups = @(& $listGroups)
             if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject $groups -Depth 100 }
             return $groups | ConvertTo-Json -Depth 100
         }
 
-        foreach ($item in $groups) {
-            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType GroupSummary
-            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.GroupSummary')
-            $item
+        & $listGroups | ForEach-Object {
+            $null = Add-InforcerPropertyAliases -InputObject $_ -ObjectType GroupSummary
+            $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.GroupSummary')
+            $_
         }
     }
 }

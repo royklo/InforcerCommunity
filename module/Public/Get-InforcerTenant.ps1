@@ -122,7 +122,7 @@ process {
             $detailErr = $null
             $detail = Invoke-InforcerApiRequest -Endpoint "/tenants/$($t.msTenantId)" -Method GET -ObjectType Tenant -ErrorAction SilentlyContinue -ErrorVariable detailErr
             if ($null -eq $detail) {
-                $reason = if ($detailErr) { $detailErr[0].Exception.Message } else { 'empty response' }
+                $reason = if ($detailErr) { $detailErr[-1].Exception.Message } else { 'empty response' }
                 Write-Warning "Could not load details for tenant '$name'; returning its summary. $reason"
                 $detail = $t
             }

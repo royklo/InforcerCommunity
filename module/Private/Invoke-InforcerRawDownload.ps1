@@ -15,8 +15,7 @@ function Invoke-InforcerRawDownload {
         Error envelope handling mirrors Invoke-InforcerApiRequest: app-layer, APIM, and
         RFC 9110 ProblemDetails shapes are all parsed for a usable error message.
     .PARAMETER Endpoint
-        Version-neutral API path (e.g. /reports/runs/.../outputs/...). Leading slash optional;
-        a leading /beta is ignored.
+        Version-neutral API path (e.g. /reports/runs/.../outputs/...). Leading slash optional.
     .PARAMETER DefaultFileName
         Suggested filename when the server doesn't return a usable Content-Disposition.
         Defaults to 'output'.
@@ -87,6 +86,7 @@ function Invoke-InforcerRawDownload {
                     -UseBasicParsing -ErrorAction Stop
             }
         } catch {
+            Clear-InforcerRequestCredential -ErrorRecord $_
             if ($tempStreamPath -and (Test-Path -LiteralPath $tempStreamPath)) {
                 Remove-Item -LiteralPath $tempStreamPath -Force -ErrorAction SilentlyContinue
             }

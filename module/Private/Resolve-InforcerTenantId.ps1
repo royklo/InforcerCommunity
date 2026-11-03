@@ -51,55 +51,69 @@ function Resolve-InforcerTenantId {
             return $guidResult.ToString()
         }
 
-        $tenants = if ($null -ne $TenantData -and $TenantData.Count -gt 0) { $TenantData } else { @(Get-InforcerTenantList) }
+        # A miss on the session-cached list is retried once on a fresh list (tenant onboarded mid-session).
+        $canRefresh = $false
+        if ($null -ne $TenantData -and $TenantData.Count -gt 0) {
+            $tenants = $TenantData
+        } else {
+            $cache = $script:InforcerTenantListCache
+            $canRefresh = $cache -and [object]::ReferenceEquals($cache.Session, $script:InforcerSession)
+            $tenants = @(Get-InforcerTenantList)
+        }
 
-        if ($isGuid) {
-            Write-Verbose "Microsoft Tenant ID (GUID) detected: $tenantIdString. Looking up client tenant ID..."
-            foreach ($t in $tenants) {
-                $msId = $t.PSObject.Properties['msTenantId'].Value
-                if ($msId -and $msId.ToString() -eq $tenantIdString) {
-                    $clientId = $t.PSObject.Properties['clientTenantId'].Value
-                    if ($null -ne $clientId) {
-                        $resolved = [int]$clientId
-                        Write-Verbose "Found matching tenant. Client Tenant ID: $resolved"
+        if ($isGuid) { Write-Verbose "Microsoft Tenant ID (GUID) detected: $tenantIdString. Looking up client tenant ID..." }
+        else { Write-Verbose "Tenant name detected: '$tenantIdString'. Looking up by name..." }
+
+        while ($true) {
+            if ($isGuid) {
+                foreach ($t in $tenants) {
+                    $msId = $t.PSObject.Properties['msTenantId'].Value
+                    if ($msId -and $msId.ToString() -eq $tenantIdString) {
+                        $clientId = $t.PSObject.Properties['clientTenantId'].Value
+                        if ($null -ne $clientId) {
+                            $resolved = [int]$clientId
+                            Write-Verbose "Found matching tenant. Client Tenant ID: $resolved"
+                            return $resolved
+                        }
+                    }
+                }
+            } else {
+                $foundTenants = [System.Collections.Generic.List[object]]::new()
+                foreach ($t in $tenants) {
+                    $props = $t.PSObject.Properties
+                    $friendlyName = $props['tenantFriendlyName'].Value
+                    $dnsName = $props['tenantDnsName'].Value
+                    if (($friendlyName -and $friendlyName -eq $tenantIdString) -or
+                        ($dnsName -and $dnsName -eq $tenantIdString)) {
+                        $foundTenants.Add($t)
+                    }
+                }
+
+                if ($foundTenants.Count -eq 1) {
+                    $idProperty = if ($isV1) { 'msTenantId' } else { 'clientTenantId' }
+                    $resolvedId = $foundTenants[0].PSObject.Properties[$idProperty].Value
+                    if ($null -ne $resolvedId) {
+                        $resolved = if ($isV1) { $resolvedId.ToString() } else { [int]$resolvedId }
+                        Write-Verbose "Found tenant '$tenantIdString'. Tenant ID: $resolved"
                         return $resolved
                     }
                 }
+
+                if ($foundTenants.Count -gt 1) {
+                    # Don't list the matching tenants' ids: in shared-MSP setups that reveals other accounts.
+                    $count = $foundTenants.Count
+                    $idHint = if ($isV1) { 'Microsoft tenant ID (GUID)' } else { 'numeric Client Tenant ID' }
+                    throw [System.InvalidOperationException]::new("$count tenants match name '$tenantIdString'. Pass the $idHint for the one you want; run Get-InforcerTenant to list available tenants.")
+                }
             }
-            throw [System.InvalidOperationException]::new("No tenant found with Microsoft Tenant ID: $tenantIdString")
+
+            if (-not $canRefresh) { break }
+            $canRefresh = $false
+            Write-Verbose "'$tenantIdString' is not in the cached tenant list; fetching the list again."
+            $tenants = @(Get-InforcerTenantList -Refresh)
         }
 
-        Write-Verbose "Tenant name detected: '$tenantIdString'. Looking up by name..."
-        $foundTenants = [System.Collections.Generic.List[object]]::new()
-        foreach ($t in $tenants) {
-            $props = $t.PSObject.Properties
-            $friendlyName = $props['tenantFriendlyName'].Value
-            if ($null -eq $friendlyName) { $friendlyName = $props['name'].Value }
-            $dnsName = $props['tenantDnsName'].Value
-            if ($null -eq $dnsName) { $dnsName = $props['dnsName'].Value }
-            if (($friendlyName -and $friendlyName -eq $tenantIdString) -or
-                ($dnsName -and $dnsName -eq $tenantIdString)) {
-                $foundTenants.Add($t)
-            }
-        }
-
-        if ($foundTenants.Count -eq 1) {
-            $idProperty = if ($isV1) { 'msTenantId' } else { 'clientTenantId' }
-            $resolvedId = $foundTenants[0].PSObject.Properties[$idProperty].Value
-            if ($null -ne $resolvedId) {
-                $resolved = if ($isV1) { $resolvedId.ToString() } else { [int]$resolvedId }
-                Write-Verbose "Found tenant '$tenantIdString'. Tenant ID: $resolved"
-                return $resolved
-            }
-        }
-
-        if ($foundTenants.Count -gt 1) {
-            # Don't list the matching tenants' ids: in shared-MSP setups that reveals other accounts.
-            $count = $foundTenants.Count
-            $idHint = if ($isV1) { 'Microsoft tenant ID (GUID)' } else { 'numeric Client Tenant ID' }
-            throw [System.InvalidOperationException]::new("$count tenants match name '$tenantIdString'. Pass the $idHint for the one you want; run Get-InforcerTenant to list available tenants.")
-        }
-
+        if ($isGuid) { throw [System.InvalidOperationException]::new("No tenant found with Microsoft Tenant ID: $tenantIdString") }
         throw [System.InvalidOperationException]::new("No tenant found with name '$tenantIdString'. Use Get-InforcerTenant to list available tenants.")
     }
 }

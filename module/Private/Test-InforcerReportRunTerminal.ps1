@@ -56,6 +56,7 @@ function Test-InforcerReportRunTerminal {
         try {
             $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck -UseBasicParsing -ErrorAction Stop
         } catch {
+            Clear-InforcerRequestCredential -ErrorRecord $_
             $msg = Protect-InforcerApiKeyInText -Text $_.Exception.Message
             Write-Error -Message "Failed to probe run terminal state: $msg" `
                 -ErrorId 'ProbeFailed' -Category ConnectionError

@@ -1,6 +1,6 @@
 # V1.Transport.Tests.ps1
 # Session, auth header, URL building, v1 mapping, unwrap, errors, retries, paging and tenant resolution.
-# Fixtures are anonymised (zero GUIDs, example names); no network calls.
+# Fixtures are anonymised (zero GUIDs, example names); the only network calls go to a closed loopback port.
 
 BeforeAll {
     Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
@@ -368,6 +368,12 @@ Describe 'Invoke-InforcerApiRequest on v1' {
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 4 -Exactly
         Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 3 -Exactly
     }
+    It 'caps a long Retry-After at 300 seconds' {
+        Mock -ModuleName InforcerCommunity Start-Sleep { }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 429 -RetryAfter '3600' }
+        $null = & $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants' -ErrorAction SilentlyContinue }
+        Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 3 -Exactly -ParameterFilter { $Seconds -eq 300 }
+    }
     It 'renews the token once on 401 and retries' {
         $script:calls = 0
         Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest {
@@ -415,13 +421,22 @@ Describe 'Invoke-InforcerApiRequest on v1' {
 Describe 'Invoke-InforcerApiRequest on beta (unchanged behaviour)' {
     BeforeEach { Set-V1TestSession -Beta }
 
-    It 'unwraps .data, sends Inf-Api-Key and accepts neutral and /beta paths' {
+    It 'unwraps .data and sends Inf-Api-Key' {
         Mock -ModuleName InforcerCommunity Invoke-RestMethod { [pscustomobject]@{ success = $true; data = @([pscustomobject]@{ clientTenantId = 1 }) } }
         @(& $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants' }).Count | Should -Be 1
         @(& $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants' -ObjectType Tenant }).Count | Should -Be 1
         Should -Invoke -ModuleName InforcerCommunity Invoke-RestMethod -Times 2 -Exactly -ParameterFilter {
             $Uri -eq 'https://api.example.invalid/api/beta/tenants' -and $Headers['Inf-Api-Key'] -eq 'beta-test-key-value' -and -not $Headers.ContainsKey('Authorization')
         }
+    }
+    It 'does not retry a beta 429' {
+        Mock -ModuleName InforcerCommunity Start-Sleep { }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 429 -RetryAfter '1' -Body '{"statusCode":429,"message":"Rate limit is exceeded."}' }
+        $e = & $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants' -ErrorAction SilentlyContinue -ErrorVariable ev; $ev }
+        @($e).Count | Should -Be 1
+        $e[0].FullyQualifiedErrorId | Should -Match '^ApiRequestFailed_429'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly
+        Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 0 -Exactly
     }
     It 'does not retry a beta 401' {
         Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 401 -Body '{"statusCode":401,"message":"Access denied"}' }
@@ -554,11 +569,6 @@ Describe 'Tenant list and Resolve-InforcerTenantId' {
         Set-V1TestSession
         { & $script:M { Resolve-InforcerTenantId -TenantId 'Twin' } } | Should -Throw '*2 tenants match*Microsoft tenant ID*'
     }
-    It 'resolves names from raw v1 -TenantData too' {
-        Set-V1TestSession
-        $data = @([pscustomobject]@{ msTenantId = '00000000-0000-0000-0000-000000000009'; name = 'Raw'; dnsName = 'raw.example' })
-        & $script:M { param($d) Resolve-InforcerTenantId -TenantId 'Raw' -TenantData $d } $data | Should -BeExactly '00000000-0000-0000-0000-000000000009'
-    }
     It 'keeps beta numeric passthrough and name resolution to [int]' {
         Set-V1TestSession -Beta
         Mock -ModuleName InforcerCommunity Invoke-RestMethod { [pscustomobject]@{ data = @([pscustomobject]@{ clientTenantId = 7; tenantFriendlyName = 'Contoso'; msTenantId = '00000000-0000-0000-0000-000000000001' }) } }
@@ -567,6 +577,110 @@ Describe 'Tenant list and Resolve-InforcerTenantId' {
         $r | Should -Be 7
         $r | Should -BeOfType [int]
         & $script:M { Resolve-InforcerTenantId -TenantId '00000000-0000-0000-0000-000000000001' } | Should -Be 7
+    }
+}
+
+Describe 'Credentials after a network failure' {
+    BeforeAll {
+        $script:Unreachable = 'https://127.0.0.1:1'
+        function Get-ErrorDumpText {
+            param($Records)
+            (@($Records) | ForEach-Object {
+                $_ | Format-List * -Force | Out-String
+                $record = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_ } else { $_.ErrorRecord }
+                if ($record) {
+                    $record | Format-List * -Force | Out-String
+                    $record.TargetObject | Out-String
+                    Get-Error -InputObject $record | Out-String
+                }
+            }) -join "`n"
+        }
+        function Set-UnreachableSession {
+            param([switch]$Beta, [switch]$NeedsToken, [string]$Secret)
+            & $script:M {
+                param($Beta, $NeedsToken, $Secret, $ApiHost)
+                $value = ConvertTo-SecureString $Secret -AsPlainText -Force
+                $script:InforcerAssessmentCache = $null
+                $script:InforcerAssessmentCacheDeniedAt = $null
+                $script:InforcerSession = if ($Beta) {
+                    @{ AuthMode = 'ApiKey'; ApiVersion = 'beta'; ApiHost = $ApiHost; BaseUrl = "$ApiHost/api"; Region = 'uk'; ConnectedAt = Get-Date; ApiKey = $value }
+                } else {
+                    @{ AuthMode = 'ClientCredentials'; ApiVersion = 'v1'; ApiHost = $ApiHost; BaseUrl = $ApiHost; Region = 'uk'; ConnectedAt = Get-Date
+                       ClientId = 'client-id-example'; ClientSecret = $value; AccessToken = $value
+                       TokenExpiresAt = if ($NeedsToken) { [datetime]::UtcNow } else { [datetime]::UtcNow.AddMinutes(50) } }
+                }
+            } $Beta.IsPresent $NeedsToken.IsPresent $Secret $script:Unreachable
+        }
+        $attr = (Get-Command Invoke-InforcerReport).Parameters['AssessmentId'].Attributes |
+            Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] }
+        $script:AssessmentCompleter = $attr.ScriptBlock
+    }
+    AfterAll { & $script:M { $script:InforcerSession = $null; $script:InforcerAssessmentCache = $null } }
+
+    It 'the dump check finds a credential left by a raw web error (positive control)' {
+        $secret = 'control-' + [guid]::NewGuid().ToString('N')
+        try { Invoke-RestMethod -Uri "$script:Unreachable/x" -Headers @{ 'Inf-Api-Key' = $secret } -TimeoutSec 5 } catch { $null }
+        Get-ErrorDumpText $global:Error | Should -Match $secret
+    }
+
+    It '<Name> leaves the credential in neither $Error nor -ErrorVariable' -ForEach @(
+        @{ Name = 'beta API request'; Beta = $true; NeedsToken = $false; ErrorId = 'ApiRequestFailed'
+           Call = { Get-InforcerBaseline -ErrorAction SilentlyContinue -ErrorVariable ev; $ev } }
+        @{ Name = 'v1 API request'; Beta = $false; NeedsToken = $false; ErrorId = 'ApiRequestFailed'
+           Call = { Get-InforcerBaseline -ErrorAction SilentlyContinue -ErrorVariable ev; $ev } }
+        @{ Name = 'v1 token request'; Beta = $false; NeedsToken = $true; ErrorId = 'TokenRequestFailed'
+           Call = { Get-InforcerBaseline -ErrorAction SilentlyContinue -ErrorVariable ev; $ev } }
+        @{ Name = 'beta output download'; Beta = $true; NeedsToken = $false; ErrorId = 'DownloadFailed'
+           Call = { & $script:M { Invoke-InforcerRawDownload -Endpoint '/reports/runs/1/outputs/2' -ErrorAction SilentlyContinue -ErrorVariable ev; $ev } } }
+        @{ Name = 'v1 output download'; Beta = $false; NeedsToken = $false; ErrorId = 'DownloadFailed'
+           Call = { & $script:M { Invoke-InforcerRawDownload -Endpoint '/reports/runs/1/outputs/2' -ErrorAction SilentlyContinue -ErrorVariable ev; $ev } } }
+        @{ Name = 'beta run probe'; Beta = $true; NeedsToken = $false; ErrorId = 'ProbeFailed'
+           Call = { & $script:M { Test-InforcerReportRunTerminal -RunId ([guid]::Empty) -ErrorAction SilentlyContinue -ErrorVariable ev; $ev } } }
+        @{ Name = 'v1 run probe'; Beta = $false; NeedsToken = $false; ErrorId = 'ProbeFailed'
+           Call = { & $script:M { Test-InforcerReportRunTerminal -RunId ([guid]::Empty) -ErrorAction SilentlyContinue -ErrorVariable ev; $ev } } }
+        @{ Name = 'beta assessment TAB completion'; Beta = $true; NeedsToken = $false; ErrorId = $null
+           Call = { $null = & $script:AssessmentCompleter 'Invoke-InforcerReport' 'AssessmentId' '' $null @{ ReportType = 'Assessment' } } }
+        @{ Name = 'v1 assessment TAB completion'; Beta = $false; NeedsToken = $false; ErrorId = $null
+           Call = { $null = & $script:AssessmentCompleter 'Invoke-InforcerReport' 'AssessmentId' '' $null @{ ReportType = 'Assessment' } } }
+    ) {
+        $secret = 'secret-' + [guid]::NewGuid().ToString('N')
+        Set-UnreachableSession -Beta:$Beta -NeedsToken:$NeedsToken -Secret $secret
+        $before = $global:Error.Count
+        $ev = @(& $Call)
+        $global:Error.Count | Should -BeGreaterThan $before -Because 'the transport error must have happened'
+        Get-ErrorDumpText $global:Error | Should -Not -Match $secret
+        Get-ErrorDumpText $ev | Should -Not -Match $secret
+        if ($ErrorId) {
+            @($ev)[-1].FullyQualifiedErrorId | Should -Match "^$ErrorId"
+            $global:Error[0].FullyQualifiedErrorId | Should -Match "^$ErrorId"
+        }
+    }
+
+    It 'Connect-Inforcer with <Name> leaves the credential in neither $Error nor -ErrorVariable' -ForEach @(
+        @{ Name = 'an API key'; ClientCredentials = $false }
+        @{ Name = 'client credentials'; ClientCredentials = $true }
+    ) {
+        $secret = 'secret-' + [guid]::NewGuid().ToString('N')
+        $params = if ($ClientCredentials) { @{ ClientId = 'client-id-example'; ClientSecret = $secret } } else { @{ ApiKey = $secret } }
+        $null = Connect-Inforcer @params -BaseUrl $script:Unreachable -ErrorAction SilentlyContinue -ErrorVariable ev 3>$null 6>$null
+        $ev | Should -Not -BeNullOrEmpty
+        Get-ErrorDumpText $global:Error | Should -Not -Match $secret
+        Get-ErrorDumpText $ev | Should -Not -Match $secret
+    }
+}
+
+Describe 'Connect-Inforcer -BaseUrl' {
+    It 'rejects <Url> before anything is sent' -ForEach @(
+        @{ Url = 'http://api.example.invalid' }
+        @{ Url = 'ftp://api.example.invalid' }
+        @{ Url = 'api.example.invalid' }
+    ) {
+        Mock -ModuleName InforcerCommunity Invoke-WebRequest { throw 'should not be called' }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { throw 'should not be called' }
+        { Connect-Inforcer -ApiKey 'api-key-example' -BaseUrl $Url -ErrorAction Stop 3>$null 6>$null } |
+            Should -Throw -ErrorId 'ParameterArgumentValidationError,Connect-Inforcer' -ExpectedMessage '*must start with https://*'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-WebRequest -Times 0 -Exactly
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly
     }
 }
 
@@ -656,5 +770,13 @@ Describe 'Test-InforcerConnection and Disconnect-Inforcer on v1' {
         Set-V1TestSession
         Disconnect-Inforcer | Should -Be 'Disconnected from Inforcer API.'
         & $script:M { $script:InforcerSession } | Should -BeNullOrEmpty
+    }
+    It 'gives the reason for a network failure on <Name>' -ForEach @(@{ Name = 'beta'; Beta = $true }, @{ Name = 'v1'; Beta = $false }) {
+        Set-V1TestSession -Beta:$Beta
+        & $script:M { $s = $script:InforcerSession; $s.ApiHost = 'https://127.0.0.1:1'; $s.BaseUrl = if ($s.ApiVersion -eq 'beta') { 'https://127.0.0.1:1/api' } else { 'https://127.0.0.1:1' } }
+        $host6 = Test-InforcerConnection -WarningVariable w -WarningAction SilentlyContinue 6>&1
+        ($host6 | Where-Object { $_ -is [bool] }) | Should -BeFalse
+        "$($w[0])" | Should -Match 'Inforcer connection test failed: \S'
+        ($host6 | Where-Object { "$_" -like 'Error:*' } | Out-String) | Should -Match 'Error: \S'
     }
 }

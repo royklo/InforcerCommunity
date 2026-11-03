@@ -45,12 +45,10 @@ function Get-InforcerBaseUrl {
         if (-not $path.StartsWith('/')) { $path = '/' + $path }
 
         if ($Session.ApiVersion -eq 'v1') {
-            $apiHost = $Session.ApiHost
-            if ([string]::IsNullOrWhiteSpace($apiHost)) { $apiHost = $Session.BaseUrl -replace '/api/?$', '' }
             $path = $path -replace '^(/tenants/[^/?]+)/roles(?=/|\?|$)', '$1/directoryRoles'
             $path = $path -replace '^/auditEvents/eventTypes(?=/|\?|$)', '/auditEvents/types'
             $path = $path -replace '([?&])customBaselineId=', '${1}baselineId='
-            return $apiHost.TrimEnd('/') + '/v1' + $path
+            return $Session.ApiHost.TrimEnd('/') + '/v1' + $path
         }
         return $Session.BaseUrl.TrimEnd('/') + '/beta' + $path
     }

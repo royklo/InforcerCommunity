@@ -145,6 +145,13 @@ Describe 'Get-InforcerTenant' {
         "$($w[0])" | Should -Match 'Fabrikam'
     }
 
+    It 'v1: -Detailed loads a tenant listed twice only once' {
+        Set-V1TenantsSession
+        $global:V1TenantsRoutes['/v1/tenants$'] = '{"tenants":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.onmicrosoft.com"},{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.onmicrosoft.com"},{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.onmicrosoft.com"}]}'
+        @(Get-InforcerTenant -Detailed -OutputType JsonObject | ConvertFrom-Json -Depth 100).Count | Should -Be 2
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
+    }
+
     It 'beta: -Detailed is a no-op and makes no per-tenant calls' {
         Set-V1TenantsSession -Beta
         $plain = Get-InforcerTenant -OutputType JsonObject
@@ -173,6 +180,53 @@ Describe 'Get-InforcerTenant' {
 
     It 'documents -Detailed in help' {
         (Get-Help Get-InforcerTenant -Parameter Detailed).Name | Should -Be 'Detailed'
+    }
+}
+
+Describe 'Resolve-InforcerTenantId with the cached tenant list' {
+    BeforeAll {
+        $script:BetaWithNorthwind = '{"success":true,"data":[{"clientTenantId":1,"msTenantId":"00000000-0000-0000-0000-000000000001","tenantFriendlyName":"Contoso","tenantDnsName":"contoso.onmicrosoft.com"},{"clientTenantId":3,"msTenantId":"00000000-0000-0000-0000-000000000003","tenantFriendlyName":"Northwind","tenantDnsName":"northwind.onmicrosoft.com"}]}'
+        $script:V1WithNorthwind = '{"tenants":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.onmicrosoft.com"},{"msTenantId":"00000000-0000-0000-0000-000000000003","name":"Northwind","dnsName":"northwind.onmicrosoft.com"}]}'
+    }
+
+    It 'beta: finds a tenant onboarded after the list was cached, by <Name>, with one refresh' -ForEach @(
+        @{ Name = 'name'; Id = 'Northwind' }
+        @{ Name = 'GUID'; Id = '00000000-0000-0000-0000-000000000003' }
+    ) {
+        Set-V1TenantsSession -Beta
+        & $script:M { Resolve-InforcerTenantId -TenantId 'Contoso' } | Should -Be 1
+        $global:V1TenantsRoutes['/beta/tenants$'] = $script:BetaWithNorthwind
+        & $script:M { param($i) Resolve-InforcerTenantId -TenantId $i } $Id | Should -Be 3
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/beta/tenants$' }
+    }
+
+    It 'v1: finds a tenant name onboarded after the list was cached' {
+        Set-V1TenantsSession
+        & $script:M { Resolve-InforcerTenantId -TenantId 'Contoso' } | Should -Be $script:T1
+        $global:V1TenantsRoutes['/v1/tenants$'] = $script:V1WithNorthwind
+        & $script:M { Resolve-InforcerTenantId -TenantId 'Northwind' } | Should -BeExactly '00000000-0000-0000-0000-000000000003'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants$' }
+    }
+
+    It 'fetches only once when the list was not cached, and still reports an unknown name' {
+        Set-V1TenantsSession -Beta
+        { & $script:M { Resolve-InforcerTenantId -TenantId 'Nope' } } | Should -Throw "*No tenant found with name 'Nope'*"
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -match '/beta/tenants$' }
+    }
+
+    It 'refreshes at most once for an unknown name on a cached list' {
+        Set-V1TenantsSession -Beta
+        $null = & $script:M { Resolve-InforcerTenantId -TenantId 'Contoso' }
+        { & $script:M { Resolve-InforcerTenantId -TenantId 'Nope' } } | Should -Throw "*No tenant found with name 'Nope'*"
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/beta/tenants$' }
+    }
+
+    It 'does not refresh when the caller passes -TenantData' {
+        Set-V1TenantsSession -Beta
+        $null = & $script:M { Resolve-InforcerTenantId -TenantId 'Contoso' }
+        $data = @([pscustomobject]@{ clientTenantId = 1; tenantFriendlyName = 'Contoso' })
+        { & $script:M { param($d) Resolve-InforcerTenantId -TenantId 'Nope' -TenantData $d } $data } | Should -Throw '*No tenant found*'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -match '/beta/tenants$' }
     }
 }
 

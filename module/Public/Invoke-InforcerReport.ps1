@@ -283,18 +283,17 @@ param(
                     }
                 }
                 if (-not $request) { return @() }
-                $resp = Invoke-RestMethod -Uri $request.Uri -Method GET -Headers $request.Headers -TimeoutSec 2 -ErrorAction Stop
-                $items = if ($state.IsV1) { @($resp.assessments) } else { @($resp.data) }
-                & $module ([scriptblock]::Create('$script:InforcerAssessmentCache = $args[0]')) $items
+                $sc = 0
+                $resp = Invoke-RestMethod -Uri $request.Uri -Method GET -Headers $request.Headers -TimeoutSec 2 `
+                    -SkipHttpErrorCheck -StatusCodeVariable sc -ErrorAction Stop
             } catch {
+                & $module { param($r) Clear-InforcerRequestCredential -ErrorRecord $r } $_
+                # Transient network failure: empty completion, no caching, retry on next TAB.
+                return @()
+            }
+            if ($sc -ge 400) {
                 # 403 (and, with an API key, a 401 from the APIM gateway) → cache denial so subsequent
                 # TABs are instant. A v1 401 means a bad token, not a missing permission.
-                $sc = 0
-                if ($_.Exception.Response) {
-                    # Intentional empty catch — best-effort status-code extraction inside a TAB
-                    # completer must never throw. Falling back to $sc=0 → "not 401/403" branch.
-                    try { $sc = [int]$_.Exception.Response.StatusCode } catch { $null }
-                }
                 if ($sc -eq 403 -or ($sc -eq 401 -and -not $state.IsV1)) {
                     & $module { $script:InforcerAssessmentCacheDeniedAt = Get-Date }
                     return @(
@@ -308,6 +307,8 @@ param(
                 # Transient: empty completion, no caching, retry on next TAB.
                 return @()
             }
+            $items = if ($state.IsV1) { @($resp.assessments) } else { @($resp.data) }
+            & $module ([scriptblock]::Create('$script:InforcerAssessmentCache = $args[0]')) $items
         }
 
         # Filter + shape results: GUID as CompletionText, friendly name as ListItemText.

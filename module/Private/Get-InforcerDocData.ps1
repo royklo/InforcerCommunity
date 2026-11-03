@@ -56,8 +56,8 @@ function Get-InforcerDocData {
     $policiesJson = Get-InforcerTenantPolicies -TenantId $resolvedTenantId -OutputType JsonObject `
         -ErrorVariable policiesApiErr -ErrorAction SilentlyContinue
     if ($policiesApiErr.Count -gt 0) {
-        $errMsg = $policiesApiErr[0].Exception.Message
-        if ([string]::IsNullOrWhiteSpace($errMsg)) { $errMsg = $policiesApiErr[0].ToString() }
+        $errMsg = $policiesApiErr[-1].Exception.Message
+        if ([string]::IsNullOrWhiteSpace($errMsg)) { $errMsg = $policiesApiErr[-1].ToString() }
         # Extract clean error details from the API response
         $statusCode = $null
         $activityId = $null
@@ -82,7 +82,7 @@ function Get-InforcerDocData {
     $policies = $policiesJson | ConvertFrom-Json -Depth 100
 
     if ($null -eq $tenant) {
-        $reason = if ($tenantErr.Count -gt 0) { " $($tenantErr[0].Exception.Message)" } else { '' }
+        $reason = if ($tenantErr.Count -gt 0) { " $($tenantErr[-1].Exception.Message)" } else { '' }
         Write-Warning "Could not load details for tenant '$resolvedTenantId'; it is shown by its id.$reason"
     }
 

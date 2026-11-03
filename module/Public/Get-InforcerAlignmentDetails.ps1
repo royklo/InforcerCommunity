@@ -37,7 +37,7 @@
     Get-InforcerAlignmentDetails -TenantId 'Contoso' -BaselineId "Provision M365"
     Retrieves detailed alignment data using the tenant name and the baseline friendly name (both logins).
 .EXAMPLE
-    Get-InforcerAlignmentDetails -TenantId '00000000-0000-0000-0000-000000000001' -BaselineId "91e0b0f7-69f1-453f-8d73-5a6f726b5b21" -Format Raw
+    Get-InforcerAlignmentDetails -TenantId '00000000-0000-0000-0000-000000000001' -BaselineId "00000000-0000-0000-0000-000000000004" -Format Raw
     Retrieves the raw alignment detail response by Microsoft Tenant ID and baseline GUID.
 .EXAMPLE
     Get-InforcerAlignmentDetails -BaselineId "Inforcer Blueprint Baseline - Tier 2 - Enhanced"
@@ -80,8 +80,8 @@ if (-not (Test-InforcerSession)) {
 $isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
 
 # The id the current API keys tenants by: beta [int] clientTenantId, v1 [string] msTenantId.
-function Get-TenantKey($Object, [string]$BetaProperty = 'clientTenantId') {
-    $name = if ($isV1) { 'msTenantId' } else { $BetaProperty }
+function Get-TenantKey($Object) {
+    $name = if ($isV1) { 'msTenantId' } else { 'clientTenantId' }
     $value = $Object.PSObject.Properties[$name].Value
     if ($null -eq $value) { return $null }
     if ($isV1) { return "$value" }
@@ -187,7 +187,7 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
         $detailEndpoint = "/tenants/$tId/alignmentDetails?customBaselineId=$baselineGuid"
         $response = Invoke-InforcerApiRequest -Endpoint $detailEndpoint -Method GET -OutputType $OutputType -ObjectType AlignmentDetails -ErrorAction SilentlyContinue -ErrorVariable apiErr
         if ($null -eq $response) {
-            $errMsg = if ($apiErr -and $apiErr.Count -gt 0) { $apiErr[0].Exception.Message } else { $null }
+            $errMsg = if ($apiErr -and $apiErr.Count -gt 0) { $apiErr[-1].Exception.Message } else { $null }
             if ($errMsg -match 'permission|forbidden|access') {
                 Write-Warning "No access to alignment details for tenant '$tName' ($tId). You may not have permission to view this baseline's data."
             } else {

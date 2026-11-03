@@ -39,7 +39,7 @@ function Resolve-InforcerGroupId {
 
         if ($items.Count -eq 0) {
             if ($apiErr.Count -gt 0) {
-                throw [System.InvalidOperationException]::new("Failed to search for group '$groupIdString': $($apiErr[0].Exception.Message)")
+                throw [System.InvalidOperationException]::new("Failed to search for group '$groupIdString': $($apiErr[-1].Exception.Message)")
             }
             throw [System.InvalidOperationException]::new("No group found with name: $groupIdString")
         }

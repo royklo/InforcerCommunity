@@ -235,7 +235,7 @@ Errors are `application/problem+json`: `type`, `title`, `status`, `detail`, `ins
 | 403 | Missing permission or tenant | "You don't have permission to access this tenant or resource." (or the API's detail) |
 | 404 | Does not exist **or** outside the client's tenant filter | "Tenant or resource not found." |
 | 409 | Conflict | Error with the API's detail |
-| 429 | Rate limit | Waits for `Retry-After` (seconds or HTTP date, capped at 300 s), up to 3 retries |
+| 429 | Rate limit | Waits for `Retry-After` (seconds or HTTP date, capped at 300 s), up to 3 retries. v1 only: with an API key (beta) the first `429` fails the call, as in 0.8.0. |
 | 500 / 502 | Server error (assessment runs can return both) | Error with the API's detail |
 
 The ErrorId stays `ApiRequestFailed_<status>` for both APIs.
@@ -246,7 +246,7 @@ Lists that page return `continuationToken`; pass it back until it is empty. Page
 
 ### Rate limits
 
-v1: **400 calls per minute per partner**, shared by every client of the partner. Beta: **400 calls per hour per API key**. A throttled v1 call answers `429` with `Retry-After`; the module waits and retries up to three times. `Get-InforcerTenant -Detailed` and anything else that fans out per tenant costs one call per tenant.
+v1: **400 calls per minute per partner**, shared by every client of the partner. Beta: **400 calls per hour per API key**. A throttled v1 call answers `429` with `Retry-After`; the module waits (at most 300 s) and retries up to three times. An API-key (beta) call is not retried: it fails on the first `429`, as in 0.8.0. `Get-InforcerTenant -Detailed` and anything else that fans out per tenant costs one call per tenant.
 
 ### `failedPolicyTypes` and the Intune gap
 
@@ -931,7 +931,7 @@ Summary of an Entra ID group (returned from list endpoint).
 | description | string | No | Description of the group. |
 | mail | string | No | Email address of the group. |
 | visibility | string | No | Visibility (e.g. Public, Private). |
-| membershipRule | string | No | Dynamic membership rule; `null` for assigned groups. Filled on the list since inforcer fixed ENG-6701 (verified live 2026-11-03: every `DynamicMembership` group carried its rule). |
+| membershipRule | string | No | Dynamic membership rule; `null` for assigned groups. Filled on the list since inforcer fixed it (2026-11; verified live 2026-11-03: every `DynamicMembership` group carried its rule). |
 | groupTypes | array\<string\> | Yes | Types of the group (e.g. Unified, DynamicMembership). |
 
 **PSTypeName:** `InforcerCommunity.GroupSummary`

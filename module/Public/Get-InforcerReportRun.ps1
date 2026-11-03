@@ -42,10 +42,10 @@
     Get-InforcerReportRun
     Lists every visible run (up to 500, last 7 days).
 .EXAMPLE
-    Get-InforcerReportRun -RunId 094a49ed-b9b8-492b-870f-0f76fd3b2954
+    Get-InforcerReportRun -RunId 00000000-0000-0000-0000-000000000009
     Returns metadata for a single run (subject to the list-endpoint propagation lag).
 .EXAMPLE
-    Get-InforcerReportRun -RunId 094a49ed-b9b8-492b-870f-0f76fd3b2954 -Wait
+    Get-InforcerReportRun -RunId 00000000-0000-0000-0000-000000000009 -Wait
     Polls the run until terminal and returns its metadata with outputs embedded.
 .EXAMPLE
     Get-InforcerReportRun -IncludeOutputs

@@ -17,8 +17,8 @@ function Invoke-InforcerApiRequest {
           * problem+json:  { type, title, status, detail, instance, errors{} }  -> "title: detail (field: message)"
           * App-layer:     { success, message, errors[], errorCode }
           * APIM gateway:  { statusCode, message }
-        ErrorId is ApiRequestFailed_<status>. 429 is retried up to three times honouring Retry-After
-        (seconds or HTTP date); a v1 401 renews the token once and retries.
+        ErrorId is ApiRequestFailed_<status>. On v1, 429 is retried up to three times honouring Retry-After
+        (seconds or HTTP date, capped at 300 s) and a 401 renews the token once and retries.
 
         The x-correlation-id response header is logged to the verbose stream and included in error
         messages when present.
@@ -99,6 +99,7 @@ function Invoke-InforcerApiRequest {
         try {
             $response = Invoke-InforcerHttpRequest -Request $attempt
         } catch {
+            Clear-InforcerRequestCredential -ErrorRecord $_
             $detail = Protect-InforcerApiKeyInText -Text $_.Exception.Message -Session $session
             Write-Error -Message "Inforcer API request failed: $detail" -ErrorId 'ApiRequestFailed' -Category ConnectionError
             return
@@ -114,7 +115,7 @@ function Invoke-InforcerApiRequest {
             break
         }
 
-        if ($statusCode -eq 429 -and $retries429 -lt 3) {
+        if ($statusCode -eq 429 -and $isV1 -and $retries429 -lt 3) {
             $retries429++
             $delay = Get-InforcerRetryDelay -Value (Get-InforcerHeaderValue -Headers $response.Headers -Name 'Retry-After') -Attempt $retries429
             Write-Verbose "Rate limited (HTTP 429). Retrying in $delay second(s) (attempt $retries429 of 3)."

@@ -40,7 +40,7 @@ if (-not $requestErrors) {
     return $true
 }
 
-$reason = $requestErrors[0].Exception.Message
+$reason = $requestErrors[-1].Exception.Message
 Write-Host 'FAILED! Connection test failed.' -ForegroundColor Red
 Write-Host "Error: $reason" -ForegroundColor Red
 Write-Warning "Inforcer connection test failed: $reason"

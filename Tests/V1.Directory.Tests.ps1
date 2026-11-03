@@ -225,6 +225,81 @@ Describe 'Get-InforcerGroup' {
         Set-DirRoute { param($Uri, $Method, $Body) New-DirResponse '{"groups":[],"groupCount":0}' }
         { Get-InforcerGroup -TenantId $script:Tid -Group 'Nope' -ErrorAction Stop } | Should -Throw '*No group found*'
     }
+
+    It 'v1: leaves members null and warns when the members call fails' {
+        Set-DirSession
+        $groupRoute = $script:GroupRoute
+        Set-DirRoute ({
+            param($Uri, $Method, $Body)
+            if ($Uri -match '/members') { New-DirResponse '{"title":"Server error","status":500}' 500 }
+            else { & $groupRoute $Uri $Method $Body }
+        }.GetNewClosure())
+        $g = Get-InforcerGroup -TenantId $script:Tid -Group $script:G1 -WarningVariable w -WarningAction SilentlyContinue
+        $g.id | Should -Be $script:G1
+        $g.PSObject.Properties.Name | Should -Contain 'members'
+        $g.members | Should -BeNullOrEmpty
+        $null -eq $g.members | Should -BeTrue
+        "$($w[0])" | Should -Match 'members'
+        "$($w[0])" | Should -Match '500'
+        (Get-InforcerGroup -TenantId $script:Tid -Group $script:G1 -OutputType JsonObject -WarningAction SilentlyContinue) | Should -Match '"members":\s*null'
+    }
+
+    It '<Name>: a network failure reports the module error, not a binding error' -ForEach @(
+        @{ Name = 'beta'; Beta = $true; TenantId = 7 }
+        @{ Name = 'v1'; Beta = $false; TenantId = '00000000-0000-0000-0000-000000000001' }
+    ) {
+        Set-DirSession -Beta:$Beta
+        & $script:M { $s = $script:InforcerSession; $s.ApiHost = 'https://127.0.0.1:1'; $s.BaseUrl = if ($s.ApiVersion -eq 'beta') { 'https://127.0.0.1:1/api' } else { 'https://127.0.0.1:1' } }
+        $null = Get-InforcerGroup -TenantId $TenantId -Group $script:G1 -ErrorAction SilentlyContinue -ErrorVariable e
+        @($e).Count | Should -BeGreaterThan 0
+        @($e | Where-Object { "$($_.FullyQualifiedErrorId)" -match 'ParameterBindingFailed|CannotConvertArgument' }).Count | Should -Be 0
+        @($e)[-1].FullyQualifiedErrorId | Should -Match '^ApiRequestFailed'
+        $err = $null
+        try { Get-InforcerGroup -TenantId $TenantId -Group 'Group One' -ErrorAction Stop } catch { $err = $_ }
+        $err.Exception.Message | Should -Match "Failed to search for group 'Group One': \S"
+    }
+}
+
+Describe 'List streaming' {
+    It '<Cmdlet> | Select-Object -First 1 requests one page of five on <Name>' -ForEach @(
+        @{ Cmdlet = 'Get-InforcerUser'; Name = 'beta'; Beta = $true; TenantId = 5 }
+        @{ Cmdlet = 'Get-InforcerGroup'; Name = 'beta'; Beta = $true; TenantId = 5 }
+        @{ Cmdlet = 'Get-InforcerUser'; Name = 'v1'; Beta = $false; TenantId = '00000000-0000-0000-0000-000000000001' }
+        @{ Cmdlet = 'Get-InforcerGroup'; Name = 'v1'; Beta = $false; TenantId = '00000000-0000-0000-0000-000000000001' }
+    ) {
+        Set-DirSession -Beta:$Beta
+        $collection = if ($Cmdlet -eq 'Get-InforcerUser') { 'users' } else { 'groups' }
+        Set-DirRoute ({
+            param($Uri, $Method, $Body)
+            $n = if ($Uri -match 'continuationToken=p(\d)') { [int]$Matches[1] } else { 1 }
+            $items = "[{""id"":""i$n-1"",""displayName"":""Item $n-1""},{""id"":""i$n-2"",""displayName"":""Item $n-2""}]"
+            $next = if ($n -lt 5) { ",""continuationToken"":""p$($n + 1)""" } else { '' }
+            if ($Beta) { New-DirResponse "{""success"":true,""data"":$items$next}" }
+            else { New-DirResponse "{""$collection"":$items$next}" }
+        }.GetNewClosure())
+
+        $first = & $Cmdlet -TenantId $TenantId | Select-Object -First 1
+        $first.id | Should -Be 'i1-1'
+        $global:DirCalls.Count | Should -Be 1
+
+        $global:DirCalls.Clear()
+        @(& $Cmdlet -TenantId $TenantId).Count | Should -Be 10
+        $global:DirCalls.Count | Should -Be 5
+    }
+
+    It 'Get-InforcerGroup -Filter -MaxResults stops paging once enough groups match' {
+        Set-DirSession -Beta
+        Set-DirRoute {
+            param($Uri, $Method, $Body)
+            $n = if ($Uri -match 'continuationToken=p(\d)') { [int]$Matches[1] } else { 1 }
+            $next = if ($n -lt 5) { ",""continuationToken"":""p$($n + 1)""" } else { '' }
+            New-DirResponse "{""success"":true,""data"":[{""id"":""g$n"",""displayName"":""Finance $n""},{""id"":""s$n"",""displayName"":""Sales $n""}]$next}"
+        }
+        $g = @(Get-InforcerGroup -TenantId 5 -Filter 'Sales*' -MaxResults 2)
+        $g.displayName | Should -Be @('Sales 1', 'Sales 2')
+        $global:DirCalls.Count | Should -Be 2
+        @(Get-InforcerGroup -TenantId 5 -Filter 'Sales*' -MaxResults 2 -OutputType JsonObject | ConvertFrom-Json).Count | Should -Be 2
+    }
 }
 
 Describe 'Get-InforcerRole, Get-InforcerSecureScore, Get-InforcerSupportedEventType' {

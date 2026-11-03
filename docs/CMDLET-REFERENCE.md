@@ -10,6 +10,12 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ---
 
+## Personal data
+
+User details (`Get-InforcerUser -UserId`), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
+
+---
+
 ## Connect-Inforcer
 
 Establishes a secure connection to the inforcer REST API. There are two parameter sets, and the API version follows from the one you use:
@@ -19,6 +25,8 @@ Establishes a secure connection to the inforcer REST API. There are two paramete
 
 Secrets and tokens are stored as SecureString only; `-PassThru` never exposes them in plain text.
 
+> **Known limit:** after a failed request, `$Error` and your own `-ErrorVariable` still hold PowerShell's transport error record. The module strips the auth header from it, but it keeps the request URL (host, path, tenant id), so review `Format-List * -Force` dumps before sharing them.
+
 **Required API scope(s)**: None (session management only; a client-credentials login only needs a valid client)
 
 | Parameter | Type | Mandatory | Description |
@@ -27,9 +35,9 @@ Secrets and tokens are stored as SecureString only; `-PassThru` never exposes th
 | **ClientId** | String | Yes (ClientCredentials set) | Client ID of an inforcer API client (create it under Configure > REST API in the portal). |
 | **ClientSecret** | Object | Yes (ClientCredentials set) | Client secret (string or SecureString). |
 | **Region** | String | No | `uk`, `eu`, `us`, `anz`. Default: `uk`. Ignored when `-BaseUrl` is set. |
-| **BaseUrl** | String | No | Custom API host, with or without `/api`. When set, `-Region` is ignored. |
+| **BaseUrl** | String | No | Custom API host, with or without `/api`. Must use `https`; an `http` URL is rejected. When set, `-Region` is ignored. |
 | **FetchGraphData** | Switch | No | Also connect to Microsoft Graph via interactive sign-in. Enables group name resolution in `Export-InforcerTenantDocumentation`. |
-| **PassThru** | Switch | No | Returns only an independent copy of the session hashtable (no status object, so `$src = Connect-Inforcer ... -PassThru` holds a session usable with `-SourceSession`; earlier versions also returned the status object, which broke that example). Use to capture sessions for cross-account comparison with `Compare-InforcerEnvironments` (sessions of different login types can be mixed). |
+| **PassThru** | Switch | No | Returns only an independent copy of the session hashtable (no status object, so `$src = Connect-Inforcer ... -PassThru` holds a session usable with `-SourceSession`; earlier versions also returned the status object, which broke that example). Use to capture sessions for cross-account comparison with `Compare-InforcerEnvironments` (sessions of different login types can be mixed). A captured session stays usable after `Disconnect-Inforcer`, which clears only the module's session; remove it when done (`Remove-Variable src`). |
 
 ### Examples
 
@@ -45,6 +53,7 @@ Connect-Inforcer -ApiKey "your-api-key" -Region uk
 $src = Connect-Inforcer -ClientId $id1 -ClientSecret $secret1 -Region uk -PassThru
 $dst = Connect-Inforcer -ApiKey $key2 -Region eu -PassThru
 Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -SourceSession $src -DestinationSession $dst
+Remove-Variable src, dst   # captured sessions outlive Disconnect-Inforcer
 ```
 
 ### Example output
@@ -66,7 +75,7 @@ WARNING: You connected with an API key, which uses inforcer's legacy beta API. A
 
 ## Disconnect-Inforcer
 
-Disconnects from the inforcer API and clears the session from memory.
+Disconnects from the inforcer API and clears the module's session from memory. Sessions captured with `Connect-Inforcer -PassThru` are separate copies and stay usable after Disconnect; remove them when done (`Remove-Variable src, dst`).
 
 **Required API scope(s)**: None (session management only; a client-credentials login only needs a valid client)
 
@@ -387,6 +396,8 @@ Retrieves audit events from the inforcer API. Supports optional `-EventType`, `-
 
 > **v1:** events have no `ClientId`, `Message`, `RelId` or `RelType`; there are 130 event types (beta: 139).
 
+> **Personal data:** events carry user names, UPNs and IP addresses. See [Personal data](#personal-data).
+
 **Endpoints called (beta)**: `POST /beta/auditEvents/search`
 **Required API scope(s) (API key, beta)**: `Audit.Read` *(not in the API team's published scope→route mapping — the route `/beta/auditEvents/search` is unmapped; `Audit.Read` is the assumed scope based on naming. Confirm with inforcer API team.)*
 **Endpoints on v1**: `POST /v1/auditEvents/search`, `GET /v1/auditEvents/types`
@@ -446,6 +457,8 @@ The default view shows 8 key properties. Use `| Select-Object *` to see all prop
 ## Get-InforcerUser
 
 Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information.
+
+> **Personal data:** `-UserId` returns a full personal record. See [Personal data](#personal-data).
 
 > **v1:** the list view returns `Groups` and `Roles` as counts (`groupCount`/`roleCount` mapped to those names), not arrays; `-UserId` returns the full record.
 
@@ -556,7 +569,7 @@ Visibility  : Public
 GroupTypes  : Unified
 ```
 
-> **`MembershipRule` is filled on the list.** Since inforcer fixed ENG-6701 (verified live 2026-11-03),
+> **`MembershipRule` is filled on the list.** Since inforcer fixed this (2026-11, verified live 2026-11-03),
 > the list returns the rule for every `DynamicMembership` group on both APIs, and the list view shows it.
 
 ### Example output (ById)
@@ -718,6 +731,8 @@ Use `| Select-Object *` to see all properties on any level.
 ## Export-InforcerTenantDocumentation
 
 Generates comprehensive, human-readable documentation of an entire M365 tenant's configuration as managed through the inforcer API. Pulls data from existing cmdlets (`Get-InforcerBaseline`, `Get-InforcerTenant`, `Get-InforcerTenantPolicies`), resolves Intune Settings Catalog settingDefinitionIDs to friendly names, and outputs in multiple formats.
+
+> **Personal data:** written documents can contain names and UPNs (for example assignment and group details). See [Personal data](#personal-data).
 
 > **Intune on v1:** the v1 policies endpoint currently returns no Intune policies, so a client-credentials login documents every other product but not Intune. The console warning from `Get-InforcerTenantPolicies` is reused (no second warning), and the document carries this note: "The inforcer v1 API (client-credentials login) currently returns no Intune policies and no Defender settings catalog policies, so they are missing here. Connect with an API key (Connect-Inforcer -ApiKey) to include them." HTML: a "Note:" block in the report header; Markdown: a `> **Note:** ...` line after the tag line; Excel: a first worksheet "Notes" with one row per note. API-key output is unchanged.
 
@@ -1172,6 +1187,8 @@ OutputCount     : 2
 ## Save-InforcerReportOutput
 
 Downloads a report output to disk. Pipeline-friendly: pipe output records from `Invoke-InforcerReport -NoSave` or `Get-InforcerReportRun -IncludeOutputs` to download every output in bulk.
+
+> **Personal data:** saved outputs can contain names and UPNs. See [Personal data](#personal-data).
 
 **Endpoints called (beta)**: `GET /beta/reports/runs/{runId}/outputs/{outputId}`
 **Required API scope(s) (API key, beta)**: `Reports.Read`

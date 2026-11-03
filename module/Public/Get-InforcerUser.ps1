@@ -39,7 +39,7 @@ function Get-InforcerUser {
         Searches for users matching "Adele" in tenant 139.
 
     .EXAMPLE
-        Get-InforcerUser -TenantId 139 -UserId "8e61ce11-a45b-42a6-8ca4-1d881781566d"
+        Get-InforcerUser -TenantId 139 -UserId "00000000-0000-0000-0000-000000000005"
 
         Gets full detail for a specific user.
 
@@ -110,7 +110,7 @@ function Get-InforcerUser {
 
             if ($null -eq $response) {
                 # Only emit UserNotFound if API returned 404; otherwise the API helper already wrote the real error
-                if ($err -and $err[0].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
+                if ($err -and $err[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
                     Write-Error -Message "User '$UserId' not found in tenant '$resolvedTenantId'." -ErrorId 'UserNotFound' -Category ObjectNotFound
                 } elseif (-not $err) {
                     Write-Error -Message "User '$UserId' not found in tenant '$resolvedTenantId'." -ErrorId 'UserNotFound' -Category ObjectNotFound
@@ -131,17 +131,16 @@ function Get-InforcerUser {
         $endpoint = "/tenants/$resolvedTenantId/users"
         if ($Search) { $endpoint += '?search=' + [System.Uri]::EscapeDataString($Search) }
 
-        $users = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType User -MaxResults $MaxResults)
-
         if ($OutputType -eq 'JsonObject') {
+            $users = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType User -MaxResults $MaxResults)
             if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject $users -Depth 100 }
             return $users | ConvertTo-Json -Depth 100
         }
 
-        foreach ($item in $users) {
-            $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType UserSummary
-            $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.UserSummary')
-            $item
+        Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType User -MaxResults $MaxResults | ForEach-Object {
+            $null = Add-InforcerPropertyAliases -InputObject $_ -ObjectType UserSummary
+            $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.UserSummary')
+            $_
         }
     }
 }

@@ -9,7 +9,7 @@ function Resolve-InforcerBaselineId {
     .PARAMETER BaselineId
         Baseline GUID or friendly baseline name.
     .PARAMETER BaselineData
-        Optional. Pre-fetched array of baseline objects (e.g. from GET /beta/baselines). When provided
+        Optional. Pre-fetched array of baseline objects (e.g. from GET /baselines). When provided
         and BaselineId is a name, resolution is done from this data instead of calling the API.
     .OUTPUTS
         System.String - The resolved baseline GUID.
@@ -36,7 +36,7 @@ function Resolve-InforcerBaselineId {
         Write-Verbose "Baseline name detected: '$baselineIdString'. Looking up baseline GUID..."
         $baselinesToUse = $BaselineData
         if ($null -eq $baselinesToUse -or $baselinesToUse.Count -eq 0) {
-            $baselinesToUse = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+            $baselinesToUse = @(Invoke-InforcerApiRequest -Endpoint '/baselines' -Method GET -OutputType PowerShellObject -ObjectType Baseline)
         }
         $baselines = if ($baselinesToUse -is [array]) { $baselinesToUse } else { @($baselinesToUse) }
 

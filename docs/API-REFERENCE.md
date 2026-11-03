@@ -1,6 +1,6 @@
-# Inforcer API Reference
+# inforcer API Reference
 
-This document describes the Inforcer REST API endpoints, schemas, and response structures used by the InforcerCommunity PowerShell module.
+This document describes the inforcer REST API endpoints, schemas, and response structures used by the InforcerCommunity PowerShell module.
 
 > **Note**: This is a technical reference for the underlying API. For PowerShell cmdlet usage, see [CMDLET-REFERENCE.md](./CMDLET-REFERENCE.md).
 
@@ -9,8 +9,18 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
 ## Table of Contents
 
 - [Authentication](#authentication)
-- [API Scopes](#api-scopes)
-- [Endpoints](#endpoints)
+- [API Scopes](#api-scopes) (API key, beta)
+- [API client permissions (v1)](#api-client-permissions-v1)
+- [v1 API (client credentials)](#v1-api-client-credentials)
+  - [Token](#token)
+  - [Response envelope](#response-envelope)
+  - [Errors](#errors)
+  - [Pagination](#pagination)
+  - [Rate limits](#rate-limits)
+  - [failedPolicyTypes and the Intune gap](#failedpolicytypes-and-the-intune-gap)
+  - [v1 endpoints](#v1-endpoints)
+  - [How v1 fields map to the module's names](#how-v1-fields-map-to-the-modules-names)
+- [Beta endpoints](#beta-endpoints)
   - [Baselines](#baselines)
   - [Alignment Scores](#alignment-scores)
   - [Tenants](#tenants)
@@ -46,20 +56,34 @@ This document describes the Inforcer REST API endpoints, schemas, and response s
   - [ReportType](#reporttype)
   - [ReportRun](#reportrun)
   - [ReportOutput](#reportoutput)
-- [Response Wrapper](#response-wrapper)
-- [Error Responses](#error-responses)
+- [Response Wrapper](#response-wrapper-beta)
+- [Error Responses](#error-responses-beta)
 
 ---
 
 ## Authentication
 
-All API requests require authentication via API key. Use `Connect-Inforcer` to establish a session before calling other cmdlets.
+The module supports two logins; the API version follows from the login. Use `Connect-Inforcer` to establish a session before calling other cmdlets.
+
+| | Client credentials (recommended) | API key (legacy) |
+|---|---|---|
+| Cmdlet | `Connect-Inforcer -ClientId <id> -ClientSecret <secret> [-Region] [-BaseUrl]` | `Connect-Inforcer -ApiKey <key> [-Region] [-BaseUrl]` |
+| API | v1, `https://api-{region}.inforcer.com/v1` | beta, `https://api-{region}.inforcer.com/api/beta` |
+| Credential | OAuth 2.0 client credentials: `POST https://api-{region}.inforcer.com/oauth/token` returns a 60-minute token, renewed automatically | API key |
+| Header | `Authorization: Bearer <token>` | `Inf-Api-Key: <key>` |
+| Not interchangeable | a token does not work on beta | a key does not work on v1 |
+
+`Get-InforcerAuthHeader` is the only place the module builds either header. Secrets and tokens are held as SecureString and never written to output. The legacy API is due to be retired by inforcer (no date announced) and `Connect-Inforcer -ApiKey` warns about it. Regions: `anz`, `eu`, `uk`, `us`.
+
+Permissions differ per login: key scopes for the API key ([API Scopes](#api-scopes)), API client permissions for client credentials ([API client permissions (v1)](#api-client-permissions-v1)).
 
 ---
 
 ## API Scopes
 
-Inforcer API keys are issued with one or more scopes. Each cmdlet and endpoint below lists its required scope(s). Request the narrowest scope that satisfies your use case; `Tenants.Read` is a broad scope that covers most tenant-related reads.
+> Applies to API-key logins (beta API). For API clients see [API client permissions (v1)](#api-client-permissions-v1).
+
+inforcer API keys are issued with one or more scopes. Each cmdlet and endpoint below lists its required scope(s). Request the narrowest scope that satisfies your use case; `Tenants.Read` is a broad scope that covers most tenant-related reads.
 
 ### Scope → Routes
 
@@ -79,7 +103,7 @@ Inforcer API keys are issued with one or more scopes. Each cmdlet and endpoint b
 | `Reports.Read` | `/beta/reports/types`, `/beta/reports/runs`, `/beta/reports/runs/{runId}/outputs`, `/beta/reports/runs/{runId}/outputs/{outputId}` |
 | `Reports.Run` | `/beta/reports/runs` *(POST only)* |
 
-> **Note on `Audit.Read`**: The scope mapping provided by the Inforcer API team lists `Audit.Read → /beta/assessments`, but `/beta/assessments` is already covered by `Assessments.Read`, and the module's audit cmdlets call `/beta/auditEvents/search` and `/beta/auditEvents/eventTypes`. This table assumes `Audit.Read` applies to the `/beta/auditEvents/*` routes. **This needs confirmation with the Inforcer API team.**
+> **Note on `Audit.Read`**: The scope mapping provided by the inforcer API team lists `Audit.Read → /beta/assessments`, but `/beta/assessments` is already covered by `Assessments.Read`, and the module's audit cmdlets call `/beta/auditEvents/search` and `/beta/auditEvents/eventTypes`. This table assumes `Audit.Read` applies to the `/beta/auditEvents/*` routes. **This needs confirmation with the inforcer API team.**
 
 ### Cmdlet → Endpoints → Required Scopes
 
@@ -113,7 +137,172 @@ Built mechanically by tracing each public cmdlet through the module (including t
 
 ---
 
-## Endpoints
+## API client permissions (v1)
+
+An API client (client credentials, v1 API) carries **permissions** instead of key scopes. They are granted per client in the inforcer portal (**Configure > REST API**, Permissions tab) and are resolved server side: the access token carries no scope or permission claims, so a client cannot read its own permissions. A client can also be restricted to specific tenants (Filters tab); a tenant outside the filter answers `404`.
+
+The permission names below are the ones the portal shows (feature and grant). **The per-endpoint mapping is unconfirmed.** It is inferred from the permission names: the test client held all of these permissions at once, so no endpoint was checked against a single permission. Treat every row as *(unconfirmed)* until inforcer publishes the mapping, and grant the neighbouring permission if a call answers `403`.
+
+### Permission → Routes
+
+| Area / feature | Grant | v1 routes | Status |
+|----------------|-------|-----------|--------|
+| Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}` | unconfirmed |
+| Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
+| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
+| Tenants / Entra Dashboard | Read: View | `/v1/tenants/{msTenantId}/secureScores`, `/v1/tenants/{msTenantId}/directoryRoles` | unconfirmed |
+| Align / Baselines | Read: View | `/v1/baselines` | unconfirmed |
+| Align / Align | Read: View | `/v1/alignmentScores`, `/v1/tenants/{msTenantId}/alignmentDetails` | unconfirmed |
+| Assess / Tenant Assessment | Write: Run | `/v1/assessments`, `/v1/tenants/{msTenantId}/assessments/{assessmentId}/runs` | unconfirmed (whether listing needs the run grant) |
+| Assess / Reports | Write: All (3 grants) | `/v1/reports/types`, `/v1/reports/runs`, `/v1/reports/runs/{reportRunId}/outputs`, `/v1/reports/runs/{reportRunId}/outputs/{outputId}` | unconfirmed (which of the 3 grants gates which route) |
+| Configure / Activity | Read | `/v1/auditEvents/types`, `/v1/auditEvents/search` | unconfirmed |
+| Copilot Manager / Copilot Manager | Write: Manage | none in the current spec; the module does not use it | n/a |
+| TDR / Threats | Read: View | none in the current spec; the module does not use it | n/a |
+
+### Cmdlet → Endpoints → Required permissions (v1)
+
+`msTenantId` is the Microsoft tenant ID. A GUID passed to `-TenantId` is used as is; only a tenant **name** costs a `GET /v1/tenants` lookup (cached per session), so **Tenants** is needed for names (marked †).
+
+| Cmdlet | Endpoints called (v1) | Permissions |
+|--------|-----------------------|-------------|
+| `Connect-Inforcer` | `POST /oauth/token` (no permission needed; any valid client connects) | None |
+| `Disconnect-Inforcer`, `Test-InforcerConnection` | none / token check only | None |
+| `Get-InforcerTenant` | `GET /v1/tenants`; with `-Detailed` or `-TenantId` also `GET /v1/tenants/{msTenantId}` per tenant | Tenants |
+| `Get-InforcerBaseline` | `GET /v1/baselines` | Baselines |
+| `Get-InforcerTenantPolicies` | `GET /v1/tenants/{msTenantId}/policies` | Policies, Tenants† |
+| `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails` | Baselines + Align + Tenants |
+| `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search`, `GET /v1/auditEvents/types` | Activity |
+| `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
+| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]` | User & Group Management, Tenants† |
+| `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
+| `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
+| `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
+| `Get-InforcerAssessment` | `GET /v1/assessments` | Tenant Assessment |
+| `Invoke-InforcerAssessment` | `GET /v1/tenants`, `GET /v1/assessments`, `POST /v1/tenants/{msTenantId}/assessments/{assessmentId}/runs` | Tenants + Tenant Assessment |
+| `Export-InforcerTenantDocumentation` | `GET /v1/tenants`, `GET /v1/baselines`, `GET /v1/tenants/{msTenantId}/policies` (+ `alignmentDetails` for baseline scoping) | Tenants + Baselines + Policies (+ Align) |
+| `Compare-InforcerEnvironments` | same as Export, per side | Tenants + Baselines + Policies (+ Align) |
+| `Get-InforcerReportType` | `GET /v1/reports/types` | Reports |
+| `Invoke-InforcerReport` | `POST /v1/reports/runs`, `GET /v1/reports/runs/{reportRunId}/outputs[/{outputId}]`, `GET /v1/tenants`† | Reports, Tenants† |
+| `Get-InforcerReportRun` | `GET /v1/reports/runs`, `GET /v1/reports/runs/{reportRunId}/outputs` | Reports |
+| `Save-InforcerReportOutput` | `GET /v1/reports/runs/{reportRunId}/outputs/{outputId}` | Reports |
+
+All rows are *(unconfirmed)* per the note above. For the legacy key scopes of the same cmdlets see [Cmdlet → Endpoints → Required Scopes](#cmdlet--endpoints--required-scopes) (API key).
+
+---
+
+## v1 API (client credentials)
+
+The v1 API is inforcer's current public API (`inforcer | Public API`, OpenAPI 1.0.0). The module chooses it when you log in with `Connect-Inforcer -ClientId ... -ClientSecret ...` and maps every v1 response to the property names the beta API used (see `module/Private/ConvertFrom-InforcerV1Response.ps1`), so cmdlet output stays the same across both logins. The spec is public at `https://api-{region}.inforcer.com/v1/openapi.json`; a copy is tracked in [`openapi-snapshot-v1.json`](./openapi-snapshot-v1.json) and refreshed by the Powershell-Module-Automation workflows.
+
+### Differences at a glance
+
+| | v1 | beta (legacy) |
+|---|----|---------------|
+| Auth | `Authorization: Bearer <token>` | `Inf-Api-Key: <key>` |
+| Base | `https://api-{region}.inforcer.com/v1` | `https://api-{region}.inforcer.com/api/beta` |
+| Tenant identifier | `msTenantId` (Microsoft tenant GUID) | `clientTenantId` (inforcer numeric ID) |
+| Success body | one named collection (`{ "tenants": [ ... ] }`); single objects bare | `{ "data": ..., "success": true }` |
+| Error body | `application/problem+json` | `{ "success": false, "message", "errors" }` |
+| Rate limit | 400 calls/minute per partner, `429` + `Retry-After` | 400 calls/hour per API key |
+| Permissions | API client permissions + tenant filters | key scopes |
+| Status | current | due to be retired (no date); bug fixes only |
+
+### Token
+
+```
+POST https://api-{region}.inforcer.com/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id=<client id>&client_secret=<client secret>
+```
+
+Response: `{ "access_token": "...", "token_type": "Bearer", "expires_in": 3600 }`. The token lasts 60 minutes, has no refresh token and is bound to the region (`aud`). The module requests a new token when less than five minutes remain, and once after a `401`. The OpenAPI document needs no token.
+
+### Response envelope
+
+Every v1 response is an object holding **one named collection** and sometimes metadata: `tenants`, `policies`, `users`, `groups`, `members`, `roles`, `baselines`, `alignmentScores`, `assessments`, `reportRuns`, `outputs`, `reportTypes`, `auditEvents`, `eventTypes`. There is no `data` or `status` wrapper. Metadata keys the module knows: `continuationToken`, `userCount`, `groupCount`, `memberCount`, `failedPolicyTypes`. Single-object endpoints (tenant, user, group, secure scores, alignment details, assessment run) return the object itself. The module unwraps the collection, so cmdlets return the items directly and `-OutputType JsonObject` is always an array.
+
+> The spec marks many fields *Required* that the documentation calls nullable (and a few are typed `unknown`: `alignedBaselineMsTenantId`, `baselineTenant`, an output's `msTenantId`). Do not read Required as non-null.
+
+### Errors
+
+Errors are `application/problem+json`: `type`, `title`, `status`, `detail`, `instance`; `400` adds `errors{}` with field messages.
+
+| Status | Meaning | Module behaviour |
+|--------|---------|------------------|
+| 400 | Invalid request (`errors{}` lists the fields) | Error with title, detail and field messages |
+| 401 | Token missing or expired | Token renewed once, request retried |
+| 403 | Missing permission or tenant | "You don't have permission to access this tenant or resource." (or the API's detail) |
+| 404 | Does not exist **or** outside the client's tenant filter | "Tenant or resource not found." |
+| 409 | Conflict | Error with the API's detail |
+| 429 | Rate limit | Waits for `Retry-After` (seconds or HTTP date, capped at 300 s), up to 3 retries |
+| 500 / 502 | Server error (assessment runs can return both) | Error with the API's detail |
+
+The ErrorId stays `ApiRequestFailed_<status>` for both APIs.
+
+### Pagination
+
+Lists that page return `continuationToken`; pass it back until it is empty. Page sizes: users 200, groups 20, group members 100. `GET` endpoints take `continuationToken` in the query (users, groups, members); `POST /v1/auditEvents/search` takes it in the JSON body together with `pageSize`. `search` filters users and groups by text. `userCount`, `groupCount` and `memberCount` (nullable) give totals. The module follows tokens in `Invoke-InforcerPagedRequest` for both APIs and stops on an empty or repeated token.
+
+### Rate limits
+
+v1: **400 calls per minute per partner**, shared by every client of the partner. Beta: **400 calls per hour per API key**. A throttled v1 call answers `429` with `Retry-After`; the module waits and retries up to three times. `Get-InforcerTenant -Detailed` and anything else that fans out per tenant costs one call per tenant.
+
+### `failedPolicyTypes` and the Intune gap
+
+`GET /v1/tenants/{msTenantId}/policies` returns `{ "policies": [ ... ], "failedPolicyTypes": { ... } }`. A non-empty `failedPolicyTypes` means the result is partial (policy types that could not be read, with a reason); `Get-InforcerTenantPolicies` writes a warning for it.
+
+**Known gap:** as of 2026-11 the endpoint returns **no Intune policies** and no Defender settings-catalog policies (`policyTypeId` 10), while `failedPolicyTypes` is empty, so the response looks complete. Every other product (Entra, Exchange, SharePoint, Teams, Purview, M365 Admin Center, other Defender types) matches beta. `GET /v1/tenants/{msTenantId}/alignmentDetails` does carry Intune policies. `Get-InforcerTenantPolicies` warns once per v1 tenant with zero Intune policies ("The v1 API currently returns no Intune policies for this tenant (a known gap in inforcer's v1 API). Connecting with an API key still returns them."); `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` reuse that warning and add a note to their reports (see their CMDLET-REFERENCE sections). Notes appear only on v1 when Intune is missing. An API-key login does not have the gap. Also on v1: policy `id` is the Microsoft policy ID (beta: the inforcer ID), so the module keys on `policyData.id` where it can, and `GET /v1/baselines` `items` are policy categories (beta: item references).
+
+### v1 endpoints
+
+Every path in the v1 spec, its beta equivalent and the module cmdlet. The module writes version-neutral endpoints (`/tenants/{id}/policies`); `Get-InforcerBaseUrl` adds `/beta` or `/v1` and applies the renames `roles` → `directoryRoles`, `auditEvents/eventTypes` → `auditEvents/types` and query `customBaselineId` → `baselineId`.
+
+| v1 path | Method | Beta equivalent | Cmdlet |
+|---------|--------|-----------------|--------|
+| `/v1/tenants` | GET | `/beta/tenants` | `Get-InforcerTenant` |
+| `/v1/tenants/{msTenantId}` | GET | `/beta/tenants/{tenantId}` | `Get-InforcerTenant -Detailed` / `-TenantId` (the sanctioned use of this endpoint) |
+| `/v1/tenants/{msTenantId}/policies` | GET | `/beta/tenants/{tenantId}/policies` | `Get-InforcerTenantPolicies`, Export, Compare |
+| `/v1/tenants/{msTenantId}/alignmentDetails` | GET (`baselineId` required) | `/beta/tenants/{tenantId}/alignmentDetails` (`customBaselineId`) | `Get-InforcerAlignmentDetails` |
+| `/v1/tenants/{msTenantId}/secureScores` | GET | `/beta/tenants/{tenantId}/secureScores` | `Get-InforcerSecureScore` |
+| `/v1/tenants/{msTenantId}/users` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/users` | `Get-InforcerUser` |
+| `/v1/tenants/{msTenantId}/users/{userId}` | GET | `/beta/tenants/{tenantId}/users/{userId}` | `Get-InforcerUser -UserId` |
+| `/v1/tenants/{msTenantId}/groups` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/groups` | `Get-InforcerGroup` |
+| `/v1/tenants/{msTenantId}/groups/{groupId}` | GET | `/beta/tenants/{tenantId}/groups/{groupId}` | `Get-InforcerGroup -Group` |
+| `/v1/tenants/{msTenantId}/groups/{groupId}/members` | GET (`continuationToken`) | none (v1 only) | `Get-InforcerGroup -Group` (attached as members) |
+| `/v1/tenants/{msTenantId}/directoryRoles` | GET | `/beta/tenants/{tenantId}/roles` | `Get-InforcerRole` |
+| `/v1/tenants/{msTenantId}/assessments/{assessmentId}/runs` | POST (synchronous) | `/beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Invoke-InforcerAssessment` |
+| `/v1/baselines` | GET (`baselineMsTenantId`) | `/beta/baselines` (`baselineTenantId`) | `Get-InforcerBaseline` |
+| `/v1/alignmentScores` | GET | `/beta/alignmentScores` | `Get-InforcerAlignmentDetails` (table) |
+| `/v1/assessments` | GET | `/beta/assessments` | `Get-InforcerAssessment` |
+| `/v1/reports/runs` | GET, POST (202 `reportRunId`) | `/beta/reports/runs` | `Get-InforcerReportRun`, `Invoke-InforcerReport` |
+| `/v1/reports/runs/{reportRunId}/outputs` | GET | `/beta/reports/runs/{reportRunId}/outputs` | `Get-InforcerReportRun`, `Invoke-InforcerReport` |
+| `/v1/reports/runs/{reportRunId}/outputs/{outputId}` | GET (raw json/csv/html/pdf) | `/beta/reports/runs/{reportRunId}/outputs/{outputId}` | `Save-InforcerReportOutput`, `Invoke-InforcerReport` |
+| `/v1/reports/types` | GET | `/beta/reports/types` | `Get-InforcerReportType` |
+| `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
+| `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
+
+That is 21 paths and 22 operations (`/v1/reports/runs` has GET and POST). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+
+### How v1 fields map to the module's names
+
+| Object | v1 field → module property | No v1 equivalent / v1 only |
+|--------|----------------------------|----------------------------|
+| Tenant | `name` → `tenantFriendlyName`, `dnsName` → `tenantDnsName`; alignment summary `lastAlignmentTimestamp` → `lastAlignmentDateTime` | no `clientTenantId`; list holds only `msTenantId`, name and DNS name (use `-Detailed`); `authenticationMode` is v1 only |
+| Policy | `policyTypeName` → `inforcerPolicyTypeName` | `id` is the Microsoft policy ID; no `policyCategoryId` |
+| Baseline | `baselineTenant{}` flattened to `baselineMsTenantId`, `baselineTenantFriendlyName`, `baselineTenantDnsName`; members `name`/`dnsName` → `tenantFriendlyName`/`tenantDnsName`; items `product`, `primaryGroup`, `secondaryGroup` → `policyCategory*` | no `baselineClientTenantId`; `description`, `isSharedCopy`, member `lastAlignmentScore` are v1 only |
+| Alignment score | `tenantName` → `tenantFriendlyName`, `alignedBaselineId` → `baselineGroupId`, `alignedBaselineName` → `baselineGroupName`, `alignmentScore` → `score`, `lastAlignmentTimestamp` → `lastComparisonDateTime` | `msTenantId` replaces the numeric `tenantId` |
+| Alignment details | buckets `matched`, `matchedWithAcceptedDeviations`, `deviated`, `missingFromTenant`, `additionalInTenant` → `matchedPolicies`, `matchedWithAcceptedDeviations`, `deviatedUnaccepted`, `missingFromSubjectUnaccepted`, `additionalInSubjectUnaccepted`; `tenantDataTimestamp` → `subjectDataTimestamp`; per-policy `displayName` → `policyName`, `tenantPolicies` → `matchingSubjectPolicies` | compared policies are richer (diffs, similar policies) |
+| User | list `groupCount`/`roleCount` → `groups`/`roles` | list has counts, not arrays |
+| Group, role, secure score, assessment, report type, audit event type | unchanged | audit events lack `clientId`, `message`, `relId`, `relType`; v1 has 130 event types (beta 139) |
+| Assessment run | `assessmentId` → `assessment` | |
+| Report run / output | `reportRunId` → `runId`; output `msTenantId` → `tenantId` (`null` = collated) | |
+
+---
+
+## Beta endpoints
+
+> Endpoints below are the legacy beta API (API-key login). The same cmdlets call the v1 equivalents listed in [v1 endpoints](#v1-endpoints) on a client-credentials login.
 
 ### Baselines
 
@@ -175,7 +364,7 @@ Retrieves a specific tenant by ID.
 
 **Response**: [Tenant](#tenant)
 
-> **Implementation Note**: The PowerShell module uses `GET /beta/tenants` with client-side filtering for consistency and deduplication.
+> **Implementation Note**: On beta the module uses `GET /beta/tenants` with client-side filtering for consistency and deduplication. On v1 `Get-InforcerTenant -Detailed` and `-TenantId` call `GET /v1/tenants/{msTenantId}` per tenant, because the v1 list holds only the name, DNS name and ID.
 
 ---
 
@@ -254,7 +443,7 @@ Returns a paginated list of user summaries for a tenant.
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
-| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `tenantId` | path | integer | Yes | inforcer tenant ID. |
 | `search` | query | string | No | Server-side search filter. |
 | `continuationToken` | query | string | No | Token to continue a previous page. |
 
@@ -268,7 +457,7 @@ Returns full detail for a single user.
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
-| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `tenantId` | path | integer | Yes | inforcer tenant ID. |
 | `userId` | path | string (GUID) | Yes | The user ID. |
 
 **Response**: Single [User](#user) object.
@@ -283,7 +472,7 @@ Returns a paginated list of Entra ID group summaries for a tenant.
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
-| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `tenantId` | path | integer | Yes | inforcer tenant ID. |
 | `search` | query | string | No | Server-side search filter. |
 | `continuationToken` | query | string | No | Token to continue a previous page. |
 
@@ -297,7 +486,7 @@ Returns full detail for a single group including members.
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
-| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `tenantId` | path | integer | Yes | inforcer tenant ID. |
 | `groupId` | path | string (GUID) | Yes | The group ID. |
 
 **Response**: Single [TenantGroup](#tenantgroup) object.
@@ -312,7 +501,7 @@ Returns the list of Entra ID directory role definitions for a tenant.
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
-| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `tenantId` | path | integer | Yes | inforcer tenant ID. |
 
 **Response**: Array of [TenantRole](#tenantrole) objects.
 
@@ -326,7 +515,7 @@ Returns the current and historic Microsoft Secure Score for a tenant. Includes u
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
-| `tenantId` | path | integer | Yes | Inforcer tenant ID. |
+| `tenantId` | path | integer | Yes | inforcer tenant ID. |
 
 **Response**: A single [TenantSecureScoreDetails](#tenantsecurescoredetails) object.
 
@@ -435,6 +624,8 @@ Downloads the raw bytes of a single output. Returns proper MIME type and a `Cont
 
 ## Schemas
 
+The schemas below are the beta shapes, which are also the property names the module outputs. On a client-credentials login v1 responses are mapped to these names ([mapping table](#how-v1-fields-map-to-the-modules-names)); properties without a v1 source are absent and v1-only properties are added. The raw v1 schemas are in [`openapi-snapshot-v1.json`](./openapi-snapshot-v1.json).
+
 ### BaselineGroup
 
 Represents a baseline configuration group used for alignment scoring.
@@ -503,11 +694,11 @@ Represents the alignment score for a tenant against a baseline.
 
 ### Tenant
 
-Represents a tenant in the Inforcer system.
+Represents a tenant in the inforcer system.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| clientTenantId | integer | Unique identifier for the tenant in Inforcer. |
+| clientTenantId | integer | Unique identifier for the tenant in inforcer. |
 | tenantFriendlyName | string | Display name of the tenant. |
 | tenantDnsName | string | DNS name of the tenant (e.g., `contoso.onmicrosoft.com`). |
 | msTenantId | string (guid) | Microsoft tenant ID (Azure AD tenant ID). |
@@ -890,9 +1081,9 @@ An output record from `GET /beta/reports/runs/{runId}/outputs`. The actual bytes
 
 ---
 
-## Response Wrapper
+## Response Wrapper (beta)
 
-All API responses are wrapped in a standard envelope:
+All beta API responses are wrapped in a standard envelope:
 
 ```json
 {
@@ -914,7 +1105,9 @@ The PowerShell module automatically unwraps the `data` property, so cmdlets retu
 
 ---
 
-## Error Responses
+## Error Responses (beta)
+
+v1 errors are `application/problem+json`, see [Errors](#errors).
 
 ### 401 Unauthorized
 

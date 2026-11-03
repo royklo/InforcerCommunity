@@ -37,9 +37,10 @@
     Connect-Inforcer -ApiKey "your-api-key" -Region uk -FetchGraphData
     Connects to inforcer and also launches Microsoft Graph interactive sign-in for group name resolution.
 .PARAMETER FetchGraphData
-    Also connect to Microsoft Graph via interactive sign-in. This enables group name resolution
-    in Export-InforcerTenantDocumentation. Requires Microsoft.Graph.Authentication module
-    (auto-installed if missing).
+    Also connect to Microsoft Graph via interactive sign-in, so Export-InforcerTenantDocumentation and
+    Compare-InforcerEnvironments -FetchGraphData can reuse it. Requests the read scopes
+    Directory.Read.All, Policy.Read.All and DeviceManagementConfiguration.Read.All. Requires the
+    Microsoft.Graph.Authentication module (a warning says how to install it when missing).
 .PARAMETER PassThru
     When specified, returns the session hashtable to the pipeline in addition to
     storing it in the module-scoped session variable. Use this to capture sessions
@@ -47,7 +48,8 @@
     are SecureStrings. The captured session stays usable after Disconnect-Inforcer, which
     clears only the module's session; remove it when done (Remove-Variable src).
 .OUTPUTS
-    PSObject with Status, Region, BaseUrl, ConnectedAt; with -PassThru, only the session hashtable.
+    PSObject with Status, Region, BaseUrl, ConnectedAt; with -PassThru, only the session hashtable
+    (System.Collections.Hashtable).
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#connect-inforcer
 .LINK
@@ -61,7 +63,7 @@ function Connect-Inforcer {
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'ClientSecret',
     Justification = 'Accepts SecureString or String; a String is converted to SecureString immediately.')]
 [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'ApiKey')]
-[OutputType([PSObject])]
+[OutputType([PSObject], [hashtable])]
 param(
     [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'ApiKey')]
     [Alias('Key')]
@@ -195,7 +197,7 @@ if ($isClientCredentials) {
         # -TimeoutSec 10 prevents Connect from hanging indefinitely on slow networks / proxies /
         # captive portals. The probe is just a GET on /beta/baselines, so 10s is generous.
         $probeResponse = Invoke-WebRequest -Uri $probeUri -Method GET -Headers $validateHeaders `
-            -UseBasicParsing -SkipHttpErrorCheck -Verbose:$false -Debug:$false -TimeoutSec 10 -ErrorAction Stop
+            -UseBasicParsing -SkipHttpErrorCheck -MaximumRedirection 0 -Verbose:$false -Debug:$false -TimeoutSec 10 -ErrorAction Ignore
     } catch {
         # Only real network errors (DNS, connection refused, TLS) land here; 4xx/5xx are
         # captured via the response object thanks to -SkipHttpErrorCheck.
@@ -207,6 +209,11 @@ if ($isClientCredentials) {
     }
 
     $probeStatusCode = [int]$probeResponse.StatusCode
+    if ($probeStatusCode -ge 300 -and $probeStatusCode -lt 400) {
+        Write-Error -Message "Connection failed: $(Get-InforcerRedirectMessage -StatusCode $probeStatusCode -Headers $probeResponse.Headers)" `
+            -ErrorId 'ConnectionValidationFailed' -Category ConnectionError
+        return
+    }
     if ($probeStatusCode -ge 200 -and $probeStatusCode -lt 300) {
         $probeSucceeded = $true
     } else {
@@ -356,8 +363,10 @@ if (-not $skipPrime) { try {
     $catalogHeaders['Accept'] = 'application/json'
     $catalogProbe = Invoke-WebRequest -Uri (Get-InforcerBaseUrl -Endpoint '/reports/types' -Session $newSession) `
         -Method GET -Headers $catalogHeaders -UseBasicParsing -SkipHttpErrorCheck -Verbose:$false -Debug:$false `
-        -TimeoutSec 4 -ErrorAction Stop
-    if ([int]$catalogProbe.StatusCode -ge 200 -and [int]$catalogProbe.StatusCode -lt 300) {
+        -TimeoutSec 4 -MaximumRedirection 0 -ErrorAction Ignore
+    if ([int]$catalogProbe.StatusCode -ge 300 -and [int]$catalogProbe.StatusCode -lt 400) {
+        Write-Verbose "Skipping Reports catalog prime: $(Get-InforcerRedirectMessage -StatusCode ([int]$catalogProbe.StatusCode) -Headers $catalogProbe.Headers)"
+    } elseif ([int]$catalogProbe.StatusCode -ge 200 -and [int]$catalogProbe.StatusCode -lt 300) {
         $catalogJson = if ($catalogProbe.Content -is [byte[]]) {
             [System.Text.Encoding]::UTF8.GetString($catalogProbe.Content)
         } else { $catalogProbe.Content -as [string] }
@@ -388,7 +397,7 @@ if (-not $skipPrime) { try {
 # Also connect to Microsoft Graph if requested
 if ($FetchGraphData) {
     Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Cyan
-    $graphCtx = Connect-InforcerGraph -RequiredScopes @('Directory.Read.All')
+    $graphCtx = Connect-InforcerGraph
     if ($graphCtx) {
         Write-Host "  Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
     }

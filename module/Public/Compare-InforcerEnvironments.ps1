@@ -11,6 +11,9 @@
     also fetches compliance policy detection rules (rulesContent) that the Inforcer API does
     not return.
 
+    The two tenants are collected at the same time (the destination in a background runspace), so
+    a comparison takes about as long as its slower side.
+
     For cross-account comparison, use Connect-Inforcer -PassThru to obtain session objects
     and pass them via -SourceSession / -DestinationSession. The two sessions may use different
     login types (API key and client credentials); each side uses its own session's API.
@@ -51,7 +54,9 @@
     When specified, connects to Microsoft Graph to enrich comparison data beyond what the
     Inforcer API provides. Requires the Microsoft.Graph.Authentication module and interactive
     sign-in. If tenants are in different Azure AD tenants, you will be prompted for each.
-    Requires DeviceManagementConfiguration.Read.All scope for compliance rules.
+    Requests the read scopes Directory.Read.All, Policy.Read.All and
+    DeviceManagementConfiguration.Read.All; a call Graph refuses leaves those names as raw IDs
+    with a warning.
 
     Graph supplementations:
     - Assignment group name resolution (ObjectID to display name)

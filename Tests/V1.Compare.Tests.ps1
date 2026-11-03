@@ -158,7 +158,7 @@ Context 'Select-InforcerBaselinePolicies' {
 }
 
 Context 'ConvertTo-InforcerDocModel' {
-    It 'ProfileType comes from the v1 policy type name; beta (no type name in the API) stays empty' {
+    It 'ProfileType comes from the v1 policy type name; beta (no type name in the API) is filled from policyTypeId' {
         Set-V1CompareSession
         $v1 = InModuleScope InforcerCommunity { ConvertTo-InforcerDocModel -DocData (Get-InforcerDocData -TenantId 'Fabrikam' 3>$null) }
         $v1.Products['Defender'].Categories['Endpoint security / Antivirus'][0].Basics.ProfileType | Should -BeExactly 'Antivirus Exclusions'
@@ -167,7 +167,7 @@ Context 'ConvertTo-InforcerDocModel' {
 
         Set-V1CompareSession -Beta
         $beta = InModuleScope InforcerCommunity { ConvertTo-InforcerDocModel -DocData (Get-InforcerDocData -TenantId 2) }
-        $beta.Products['Intune'].Categories['Devices / Windows'][0].Basics.ProfileType | Should -BeExactly ''
+        $beta.Products['Intune'].Categories['Devices / Windows'][0].Basics.ProfileType | Should -BeExactly 'Conditional Access Named Location'
         $beta.Products['Intune'].Categories['Devices / Windows'][0].Basics.Id | Should -Be '1001'
         $beta.ContainsKey('Notes') | Should -BeFalse
     }

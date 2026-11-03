@@ -3,11 +3,12 @@ function Get-InforcerDocData {
     .SYNOPSIS
         Collects raw data from existing Inforcer cmdlets for documentation generation.
     .DESCRIPTION
-        Calls Get-InforcerTenant -TenantId, Get-InforcerBaseline, and Get-InforcerTenantPolicies
-        with -OutputType JsonObject and returns a hashtable bundle of deserialized data.
+        Calls Get-InforcerTenant -TenantId and Get-InforcerBaseline (-OutputType JsonObject, parsed
+        back) and fetches the policies directly with Invoke-InforcerApiRequest -ObjectType Policy (the
+        same raw objects, without a JSON round trip of the largest payload). Returns a hashtable bundle.
         This is Stage 1 of the documentation pipeline -- no normalization, just collection.
-        Works with both login types. On v1, when the policies hold no Intune policy, the bundle
-        carries a Notes entry that the documents show.
+        Works with both login types. On v1, when the policies hold no Intune policy, it warns once
+        and the bundle carries a Notes entry that the documents show.
     .PARAMETER TenantId
         Tenant to collect data for. Accepts numeric ID, GUID, or tenant name.
     .PARAMETER SettingsCatalogPath
@@ -53,8 +54,8 @@ function Get-InforcerDocData {
 
     Write-Verbose 'Collecting tenant policies...'
     $policiesApiErr = @()
-    $policiesJson = Get-InforcerTenantPolicies -TenantId $resolvedTenantId -OutputType JsonObject `
-        -ErrorVariable policiesApiErr -ErrorAction SilentlyContinue
+    $policies = @(Invoke-InforcerApiRequest -Endpoint "/tenants/$resolvedTenantId/policies" -Method GET `
+        -OutputType PowerShellObject -ObjectType Policy -ErrorVariable policiesApiErr -ErrorAction SilentlyContinue)
     if ($policiesApiErr.Count -gt 0) {
         $errMsg = $policiesApiErr[-1].Exception.Message
         if ([string]::IsNullOrWhiteSpace($errMsg)) { $errMsg = $policiesApiErr[-1].ToString() }
@@ -79,7 +80,9 @@ function Get-InforcerDocData {
         }
         return
     }
-    $policies = $policiesJson | ConvertFrom-Json -Depth 100
+    $hasPolicies = $policies.Count -gt 0
+    # Kept $null for an empty list, as the JSON round trip used to produce.
+    if (-not $hasPolicies) { $policies = $null } elseif ($policies.Count -eq 1) { $policies = $policies[0] }
 
     if ($null -eq $tenant) {
         $reason = if ($tenantErr.Count -gt 0) { " $($tenantErr[-1].Exception.Message)" } else { '' }
@@ -94,6 +97,7 @@ function Get-InforcerDocData {
         CollectedAt = [datetime]::UtcNow
     }
     if ($isV1 -and -not @($policies).Where({ $_.product -eq 'Intune' }, 'First')) {
+        Write-Warning "The v1 API currently returns no Intune policies for this tenant (a known gap in inforcer's v1 API). Connecting with an API key still returns them."
         $docData['Notes'] = @('The inforcer v1 API (client-credentials login) currently returns no Intune policies and no Defender settings catalog policies, so they are missing here. Connect with an API key (Connect-Inforcer -ApiKey) to include them.')
     }
     $docData

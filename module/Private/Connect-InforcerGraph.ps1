@@ -10,12 +10,16 @@ function Connect-InforcerGraph {
         The Graph session is stored in $script:InforcerGraphConnected so Disconnect-Inforcer
         knows to also disconnect Graph.
 
+        The default scopes cover every Graph call the module makes: Directory.Read.All (groups,
+        roles, service principals), Policy.Read.All (named locations) and
+        DeviceManagementConfiguration.Read.All (assignment filters, scope tags, compliance policies).
+
         Based on the Connect-ToMgGraph pattern from RKSolutions-Module.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]
-        [string[]]$RequiredScopes = @('Directory.Read.All'),
+        [string[]]$RequiredScopes = @('Directory.Read.All', 'Policy.Read.All', 'DeviceManagementConfiguration.Read.All'),
 
         [Parameter(Mandatory = $false)]
         [string]$TenantId

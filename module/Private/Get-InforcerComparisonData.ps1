@@ -6,6 +6,10 @@ function Get-InforcerComparisonData {
         Stage 1 of the Compare-InforcerEnvironments pipeline. Collects data from both
         environments via Get-InforcerDocData and normalizes through ConvertTo-InforcerDocModel
         with -ComparisonMode, producing two DocModels ready for diffing.
+        The destination is collected in a separate runspace while the source is collected here, so
+        the two slow policies calls overlap. The runspace imports this module and works on a copy
+        of the destination session (token renewed here first); its warnings are re-emitted here.
+        If it fails for any reason, the destination is collected here afterwards, as before.
         When baseline IDs are specified, filters each tenant's policies to only those
         belonging to the specified baseline before building DocModels.
     .PARAMETER SourceTenantId
@@ -75,7 +79,35 @@ function Get-InforcerComparisonData {
         $docDataParams['SettingsCatalogPath'] = $SettingsCatalogPath
     }
 
+    $destPs = $null
+    $destAsync = $null
     try {
+        # ── Destination, in parallel ──
+        if (Get-InforcerAuthHeader -Session $DestinationSession -ErrorAction Ignore) {
+            $sessionCopy = @{}
+            foreach ($key in $DestinationSession.Keys) {
+                $value = $DestinationSession[$key]
+                $sessionCopy[$key] = if ($value -is [securestring]) { $value.Copy() } else { $value }
+            }
+            $destPs = [PowerShell]::Create()
+            $null = $destPs.AddScript({
+                param($ManifestPath, $Session, $TenantId, $DocDataParams)
+                Import-Module $ManifestPath -ErrorAction Stop
+                & (Get-Module InforcerCommunity) {
+                    param($s, $t, $p)
+                    $script:InforcerSession = $s
+                    Get-InforcerDocData -TenantId $t @p
+                } $Session $TenantId $DocDataParams
+            }.ToString())
+            $null = $destPs.AddParameters(@{
+                ManifestPath  = Join-Path $ExecutionContext.SessionState.Module.ModuleBase 'InforcerCommunity.psd1'
+                Session       = $sessionCopy
+                TenantId      = $DestinationTenantId
+                DocDataParams = $docDataParams
+            })
+            $destAsync = $destPs.BeginInvoke()
+        }
+
         # ── Source ──
         Write-Host 'Collecting source tenant data...' -ForegroundColor Gray
         $script:InforcerSession = $SourceSession
@@ -100,7 +132,22 @@ function Get-InforcerComparisonData {
         # ── Destination ──
         Write-Host 'Collecting destination tenant data...' -ForegroundColor Gray
         $script:InforcerSession = $DestinationSession
-        $destDocData = Get-InforcerDocData -TenantId $DestinationTenantId @docDataParams
+        $destDocData = $null
+        if ($destAsync) {
+            try {
+                $out = $destPs.EndInvoke($destAsync)
+                $last = if ($out.Count -gt 0) { $out[$out.Count - 1] } else { $null }
+                if ($last -is [hashtable]) {
+                    $destDocData = [hashtable]$last
+                    foreach ($w in $destPs.Streams.Warning) { Write-Warning $w.Message }
+                }
+            } catch {
+                Write-Verbose "Parallel destination fetch failed; fetching it now: $($_.Exception.Message)"
+            }
+        }
+        if ($null -eq $destDocData) {
+            $destDocData = Get-InforcerDocData -TenantId $DestinationTenantId @docDataParams
+        }
         if ($null -eq $destDocData -or $null -eq $destDocData.Policies) {
             Write-Error -Message "Failed to collect data for destination tenant '$DestinationTenantId'. The API may be unavailable — try again later." `
                 -ErrorId 'DestDataCollectionFailed' -Category ConnectionError
@@ -141,6 +188,10 @@ function Get-InforcerComparisonData {
         }
     } finally {
         $script:InforcerSession = $originalSession
+        if ($destPs) {
+            try { if ($destPs.InvocationStateInfo.State -eq 'Running') { $destPs.Stop() } } catch { $null }
+            $destPs.Dispose()
+        }
     }
 
     # ── Graph enrichment (resolve group names and assignment filters) ──
@@ -155,10 +206,10 @@ function Get-InforcerComparisonData {
         $dstTenantName = if ($destDocData.Tenant.tenantFriendlyName) { $destDocData.Tenant.tenantFriendlyName } else { $DestinationTenantId }
 
         Write-Host "  Sign in for SOURCE tenant: $srcTenantName" -ForegroundColor Yellow
-        $srcGraphMaps = Resolve-InforcerGraphEnrichment -DocData $sourceDocData -Label "Source ($srcTenantName)"
+        $srcGraphMaps = Resolve-InforcerGraphEnrichment -DocData $sourceDocData -Label "Source ($srcTenantName)" -ComplianceRules
 
         Write-Host "  Sign in for DESTINATION tenant: $dstTenantName" -ForegroundColor Yellow
-        $dstGraphMaps = Resolve-InforcerGraphEnrichment -DocData $destDocData -Label "Destination ($dstTenantName)"
+        $dstGraphMaps = Resolve-InforcerGraphEnrichment -DocData $destDocData -Label "Destination ($dstTenantName)" -ComplianceRules
     }
 
     # ── Helper: inject compliance rules and link discovery scripts ──

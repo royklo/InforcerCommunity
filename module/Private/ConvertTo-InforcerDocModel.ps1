@@ -50,9 +50,10 @@ function Get-InforcerPolicyDisplayInfo {
         Maps API policy names and types to friendly display names and Microsoft admin portal categories.
     .DESCRIPTION
         The Inforcer API uses internal identifiers (e.g., "MSAuthenticatorConfig", "Fido2Config") and
-        generic groupings ("Settings / All"). This function maps them to the names and categories IT
-        admins recognise from the Microsoft admin portals. Returns a hashtable with FriendlyName and
-        Category, both $null when no mapping matches.
+        generic groupings ("Settings / All"). This function maps them to the Microsoft admin portal
+        category, which the API does not carry. FriendlyName is only a fallback: the caller prefers
+        the API's own friendlyName. Returns a hashtable with FriendlyName and Category, both $null
+        when no mapping matches.
     #>
     [CmdletBinding()]
     param(
@@ -64,7 +65,7 @@ function Get-InforcerPolicyDisplayInfo {
     # Entra ID settings (policyTypeId 12) — internal name -> admin portal path
     $entraSettingsMap = @{
         'AdminAppConsent'            = @{ FriendlyName = 'Admin consent requests';        Category = 'Enterprise applications' }
-        'AuthenticatorSetupEnforce'  = @{ FriendlyName = 'System-preferred MFA';          Category = 'Authentication methods' }
+        'AuthenticatorSetupEnforce'  = @{ FriendlyName = 'Registration campaign';         Category = 'Authentication methods' }
         'DefSecSettings'             = @{ FriendlyName = 'Security defaults';             Category = 'Properties' }
         'DefUserRolePerms'           = @{ FriendlyName = 'Default user role permissions'; Category = 'User settings' }
         'EmailOTPConfig'             = @{ FriendlyName = 'Email OTP';                     Category = 'Authentication methods' }
@@ -74,9 +75,9 @@ function Get-InforcerPolicyDisplayInfo {
         'HardwareOathConfig'         = @{ FriendlyName = 'Hardware OATH tokens';          Category = 'Authentication methods' }
         'LocalAdministratorPassword' = @{ FriendlyName = 'Windows LAPS';                  Category = 'Device settings' }
         'MSAuthenticatorConfig'      = @{ FriendlyName = 'Microsoft Authenticator';       Category = 'Authentication methods' }
-        'MultiFactorAuthConfig'      = @{ FriendlyName = 'Multifactor authentication';    Category = 'Authentication methods' }
+        'MultiFactorAuthConfig'      = @{ FriendlyName = 'Require MFA to register or join devices'; Category = 'Device settings' }
         'QrCodeConfig'               = @{ FriendlyName = 'QR code authentication';        Category = 'Authentication methods' }
-        'SelfServicePassConfig'      = @{ FriendlyName = 'Self-service password reset';   Category = 'Password reset' }
+        'SelfServicePassConfig'      = @{ FriendlyName = 'Guest self-service sign up';    Category = 'External Identities' }
         'SmsAuthConfig'              = @{ FriendlyName = 'SMS';                           Category = 'Authentication methods' }
         'SoftwareOathConfig'         = @{ FriendlyName = 'Software OATH tokens';          Category = 'Authentication methods' }
         'TempPasswordConfig'         = @{ FriendlyName = 'Temporary Access Pass';         Category = 'Authentication methods' }
@@ -284,7 +285,11 @@ function ConvertTo-InforcerDocModel {
         # Map to friendly display name and Microsoft admin portal category
         $displayInfo = Get-InforcerPolicyDisplayInfo -PolicyName $policyName `
             -Product $prod -PolicyTypeId $policy.policyTypeId
-        if ($displayInfo.FriendlyName) { $policyName = $displayInfo.FriendlyName }
+        if ($policy.policyTypeId -in 12, 14, 16 -and -not [string]::IsNullOrWhiteSpace($policy.friendlyName)) {
+            $policyName = $policy.friendlyName
+        } elseif ($displayInfo.FriendlyName) {
+            $policyName = $displayInfo.FriendlyName
+        }
 
         $catKey = if ($displayInfo.Category) {
             $displayInfo.Category
@@ -328,7 +333,7 @@ function ConvertTo-InforcerDocModel {
             Name        = $policyName
             Id          = if ($policy.id) { "$($policy.id)" } else { '' }
             Description = if ($policy.policyData -and $policy.policyData.description) { $policy.policyData.description } else { '' }
-            ProfileType = if ($policy.inforcerPolicyTypeName) { $policy.inforcerPolicyTypeName } else { '' }
+            ProfileType = if ($policy.inforcerPolicyTypeName) { $policy.inforcerPolicyTypeName } else { Get-InforcerPolicyTypeName -PolicyTypeId $policy.policyTypeId }
             Platform    = if ($policy.platform) { $policy.platform } else { '' }  # null ~96% per D-14
             Created     = if ($policy.policyData -and $policy.policyData.createdDateTime) { $policy.policyData.createdDateTime } else { '' }
             Modified    = if ($policy.policyData -and $policy.policyData.lastModifiedDateTime) { $policy.policyData.lastModifiedDateTime } else { '' }

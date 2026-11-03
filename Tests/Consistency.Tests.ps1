@@ -1679,7 +1679,7 @@ Describe 'Private helpers (via module scope)' {
                     Content    = $bytes
                 }
             }
-            $r = & (Get-Module InforcerCommunity) { Invoke-InforcerRawDownload -Endpoint '/beta/reports/runs/abc/outputs/xyz' }
+            $r = & (Get-Module InforcerCommunity) { Invoke-InforcerRawDownload -Endpoint '/reports/runs/abc/outputs/xyz' }
             $r.FileName | Should -Be 'MyReport.csv'
             $r.ContentType | Should -Be 'text/csv'
             $r.CorrelationId | Should -Be 'cor-7'
@@ -1740,7 +1740,7 @@ Describe 'Private helpers (via module scope)' {
             }
             try {
                 $r = & (Get-Module InforcerCommunity) {
-                    param($dir) Invoke-InforcerRawDownload -Endpoint '/beta/reports/runs/x/outputs/y' -DestinationDirectory $dir
+                    param($dir) Invoke-InforcerRawDownload -Endpoint '/reports/runs/x/outputs/y' -DestinationDirectory $dir
                 } $tempDir
                 $r.FilePath | Should -Not -BeNullOrEmpty
                 $r.FileName | Should -Be 'StreamedReport.csv'

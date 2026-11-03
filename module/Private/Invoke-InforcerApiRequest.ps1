@@ -5,7 +5,7 @@ function Invoke-InforcerApiRequest {
     .DESCRIPTION
         Works for both login types. API-key sessions call {BaseUrl}/beta{path}; client-credentials
         sessions call {ApiHost}/v1{path} with the v1 path renames (see Get-InforcerBaseUrl).
-        Endpoints are version-neutral; a leading '/beta' is stripped.
+        Endpoints are version-neutral.
 
         beta responses: unwraps response.data, then (unless -PreserveStructure) the first array property.
         v1 responses:   a list response unwraps to its single collection array (metadata such as

@@ -8,7 +8,6 @@ function Get-InforcerBaseUrl {
         trailing '/', '/api', '/api/beta' or '/v1'. Both 'https://host' and 'https://host/api' work.
 
         Endpoint mode (-Endpoint): builds the request URI for the session's API version.
-        A leading '/beta' on the endpoint is stripped, so callers can pass version-neutral paths.
           beta: {BaseUrl}/beta{path}
           v1:   {ApiHost}/v1{path}, with the v1 renames applied:
                 /tenants/{id}/roles -> /tenants/{id}/directoryRoles
@@ -19,7 +18,7 @@ function Get-InforcerBaseUrl {
     .PARAMETER BaseUrl
         Optional custom host (with or without '/api').
     .PARAMETER Endpoint
-        API path, version-neutral (e.g. /tenants/{id}/policies). A leading /beta is ignored.
+        API path, version-neutral (e.g. /tenants/{id}/policies).
     .PARAMETER Session
         Session hashtable for -Endpoint. Defaults to the current session.
     #>
@@ -44,7 +43,6 @@ function Get-InforcerBaseUrl {
         if (-not $Session) { throw [System.InvalidOperationException]::new('Not connected. Run Connect-Inforcer first.') }
         $path = $Endpoint.Trim()
         if (-not $path.StartsWith('/')) { $path = '/' + $path }
-        $path = $path -replace '^/beta(?=/|\?|$)', ''
 
         if ($Session.ApiVersion -eq 'v1') {
             $apiHost = $Session.ApiHost

@@ -71,23 +71,22 @@ Describe 'Get-InforcerBaseUrl' {
         & $script:M { Get-InforcerBaseUrl -BaseUrl 'https://api.example.invalid/api/' } | Should -Be 'https://api.example.invalid'
         & $script:M { Get-InforcerBaseUrl -BaseUrl 'https://api.example.invalid' } | Should -Be 'https://api.example.invalid'
     }
-    It 'builds beta URIs from neutral and /beta-prefixed endpoints' {
+    It 'builds beta URIs from neutral endpoints' {
         Set-V1TestSession -Beta
         & $script:M { Get-InforcerBaseUrl -Endpoint '/tenants' } | Should -Be 'https://api.example.invalid/api/beta/tenants'
-        & $script:M { Get-InforcerBaseUrl -Endpoint '/beta/tenants' } | Should -Be 'https://api.example.invalid/api/beta/tenants'
     }
     It 'does not apply v1 renames on beta' {
         Set-V1TestSession -Beta
         & $script:M { Get-InforcerBaseUrl -Endpoint '/tenants/5/roles' } | Should -Be 'https://api.example.invalid/api/beta/tenants/5/roles'
     }
-    It 'builds v1 URIs and strips a /beta prefix' {
+    It 'builds v1 URIs' {
         Set-V1TestSession
         & $script:M { Get-InforcerBaseUrl -Endpoint 'tenants' } | Should -Be 'https://api.example.invalid/v1/tenants'
-        & $script:M { Get-InforcerBaseUrl -Endpoint '/beta/baselines' } | Should -Be 'https://api.example.invalid/v1/baselines'
+        & $script:M { Get-InforcerBaseUrl -Endpoint '/baselines' } | Should -Be 'https://api.example.invalid/v1/baselines'
     }
     It 'renames roles to directoryRoles on v1' {
         Set-V1TestSession
-        & $script:M { param($t) Get-InforcerBaseUrl -Endpoint "/beta/tenants/$t/roles" } $script:Tid1 | Should -Be "https://api.example.invalid/v1/tenants/$script:Tid1/directoryRoles"
+        & $script:M { param($t) Get-InforcerBaseUrl -Endpoint "/tenants/$t/roles" } $script:Tid1 | Should -Be "https://api.example.invalid/v1/tenants/$script:Tid1/directoryRoles"
     }
     It 'renames auditEvents/eventTypes to auditEvents/types on v1' {
         Set-V1TestSession
@@ -262,7 +261,7 @@ Describe 'Invoke-InforcerApiRequest on v1' {
         Mock -ModuleName InforcerCommunity Invoke-RestMethod {
             [pscustomobject]@{ tenants = @([pscustomobject]@{ msTenantId = '00000000-0000-0000-0000-000000000001'; name = 'Contoso'; dnsName = 'contoso.example' }) }
         }
-        $r = @(& $script:M { Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -ObjectType Tenant })
+        $r = @(& $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants' -ObjectType Tenant })
         $r.Count | Should -Be 1
         $r[0].tenantFriendlyName | Should -BeExactly 'Contoso'
         Should -Invoke -ModuleName InforcerCommunity Invoke-RestMethod -Times 1 -Exactly -ParameterFilter {
@@ -419,7 +418,7 @@ Describe 'Invoke-InforcerApiRequest on beta (unchanged behaviour)' {
     It 'unwraps .data, sends Inf-Api-Key and accepts neutral and /beta paths' {
         Mock -ModuleName InforcerCommunity Invoke-RestMethod { [pscustomobject]@{ success = $true; data = @([pscustomobject]@{ clientTenantId = 1 }) } }
         @(& $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants' }).Count | Should -Be 1
-        @(& $script:M { Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -ObjectType Tenant }).Count | Should -Be 1
+        @(& $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants' -ObjectType Tenant }).Count | Should -Be 1
         Should -Invoke -ModuleName InforcerCommunity Invoke-RestMethod -Times 2 -Exactly -ParameterFilter {
             $Uri -eq 'https://api.example.invalid/api/beta/tenants' -and $Headers['Inf-Api-Key'] -eq 'beta-test-key-value' -and -not $Headers.ContainsKey('Authorization')
         }
@@ -485,7 +484,7 @@ Describe 'Invoke-InforcerPagedRequest' {
             if ($Uri -like '*continuationToken=b2') { [pscustomobject]@{ data = @([pscustomobject]@{ id = 'u2' }); continuationToken = $null; totalCount = 2 } }
             else { [pscustomobject]@{ data = @([pscustomobject]@{ id = 'u1' }); continuationToken = 'b2'; totalCount = 2 } }
         }
-        (@(& $script:M { Invoke-InforcerPagedRequest -Endpoint '/beta/tenants/1/users' })).id | Should -Be @('u1', 'u2')
+        (@(& $script:M { Invoke-InforcerPagedRequest -Endpoint '/tenants/1/users' })).id | Should -Be @('u1', 'u2')
     }
     It 'pages beta audit search with items and token inside .data' {
         Set-V1TestSession -Beta

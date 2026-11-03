@@ -974,7 +974,7 @@ Runs an assessment against one or more inforcer tenants and outputs per-check re
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
-| **TenantId** | Object[] | No | One or more tenants (Microsoft tenant ID (GUID) or tenant name; numeric Client Tenant ID with an API key only). Accepts arrays and friendly names. Required unless `-MultiTenant` is specified. Aliases: `ClientTenantId`, `MsTenantId`. |
+| **TenantId** | Object[] | No | One or more tenants (Microsoft tenant ID (GUID) or tenant name; numeric Client Tenant ID with an API key only). Accepts arrays, friendly names and pipeline input: piped tenants are collected into one multi-tenant run. Required unless `-MultiTenant` is specified. Aliases: `ClientTenantId`, `MsTenantId`. |
 | **AssessmentId** | String | Yes | Assessment ID or friendly name to run. |
 | **MultiTenant** | Switch | No | Run the assessment against all tenants in the account. |
 | **OutputPath** | String | No | Directory to write an HTML or CSV export. When omitted, results stream to the pipeline only. |

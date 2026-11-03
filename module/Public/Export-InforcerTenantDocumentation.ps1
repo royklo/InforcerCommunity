@@ -124,6 +124,8 @@ param(
     [string]$Tag
 )
 
+process {
+
 if (-not (Test-InforcerSession)) {
     Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' `
         -ErrorId 'NotConnected' -Category ConnectionError
@@ -471,4 +473,5 @@ if ($Show) {
 }
 
 Write-Host "Done. $($Format.Count) file(s) exported for tenant '$($docModel.TenantName)'." -ForegroundColor Cyan
+}
 }

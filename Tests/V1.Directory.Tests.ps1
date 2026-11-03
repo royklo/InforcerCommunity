@@ -416,6 +416,13 @@ Describe 'Get-InforcerAuditEvent' {
 }
 
 Describe 'Get-InforcerTenantPolicies' {
+    It 'processes every piped tenant, not only the last' {
+        Set-DirSession
+        Set-DirRoute { param($Uri, $Method, $Body) $n = if ($Uri -match '0{11}(\d)/policies') { $Matches[1] }; New-DirResponse ('{"policies":[{"id":"p' + $n + '","displayName":"P","product":"Intune"}],"failedPolicyTypes":{}}') }
+        $p = @([pscustomobject]@{ MsTenantId = $script:Tid }, [pscustomobject]@{ MsTenantId = '00000000-0000-0000-0000-000000000002' } | Get-InforcerTenantPolicies)
+        @($p.id) | Should -Be @('p1', 'p2')
+    }
+
     It 'warns once on v1 when no Intune policies are returned' {
         Set-DirSession
         Set-DirRoute { param($Uri, $Method, $Body) New-DirResponse '{"policies":[{"id":"p1","displayName":"Policy One","product":"Entra","policyTypeName":"Conditional Access"}],"failedPolicyTypes":{}}' }

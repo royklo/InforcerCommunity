@@ -92,6 +92,14 @@ Describe 'Consistency contract' {
         }
     }
 
+    It 'Every cmdlet that takes pipeline input has a process block' {
+        $missing = foreach ($cmd in (Get-Command -Module InforcerCommunity -CommandType Function)) {
+            $piped = $cmd.Parameters.Values | Where-Object { $_.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] -and ($_.ValueFromPipeline -or $_.ValueFromPipelineByPropertyName) } }
+            if ($piped -and -not $cmd.ScriptBlock.Ast.Body.ProcessBlock) { $cmd.Name }
+        }
+        @($missing) | Should -BeNullOrEmpty -Because 'without process {} only the last piped object is handled'
+    }
+
     It 'Every exported cmdlet has comment-based help (Synopsis and at least one Example)' {
         foreach ($name in $script:expectedNames) {
             $help = Get-Help -Name $name -ErrorAction Stop

@@ -72,6 +72,8 @@ param(
     [string]$OutputType = 'PowerShellObject'
 )
 
+process {
+
 if (-not (Test-InforcerSession)) {
     Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' -ErrorId 'NotConnected' -Category ConnectionError
     return
@@ -556,4 +558,5 @@ if ($OutputType -eq 'JsonObject') {
     return
 }
 $alignmentTable
+}
 }

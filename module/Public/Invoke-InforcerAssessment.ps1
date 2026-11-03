@@ -83,6 +83,11 @@ param(
     [string]$OutputType = 'PowerShellObject'
 )
 
+begin { $pipedTenantIds = [System.Collections.Generic.List[object]]::new() }
+process { if ($null -ne $TenantId) { foreach ($t in @($TenantId)) { $pipedTenantIds.Add($t) } } }
+end {
+if ($pipedTenantIds.Count -gt 0) { $TenantId = $pipedTenantIds.ToArray() }
+
 if (-not (Test-InforcerSession)) {
     Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' -ErrorId 'NotConnected' -Category ConnectionError
     return
@@ -479,4 +484,5 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
 }
 
 foreach ($c in $processedChecks) { $c }
+}
 }

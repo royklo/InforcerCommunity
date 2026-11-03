@@ -44,9 +44,23 @@ function Export-InforcerDocExcel {
         Remove-Item -LiteralPath $FilePath -Force
     }
 
+    # Export-Excel turns a string that starts with '=' into a live formula and a URI into a hyperlink.
+    # Tenant data must stay text: prefix '=' values with an apostrophe and switch hyperlinks off.
+    # Other leading characters (+ - @ tab CR) are stored as plain string cells, which Excel never evaluates.
+    $asText = {
+        param($Rows)
+        foreach ($r in $Rows) {
+            foreach ($p in $r.PSObject.Properties) {
+                if ($p.Value -is [string] -and $p.Value.StartsWith('=')) { $p.Value = "'" + $p.Value }
+            }
+        }
+        $Rows
+    }
+
     $notes = @($DocModel.Notes | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($notes.Count -gt 0) {
-        $notes | ForEach-Object { [PSCustomObject]@{ Note = $_ } } | Export-Excel -Path $FilePath -WorksheetName 'Notes' -BoldTopRow
+        & $asText @($notes | ForEach-Object { [PSCustomObject]@{ Note = $_ } }) |
+            Export-Excel -Path $FilePath -WorksheetName 'Notes' -BoldTopRow -NoHyperLinkConversion '*'
     }
 
     foreach ($prodName in $DocModel.Products.Keys) {
@@ -131,10 +145,11 @@ function Export-InforcerDocExcel {
             AutoFilter    = $true
             FreezeTopRow  = $true
             BoldTopRow    = $true
+            NoHyperLinkConversion = '*'
         }
         if ($IsWindows -or $null -eq $IsWindows) {
             $excelParams['AutoSize'] = $true
         }
-        $rows | Export-Excel @excelParams
+        & $asText $rows | Export-Excel @excelParams
     }
 }

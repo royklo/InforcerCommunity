@@ -240,20 +240,21 @@ tbody tr:hover td:first-child{background:#f3f4f6}
   </div>
 </div>
 <script>
-var T=$($tenantsJson -replace '</','<\/'),M=$($matrixJson -replace '</','<\/');
+var T=$($tenantsJson -replace '<','\u003c'),M=$($matrixJson -replace '<','\u003c');
 var vis=new Set(T.map(function(t){return t.name}));
 var filt='all';
 
-function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function sCol(s){return s>=90?'var(--pass)':s>=70?'var(--cyan)':'var(--fail)'}
 
 function buildCbs(){
-  var h='';T.forEach(function(t){
+  var h='';T.forEach(function(t,i){
     var c=sCol(t.score);
-    h+='<label><input type=checkbox checked onchange="togT(this,\''+esc(t.name).replace(/'/g,"\\'")+'\')">'+esc(t.name)+'<span class="t-score" style="color:'+c+'">'+t.score+'%</span></label>';
+    h+='<label><input type=checkbox checked data-i="'+i+'">'+esc(t.name)+'<span class="t-score" style="color:'+c+'">'+t.score+'%</span></label>';
   });
   document.getElementById('tCbs').innerHTML=h;
 }
+document.getElementById('tCbs').addEventListener('change',function(e){var i=e.target.getAttribute('data-i');if(i!==null)togT(e.target,T[+i].name)});
 function toggleDrop(e){e.stopPropagation();document.getElementById('tDrop').classList.toggle('open')}
 document.addEventListener('click',function(){document.getElementById('tDrop').classList.remove('open')});
 document.getElementById('tDrop').addEventListener('click',function(e){e.stopPropagation()});

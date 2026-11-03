@@ -54,7 +54,7 @@ function Test-InforcerReportRunTerminal {
         $headers['Accept'] = 'application/json'
 
         try {
-            $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck -UseBasicParsing -ErrorAction Stop
+            $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck -UseBasicParsing -MaximumRedirection 0 -ErrorAction Ignore
         } catch {
             Clear-InforcerRequestCredential -ErrorRecord $_
             $msg = Protect-InforcerApiKeyInText -Text $_.Exception.Message
@@ -71,6 +71,10 @@ function Test-InforcerReportRunTerminal {
     }
 
     $statusCode    = [int]$response.StatusCode
+    if ($statusCode -ge 300 -and $statusCode -lt 400) {
+        Write-Error -Message (Get-InforcerRedirectMessage -StatusCode $statusCode -Headers $response.Headers) -ErrorId "ProbeFailed_$statusCode" -Category ConnectionError
+        return
+    }
     $correlationId = Get-InforcerHeaderValue -Headers $response.Headers -Name 'x-correlation-id'
     if ($correlationId) {
         Write-Verbose "x-correlation-id: $correlationId"

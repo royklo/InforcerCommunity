@@ -316,7 +316,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
             [void]$sb.Append(@"
 
-      <div class="control-item $itemClass" data-name="$(& $esc $check.name)" data-status="$($check.Status)">
+      <div class="control-item $itemClass" data-name="$(& $esc $check.name)" data-status="$(& $esc $check.Status)">
         <div class="control-header" onclick="toggleControl(this.parentElement)">
           <div class="control-left">
             <span class="control-imp $impClass">$(& $esc $check.importance)</span>

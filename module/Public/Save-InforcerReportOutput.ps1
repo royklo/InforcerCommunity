@@ -28,9 +28,11 @@
     outputs carry no tenant ($null). Aliases: -ClientTenantId, -MsTenantId.
 .PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
-    Created if it doesn't exist.
+    Created if it doesn't exist. Existing files are never overwritten: when the name is taken,
+    the output is saved as 'name (1).ext', 'name (2).ext', and so on.
 .PARAMETER FileName
-    Override the server-suggested filename. Sanitized for cross-platform safety.
+    Override the server-suggested filename. Sanitized for cross-platform safety. The server's
+    name is then not used at all.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject.
 .EXAMPLE
@@ -138,11 +140,9 @@ process {
     $runIdStr = $RunId.ToString()
     $endpoint = "/reports/runs/$runIdStr/outputs/$OutputId"
 
-    # When -FileName is supplied the user's choice wins (after filesystem-safety sanitization).
-    # Otherwise the server's Content-Disposition filename is used (via Invoke-InforcerRawDownload).
-    # -FileName has ValidateNotNullOrEmpty so we won't get '' here, but still guard against whitespace.
-    $userSuppliedName = $PSBoundParameters.ContainsKey('FileName') -and -not [string]::IsNullOrWhiteSpace($FileName)
-    $defaultName = if ($userSuppliedName) { $FileName } else { ('{0}-{1}' -f $runIdStr, $OutputId) }
+    # -FileName wins over the server's Content-Disposition name; the helper sanitizes either one.
+    $downloadParams = @{ Endpoint = $endpoint; DefaultFileName = ('{0}-{1}' -f $runIdStr, $OutputId); DestinationDirectory = $resolvedOutputPath }
+    if (-not [string]::IsNullOrWhiteSpace($FileName)) { $downloadParams['FileName'] = $FileName }
 
     $target = "$runIdStr / $OutputId → $resolvedOutputPath"
     if (-not $PSCmdlet.ShouldProcess($target, 'Download report output')) { return }
@@ -150,9 +150,7 @@ process {
     Write-Verbose "Downloading: $endpoint"
     try {
         # Stream straight to disk so multi-GB report outputs don't materialize in memory.
-        # The helper renames the temp file to the Content-Disposition filename for us.
-        $download = Invoke-InforcerRawDownload -Endpoint $endpoint -DefaultFileName $defaultName `
-            -DestinationDirectory $resolvedOutputPath -ErrorAction Stop
+        $download = Invoke-InforcerRawDownload @downloadParams -ErrorAction Stop
     } catch {
         Write-Error -Message "Failed to download output ${OutputId}: $($_.Exception.Message)" `
             -ErrorId 'DownloadFailed' -Category ReadError
@@ -162,21 +160,6 @@ process {
 
     $filePath = $download.FilePath
     $effectiveName = $download.FileName
-
-    # When the user supplied an explicit -FileName, rename from the server-derived name to theirs.
-    if ($userSuppliedName) {
-        $overrideName = Resolve-InforcerReportOutputFileName -ContentDisposition $null -DefaultName $FileName
-        $overridePath = Join-Path -Path $resolvedOutputPath -ChildPath $overrideName
-        if ($overridePath -ne $filePath) {
-            try {
-                Move-Item -LiteralPath $filePath -Destination $overridePath -Force -ErrorAction Stop
-                $filePath = $overridePath
-                $effectiveName = $overrideName
-            } catch {
-                Write-Warning "Could not rename to user-requested '$overrideName': $($_.Exception.Message)"
-            }
-        }
-    }
 
     $fileSize = if ($download.PSObject.Properties['FileSize']) { $download.FileSize } else { (Get-Item -LiteralPath $filePath -ErrorAction SilentlyContinue).Length }
 

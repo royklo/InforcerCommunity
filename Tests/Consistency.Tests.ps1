@@ -2263,8 +2263,8 @@ Describe 'Private helpers (via module scope)' {
         }
         It 'Filename .csv (extension-only, no stem) — GetFileNameWithoutExtension is empty' {
             $r = & (Get-Module InforcerCommunity) { Resolve-InforcerReportOutputFileName -DefaultName '.csv' }
-            # Allowed — leading-dot is a normal Unix dotfile, no reserved-name conflict
-            $r | Should -Be '.csv'
+            # A leading dot is prefixed so a server-chosen name never becomes a hidden dotfile (security F1)
+            $r | Should -Be '_.csv'
         }
         It 'Filename with mixed allowlisted + unusual extensions still passes resolver' {
             $r = & (Get-Module InforcerCommunity) { Resolve-InforcerReportOutputFileName -DefaultName 'report.parquet' }

@@ -59,10 +59,13 @@
     Poll until terminal but do not download the output bytes. Returns outputs metadata.
 .PARAMETER Open
     After each output is saved, launch it with the OS default handler (Invoke-Item).
+    Only common document types are launched (csv, json, html, pdf, xlsx, xml, txt, zip, md,
+    tsv); for anything else, or more than 5 files, the output directory is opened instead.
     Ignored when -NoWait or -NoSave is set (nothing was saved to open). Aliases: -Show, -ShowResult.
 .PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
-    Created if it doesn't exist.
+    Created if it doesn't exist. Existing files are never overwritten: when the name is taken,
+    the output is saved as 'name (1).ext', 'name (2).ext', and so on.
 .PARAMETER TimeoutSeconds
     Maximum total time to wait for any run to become terminal. Default: 600 (10 minutes).
     The access token of an API client is renewed automatically during long waits.
@@ -285,13 +288,13 @@ param(
                 if (-not $request) { return @() }
                 $sc = 0
                 $resp = Invoke-RestMethod -Uri $request.Uri -Method GET -Headers $request.Headers -TimeoutSec 2 `
-                    -SkipHttpErrorCheck -StatusCodeVariable sc -ErrorAction Stop
+                    -MaximumRedirection 0 -SkipHttpErrorCheck -StatusCodeVariable sc -ErrorAction Stop
             } catch {
                 & $module { param($r) Clear-InforcerRequestCredential -ErrorRecord $r } $_
                 # Transient network failure: empty completion, no caching, retry on next TAB.
                 return @()
             }
-            if ($sc -ge 400) {
+            if ($sc -ge 300) {
                 # 403 (and, with an API key, a 401 from the APIM gateway) → cache denial so subsequent
                 # TABs are instant. A v1 401 means a bad token, not a missing permission.
                 if ($sc -eq 403 -or ($sc -eq 401 -and -not $state.IsV1)) {
@@ -864,7 +867,7 @@ if ($Open.IsPresent -and $results.Count -gt 0) {
     # .workflow, …) could let a compromised or malicious upstream auto-execute attacker
     # code via the OS file-type association. For non-allowlisted files, open the directory
     # instead so the user can choose what to do with them.
-    $openAllowlist = @('.csv','.json','.html','.htm','.pdf','.xlsx','.xls','.xml','.txt','.zip','.md','.tsv')
+    $openAllowlist = @('.csv','.json','.html','.htm','.pdf','.xlsx','.xml','.txt','.zip','.md','.tsv')
     $openMax = 5
     $unsafe = @($results | Where-Object {
         $ext = ([System.IO.Path]::GetExtension($_.FilePath) -as [string]).ToLowerInvariant()

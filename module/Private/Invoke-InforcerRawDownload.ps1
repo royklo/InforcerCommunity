@@ -24,6 +24,11 @@ function Invoke-InforcerRawDownload {
         than buffered into memory, then renamed to the Content-Disposition filename. Use this
         for large downloads (>100MB) to avoid a 2GB+ in-memory allocation on multi-GB reports.
         The returned object has a `FilePath` instead of `Bytes`. The directory must already exist.
+        An existing file is never overwritten: a taken name gets a ' (1)', ' (2)', ... suffix.
+        On Windows the saved file is marked as downloaded from the internet (Zone.Identifier).
+    .PARAMETER FileName
+        Final file name chosen by the caller. When set, the server's Content-Disposition name is
+        ignored and never touches the disk. Sanitized like the server name.
     .OUTPUTS
         PSCustomObject with members:
           Bytes         — [byte[]] response body (omitted when -DestinationDirectory is used)
@@ -43,7 +48,10 @@ function Invoke-InforcerRawDownload {
         [string]$DefaultFileName = 'output',
 
         [Parameter(Mandatory = $false)]
-        [string]$DestinationDirectory
+        [string]$DestinationDirectory,
+
+        [Parameter(Mandatory = $false)]
+        [string]$FileName
     )
 
     if (-not (Test-InforcerSession)) {
@@ -66,6 +74,8 @@ function Invoke-InforcerRawDownload {
                 -ErrorId 'BadDestination' -Category InvalidArgument
             return
         }
+        # File.Move resolves relative paths against the process directory, not $PWD.
+        $DestinationDirectory = Convert-Path -LiteralPath $DestinationDirectory
         $tempStreamPath = Join-Path -Path $DestinationDirectory -ChildPath ('inforcer-download-' + [guid]::NewGuid().ToString('N') + '.partial')
     }
 
@@ -80,15 +90,19 @@ function Invoke-InforcerRawDownload {
             # -SkipHttpErrorCheck lets us inspect status code and body without exception-based flow.
             if ($tempStreamPath) {
                 $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck `
-                    -UseBasicParsing -OutFile $tempStreamPath -PassThru -ErrorAction Stop
+                    -MaximumRedirection 0 -UseBasicParsing -OutFile $tempStreamPath -PassThru -ErrorAction Stop
             } else {
                 $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck `
-                    -UseBasicParsing -ErrorAction Stop
+                    -MaximumRedirection 0 -UseBasicParsing -ErrorAction Stop
             }
         } catch {
             Clear-InforcerRequestCredential -ErrorRecord $_
             if ($tempStreamPath -and (Test-Path -LiteralPath $tempStreamPath)) {
                 Remove-Item -LiteralPath $tempStreamPath -Force -ErrorAction SilentlyContinue
+            }
+            if ($_.FullyQualifiedErrorId -match 'MaximumRedirect') {
+                Write-Error -Message (Get-InforcerRedirectMessage -StatusCode 302 -Headers $null) -ErrorId 'DownloadFailed_302' -Category ConnectionError
+                return
             }
             $msg = Protect-InforcerApiKeyInText -Text $_.Exception.Message
             Write-Error -Message "Download request failed: $msg" `
@@ -111,6 +125,13 @@ function Invoke-InforcerRawDownload {
     $correlationId = Get-InforcerHeaderValue -Headers $response.Headers -Name 'x-correlation-id'
     if ($correlationId) {
         Write-Verbose "x-correlation-id: $correlationId"
+    }
+
+    if ($statusCode -ge 300 -and $statusCode -lt 400) {
+        if ($tempStreamPath) { Remove-Item -LiteralPath $tempStreamPath -Force -ErrorAction SilentlyContinue }
+        Write-Error -Message (Get-InforcerRedirectMessage -StatusCode $statusCode -Headers $response.Headers) `
+            -ErrorId "DownloadFailed_$statusCode" -Category ConnectionError
+        return
     }
 
     if ($statusCode -lt 200 -or $statusCode -ge 300) {
@@ -166,19 +187,41 @@ function Invoke-InforcerRawDownload {
         $contentType = Get-InforcerHeaderValue -Headers $response.Headers -Name 'Content-Type'
     }
 
-    $fileName = Resolve-InforcerReportOutputFileName -ContentDisposition $disposition -DefaultName $DefaultFileName
+    $fileName = if ($FileName) {
+        Resolve-InforcerReportOutputFileName -DefaultName $FileName
+    } else {
+        Resolve-InforcerReportOutputFileName -ContentDisposition $disposition -DefaultName $DefaultFileName
+    }
 
     if ($tempStreamPath) {
-        # Streaming mode: rename the temp file to the final Content-Disposition name. Move-Item
-        # is atomic within the same volume; if the destination already exists, Force overwrites it.
-        $finalPath = Join-Path -Path $DestinationDirectory -ChildPath $fileName
-        try {
-            Move-Item -LiteralPath $tempStreamPath -Destination $finalPath -Force -ErrorAction Stop
-        } catch {
-            Remove-Item -LiteralPath $tempStreamPath -Force -ErrorAction SilentlyContinue
-            Write-Error -Message "Failed to finalize downloaded file at '$finalPath': $($_.Exception.Message)" `
-                -ErrorId 'DownloadFinalizeFailed' -Category WriteError
-            return
+        # File.Move without overwrite fails when the name is taken, so an existing file is never
+        # replaced; the next ' (n)' name is tried instead.
+        $stem = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
+        $extension = [System.IO.Path]::GetExtension($fileName)
+        $candidate = $fileName
+        for ($n = 1; ; $n++) {
+            $finalPath = Join-Path -Path $DestinationDirectory -ChildPath $candidate
+            try {
+                [System.IO.File]::Move($tempStreamPath, $finalPath)
+                break
+            } catch {
+                if ($n -le 1000 -and (Test-Path -LiteralPath $finalPath)) {
+                    $candidate = '{0} ({1}){2}' -f $stem, $n, $extension
+                    continue
+                }
+                Remove-Item -LiteralPath $tempStreamPath -Force -ErrorAction SilentlyContinue
+                Write-Error -Message "Failed to finalize downloaded file at '$finalPath': $($_.Exception.Message)" `
+                    -ErrorId 'DownloadFinalizeFailed' -Category WriteError
+                return
+            }
+        }
+        $fileName = $candidate
+        if ($IsWindows) {
+            try {
+                Set-Content -LiteralPath $finalPath -Stream 'Zone.Identifier' -Value '[ZoneTransfer]', 'ZoneId=3' -ErrorAction Stop
+            } catch {
+                Write-Verbose "Could not mark '$finalPath' as downloaded from the internet: $($_.Exception.Message)"
+            }
         }
         $size = (Get-Item -LiteralPath $finalPath -ErrorAction SilentlyContinue).Length
         return [PSCustomObject]@{

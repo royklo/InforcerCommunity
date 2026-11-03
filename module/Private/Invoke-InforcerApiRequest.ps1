@@ -317,16 +317,29 @@ function Invoke-InforcerApiRequest {
 function Invoke-InforcerHttpRequest {
     # Invoke-RestMethod that returns HTTP errors instead of throwing them, so a caller's -ErrorVariable
     # only ever holds the module's own error record. Network failures still throw.
+    # Redirects are never followed: the request carries the API key, token or client secret.
     param([Parameter(Mandatory = $true)][hashtable]$Request)
 
     $statusCode = $null
     $responseHeaders = $null
-    $body = Invoke-RestMethod @Request -SkipHttpErrorCheck -StatusCodeVariable statusCode -ResponseHeadersVariable responseHeaders -Verbose:$false -Debug:$false
+    # -ErrorAction Ignore: a 3xx also raises a non-terminating 'maximum redirection' record (holding the request headers); network failures still throw.
+    $body = Invoke-RestMethod @Request -MaximumRedirection 0 -SkipHttpErrorCheck -StatusCodeVariable statusCode -ResponseHeadersVariable responseHeaders -Verbose:$false -Debug:$false -ErrorAction Ignore
+    if ($statusCode -ge 300 -and $statusCode -lt 400) {
+        throw (Get-InforcerRedirectMessage -StatusCode $statusCode -Headers $responseHeaders)
+    }
     [PSCustomObject]@{
         StatusCode = if ($statusCode) { [int]$statusCode } else { 200 }
         Body       = $body
         Headers    = $responseHeaders
     }
+}
+
+function Get-InforcerRedirectMessage {
+    param([int]$StatusCode, $Headers)
+
+    $location = Get-InforcerHeaderValue -Headers $Headers -Name 'Location'
+    $target = if ($location) { " to '$location'" } else { '' }
+    "The API answered with a redirect (HTTP $StatusCode)$target. The module does not follow redirects, so credentials are never sent to another address. Check -BaseUrl or -Region."
 }
 
 function Format-InforcerProblemError {

@@ -16,6 +16,9 @@ function Get-InforcerSettingsCatalogPath {
         Override cache directory. Defaults to ~/.inforcercommunity/data.
     .PARAMETER BaseUrl
         Override base URL for GitHub Release assets. For testing.
+    .PARAMETER MaxDownloadBytes
+        Largest accepted settings.json or categories.json. A bigger or malformed download (not a
+        JSON array of objects with an id) never replaces the cache. For testing.
     #>
     [CmdletBinding()]
     param(
@@ -26,8 +29,35 @@ function Get-InforcerSettingsCatalogPath {
         [string]$CacheDirectory,
 
         [Parameter()]
-        [string]$BaseUrl = 'https://github.com/royklo/IntuneSettingsCatalogData/releases/latest/download'
+        [string]$BaseUrl = 'https://github.com/royklo/IntuneSettingsCatalogData/releases/latest/download',
+
+        [Parameter()]
+        [long]$MaxDownloadBytes = 512MB
     )
+
+    # ConvertFrom-Json may turn ISO timestamps into DateTime, so compare a normalized form.
+    $toStamp = {
+        param($v)
+        if ($v -is [datetime]) { $v.ToUniversalTime().ToString('o') } elseif ($null -ne $v) { [string]$v }
+    }
+    $isCatalogFile = {
+        param([string]$File)
+        $item = Get-Item -LiteralPath $File -ErrorAction SilentlyContinue
+        if (-not $item -or $item.Length -gt $MaxDownloadBytes) { return $false }
+        $stream = [System.IO.File]::OpenRead($File)
+        $doc = $null
+        try {
+            # Parses the whole file (rejects truncated or non-JSON content) without building PowerShell objects.
+            $doc = [System.Text.Json.JsonDocument]::Parse($stream)
+            $first = @($doc.RootElement.EnumerateArray() | Select-Object -First 1)
+            $first.Count -eq 1 -and $first[0].GetProperty('id').ValueKind -eq [System.Text.Json.JsonValueKind]::String
+        } catch {
+            $false
+        } finally {
+            if ($doc) { $doc.Dispose() }
+            $stream.Dispose()
+        }
+    }
 
     # Tier 1: Explicit path
     if (-not [string]::IsNullOrEmpty($ExplicitPath)) {
@@ -87,7 +117,11 @@ function Get-InforcerSettingsCatalogPath {
         $remoteInfo = $null
         try {
             $response = Invoke-WebRequest -Uri $lastUpdatedUrl -UseBasicParsing -ErrorAction Stop
-            $remoteInfo = $response.Content | ConvertFrom-Json
+            # GitHub serves release assets as application/octet-stream, so Content is a byte[].
+            $remoteJson = if ($response.Content -is [byte[]]) {
+                [System.Text.Encoding]::UTF8.GetString($response.Content)
+            } else { $response.Content -as [string] }
+            $remoteInfo = $remoteJson | ConvertFrom-Json -Depth 100 -ErrorAction Stop
         } catch {
             Write-Verbose "Could not fetch last-updated.json: $_"
         }
@@ -102,9 +136,11 @@ function Get-InforcerSettingsCatalogPath {
             return $null
         }
 
-        # Tier 3: Stale cache -- check if remote is newer
+        # Tier 3: Stale cache -- check if remote is newer. An unknown timestamp on either side downloads.
         if ($hasCachedFile -and $null -ne $cacheMeta -and $null -ne $remoteInfo) {
-            if ($cacheMeta.releaseTimestamp -eq $remoteInfo.updatedAt) {
+            $cachedStamp = & $toStamp $cacheMeta.releaseTimestamp
+            $remoteStamp = & $toStamp $remoteInfo.updatedAt
+            if ($cachedStamp -and $remoteStamp -and $cachedStamp -eq $remoteStamp) {
                 # Remote unchanged -- refresh lastChecked and use cache
                 $cacheMeta.lastChecked = [datetime]::UtcNow.ToString('o')
                 $cacheMeta | ConvertTo-Json -Depth 100 | Set-Content -Path $metaPath -Encoding UTF8
@@ -126,13 +162,16 @@ function Get-InforcerSettingsCatalogPath {
                 try {
                     Write-Host 'Downloading Settings Catalog data...' -ForegroundColor Cyan
                     $tmpSettings = "$settingsPath.tmp"
-                    Invoke-WebRequest -Uri $settingsUrl -OutFile $tmpSettings -UseBasicParsing -ErrorAction Stop
-                    Move-Item -Path $tmpSettings -Destination $settingsPath -Force
-
-                    # Also download categories
                     $tmpCategories = "$categoriesPath.tmp"
+                    Invoke-WebRequest -Uri $settingsUrl -OutFile $tmpSettings -UseBasicParsing -ErrorAction Stop
                     Invoke-WebRequest -Uri $categoriesUrl -OutFile $tmpCategories -UseBasicParsing -ErrorAction Stop
-                    Move-Item -Path $tmpCategories -Destination $categoriesPath -Force
+                    if (-not (& $isCatalogFile $tmpSettings) -or -not (& $isCatalogFile $tmpCategories)) {
+                        Remove-Item -LiteralPath $tmpSettings, $tmpCategories -Force -ErrorAction SilentlyContinue
+                        Write-Verbose "The downloaded Settings Catalog data is not a valid catalog or is larger than $MaxDownloadBytes bytes; the cache is not replaced."
+                        break
+                    }
+                    Move-Item -LiteralPath $tmpSettings -Destination $settingsPath -Force
+                    Move-Item -LiteralPath $tmpCategories -Destination $categoriesPath -Force
 
                     $downloaded = $true
                     break
@@ -154,7 +193,7 @@ function Get-InforcerSettingsCatalogPath {
                 # Update cache metadata
                 $newMeta = @{
                     lastChecked     = [datetime]::UtcNow.ToString('o')
-                    releaseTimestamp = $(if ($remoteInfo) { $remoteInfo.updatedAt } else { [datetime]::UtcNow.ToString('o') })
+                    releaseTimestamp = $(if ($remoteInfo) { & $toStamp $remoteInfo.updatedAt } else { $null })
                     schemaVersion   = $(if ($remoteInfo) { $remoteInfo.schemaVersion } else { 1 })
                 }
                 $newMeta | ConvertTo-Json -Depth 100 | Set-Content -Path $metaPath -Encoding UTF8

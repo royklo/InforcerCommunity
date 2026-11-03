@@ -6,7 +6,8 @@ function Resolve-InforcerReportOutputFileName {
         Handles both filename= and the RFC 5987 filename*=charset'lang'percent-encoded form,
         preferring the latter when present (it can carry non-ASCII characters that filename=
         cannot). The returned name is sanitized: path components stripped, reserved characters
-        removed, leading/trailing whitespace trimmed.
+        removed, leading/trailing whitespace trimmed, and a leading dot prefixed with '_' so the
+        result is never a hidden dotfile.
 
         When the header is absent, empty, or contains no usable filename, falls back to
         -DefaultName (or 'output' if also unset).
@@ -101,6 +102,9 @@ function Resolve-InforcerReportOutputFileName {
     }
 
     if ([string]::IsNullOrWhiteSpace($parsed)) { $parsed = 'output' }
+
+    # No dotfiles: a server-chosen name must never become .zshrc, .profile, .gitconfig, ...
+    if ($parsed.StartsWith('.')) { $parsed = '_' + $parsed }
 
     # Prefix Windows reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9 with or without
     # extension) to avoid OS-level redirection on Windows. Cross-platform safe; just a leading '_'.

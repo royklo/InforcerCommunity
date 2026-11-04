@@ -3,6 +3,7 @@
     Retrieves alignment scores or alignment details from the Inforcer API.
 
     Required API scope(s): Baselines.Read + AlignmentScores.Read + Tenants.Read + tenants.policies.Read
+    (API key); Baselines + Align + Tenants permission (API client, unconfirmed).
 .DESCRIPTION
     Without -BaselineId: retrieves alignment score summaries (table or raw).
     With -BaselineId: retrieves detailed alignment data including metrics,
@@ -10,6 +11,8 @@
     When -TenantId is also specified, queries a single tenant.
     When only -BaselineId is specified, queries the first member tenant (baseline policies are identical across members).
     -BaselineId accepts a GUID or a friendly baseline name (resolved via the baselines API).
+    With -BaselineId the metrics summary is written to the host, not the pipeline; the pipeline gets
+    one object per policy (use -Format Raw for the metrics as an object).
 
     API-key login: table rows identify the tenant by TargetTenantClientTenantId.
     Client-credentials login: numeric tenant ids do not exist; table rows carry TargetTenantMsTenantId
@@ -17,7 +20,8 @@
 
     Piped tenants (Get-InforcerTenant | Get-InforcerAlignmentDetails): scores, baselines and tenant
     records are fetched once for the whole pipeline, each row carries TenantId, no row repeats, and
-    -OutputType JsonObject returns one JSON array.
+    -OutputType JsonObject returns one JSON array. With client credentials the table is always a
+    JSON array, also for one row.
 .PARAMETER Format
     Table (default) or Raw.
 .PARAMETER TenantId
@@ -36,7 +40,7 @@
 .EXAMPLE
     Get-InforcerAlignmentDetails -Format Raw -OutputType JsonObject
 .EXAMPLE
-    Get-InforcerAlignmentDetails -TenantId 482 -Tag Production
+    Get-InforcerAlignmentDetails -TenantId 'Contoso' -Tag Production
 .EXAMPLE
     Get-InforcerAlignmentDetails -TenantId 'Contoso' -BaselineId "Provision M365"
     Retrieves detailed alignment data using the tenant name and the baseline friendly name (both logins).

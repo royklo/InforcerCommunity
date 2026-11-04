@@ -4,6 +4,7 @@ function Get-InforcerUser {
         Retrieves users from an Inforcer tenant.
 
         Required API scope(s): Tenants.Users.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+        (API key); User & Group Management + Tenants (only for a tenant name) permission (API client, unconfirmed).
 
     .DESCRIPTION
         Gets a list of users or a single user by ID from the Inforcer API. Works with both login types (API key and client credentials).
@@ -30,27 +31,27 @@ function Get-InforcerUser {
         Piped tenants: each user carries TenantId and JsonObject returns one array for all tenants.
 
     .EXAMPLE
-        Get-InforcerUser -TenantId 139
+        Get-InforcerUser -TenantId 'Contoso'
 
-        Lists all users in tenant 139.
-
-    .EXAMPLE
-        Get-InforcerUser -TenantId 139 -Search "Adele"
-
-        Searches for users matching "Adele" in tenant 139.
+        Lists all users in the tenant Contoso.
 
     .EXAMPLE
-        Get-InforcerUser -TenantId 139 -UserId "00000000-0000-0000-0000-000000000005"
+        Get-InforcerUser -TenantId 'Contoso' -Search "Adele"
+
+        Searches for users matching "Adele" in the tenant Contoso.
+
+    .EXAMPLE
+        Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005"
 
         Gets full detail for a specific user.
 
     .EXAMPLE
-        Get-InforcerTenant -TenantId 139 | Get-InforcerUser
+        Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
 
         Lists all users in the piped tenant.
 
     .EXAMPLE
-        Get-InforcerUser -TenantId 482 -OutputType JsonObject
+        Get-InforcerUser -TenantId 'Contoso' -OutputType JsonObject
 
         Returns the users as a JSON string (depth 100) instead of objects.
 

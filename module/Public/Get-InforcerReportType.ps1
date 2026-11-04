@@ -2,7 +2,7 @@
 .SYNOPSIS
     Lists available report types from the Inforcer Reports API.
 
-    Required API scope(s): Reports.Read (API key); Reports permission (API client).
+    Required API scope(s): Reports.Read (API key); Reports permission (API client, unconfirmed).
 .DESCRIPTION
     Retrieves the catalog of report types from GET /reports/types (API key: legacy API; client
     ID and secret: v1 API, whose entries also carry singleTenantOnly). Each catalog entry
@@ -26,23 +26,29 @@
     PowerShellObject (default) or JsonObject. JSON uses Depth 100.
 .EXAMPLE
     Get-InforcerReportType
+
     Lists every available report type.
 .EXAMPLE
     Get-InforcerReportType -Key CopilotAdoption
+
     Returns the single CopilotAdoption catalog entry.
 .EXAMPLE
     Get-InforcerReportType -OutputFormat pdf
+
     Lists every type that supports PDF output.
 .EXAMPLE
     Get-InforcerReportType -Tag security
+
     Lists every type tagged with 'security'.
 .EXAMPLE
-    Get-InforcerReportType -Tag security | Invoke-InforcerReport -OutputFormat csv -TenantId 482
+    Get-InforcerReportType -Tag security | Invoke-InforcerReport -OutputFormat csv -TenantId 'Contoso'
+
     Discovers every security-tagged report type and pipes each into Invoke-InforcerReport.
     Works because Get-InforcerReportType emits a 'Key' alias which binds to
     Invoke-InforcerReport's -ReportType (ValueFromPipelineByPropertyName).
 .EXAMPLE
     Get-InforcerReportType -Key ActiveUserCount -OutputType JsonObject
+
     Returns the report type as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS

@@ -2,9 +2,10 @@
 .SYNOPSIS
     Compares the Intune policy configuration of two tenants and generates an HTML report.
 
-    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read
+    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read (API key);
+    Tenants + Baselines + Policies (+ Align with a baseline) permission (API client, unconfirmed).
 .DESCRIPTION
-    Fetches all policies from two tenants via Get-InforcerTenantPolicies, compares Intune
+    Fetches all policies from two tenants, compares Intune
     Settings Catalog settings at the settingDefinitionId level, and produces a self-contained
     HTML report showing alignment score, matches, conflicts, source-only/destination-only items,
     and non-Settings-Catalog policies for manual review. When -FetchGraphData is specified,
@@ -48,8 +49,11 @@
     When specified, fetches and displays Graph assignment data in the report.
     Assignments are informational only and do not affect the alignment score.
 .PARAMETER SettingsCatalogPath
-    Path to the IntuneSettingsCatalogViewer settings.json file.
-    Auto-discovers from sibling repo if omitted.
+    Path to a local settings.json file for Settings Catalog resolution. When omitted, the latest
+    data is downloaded from the IntuneSettingsCatalogData GitHub repository and cached at
+    ~/.inforcercommunity/data/settings.json. After 24 hours it checks for a newer release and
+    downloads it; a download that is not a valid catalog, or is larger than 512 MB, never replaces
+    the cached copy.
 .PARAMETER FetchGraphData
     When specified, connects to Microsoft Graph to enrich comparison data beyond what the
     Inforcer API provides. Requires the Microsoft.Graph.Authentication module and interactive
@@ -103,17 +107,17 @@
 .EXAMPLE
     $src = Connect-Inforcer -ApiKey $key -Region uk -PassThru
     $dst = Connect-Inforcer -ClientId $clientId -ClientSecret $secret -Region uk -PassThru
-    Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId '00000000-0000-0000-0000-000000000000' -SourceSession $src -DestinationSession $dst
+    Compare-InforcerEnvironments -SourceTenantId 101 -DestinationTenantId '00000000-0000-0000-0000-000000000002' -SourceSession $src -DestinationSession $dst   # API key only for the numeric source id
 
     Mixed login types: the source uses the API-key (beta) API, the destination the client-credentials (v1) API.
 .EXAMPLE
-    Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 -IncludingAssignments
+    Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -IncludingAssignments
 .EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' -DestinationTenantId 'Fabrikam'
     # Compares the 'Tier 1 Foundations' baseline policies on both sides. Fabrikam is scoped to the
     # same baseline unless -DestinationBaselineId says otherwise.
 .EXAMPLE
-    Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' -DestinationTenantId 14506
+    Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' -DestinationTenantId 'Fabrikam'
     # Compares the baseline (auto-resolves owner tenant) against a specific tenant.
 .EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1' -DestinationTenantId 'Fabrikam' -DestinationBaselineId 'Tier 2'

@@ -12,11 +12,14 @@ inforcer now has a versioned API (v1) with API clients that log in with a client
 
 - **`Connect-Inforcer -ClientId <id> -ClientSecret <secret> -Region uk`** logs in with an inforcer API client and uses the v1 API. The access token is requested at connect and renewed automatically before it expires, or once after a `401`. The secret may be a `SecureString` or a string. `-PassThru`, verbose output and error records never contain the secret, key or token.
 - **Every cmdlet works with both logins and returns the module's usual property names.** v1 responses are mapped to the existing names, so most scripts run unchanged. v1-only fields are added, and fields v1 does not have are absent (most visibly `ClientTenantId`; use `MsTenantId`).
-- **`-TenantId` takes a Microsoft tenant ID (GUID) or a tenant name with both logins.** Numeric tenant IDs only work with an API key; with client credentials they fail with an `InvalidTenantId` error that says what to pass instead.
+- **`-TenantId` takes a Microsoft tenant ID (GUID) or a tenant name with both logins.** Numeric tenant IDs only work with an API key; with client credentials they fail with an error that says what to pass instead.
 - **`Get-InforcerTenant -Detailed`** fetches the full tenant details (licenses, tags, secure score, alignment summaries, baseline flag) on v1, whose tenant list returns only name, DNS name and tenant ID. With an API key the switch is ignored, so scripts can pass it with both logins.
-- **v1 rate limits are handled:** a `429` is retried up to 3 times, honouring `Retry-After` (at most 300 s per wait). API-key behaviour is unchanged (a `429` fails at once).
+- **v1 rate limits are handled:** a `429` is retried up to 3 times, honouring `Retry-After` (at most 300 s per wait). Report-file downloads are not retried on `429`. API-key behaviour is unchanged (a `429` fails at once).
 - **Intune gap warning.** The v1 policies endpoint currently returns no Intune policies and no Defender settings-catalog policies, without reporting an error. `Get-InforcerTenantPolicies` warns when that happens. `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` add a note to the report. Until inforcer fixes this, use an API key for Intune documentation and comparisons.
 - **`Compare-InforcerEnvironments` can compare across logins:** pass one session from each login with `-SourceSession` / `-DestinationSession`.
+- **Piped tenants are labelled.** Piping tenants into `Get-InforcerBaseline`, `Get-InforcerAlignmentDetails`, `Get-InforcerTenantPolicies`, `Get-InforcerUser`, `Get-InforcerGroup`, `Get-InforcerRole` or `Get-InforcerSecureScore` adds `TenantId` to each result, and `-OutputType JsonObject` returns one JSON array for all of them. Piping one tenant into `Invoke-InforcerAssessment` adds `TenantId` to its checks. Calls without pipeline input are unchanged.
+- **`Compare-InforcerEnvironments` collects both tenants at the same time**, so a comparison takes about as long as its slower side.
+- **Credentials never follow a redirect.** API calls, the token request, report downloads, assessment runs and the `Connect-Inforcer` check stop at an HTTP 3xx with a message naming the target.
 
 ### Changes for API-key users
 
@@ -34,6 +37,19 @@ API-key output is identical to 0.8.0 (checked live, side by side), except for th
 - Security: `$Error` and `Get-Error` no longer contain the API key after a failed call (0.8.0 kept it in the request headers), and `Test-InforcerConnection -Verbose` no longer prints part of the key.
 - Export and Compare no longer label a report with another tenant's name when a tenant record is missing.
 - `Invoke-InforcerReport`: TAB completion of assessment IDs works before `-ReportType` is bound.
+- **Report downloads** (`Invoke-InforcerReport`, `Save-InforcerReportOutput`) never overwrite an existing file: a taken name is saved as `name (1).ext`, `name (2).ext`, and so on. A server file name that starts with a dot gets a leading underscore (`.csv` becomes `_.csv`), and `-FileName` writes your name directly. On Windows the files are marked as downloaded from the internet, so Office opens them in Protected View. `Invoke-InforcerReport -Open` no longer launches `.xls` files; it opens the folder.
+- **Redirects:** when the API answers with a redirect, the call (including `Connect-Inforcer` and assessment runs) fails with a clear message instead of following it.
+- **Exported files neutralise formulas:** Excel documentation writes values that start with `=` as text (`'=…`) and no longer turns web addresses into links; `Invoke-InforcerAssessment` CSV files prefix values that start with `=`, `+`, `-`, `@`, a tab or a carriage return with `'`. Markdown documentation encodes `&`, `<` and `>` (same text once rendered), and HTML reports show names with quotes or markup as plain text.
+- **The settings catalog updates again** when a newer catalog is released (it never refreshed after the first download), and a broken or oversized download no longer replaces the cached catalog.
+- **Piping tenants into `Get-InforcerBaseline` or `Get-InforcerAlignmentDetails`** reads baselines and scores once per call, so results no longer repeat.
+- `Get-InforcerTenant -TenantId` reads the tenant from the session's cached tenant list (fetched again once when the tenant is missing); run `Get-InforcerTenant` without `-TenantId` to see changed values.
+- `Get-InforcerAuditEvent` without `-EventType` makes one search instead of one per 10 event types. Events come back in the API's order instead of grouped by type, `-MaxResults` returns the first events of that order, and the call no longer refreshes the `-EventType` completion list.
+- `Export-InforcerTenantDocumentation`:
+  - The "Profile type" column is filled again (from the policy type id; the legacy API stopped sending the name).
+  - Entra, SharePoint and Microsoft 365 settings policies show the name inforcer gives them. "Require Multifactor Authentication to register or join devices" moves to Device settings and "Enable guest self-service sign up via user flows" to External Identities.
+  - Piping several tenants with `-OutputPath` set to a file stops at the second tenant with an `OutputPathIsFileForSeveralTenants` error instead of overwriting the file. `-Show` opens each HTML file once.
+- **`-FetchGraphData`** (Connect, Export, Compare) asks for `Directory.Read.All`, `Policy.Read.All` and `DeviceManagementConfiguration.Read.All`, so a consent prompt can appear once. Names come from the tenant for custom directory roles and every Conditional Access application, one tenant's names never show up in another tenant's document, and a call Graph refuses warns at once (naming the missing scope) instead of retrying for about 6 seconds.
+- An assessment run's HTTP errors show the response body as compact JSON.
 
 ### Migration from API key to client credentials
 
@@ -48,10 +64,11 @@ The full per-object difference list is in [docs/API-REFERENCE.md](docs/API-REFER
 ### Documentation
 
 - README, CMDLET-REFERENCE and API-REFERENCE cover both logins, the migration steps, the v1 permissions per cmdlet, the Intune gap and a short note on personal data in output files.
+- New: the Graph scopes and endpoints `-FetchGraphData` uses, the download rules for report files, redirect handling, the alignment-details field mapping, and per-endpoint sections for assessments and alignment details. Endpoint lists, example output and help examples were checked against the code (examples use tenant names or GUIDs, so they work with both logins).
 
 ### Tests
 
-- About 240 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing and pipeline input (720 pass in total).
+- About 330 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (810 pass in total).
 
 ## [0.8.0] - 2026-10-22
 

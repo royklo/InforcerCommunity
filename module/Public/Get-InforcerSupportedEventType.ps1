@@ -60,7 +60,8 @@ function Get-InforcerSupportedEventType {
     .SYNOPSIS
     Returns a list of available audit event types from the Inforcer API.
 
-    Required API scope(s): Audit.Read (unconfirmed — see docs/API-REFERENCE.md)
+    Required API scope(s): Audit.Read (API key, unconfirmed — see docs/API-REFERENCE.md); Activity
+    permission (API client, unconfirmed).
 
     .DESCRIPTION
     Retrieves the valid event type names that can be used with Get-InforcerAuditEvent.
@@ -76,7 +77,7 @@ function Get-InforcerSupportedEventType {
     Returns all available audit event type names for use with Get-InforcerAuditEvent.
 
     .LINK
-    https://github.com/royklo/InforcerCommunity/blob/main/docs/Get-InforcerSupportedEventType.md
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcersupportedeventtype
     #>
     [CmdletBinding()]
     [OutputType([string])]

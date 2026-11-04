@@ -2,7 +2,8 @@
 .SYNOPSIS
     Retrieves baseline information from the Inforcer API.
 
-    Required API scope(s): Baselines.Read
+    Required API scope(s): Baselines.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+    (API key); Baselines + Tenants (only for a tenant name) permission (API client, unconfirmed).
 .DESCRIPTION
     Retrieves baseline groups and members. Optionally filter by -TenantId (owner or member).
     API-key login: the owner is identified by BaselineClientTenantId and members by ClientTenantId.
@@ -21,7 +22,8 @@
 .EXAMPLE
     Get-InforcerBaseline
 .EXAMPLE
-    Get-InforcerBaseline -TenantId 482
+    Get-InforcerBaseline -TenantId 'Contoso'
+    Baselines owned by, or including, the tenant named Contoso (both logins).
 .EXAMPLE
     Get-InforcerBaseline -TenantId '00000000-0000-0000-0000-000000000001'
     Baselines owned by, or including, the tenant with this Microsoft Tenant ID (both logins).

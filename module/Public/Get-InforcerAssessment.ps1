@@ -2,7 +2,7 @@
 .SYNOPSIS
     Retrieves available assessments from the Inforcer API.
 
-    Required API scope(s): Assessments.Read (API key); Tenant Assessment permission (API client).
+    Required API scope(s): Assessments.Read (API key); Tenant Assessment permission (API client, unconfirmed).
 .DESCRIPTION
     Lists all assessments available for evaluation (e.g. Copilot Readiness, CIS Benchmarks,
     Essential Eight). Each assessment has an ID, name, description, tags, and type.

@@ -2,8 +2,9 @@
 .SYNOPSIS
     Queues one or more Inforcer reports, waits for completion, and saves the outputs.
 
-    Required API scope(s): Reports.Read, Reports.Run (API key); Reports permission with run access
-    on every target tenant (API client).
+    Required API scope(s): Reports.Read + Reports.Run + Tenants.Read (only when -TenantId is a GUID or
+    tenant name) (API key); Reports permission with run access on every target tenant + Tenants (only
+    for a tenant name) (API client, unconfirmed).
 .DESCRIPTION
     POST /reports/runs submits a batch of (ReportType, OutputFormat) pairs against the
     target tenants. Works with both login types: an API key uses the legacy API (tenants as numeric
@@ -27,6 +28,11 @@
       * Unknown -Parameter keys are rejected — the server would otherwise silently ignore them.
       * Each tenant identifier is validated and resolved before POST: to a numeric Client Tenant ID
         with an API key, to a Microsoft tenant ID (GUID) with an API client.
+
+    Saving: the server's file name is reduced to a plain file name (a leading dot becomes '_'), an
+    existing file is never overwritten, and on Windows saved files are marked as downloaded from the
+    internet. A download that answers with a redirect fails instead of following it, and a
+    throttled (429) download is not retried.
 .PARAMETER ReportType
     One or more report type keys (e.g. CopilotAdoption, TenantAuditReport, Assessment). Case-
     insensitive. Get-InforcerReportType lists every available key. Pipeline-bindable by
@@ -60,7 +66,8 @@
 .PARAMETER Open
     After each output is saved, launch it with the OS default handler (Invoke-Item).
     Only common document types are launched (csv, json, html, pdf, xlsx, xml, txt, zip, md,
-    tsv); for anything else, or more than 5 files, the output directory is opened instead.
+    tsv; legacy .xls is not launched); for anything else, or more than 5 files, the output
+    directory is opened instead.
     Ignored when -NoWait or -NoSave is set (nothing was saved to open). Aliases: -Show, -ShowResult.
 .PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
@@ -77,32 +84,40 @@
     PowerShellObject (default) or JsonObject. Affects pipeline output only; the saved files
     are unchanged.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 'Contoso'
+
     Queues, waits, and saves ActiveUserCount.csv to the current directory.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType TenantAuditReport, ActiveUserCount -OutputFormat pdf, csv -TenantId 482
+    Invoke-InforcerReport -ReportType TenantAuditReport, ActiveUserCount -OutputFormat pdf, csv -TenantId 'Contoso'
+
     Pairs by index: TenantAuditReport→pdf, ActiveUserCount→csv.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 482, 139 -NoWait
+    Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 'Contoso', 'Fabrikam' -NoWait
+
     Submits and returns immediately with the RunIds.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType Assessment -AssessmentId l1f8wd29pl44pp1j66r9 -OutputFormat pdf -TenantId 482
+    Invoke-InforcerReport -ReportType Assessment -AssessmentId l1f8wd29pl44pp1j66r9 -OutputFormat pdf -TenantId 'Contoso'
+
     Runs a specific assessment as a report.
 .EXAMPLE
-    Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 482
+    Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 'Contoso'
+
     Pipeline-discover-then-run: each catalog entry's 'Key' alias binds to -ReportType
     via ValueFromPipelineByPropertyName, so every Security-tagged type is queued in
     one call.
 .EXAMPLE
-    Invoke-InforcerReport -Key TenantAuditReport -OutputFormat html -TenantId 482 -Open
+    Invoke-InforcerReport -Key TenantAuditReport -OutputFormat html -TenantId 'Contoso' -Open
+
     Runs the report, saves it, and immediately opens the HTML in the default browser.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -OutputType JsonObject
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 'Contoso' -OutputType JsonObject
+
     Returns the run result as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS
     PSObject or String. The shape depends on the mode:
-      -NoWait        → one object per run with { RunId, Status='queued', TenantId, ReportType, ... }
+      -NoWait        → one object per queued run with only RunId (poll it with
+                       Get-InforcerReportRun -RunId <id> -Wait)
       -NoSave        → one object per output with { RunId, OutputId, FileName, FileSize, ... }
       default        → one object per saved output with { RunId, OutputId, FilePath, FileName, ... }
     TenantId on the result is the Client Tenant ID (API key) or Microsoft tenant ID (API client);

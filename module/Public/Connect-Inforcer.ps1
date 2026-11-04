@@ -9,7 +9,8 @@
         a warning. Before returning Connected, a minimal API call validates the key; an expired, revoked
         or invalid key is refused. A valid key that lacks the probe endpoint's scope still connects.
     You can specify -Region (uk, eu, us, anz) or -BaseUrl for a custom host. Secrets and tokens are
-    stored only as SecureString.
+    stored only as SecureString. Requests that carry the key, secret or token never follow a
+    redirect: an API that answers with one fails the connection with a clear message.
 .PARAMETER ApiKey
     The inforcer API key (legacy beta API). Can be SecureString or String (converted to SecureString).
 .PARAMETER ClientId

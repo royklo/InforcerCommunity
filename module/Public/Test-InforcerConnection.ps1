@@ -1,6 +1,9 @@
 <#
 .SYNOPSIS
     Tests the Inforcer API connection.
+
+    Required API scope(s): Baselines.Read (API key); Baselines permission (API client, unconfirmed).
+    A credential without it makes the test return $false.
 .DESCRIPTION
     Makes a test request to the baselines endpoint to verify the current session and its credential
     (API key or API client) work, and returns $true or $false so the result can be used as a condition.

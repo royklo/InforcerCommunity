@@ -4,6 +4,7 @@ function Get-InforcerRole {
         Retrieves directory role definitions from an Inforcer tenant.
 
         Required API scope(s): Tenants.Roles.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+        (API key); Entra Dashboard + Tenants (only for a tenant name) permission (API client, unconfirmed).
 
     .DESCRIPTION
         Gets the list of Entra ID directory role definitions for a tenant from the Inforcer API.
@@ -19,22 +20,22 @@ function Get-InforcerRole {
         JsonObject returns one array for all tenants.
 
     .EXAMPLE
-        Get-InforcerRole -TenantId 139
+        Get-InforcerRole -TenantId 'Contoso'
 
-        Lists all directory role definitions in tenant 139.
-
-    .EXAMPLE
-        Get-InforcerRole -TenantId 139 | Where-Object IsPrivileged -eq $true
-
-        Lists only privileged roles in tenant 139.
+        Lists all directory role definitions in the tenant Contoso.
 
     .EXAMPLE
-        Get-InforcerTenant -TenantId 139 | Get-InforcerRole
+        Get-InforcerRole -TenantId 'Contoso' | Where-Object IsPrivileged -eq $true
+
+        Lists only privileged roles in the tenant Contoso.
+
+    .EXAMPLE
+        Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerRole
 
         Lists all roles in the piped tenant.
 
     .EXAMPLE
-        Get-InforcerRole -TenantId 139 -OutputType JsonObject
+        Get-InforcerRole -TenantId 'Contoso' -OutputType JsonObject
 
         Returns roles as a JSON string.
 

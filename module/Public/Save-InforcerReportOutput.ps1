@@ -2,12 +2,17 @@
 .SYNOPSIS
     Downloads a report output to disk.
 
-    Required API scope(s): Reports.Read (API key); Reports permission (API client).
+    Required API scope(s): Reports.Read (API key); Reports permission (API client, unconfirmed).
 .DESCRIPTION
     GET /reports/runs/{runId}/outputs/{outputId} (legacy API for an API-key login, v1 API for a
     client ID and secret login) returns the raw bytes plus a
     Content-Disposition filename. This cmdlet writes those bytes to -OutputPath using the
     server-suggested filename (sanitized) and emits a result object per saved file.
+
+    The server's name is reduced to a plain file name (a leading dot becomes '_', so '.csv' is
+    saved as '_.csv'), an existing file is never overwritten, and on Windows saved files are marked
+    as downloaded from the internet. A redirect fails instead of being followed, and a throttled
+    (429) download is not retried.
 
     Pipeline-friendly: pipe output records from Invoke-InforcerReport -NoSave or
     Get-InforcerReportRun -IncludeOutputs and every output is downloaded.
@@ -31,15 +36,16 @@
     Created if it doesn't exist. Existing files are never overwritten: when the name is taken,
     the output is saved as 'name (1).ext', 'name (2).ext', and so on.
 .PARAMETER FileName
-    Override the server-suggested filename. Sanitized for cross-platform safety. The server's
-    name is then not used at all.
+    Override the server-suggested filename. Sanitized for cross-platform safety. The file is
+    written under this name directly; the server's name is not used at all. An existing file of
+    this name is kept and the output is saved as 'name (1).ext'.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject.
 .EXAMPLE
-    Save-InforcerReportOutput -RunId <run> -OutputId <output>
+    Save-InforcerReportOutput -RunId 00000000-0000-0000-0000-000000000009 -OutputId out-1
     Saves a single output to the current directory.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -NoSave |
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 'Contoso' -NoSave |
         Save-InforcerReportOutput -OutputPath ./reports
     Queues + polls a report without saving, then downloads every output to ./reports.
 .EXAMPLE
@@ -48,7 +54,7 @@
         Save-InforcerReportOutput -OutputPath ./bulk
     Bulk-downloads every output from every visible run.
 .EXAMPLE
-    Save-InforcerReportOutput -RunId 8842 -OutputId 1 -OutputPath ./out -OutputType JsonObject
+    Save-InforcerReportOutput -RunId 00000000-0000-0000-0000-000000000009 -OutputId out-1 -OutputPath ./out -OutputType JsonObject
     Returns the saved-file result as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS

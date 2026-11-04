@@ -4,8 +4,8 @@ function Connect-InforcerGraph {
         Connects to Microsoft Graph for documentation enrichment (group name resolution etc.).
     .DESCRIPTION
         Always performs a fresh interactive sign-in to Microsoft Graph. This ensures the session
-        is current each time the module is used. Auto-installs Microsoft.Graph.Authentication
-        if not present.
+        is current each time the module is used. When Microsoft.Graph.Authentication is not
+        installed it warns and returns nothing; it never installs modules.
 
         The Graph session is stored in $script:InforcerGraphConnected so Disconnect-Inforcer
         knows to also disconnect Graph.

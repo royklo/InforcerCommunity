@@ -2,7 +2,7 @@
 .SYNOPSIS
     Retrieves tenant information from the Inforcer API.
 
-    Required API scope(s): Tenants.Read
+    Required API scope(s): Tenants.Read (API key); Tenants permission (API client, unconfirmed).
 .DESCRIPTION
     Lists tenants. Optionally filter by -TenantId (numeric ID, Microsoft Tenant ID GUID, or tenant name).
     When the API returns licenses as an array, it is converted to a comma-separated string in the
@@ -14,6 +14,7 @@
     -Detailed, or -TenantId, loads each tenant's full record (licenses, SecureScore, IsBaseline, tags,
     alignmentSummaries, LastBackupTimestamp, AuthenticationMode) with one extra call per tenant.
     -TenantId <GUID> makes that one call only; a name is first resolved from the session's tenant list.
+    With client credentials -OutputType JsonObject is always a JSON array, also for one tenant.
 
     ClientTenantId does not exist with client credentials; use MsTenantId or the tenant name.
 .PARAMETER Format
@@ -29,8 +30,8 @@
 .EXAMPLE
     Get-InforcerTenant
 .EXAMPLE
-    Get-InforcerTenant -TenantId 482
-    API-key login: returns the tenant with Client Tenant ID 482.
+    Get-InforcerTenant -TenantId 102   # API key only (numeric Client Tenant ID)
+    API-key login: returns the tenant with Client Tenant ID 102.
 .EXAMPLE
     Get-InforcerTenant -TenantId 'Contoso'
     Returns the tenant named Contoso with its full record (works with both logins).

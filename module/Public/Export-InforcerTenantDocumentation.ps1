@@ -2,7 +2,8 @@
 .SYNOPSIS
     Generates comprehensive tenant documentation across all M365 products managed via Inforcer.
 
-    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read
+    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read (API key);
+    Tenants + Baselines + Policies (+ Align with -Baseline) permission (API client, unconfirmed).
 .DESCRIPTION
     Export-InforcerTenantDocumentation collects the tenant, its baselines and its policies (the raw
     API data, as Get-InforcerTenant, Get-InforcerBaseline and Get-InforcerTenantPolicies return it),
@@ -24,6 +25,10 @@
     Nothing is written unless -OutputPath is given: without it the DocModel is returned so a
     caller can read the configuration without producing files. With it, output is auto-named
     {TenantName}-Documentation.{ext} (e.g., Contoso-Documentation.html).
+
+    The Profile type column is filled from the policy type id when the API sends no type name.
+    Excel: values that start with '=' are written as text with a leading apostrophe, and web
+    addresses are not turned into links. Markdown: & < > in cells and headings are encoded.
 .PARAMETER Format
     Output format(s) to generate. Accepted values: Html, Markdown, Excel. Multiple formats
     can be specified as a comma-separated list or array. Defaults to Html. Excel format
@@ -50,9 +55,10 @@
 .PARAMETER SettingsCatalogPath
     Path to a local settings.json file for Settings Catalog resolution. When omitted, the cmdlet
     automatically downloads and caches the latest data from the IntuneSettingsCatalogData GitHub
-    repository (~65 MB, cached at ~/.inforcercommunity/data/settings.json with a 24-hour TTL).
-    If download fails and no cached copy exists, Settings Catalog policies show raw
-    settingDefinitionId values and a warning is emitted.
+    repository (~65 MB, cached at ~/.inforcercommunity/data/settings.json). After 24 hours it checks
+    for a newer release and downloads it; a download that is not a valid catalog, or is larger than
+    512 MB, never replaces the cached copy. If download fails and no cached copy exists, Settings
+    Catalog policies show raw settingDefinitionId values and a warning is emitted.
 .PARAMETER FetchGraphData
     When specified, signs in to Microsoft Graph for the tenant and resolves IDs to names: assignment
     groups and filters, scope tags, and the groups, directory roles (built-in and custom), named
@@ -72,15 +78,15 @@
     The DocModel (hashtable) when -OutputPath is omitted, otherwise System.IO.FileInfo for each
     exported file.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 482 -Format Html
+    Export-InforcerTenantDocumentation -TenantId 'Contoso' -Format Html
 
     Returns the DocModel. No file is written - pass -OutputPath for that.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 482 -Format Html -OutputPath ./docs -Show
+    Export-InforcerTenantDocumentation -TenantId 'Contoso' -Format Html -OutputPath ./docs -Show
 
     Writes Contoso-Documentation.html to ./docs and opens it.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Excel -OutputPath C:\Reports
+    Export-InforcerTenantDocumentation -TenantId 'Contoso' -Format Html,Markdown,Excel -OutputPath C:\Reports
 
     Writes three documentation files to C:\Reports.
 .EXAMPLE
@@ -88,7 +94,7 @@
 
     Uses an explicit settings.json path for Settings Catalog resolution.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 139 -Baseline "Inforcer Blueprint Baseline - Tier 1 - Foundations" -Format Html
+    Export-InforcerTenantDocumentation -TenantId 'Contoso' -Baseline "Inforcer Blueprint Baseline - Tier 1 - Foundations" -Format Html
 
     Exports only the policies that belong to the specified baseline.
 .LINK

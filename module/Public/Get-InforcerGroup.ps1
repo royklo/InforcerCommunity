@@ -4,6 +4,7 @@ function Get-InforcerGroup {
         Retrieves groups from an Inforcer tenant.
 
         Required API scope(s): Tenants.Groups.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+        (API key); User & Group Management + Tenants (only for a tenant name) permission (API client, unconfirmed).
 
     .DESCRIPTION
         Gets a list of groups or a single group from the Inforcer API.
@@ -46,42 +47,42 @@ function Get-InforcerGroup {
         Piped tenants: each group carries TenantId and JsonObject returns one array for all tenants.
 
     .EXAMPLE
-        Get-InforcerGroup -TenantId 139
+        Get-InforcerGroup -TenantId 'Contoso'
 
-        Lists all groups in tenant 139.
+        Lists all groups in the tenant Contoso.
 
     .EXAMPLE
-        Get-InforcerGroup -TenantId 139 -Search "Finance"
+        Get-InforcerGroup -TenantId 'Contoso' -Search "Finance"
 
         Server-side search for groups starting with "Finance".
 
     .EXAMPLE
-        Get-InforcerGroup -TenantId 139 -Filter "*comp*"
+        Get-InforcerGroup -TenantId 'Contoso' -Filter "*comp*"
 
         Client-side filter for groups containing "comp" in the display name (e.g. "All Company").
 
     .EXAMPLE
-        Get-InforcerGroup -TenantId 139 -Group "Tailspin Toys"
+        Get-InforcerGroup -TenantId 'Contoso' -Group "Tailspin Toys"
 
         Resolves the group by display name and returns full detail including members.
 
     .EXAMPLE
-        Get-InforcerGroup -TenantId 139 -Group "00000000-0000-0000-0000-000000000006"
+        Get-InforcerGroup -TenantId 'Contoso' -Group "00000000-0000-0000-0000-000000000006"
 
         Gets full detail for a specific group by GUID including members.
 
     .EXAMPLE
-        Get-InforcerTenant -TenantId 139 | Get-InforcerGroup
+        Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerGroup
 
         Lists all groups in the piped tenant.
 
     .EXAMPLE
-        Get-InforcerGroup -TenantId 139 -OutputType JsonObject
+        Get-InforcerGroup -TenantId 'Contoso' -OutputType JsonObject
 
         Returns all groups as a JSON string.
 
     .EXAMPLE
-        Get-InforcerGroup -TenantId 139 -Group "Finance" -OutputType JsonObject
+        Get-InforcerGroup -TenantId 'Contoso' -Group "Finance" -OutputType JsonObject
 
         Returns full group detail as a JSON string.
 

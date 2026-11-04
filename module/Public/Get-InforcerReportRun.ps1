@@ -2,7 +2,7 @@
 .SYNOPSIS
     Lists report runs from the Inforcer Reports API, with optional polling and outputs embedding.
 
-    Required API scope(s): Reports.Read (API key); Reports permission (API client).
+    Required API scope(s): Reports.Read (API key); Reports permission (API client, unconfirmed).
 .DESCRIPTION
     Works with both login types (API key: legacy API; client ID and secret: v1 API). The run
     objects have the same properties either way (v1 reportRunId is exposed as runId).
@@ -40,18 +40,23 @@
     PowerShellObject (default) or JsonObject. JSON uses Depth 100.
 .EXAMPLE
     Get-InforcerReportRun
+
     Lists every visible run (up to 500, last 7 days).
 .EXAMPLE
     Get-InforcerReportRun -RunId 00000000-0000-0000-0000-000000000009
+
     Returns metadata for a single run (subject to the list-endpoint propagation lag).
 .EXAMPLE
     Get-InforcerReportRun -RunId 00000000-0000-0000-0000-000000000009 -Wait
+
     Polls the run until terminal and returns its metadata with outputs embedded.
 .EXAMPLE
     Get-InforcerReportRun -IncludeOutputs
+
     Returns every run with its outputs array embedded (1 extra API call per run).
 .EXAMPLE
-    Get-InforcerReportRun -RunId 8842 -OutputType JsonObject
+    Get-InforcerReportRun -RunId 00000000-0000-0000-0000-000000000009 -OutputType JsonObject
+
     Returns the run as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS

@@ -4,6 +4,7 @@ function Get-InforcerSecureScore {
         Retrieves the current and historic secure score for an Inforcer tenant.
 
         Required API scope(s): Tenants.SecureScores.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+        (API key); Entra Dashboard + Tenants (only for a tenant name) permission (API client, unconfirmed).
 
     .DESCRIPTION
         Gets secure score data for a tenant from GET /tenants/{tenantId}/secureScores (beta or v1, by login type).
@@ -19,22 +20,22 @@ function Get-InforcerSecureScore {
         Piped tenants: each result carries TenantId and JsonObject returns one array for all tenants.
 
     .EXAMPLE
-        Get-InforcerSecureScore -TenantId 139
+        Get-InforcerSecureScore -TenantId 'Contoso'
 
-        Returns the secure score summary for tenant 139.
+        Returns the secure score summary for the tenant Contoso.
 
     .EXAMPLE
-        (Get-InforcerSecureScore -TenantId 139).Scores
+        (Get-InforcerSecureScore -TenantId 'Contoso').Scores
 
         Returns the 90-day daily score history.
 
     .EXAMPLE
-        (Get-InforcerSecureScore -TenantId 139).ControlProfiles | Sort-Object ScoreDifference -Descending | Select-Object -First 10
+        (Get-InforcerSecureScore -TenantId 'Contoso').ControlProfiles | Sort-Object ScoreDifference -Descending | Select-Object -First 10
 
         Lists the 10 controls with the largest gap between current and max score.
 
     .EXAMPLE
-        $s = Get-InforcerSecureScore -TenantId 139
+        $s = Get-InforcerSecureScore -TenantId 'Contoso'
         $s.ControlProfiles | Where-Object ScoreDifference -gt 0 |
             Group-Object ControlCategory |
             Select-Object Name, Count, @{n='TotalGain';e={($_.Group | Measure-Object ScoreDifference -Sum).Sum}}
@@ -42,19 +43,19 @@ function Get-InforcerSecureScore {
         Groups open recommendations by category with total potential score gain per category.
 
     .EXAMPLE
-        $s = Get-InforcerSecureScore -TenantId 139
+        $s = Get-InforcerSecureScore -TenantId 'Contoso'
         ($s.ControlCategoryScores | Where-Object ControlCategory -eq 'Identity').HistoricScores |
             Format-Table CreatedDateTime, CurrentScore, MaxScore, CurrentScorePercentage -AutoSize
 
         Shows the daily Identity category history for the tenant.
 
     .EXAMPLE
-        Get-InforcerTenant -TenantId 139 | Get-InforcerSecureScore
+        Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerSecureScore
 
         Retrieves secure scores for the piped tenant.
 
     .EXAMPLE
-        Get-InforcerSecureScore -TenantId 139 -OutputType JsonObject
+        Get-InforcerSecureScore -TenantId 'Contoso' -OutputType JsonObject
 
         Returns the response as a JSON string.
 

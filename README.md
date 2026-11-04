@@ -86,13 +86,13 @@ Get-InforcerTenant -Detailed
 
 # Tenants are addressed by Microsoft tenant ID (GUID) or name
 Get-InforcerTenantPolicies -TenantId '00000000-0000-0000-0000-000000000000'
-Get-InforcerTenant | Get-InforcerSecureScore   # pipeline binds MsTenantId
+Get-InforcerTenant | Get-InforcerSecureScore   # pipeline binds MsTenantId; each result carries TenantId
 
 # Alignment score table
 Get-InforcerAlignmentDetails
 ```
 
-`-TenantId` accepts the aliases `ClientTenantId` and `MsTenantId`, so objects from `Get-InforcerTenant` bind through the pipeline in both logins.
+`-TenantId` accepts the aliases `ClientTenantId` and `MsTenantId`, so objects from `Get-InforcerTenant` bind through the pipeline in both logins. Results from piped tenants carry a `TenantId` property, and `-OutputType JsonObject` returns one JSON array for all of them.
 
 ### API key (legacy)
 
@@ -116,9 +116,12 @@ Get-InforcerTenant | Select-Object ClientTenantId, TenantFriendlyName, PolicyDif
 # The report opens in your browser automatically, unless you are on a CI runner or pass -Show:$false.
 Export-InforcerTenantDocumentation -Format Html -TenantId 'Contoso' -OutputPath ./docs
 
-# Generate documentation for a specific baseline with Graph group name resolution
+# Generate documentation for a specific baseline with Graph name resolution (see Microsoft Graph below)
 Connect-Inforcer -ClientId '<client-id>' -ClientSecret $secret -Region uk -FetchGraphData
 Export-InforcerTenantDocumentation -Format Html -TenantId 'Contoso' -Baseline "Production" -FetchGraphData -OutputPath ./docs
+
+# Document several tenants: pass a directory, one file per tenant
+Get-InforcerTenant | Export-InforcerTenantDocumentation -Format Html -OutputPath ./docs -Show:$false
 
 # Disconnect when done
 Disconnect-Inforcer
@@ -133,11 +136,11 @@ inforcer's API keys use the **legacy beta API**, which inforcer says is due to b
 | What | API key (beta) | Client credentials (v1) |
 |------|----------------|--------------------------|
 | Login | `Connect-Inforcer -ApiKey $key -Region uk` | `Connect-Inforcer -ClientId $id -ClientSecret $secret -Region uk` |
-| Tenant ID | numeric Client Tenant ID, Microsoft tenant ID (GUID) or name | Microsoft tenant ID (GUID) or tenant name. A numeric ID fails with an `InvalidTenantId` error that says to use the GUID or name. |
+| Tenant ID | numeric Client Tenant ID, Microsoft tenant ID (GUID) or name | Microsoft tenant ID (GUID) or tenant name. A numeric ID fails with an error that says to use the GUID or name (`InvalidTenantId`; `TenantResolutionFailed` in `Invoke-InforcerReport`). |
 | `ClientTenantId` property | present | **absent** (use `MsTenantId`) |
 | `Get-InforcerTenant` | rich objects | name, DNS name and Microsoft tenant ID; add `-Detailed` (or `-TenantId`) for the rich fields. `-Detailed` is ignored with an API key, so scripts work with both logins. |
 | Permissions | key scopes (`Tenants.Read`, ...) | API client permissions plus optional tenant filters, set in the portal |
-| Rate limit | 400 calls/hour per key; a throttled (`429`) call fails at once | 400 calls/minute per partner; throttled calls are retried using `Retry-After` (up to 3 times, at most 300 s each) |
+| Rate limit | 400 calls/hour per key; a throttled (`429`) call fails at once | 400 calls/minute per partner; throttled calls are retried using `Retry-After` (up to 3 times, at most 300 s each). Report-file downloads are not retried on `429`. |
 | Output | unchanged | the same property names; v1 responses are mapped to them. v1-only fields are added; fields v1 does not have are missing. |
 
 Steps:
@@ -149,6 +152,24 @@ Steps:
 5. **Intune gap for now:** the v1 tenant policies endpoint currently returns no Intune policies (and no Defender settings-catalog policies, type 10), with no error. `Get-InforcerTenantPolicies` warns about it once per tenant, and `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` add a note to their reports (no second warning). Until inforcer fixes this, use an API key for Intune-centred documentation and comparison. API-key output is unchanged.
 
 The full list of differences per object is in the [API Reference](docs/API-REFERENCE.md#v1-api-client-credentials).
+
+## Security notes
+
+- Requests that carry your API key, client secret or access token never follow a redirect. When the API answers with a redirect, the call fails with a message naming the target, so credentials are never sent to another address.
+- Report downloads (`Invoke-InforcerReport`, `Save-InforcerReportOutput`) never overwrite an existing file (a taken name becomes `name (1).ext`) and use a safe file name; on Windows the files are marked as downloaded from the internet.
+- Exported files neutralise formulas: Excel documentation writes values that start with `=` as text, and assessment CSV files prefix values that start with `=`, `+`, `-`, `@`, a tab or a carriage return with `'`.
+
+## Microsoft Graph (optional)
+
+`-FetchGraphData` on `Connect-Inforcer`, `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` signs in to Microsoft Graph interactively (module `Microsoft.Graph.Authentication`, not installed automatically) to turn IDs into names. It requests three delegated read scopes, so a consent prompt can appear once:
+
+| Scope | Used for |
+|-------|----------|
+| `Directory.Read.All` | Group and user names (assignments, Conditional Access), directory roles including custom roles, application names in Conditional Access |
+| `Policy.Read.All` | Named locations in Conditional Access |
+| `DeviceManagementConfiguration.Read.All` | Assignment filters, scope tags, and compliance rules (Compare) |
+
+A call Graph refuses leaves those IDs as they are, with a warning that names the likely missing scope. The Graph endpoints are listed in the [API Reference](docs/API-REFERENCE.md#microsoft-graph).
 
 ## Personal data
 
@@ -179,16 +200,17 @@ Some output contains personal data (names, UPNs, email addresses, IP addresses, 
 | **Get-InforcerReportType**     | Lists the report catalog from the Reports API. Cached after first call; supports `-Key`, `-Tag`, and `-OutputFormat` filters. |
 | **Invoke-InforcerReport**      | Queues a report run, polls until complete, and saves outputs to disk. Use `-NoWait` for async or `-NoSave` to download metadata only. |
 | **Get-InforcerReportRun**      | Lists report runs (last 7 days, capped at 500). Use `-Wait` with `-RunId` to bypass the 4-minute list propagation lag. |
-| **Save-InforcerReportOutput**  | Downloads a report output to disk using the server's `Content-Disposition` filename. Pipeline-friendly for bulk download. |
+| **Save-InforcerReportOutput**  | Downloads a report output to disk using the server's `Content-Disposition` filename (or `-FileName`); never overwrites an existing file. Pipeline-friendly for bulk download. |
 
 
 For full parameter details and example output, see **[Cmdlet Reference](docs/CMDLET-REFERENCE.md)**. For detailed API schemas and response structures, see **[API Reference](docs/API-REFERENCE.md)**.
 
 ## Settings Catalog data
 
-The `Export-InforcerTenantDocumentation` cmdlet resolves Intune Settings Catalog settingDefinitionIDs to friendly names using data from the [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) repository. This data (~65 MB) is **automatically downloaded and cached** on first use at `~/.inforcercommunity/data/settings.json` with a 24-hour TTL.
+`Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` resolve Intune Settings Catalog settingDefinitionIDs to friendly names using data from the [IntuneSettingsCatalogData](https://github.com/royklo/IntuneSettingsCatalogData) repository. This data (~65 MB) is **automatically downloaded and cached** on first use at `~/.inforcercommunity/data/settings.json` with a 24-hour TTL.
 
-- **No manual setup required** — the module handles download, caching, and freshness checks automatically
+- **No manual setup required** — the module handles download, caching, and freshness checks automatically. After 24 hours it checks the release and downloads only when a newer catalog exists.
+- **Validated downloads** — a download replaces the cache only when it is a valid catalog of at most 512 MB; otherwise the cached copy is kept
 - **Offline support** — if the download fails, the module uses a stale cached copy (or proceeds without resolution, showing raw IDs)
 - **Override** — use `-SettingsCatalogPath` to point to a local `settings.json` file instead
 

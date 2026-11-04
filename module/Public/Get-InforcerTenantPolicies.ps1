@@ -43,6 +43,7 @@ function EnrichPolicyObject {
     Retrieves policies for a tenant from the Inforcer API.
 
     Required API scope(s): tenants.policies.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
+    (API key); Policies + Tenants (only for a tenant name) permission (API client, unconfirmed).
 .DESCRIPTION
     Gets all policies for the specified tenant. TenantId accepts a numeric ID (API-key login only), Microsoft tenant GUID, or tenant name.
     Works with both login types. With client credentials (v1) the API currently returns no Intune policies;
@@ -56,7 +57,9 @@ function EnrichPolicyObject {
     PowerShellObject (default) or JsonObject. JSON output is an array and uses Depth 100.
     Piped tenants: each policy carries TenantId and JsonObject returns one array for all tenants.
 .EXAMPLE
-    Get-InforcerTenantPolicies -TenantId 482
+    Get-InforcerTenantPolicies -TenantId 'Contoso'
+.EXAMPLE
+    Get-InforcerTenantPolicies -TenantId 101   # API key only (numeric Client Tenant ID)
 .EXAMPLE
     Get-InforcerTenantPolicies -TenantId "00000000-0000-0000-0000-000000000003" -OutputType JsonObject
 .NOTES

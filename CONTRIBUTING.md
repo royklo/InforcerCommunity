@@ -32,7 +32,7 @@ Thank you for your interest in contributing. This project is maintained by the c
 - **PowerShell 7.0+** is required.
 - No build step: the module is a script module. After editing files under `module/`, re-import:
   ```powershell
-  Import-Module ./module -Force
+  Import-Module ./module/InforcerCommunity.psd1 -Force
   ```
 - Optional: run the full cmdlet verification script from repo root:
   ```powershell
@@ -43,9 +43,10 @@ Thank you for your interest in contributing. This project is maintained by the c
 
 The module follows a **consistency contract** so all cmdlets behave predictably:
 
-- **Parameter order:** Format → TenantId → Tag (if any) → OutputType for Get-* cmdlets that return API data.
+- **Parameter order:** Format → TenantId → BaselineId (if any) → Tag (if any) → OutputType for Get-* cmdlets that return API data.
 - **-Format and -OutputType:** Present where applicable; do not remove them.
-- **Property names:** Use the standard PascalCase aliases (Tenant, Baseline, Policy, AlignmentScore, AuditEvent) implemented in `module/Private/Add-InforcerPropertyAliases.ps1`.
+- **Property names:** keep the API casing. `module/Private/Add-InforcerPropertyAliases.ps1` adds only real renames (`BaselineId` ← `id`, `FileSize` ← `sizeBytes`, …); never add case-only aliases, which would duplicate keys in JSON and CSV output.
+- **Piped tenants:** a cmdlet that takes `-TenantId` from the pipeline adds `TenantId` to each result (only when the result has none) and returns one JSON array for `-OutputType JsonObject`; calls without pipeline input stay unchanged.
 - **JSON depth:** Always 100 for `-OutputType JsonObject`.
 
 When you fix a bug or change behavior, describe what was done and how to test in your pull request.
@@ -96,7 +97,8 @@ The module supports two logins and a change is only done when it works with both
 - **Auth headers are built only in `Get-InforcerAuthHeader`.** Never write `Inf-Api-Key` or `Authorization` anywhere else; it also renews v1 tokens.
 - **Endpoints are version-neutral.** Callers pass `/tenants/{id}/policies`; the request helper adds `/beta` or `/v1` and applies the v1 renames (`roles` to `directoryRoles`, `auditEvents/eventTypes` to `auditEvents/types`, `customBaselineId` to `baselineId`). Do not hard-code `/beta/` or `/v1/` in cmdlets.
 - **v1 responses are mapped to the module's property names** through `ConvertFrom-InforcerV1Response -ObjectType ...` (via the request helper's `-ObjectType`). Add a mapping there rather than special-casing a cmdlet.
-- Paging goes through `Invoke-InforcerPagedRequest`; tenant lookups through `Get-InforcerTenantList` (cached per session).
+- Paging goes through `Invoke-InforcerPagedRequest`; tenant lookups through `Get-InforcerTenantList` and baseline lookups through `Get-InforcerBaselineList` (both cached per session).
+- Requests that carry credentials never follow redirects (`-MaximumRedirection 0`, a 3xx is an error).
 - `-TenantId` parameters carry the aliases `ClientTenantId` and `MsTenantId`.
 - Document every endpoint change in `docs/API-REFERENCE.md` with both the beta API-key scope and the v1 API client permission.
 

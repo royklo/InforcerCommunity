@@ -3,7 +3,7 @@
     Runs an assessment against one or more tenants via the Inforcer API.
 
     Required API scope(s): Tenants.Read + Assessments.Read + Assessments.Run (API key);
-    Tenants (read) + Tenant Assessment (run) permissions (API client).
+    Tenants (read) + Tenant Assessment (run) permissions (API client, unconfirmed).
 .DESCRIPTION
     Triggers an assessment run and returns detailed results including per-check scores,
     passes, violations, warnings, and framework metadata.
@@ -16,6 +16,8 @@
     (GUID) or name, and the TenantId on the output is the Microsoft tenant ID. v1 runs return
     when the assessment completes, exactly like the legacy runs.
     When -OutputPath is specified with multi-tenant, generates an HTML matrix report.
+    With client credentials a throttled run (429) is retried after Retry-After and a 401 renews the
+    token once; with an API key neither is retried. A run that answers with a redirect fails.
 .PARAMETER TenantId
     Tenant(s) to run the assessment against. Accepts numeric Client Tenant ID (API key only),
     Microsoft tenant GUID, or friendly name. Aliases: -ClientTenantId, -MsTenantId.
@@ -28,8 +30,9 @@
     Switch. Runs the assessment against all tenants (or subset if -TenantId also specified).
     Requires -OutputPath with HTML extension for the matrix report.
 .PARAMETER OutputPath
-    Optional. File path to export results. Auto-detects format from file extension.
-    Single tenant: HTML (.html) report or CSV (.csv).
+    Optional. File path (not a directory) to export results; the extension picks the format, and
+    any other extension fails with UnsupportedFormat.
+    Single tenant: HTML (.html or .htm) report or CSV (.csv).
     Multi-tenant: HTML (.html) matrix report or CSV (.csv) with tenant column.
     CSV values that start with =, +, -, @, a tab or a carriage return get a leading ' so Excel
     shows them as text instead of running them as formulas.
@@ -37,8 +40,8 @@
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON uses Depth 100.
 .EXAMPLE
-    Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness"
-    Runs the Copilot Readiness assessment against tenant 144.
+    Invoke-InforcerAssessment -TenantId 'Contoso' -AssessmentId "Copilot Readiness"
+    Runs the Copilot Readiness assessment against the tenant Contoso.
 .EXAMPLE
     Invoke-InforcerAssessment -TenantId "Contoso" -AssessmentId "Copilot Readiness" -OutputPath ./report.html
     Generates an interactive HTML assessment report.
@@ -49,10 +52,10 @@
     Invoke-InforcerAssessment -TenantId "Contoso","Fabrikam","Woodgrove" -AssessmentId "Copilot Readiness" -OutputPath ./matrix.html
     Runs the assessment against specific tenants and generates a matrix report.
 .EXAMPLE
-    Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness" -OutputPath ./report.csv
+    Invoke-InforcerAssessment -TenantId 'Contoso' -AssessmentId "Copilot Readiness" -OutputPath ./report.csv
     Exports assessment results to CSV.
 .EXAMPLE
-    Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness" -OutputType JsonObject
+    Invoke-InforcerAssessment -TenantId 'Contoso' -AssessmentId "Copilot Readiness" -OutputType JsonObject
     Returns the assessment results as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS

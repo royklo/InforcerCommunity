@@ -9,6 +9,8 @@ This document describes the inforcer REST API endpoints, schemas, and response s
 ## Table of Contents
 
 - [Authentication](#authentication)
+  - [Redirects](#redirects)
+  - [Session caches](#session-caches)
 - [API Scopes](#api-scopes) (API key, beta)
 - [API client permissions (v1)](#api-client-permissions-v1)
 - [v1 API (client credentials)](#v1-api-client-credentials)
@@ -20,9 +22,11 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [failedPolicyTypes and the Intune gap](#failedpolicytypes-and-the-intune-gap)
   - [v1 endpoints](#v1-endpoints)
   - [How v1 fields map to the module's names](#how-v1-fields-map-to-the-modules-names)
+    - [Alignment details renames](#alignment-details-renames)
 - [Beta endpoints](#beta-endpoints)
   - [Baselines](#baselines)
   - [Alignment Scores](#alignment-scores)
+  - [Alignment Details](#alignment-details)
   - [Tenants](#tenants)
   - [Tenant Policies](#tenant-policies)
   - [Audit Events](#audit-events)
@@ -30,6 +34,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [Groups](#groups)
   - [Roles](#roles)
   - [Secure Scores](#secure-scores)
+  - [Assessments](#assessments)
   - [Reports](#reports)
 - [Schemas](#schemas)
   - [BaselineGroup](#baselinegroup)
@@ -53,9 +58,12 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [TenantSecureScoreDetails](#tenantsecurescoredetails)
   - [TenantSecureScoreHistoryPoint](#tenantsecurescorehistorypoint)
   - [TenantSecureScoreControlProfile](#tenantsecurescorecontrolprofile)
+  - [Assessment](#assessment)
+  - [AssessmentCheck](#assessmentcheck)
   - [ReportType](#reporttype)
   - [ReportRun](#reportrun)
   - [ReportOutput](#reportoutput)
+- [Microsoft Graph](#microsoft-graph) (optional, `-FetchGraphData`)
 - [Response Wrapper](#response-wrapper-beta)
 - [Error Responses](#error-responses-beta)
 
@@ -76,6 +84,20 @@ The module supports two logins; the API version follows from the login. Use `Con
 `Get-InforcerAuthHeader` is the only place the module builds either header. Secrets and tokens are held as SecureString and never written to output. The legacy API is due to be retired by inforcer (no date announced) and `Connect-Inforcer -ApiKey` warns about it. Regions: `anz`, `eu`, `uk`, `us`.
 
 Permissions differ per login: key scopes for the API key ([API Scopes](#api-scopes)), API client permissions for client credentials ([API client permissions (v1)](#api-client-permissions-v1)).
+
+### Redirects
+
+Requests that carry the API key, the access token or the client secret never follow a redirect, on both logins: API calls, the token request, report-run polling, report downloads, assessment runs, the `Connect-Inforcer` key probe and the `-AssessmentId` tab completer of `Invoke-InforcerReport`. A `3xx` answer fails with a message that names the target, for example: "The API answered with a redirect (HTTP 302) to '…'. The module does not follow redirects, so credentials are never sent to another address. Check -BaseUrl or -Region." The best-effort report-catalog prime in `Connect-Inforcer` skips a redirect silently (verbose message only).
+
+### Session caches
+
+Cached per session and cleared by `Connect-Inforcer` and `Disconnect-Inforcer`:
+
+| Cache | Filled by | Notes |
+|-------|-----------|-------|
+| Tenant list (`GET /tenants`) | `Get-InforcerTenantList` | Used to resolve tenant names (and GUIDs on beta). Plain `Get-InforcerTenant` always fetches the list fresh; `Get-InforcerTenant -TenantId` on beta reads the list again once per call. |
+| Baseline list (`GET /baselines`) | `Get-InforcerBaselineList` | Used to resolve baseline names. `Get-InforcerBaseline` and `Get-InforcerAlignmentDetails` fetch fresh once per call and refresh the cache. |
+| Report types (`GET /reports/types`) | `Connect-Inforcer` (best effort), `Get-InforcerReportType` | `Get-InforcerReportType -Force` refetches. |
 
 ---
 
@@ -111,14 +133,14 @@ Built mechanically by tracing each public cmdlet through the module (including t
 
 | Cmdlet | Endpoints called | Minimum scopes |
 |--------|------------------|----------------|
-| `Connect-Inforcer` | — (session validation only) | None |
+| `Connect-Inforcer` | `GET /beta/baselines` probe (a denied scope still connects, with a warning) and a best-effort `GET /beta/reports/types` to prime the report catalog | None |
 | `Disconnect-Inforcer` | — | None |
-| `Test-InforcerConnection` | — | None |
-| `Get-InforcerTenant` | `GET /beta/tenants` | `Tenants.Read` |
-| `Get-InforcerBaseline` | `GET /beta/baselines` | `Baselines.Read` |
+| `Test-InforcerConnection` | `GET /beta/baselines` | `Baselines.Read` (or `Tenants.Read`); without it the test returns `False` |
+| `Get-InforcerTenant` | `GET /beta/tenants` (fetched once per call, also for piped tenants) | `Tenants.Read` |
+| `Get-InforcerBaseline` | `GET /beta/baselines` + `GET /beta/tenants` *(GUID/name lookup)* | `Baselines.Read` + `Tenants.Read`† |
 | `Get-InforcerTenantPolicies` | `GET /beta/tenants/{tenantId}/policies` + `GET /beta/tenants` *(GUID/name lookup)* | `tenants.policies.Read` + `Tenants.Read`† |
 | `Get-InforcerAlignmentDetails` | `GET /beta/baselines`, `GET /beta/alignmentScores`, `GET /beta/tenants`, `GET /beta/tenants/{tenantId}/alignmentDetails` | `Baselines.Read` + `AlignmentScores.Read` + `Tenants.Read` + `tenants.policies.Read` |
-| `Get-InforcerAuditEvent` | `POST /beta/auditEvents/search` | `Audit.Read` *(unmapped — see note above)* |
+| `Get-InforcerAuditEvent` | `POST /beta/auditEvents/search` (one search; without `-EventType` no event-type filter is sent) | `Audit.Read` *(unmapped — see note above)* |
 | `Get-InforcerSupportedEventType` | `GET /beta/auditEvents/eventTypes` | `Audit.Read` *(unmapped — see note above)* |
 | `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Users.Read` + `Tenants.Read`† |
 | `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
@@ -126,13 +148,15 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Get-InforcerSecureScore` | `GET /beta/tenants/{tenantId}/secureScores` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.SecureScores.Read` + `Tenants.Read`† |
 | `Get-InforcerAssessment` | `GET /beta/assessments` | `Assessments.Read` |
 | `Invoke-InforcerAssessment` | `GET /beta/tenants`, `GET /beta/assessments`, `POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Tenants.Read` + `Assessments.Read` + `Assessments.Run` |
-| `Export-InforcerTenantDocumentation` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
-| `Compare-InforcerEnvironments` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` *(per side)* | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
+| `Export-InforcerTenantDocumentation` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies`; with `-Baseline` also `GET /beta/tenants/{tenantId}/alignmentDetails` | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
+| `Compare-InforcerEnvironments` | `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` *(per side, both sides fetched at the same time)*; with `-SourceBaselineId`/`-DestinationBaselineId` also `GET /beta/tenants/{tenantId}/alignmentDetails` | `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read` |
 | `Get-InforcerReportType` | `GET /beta/reports/types` | `Reports.Read` |
 | `Invoke-InforcerReport` | `POST /beta/reports/runs`, `GET /beta/reports/runs/{runId}/outputs`, `GET /beta/reports/runs/{runId}/outputs/{outputId}` + `GET /beta/tenants` *(GUID/name lookup)* | `Reports.Read` + `Reports.Run` + `Tenants.Read`† |
 | `Get-InforcerReportRun` | `GET /beta/reports/runs`, `GET /beta/reports/runs/{runId}/outputs` *(with `-Wait` or `-IncludeOutputs`)* | `Reports.Read` |
 | `Save-InforcerReportOutput` | `GET /beta/reports/runs/{runId}/outputs/{outputId}` | `Reports.Read` |
 
+> The probes in `Connect-Inforcer` never fail the login on a denied scope; only a redirect (see [Redirects](#redirects)) or an invalid key does.
+>
 > † `Tenants.Read` is only consumed for the tenant-list lookup that `Resolve-InforcerTenantId` performs when `-TenantId` is a GUID or tenant name. If callers always pass a numeric Client Tenant ID, the `Tenants.Read` portion can be omitted.
 
 ---
@@ -165,13 +189,14 @@ The permission names below are the ones the portal shows (feature and grant). **
 
 | Cmdlet | Endpoints called (v1) | Permissions |
 |--------|-----------------------|-------------|
-| `Connect-Inforcer` | `POST /oauth/token` (no permission needed; any valid client connects) | None |
-| `Disconnect-Inforcer`, `Test-InforcerConnection` | none / token check only | None |
-| `Get-InforcerTenant` | `GET /v1/tenants`; with `-Detailed` or `-TenantId` also `GET /v1/tenants/{msTenantId}` per tenant | Tenants |
-| `Get-InforcerBaseline` | `GET /v1/baselines` | Baselines |
+| `Connect-Inforcer` | `POST /oauth/token` (no permission needed; any valid client connects) and a best-effort `GET /v1/reports/types` to prime the report catalog | None |
+| `Disconnect-Inforcer` | none | None |
+| `Test-InforcerConnection` | `GET /v1/baselines` | Baselines; without it the test returns `False` |
+| `Get-InforcerTenant` | `GET /v1/tenants`; with `-Detailed` also `GET /v1/tenants/{msTenantId}` per tenant. `-TenantId <GUID>` makes only `GET /v1/tenants/{msTenantId}`; a name adds the cached list | Tenants |
+| `Get-InforcerBaseline` | `GET /v1/baselines` (+ `GET /v1/tenants` for a tenant name) | Baselines, Tenants† |
 | `Get-InforcerTenantPolicies` | `GET /v1/tenants/{msTenantId}/policies` | Policies, Tenants† |
-| `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails` | Baselines + Align + Tenants |
-| `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search`, `GET /v1/auditEvents/types` | Activity |
+| `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails`; with `-Tag` also `GET /v1/tenants/{msTenantId}` per tenant (v1 tags are only on the tenant record) | Baselines + Align + Tenants |
+| `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search` | Activity |
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
 | `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]` | User & Group Management, Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
@@ -179,8 +204,8 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
 | `Get-InforcerAssessment` | `GET /v1/assessments` | Tenant Assessment |
 | `Invoke-InforcerAssessment` | `GET /v1/tenants`, `GET /v1/assessments`, `POST /v1/tenants/{msTenantId}/assessments/{assessmentId}/runs` | Tenants + Tenant Assessment |
-| `Export-InforcerTenantDocumentation` | `GET /v1/tenants`, `GET /v1/baselines`, `GET /v1/tenants/{msTenantId}/policies` (+ `alignmentDetails` for baseline scoping) | Tenants + Baselines + Policies (+ Align) |
-| `Compare-InforcerEnvironments` | same as Export, per side | Tenants + Baselines + Policies (+ Align) |
+| `Export-InforcerTenantDocumentation` | `GET /v1/tenants/{msTenantId}` (+ `GET /v1/tenants` for a tenant name), `GET /v1/baselines`, `GET /v1/tenants/{msTenantId}/policies` (+ `alignmentDetails` with `-Baseline`) | Tenants + Baselines + Policies (+ Align) |
+| `Compare-InforcerEnvironments` | same as Export, per side; both sides are fetched at the same time | Tenants + Baselines + Policies (+ Align) |
 | `Get-InforcerReportType` | `GET /v1/reports/types` | Reports |
 | `Invoke-InforcerReport` | `POST /v1/reports/runs`, `GET /v1/reports/runs/{reportRunId}/outputs[/{outputId}]`, `GET /v1/tenants`† | Reports, Tenants† |
 | `Get-InforcerReportRun` | `GET /v1/reports/runs`, `GET /v1/reports/runs/{reportRunId}/outputs` | Reports |
@@ -220,7 +245,14 @@ Response: `{ "access_token": "...", "token_type": "Bearer", "expires_in": 3600 }
 
 ### Response envelope
 
-Every v1 response is an object holding **one named collection** and sometimes metadata: `tenants`, `policies`, `users`, `groups`, `members`, `roles`, `baselines`, `alignmentScores`, `assessments`, `reportRuns`, `outputs`, `reportTypes`, `auditEvents`, `eventTypes`. There is no `data` or `status` wrapper. Metadata keys the module knows: `continuationToken`, `userCount`, `groupCount`, `memberCount`, `failedPolicyTypes`. Single-object endpoints (tenant, user, group, secure scores, alignment details, assessment run) return the object itself. The module unwraps the collection, so cmdlets return the items directly and `-OutputType JsonObject` is always an array.
+Every v1 response is an object holding **one named collection** and sometimes metadata: `tenants`, `policies`, `users`, `groups`, `members`, `roles`, `baselines`, `alignmentScores`, `assessments`, `reportRuns`, `outputs`, `reportTypes`, `auditEvents`, `eventTypes`. There is no `data` or `status` wrapper. Metadata keys the module knows: `continuationToken`, `userCount`, `groupCount`, `memberCount`, `failedPolicyTypes`. Single-object endpoints (tenant, user, group, secure scores, alignment details, assessment run) return the object itself. The module unwraps the collection, so cmdlets return the items directly.
+
+`-OutputType JsonObject` shape:
+
+- **v1:** a list result is always a JSON array, also with one item (including `Get-InforcerTenant`, `Get-InforcerRole` and the alignment table).
+- **API key (beta):** a list of exactly one item can come back as a bare JSON object (for example `Get-InforcerTenant`, `Get-InforcerBaseline`, `Get-InforcerRole`, `Get-InforcerUser`, `Get-InforcerGroup`, `Get-InforcerAuditEvent` and the alignment table), as in 0.8.0.
+- **Piped tenants** (`Get-InforcerTenant | Get-InforcerTenantPolicies -OutputType JsonObject`): one JSON array for the whole call, each item carrying `TenantId`, on both logins.
+- Single-object results (`Get-InforcerSecureScore`, `Get-InforcerUser -UserId`, `Get-InforcerGroup -Group`) are one JSON object.
 
 > The spec marks many fields *Required* that the documentation calls nullable (and a few are typed `unknown`: `alignedBaselineMsTenantId`, `baselineTenant`, an output's `msTenantId`). Do not read Required as non-null.
 
@@ -232,13 +264,13 @@ Errors are `application/problem+json`: `type`, `title`, `status`, `detail`, `ins
 |--------|---------|------------------|
 | 400 | Invalid request (`errors{}` lists the fields) | Error with title, detail and field messages |
 | 401 | Token missing or expired | Token renewed once, request retried |
-| 403 | Missing permission or tenant | "You don't have permission to access this tenant or resource." (or the API's detail) |
-| 404 | Does not exist **or** outside the client's tenant filter | "Tenant or resource not found." |
+| 403 | Missing permission or tenant | Error showing the API's title and detail |
+| 404 | Does not exist **or** outside the client's tenant filter | Error showing the API's title and detail (e.g. `Tenant not found`) |
 | 409 | Conflict | Error with the API's detail |
-| 429 | Rate limit | Waits for `Retry-After` (seconds or HTTP date, capped at 300 s), up to 3 retries. v1 only: with an API key (beta) the first `429` fails the call, as in 0.8.0. |
+| 429 | Rate limit | Waits for `Retry-After` (seconds or HTTP date, capped at 300 s), up to 3 retries. v1 only: with an API key (beta) the first `429` fails the call, as in 0.8.0. Report-file downloads are not retried on `429`. |
 | 500 / 502 | Server error (assessment runs can return both) | Error with the API's detail |
 
-The ErrorId stays `ApiRequestFailed_<status>` for both APIs.
+API calls use ErrorId `ApiRequestFailed_<status>` on both APIs; report-file downloads use `DownloadFailed_<status>`.
 
 ### Pagination
 
@@ -246,7 +278,7 @@ Lists that page return `continuationToken`; pass it back until it is empty. Page
 
 ### Rate limits
 
-v1: **400 calls per minute per partner**, shared by every client of the partner. Beta: **400 calls per hour per API key**. A throttled v1 call answers `429` with `Retry-After`; the module waits (at most 300 s) and retries up to three times. An API-key (beta) call is not retried: it fails on the first `429`, as in 0.8.0. `Get-InforcerTenant -Detailed` and anything else that fans out per tenant costs one call per tenant.
+v1: **400 calls per minute per partner**, shared by every client of the partner. Beta: **400 calls per hour per API key**. A throttled v1 call answers `429` with `Retry-After`; the module waits (at most 300 s) and retries up to three times, also for assessment runs. Report-file downloads are not retried on `429`. An API-key (beta) call is not retried: it fails on the first `429`, as in 0.8.0. `Get-InforcerTenant -Detailed` and anything else that fans out per tenant costs one call per tenant.
 
 ### `failedPolicyTypes` and the Intune gap
 
@@ -261,9 +293,9 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | v1 path | Method | Beta equivalent | Cmdlet |
 |---------|--------|-----------------|--------|
 | `/v1/tenants` | GET | `/beta/tenants` | `Get-InforcerTenant` |
-| `/v1/tenants/{msTenantId}` | GET | `/beta/tenants/{tenantId}` | `Get-InforcerTenant -Detailed` / `-TenantId` (the sanctioned use of this endpoint) |
+| `/v1/tenants/{msTenantId}` | GET | `/beta/tenants/{tenantId}` | `Get-InforcerTenant -Detailed` / `-TenantId` (the sanctioned use of this endpoint); also reached through it by Export, Compare and `Get-InforcerAlignmentDetails -Tag` |
 | `/v1/tenants/{msTenantId}/policies` | GET | `/beta/tenants/{tenantId}/policies` | `Get-InforcerTenantPolicies`, Export, Compare |
-| `/v1/tenants/{msTenantId}/alignmentDetails` | GET (`baselineId` required) | `/beta/tenants/{tenantId}/alignmentDetails` (`customBaselineId`) | `Get-InforcerAlignmentDetails` |
+| `/v1/tenants/{msTenantId}/alignmentDetails` | GET (`baselineId` required) | `/beta/tenants/{tenantId}/alignmentDetails` (`customBaselineId`) | `Get-InforcerAlignmentDetails`; Export/Compare baseline scoping |
 | `/v1/tenants/{msTenantId}/secureScores` | GET | `/beta/tenants/{tenantId}/secureScores` | `Get-InforcerSecureScore` |
 | `/v1/tenants/{msTenantId}/users` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/users` | `Get-InforcerUser` |
 | `/v1/tenants/{msTenantId}/users/{userId}` | GET | `/beta/tenants/{tenantId}/users/{userId}` | `Get-InforcerUser -UserId` |
@@ -292,11 +324,25 @@ That is 21 paths and 22 operations (`/v1/reports/runs` has GET and POST). Path p
 | Policy | `policyTypeName` → `inforcerPolicyTypeName` | `id` is the Microsoft policy ID; no `policyCategoryId` |
 | Baseline | `baselineTenant{}` flattened to `baselineMsTenantId`, `baselineTenantFriendlyName`, `baselineTenantDnsName`; members `name`/`dnsName` → `tenantFriendlyName`/`tenantDnsName`; items `product`, `primaryGroup`, `secondaryGroup` → `policyCategory*` | no `baselineClientTenantId`; `description`, `isSharedCopy`, member `lastAlignmentScore` are v1 only |
 | Alignment score | `tenantName` → `tenantFriendlyName`, `alignedBaselineId` → `baselineGroupId`, `alignedBaselineName` → `baselineGroupName`, `alignmentScore` → `score`, `lastAlignmentTimestamp` → `lastComparisonDateTime` | `msTenantId` replaces the numeric `tenantId` |
-| Alignment details | buckets `matched`, `matchedWithAcceptedDeviations`, `deviated`, `missingFromTenant`, `additionalInTenant` → `matchedPolicies`, `matchedWithAcceptedDeviations`, `deviatedUnaccepted`, `missingFromSubjectUnaccepted`, `additionalInSubjectUnaccepted`; `tenantDataTimestamp` → `subjectDataTimestamp`; per-policy `displayName` → `policyName`, `tenantPolicies` → `matchingSubjectPolicies` | compared policies are richer (diffs, similar policies) |
+| Alignment details | buckets `matched`, `matchedWithAcceptedDeviations`, `deviated`, `missingFromTenant`, `additionalInTenant` → `matchedPolicies`, `matchedWithAcceptedDeviations`, `deviatedUnaccepted`, `missingFromSubjectUnaccepted`, `additionalInSubjectUnaccepted`; `tenantDataTimestamp` → `subjectDataTimestamp`; per-policy `displayName` → `policyName`, `tenantPolicies` → `matchingSubjectPolicies`; more renames in [Alignment details renames](#alignment-details-renames) | compared policies are richer (diffs, similar policies) |
 | User | list `groupCount`/`roleCount` → `groups`/`roles` | list has counts, not arrays |
 | Group, role, secure score, assessment, report type, audit event type | unchanged | audit events lack `clientId`, `message`, `relId`, `relType`; v1 has 130 event types (beta 139) |
 | Assessment run | `assessmentId` → `assessment` | |
 | Report run / output | `reportRunId` → `runId`; output `msTenantId` → `tenantId` (`null` = collated) | |
+
+#### Alignment details renames
+
+Inside a v1 `alignmentDetails` response the module also renames these fields (`ConvertFrom-InforcerV1Response`):
+
+| Where | v1 field → module property |
+|-------|----------------------------|
+| `metrics` | `matched` → `matchedPolicies`, `deviated` → `deviatedPolicies`, `missingFromTenant` → `recommendedPoliciesFromBaseline`, `additionalInTenant` → `customerOnlyPolicies` |
+| Compared policy | `displayName` → `policyName`, `policyTypeName` → `inforcerPolicyTypeName`, `tags` → `policyTags`, `tenantPolicies` → `matchingSubjectPolicies`, `variables` → `matchingVariables` |
+| Matching tenant policy (`matchingSubjectPolicies[]`) | `tags` → `policyTags` |
+| Variable (`matchingVariables[]`) | `name` → `variableName`, `tenantValue` → `subjectValue` |
+| Diff (`policyDataDiff`, `policyAssignmentsDiff`) | `tenantValue` → `subjectValue` |
+| Accepted deviation | `acceptedTimestamp` → `acceptedDateTime`, `reason` → `acceptedReason` |
+| Similar policy | `name` → `policyName`, `categoryName` → `policyCategoryName` |
 
 ---
 
@@ -333,6 +379,25 @@ Retrieves alignment scores for tenants.
 **Required API scope(s)**: `AlignmentScores.Read` (or `Tenants.Read`)
 
 **Response**: Array of [AlignmentScore](#alignmentscore)
+
+---
+
+### Alignment Details
+
+#### GET /beta/tenants/{tenantId}/alignmentDetails
+
+Compares one tenant against one baseline and returns the per-policy result.
+
+**Cmdlet**: `Get-InforcerAlignmentDetails -BaselineId`; also `Export-InforcerTenantDocumentation -Baseline` and `Compare-InforcerEnvironments -SourceBaselineId`/`-DestinationBaselineId` (to list the baseline's policies)
+
+**Required API scope(s)**: `tenants.policies.Read`
+
+| Parameter | Location | Required | Type | Description |
+|-----------|----------|----------|------|-------------|
+| tenantId | path | Yes | integer | Client Tenant ID of the subject tenant. |
+| customBaselineId | query | Yes | string (guid) | The baseline to compare against (v1: `baselineId`). |
+
+**Response**: `{ data: { metrics, completedAt, alignment } }`. `alignment` holds the arrays `matchedPolicies`, `matchedWithAcceptedDeviations`, `deviatedUnaccepted`, `missingFromSubjectUnaccepted` and `additionalInSubjectUnaccepted`. v1 uses other names, mapped by the module (see [Alignment details renames](#alignment-details-renames)).
 
 ---
 
@@ -392,7 +457,7 @@ Retrieves policies for a specific tenant.
 
 Retrieves available event types for filtering audit events.
 
-**Cmdlet**: Internal use (populates `-EventType` tab completion)
+**Cmdlet**: `Get-InforcerSupportedEventType` (also feeds `-EventType` tab completion of `Get-InforcerAuditEvent`)
 
 **Required API scope(s)**: `Audit.Read` *(needs confirmation — see [API Scopes](#api-scopes))*
 
@@ -417,6 +482,7 @@ Searches the activity log with optional filters.
 | dateTo | string (date-time) | No | End of date/time range (inclusive). ISO 8601 format. |
 | pageSize | integer | No | Number of results per page. Default: 100. |
 | continuationToken | string | No | Token for pagination (returned in previous response). |
+| user | string | No | Filter by user (UPN). Sent for `Get-InforcerAuditEvent -User`. |
 
 **Example Request**:
 
@@ -430,6 +496,8 @@ Searches the activity log with optional filters.
 ```
 
 **Response**: Paginated array of [AuditEvent](#auditevent) with `continuationToken`
+
+`Get-InforcerAuditEvent` sends one search per call. Without `-EventType` it omits `eventTypes` and the API searches every type; events come back in the API's order.
 
 ---
 
@@ -519,6 +587,33 @@ Returns the current and historic Microsoft Secure Score for a tenant. Includes u
 
 **Response**: A single [TenantSecureScoreDetails](#tenantsecurescoredetails) object.
 
+### Assessments
+
+#### `GET /beta/assessments`
+
+Lists the assessments that can be run (CIS, Essential Eight, custom, ...).
+
+**Cmdlet**: `Get-InforcerAssessment`; `Invoke-InforcerAssessment` uses it to resolve an assessment name
+
+**Required API scope(s)**: `Assessments.Read`
+
+**Response**: Array of [Assessment](#assessment) objects.
+
+#### `POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs`
+
+Runs an assessment against one tenant and returns the results in the same response (no polling).
+
+**Cmdlet**: `Invoke-InforcerAssessment`
+
+**Required API scope(s)**: `Assessments.Run`
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `tenantId` | path | integer | Yes | Client Tenant ID. |
+| `assessmentId` | path | string | Yes | Assessment ID from `GET /beta/assessments` (an alphanumeric string, not a GUID). |
+
+**Response**: `{ data: { assessment, name, results: [AssessmentCheck, ...] } }`. Runs can answer `500` or `502`. The module runs the request in a background runspace; on v1 it renews the token once after a `401` and honours `Retry-After` on a `429` (up to 3 times), and on both logins it refuses a redirect (see [Redirects](#redirects)).
+
 ### Reports
 
 Beta endpoints for triggering and retrieving asynchronous report runs.
@@ -535,7 +630,7 @@ Returns the catalog of available report types. Each entry advertises the report'
 
 #### `POST /beta/reports/runs`
 
-Queues one or more report runs against a set of target tenants. Returns one run record per (report × tenant) combination unless `collate: true` is set on a `collatable: true` type, in which case a single cross-tenant output is produced.
+Queues one run, which can batch several report types and tenants, and returns its `runId`. With `collate: true` on a `collatable: true` type the run produces a single cross-tenant output instead of one output per tenant.
 
 **Required API scope(s)**: `Reports.Run`
 
@@ -565,7 +660,7 @@ Queues one or more report runs against a set of target tenants. Returns one run 
 | `reports[].parameters` | object | No | Type-specific parameters (string-keyed, string-valued). Unknown keys are silently accepted today; the module rejects them client-side. |
 | `tenants.includeTenants` | int[] | Yes | Numeric Client Tenant IDs. Duplicates are deduped by the server. |
 
-**Response**: Array of [ReportRun](#reportrun) objects (one per created run).
+**Response**: `{ data: { runId } }` (v1: `{ reportRunId }`, HTTP 202).
 
 > **Known server-side bug**: Duplicate `(type, outputFormat)` entries currently render all duplicates in the last-listed format. The module deduplicates client-side before POST.
 
@@ -579,7 +674,7 @@ Lists report runs across all tenants the caller has visibility into. Server-side
 
 > **Propagation lag**: a newly-queued run does not appear in this list for ~4 minutes. For freshly-queued runs, poll `GET /beta/reports/runs/{runId}/outputs` directly (404 until terminal, 200 once complete).
 
-**Response**: Array of [ReportRun](#reportrun) objects (under `data`).
+**Response**: `{ data: { runs: [ReportRun, ...] } }`.
 
 #### `GET /beta/reports/runs/{runId}/outputs`
 
@@ -587,7 +682,7 @@ Returns the list of outputs for a single terminal run. Used as the polling probe
 
 **Required API scope(s)**: `Reports.Read`
 
-**Cmdlet**: `Test-InforcerReportRunTerminal` *(private helper, used by `Invoke-InforcerReport -Wait`, `Get-InforcerReportRun -Wait`, and `Get-InforcerReportRun -IncludeOutputs`)*
+**Cmdlet**: `Test-InforcerReportRunTerminal` *(private helper, used by `Invoke-InforcerReport` (default; not with `-NoWait`), `Get-InforcerReportRun -Wait`, and `Get-InforcerReportRun -IncludeOutputs`)*
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
@@ -597,11 +692,11 @@ Returns the list of outputs for a single terminal run. Used as the polling probe
 
 | Code | Body | Meaning |
 |------|------|---------|
-| 200 | `{ data: [ReportOutput, ...] }` | Run is in a terminal state (`completed` or `completedWithErrors`) and outputs are available. |
-| 200 | `{ data: [] }` | Run is visible to the API key, but **no outputs are within the key's tenant scope.** Collated outputs (covering multiple tenants) are only returned when the key covers every tenant the run targeted. |
+| 200 | `{ data: { outputs: [ReportOutput, ...] } }` | Run is in a terminal state (`completed` or `completedWithErrors`) and outputs are available. |
+| 200 | `{ data: { outputs: [] } }` | Run is visible to the API key, but **no outputs are within the key's tenant scope.** Collated outputs (covering multiple tenants) are only returned when the key covers every tenant the run targeted. |
 | 404 | — | **Deliberately indistinguishable across four cases**: (1) run does not exist, (2) run belongs to a different client, (3) run is not in a terminal state (still `running`, or `failed`), (4) output ID does not belong to this run. Designed this way to avoid leaking run existence across clients. |
 
-> **Polling implication**: `Invoke-InforcerReport -Wait` and `Get-InforcerReportRun -Wait` cannot distinguish a still-running run from a `failed` run — both 404 indefinitely. The cmdlet times out cleanly after `-TimeoutSeconds`. To detect `failed` status, query `GET /beta/reports/runs` (subject to the 4-minute lag).
+> **Polling implication**: `Invoke-InforcerReport` (default; not with `-NoWait`) and `Get-InforcerReportRun -Wait` cannot distinguish a still-running run from a `failed` run — both 404 indefinitely. The cmdlet times out cleanly after `-TimeoutSeconds`. To detect `failed` status, query `GET /beta/reports/runs` (subject to the 4-minute lag).
 
 #### `GET /beta/reports/runs/{runId}/outputs/{outputId}`
 
@@ -619,6 +714,14 @@ Downloads the raw bytes of a single output. Returns proper MIME type and a `Cont
 **404 is deliberately indistinguishable** across: run doesn't exist, run belongs to a different client, run isn't in a terminal state, output ID doesn't belong to the run, or the output's tenant is outside the key's tenant scope. Designed to avoid leaking run/output existence.
 
 **Response**: Raw bytes (CSV, JSON, HTML, PDF, etc. depending on `outputFormat`).
+
+**How the module saves the file** (`Save-InforcerReportOutput`, and the save step of `Invoke-InforcerReport`):
+
+- The `Content-Disposition` name is reduced to a safe file name (no folders, no unsafe characters); a name that starts with a dot gets a leading `_` (`.csv` → `_.csv`).
+- An existing file is never overwritten: a taken name is saved as `name (1).ext`, `name (2).ext`, and so on.
+- `Save-InforcerReportOutput -FileName` writes your name directly; the server's name is not used.
+- On Windows the file is marked as downloaded from the internet, so Office opens it in Protected View.
+- A `401` on v1 renews the token once; a `429` is not retried. Errors use ErrorId `DownloadFailed_<status>`. A redirect is refused (see [Redirects](#redirects)).
 
 ---
 
@@ -773,6 +876,8 @@ Represents a policy associated with a tenant.
 | policyData | object | Full policy configuration data (structure varies by policy type). |
 
 > **Note**: The PowerShell module normalizes policy names to `PolicyName` for consistency across different policy types.
+
+> **Policy type name**: v1 sends `policyTypeName` (mapped to `inforcerPolicyTypeName`); the beta list currently sends no type name. `Export-InforcerTenantDocumentation` then fills its "Profile type" column from `policyTypeId`, using names the inforcer API returned for that id; ids without a known name stay blank. Note that v1 `/policies` and `alignmentDetails` use different names for some ids.
 
 ---
 
@@ -1023,6 +1128,37 @@ Actionable control profile in the `controlProfiles` array of `TenantSecureScoreD
 
 **PSTypeName:** `InforcerCommunity.SecureScoreControlProfile`. Each item in `.ControlProfiles` on a `TenantSecureScoreDetails` gets this PSTypeName inserted so the default `Format-List` view renders `Title`, `ControlCategory`, `Service`, current/max score with potential gain, `RemediationImpact`, `ActionUrl`, `Id` — the full HTML `remediation` string stays accessible via `.remediation`.
 
+### Assessment
+
+An assessment from `GET /beta/assessments`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| id | string | Yes | Assessment ID (alphanumeric, not a GUID). |
+| name | string | Yes | Display name. |
+| description | string | No | Description. |
+| assessmentType | string | No | Type, e.g. `platform`, `custom`, `community`. |
+| tags | string[] | No | Tags. |
+| lastUpdated | string (date-time) | No | Last update. |
+| created | string (date-time) | No | Creation time. |
+
+**PSTypeName:** `InforcerCommunity.Assessment`
+
+### AssessmentCheck
+
+One item of `results` in an assessment run.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id, key, name | string | Check identity and name. |
+| category, subCategory | string | Grouping. |
+| description, rationale, remediation, impact | string | Explanation and fix. |
+| importance | string | Importance level. |
+| findings | object | `{ compliant, status, message, scores: [{ objectId, objectName, score, passes[], violations[], warnings[] }] }`. `status` is `pass`, `fail`, `insufficientPermissions` or `error` (may be absent); `compliant` is `false` for unassessed checks too. |
+| frameworks, tags, version, created, lastUpdated | various | Metadata. |
+
+The module adds `Status` (`Pass`, `Fail`, `InsufficientPermissions`, `Error`), `ObjectsEvaluated`, `FindingsMessage` and `Scores`, and, for several tenants, `TenantName` and `TenantId`. **PSTypeName:** `InforcerCommunity.AssessmentCheck`
+
 ### ReportType
 
 A catalog entry from `GET /beta/reports/types`. Field names verified against `api-uk.inforcer.com`.
@@ -1078,6 +1214,28 @@ An output record from `GET /beta/reports/runs/{runId}/outputs`. The actual bytes
 **PSTypeName:** `InforcerCommunity.ReportOutput`
 
 > **Empty-result caveat**: Some report types produce a 4-byte UTF-8 BOM CSV (`EF BB BF 0A`) when there's no data, while others omit the output entirely. The cmdlet does not try to disambiguate "report ran with empty result" from "report didn't run for this tenant"; callers should inspect `fileSize` and/or content.
+
+---
+
+## Microsoft Graph
+
+Optional. With `-FetchGraphData`, `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` (and `Connect-Inforcer -FetchGraphData`, which signs in up front) call Microsoft Graph directly to turn IDs into names. This is not the inforcer API: it uses an interactive delegated sign-in (Microsoft.Graph.Authentication module, not installed automatically) for the tenant being documented, and an existing Graph session is reused only when its tenant and scopes match.
+
+Delegated scopes requested, all read-only:
+
+| Scope | Used for | Graph calls |
+|-------|----------|-------------|
+| `Directory.Read.All` | Group, user and other object names in assignments and Conditional Access; directory role names (built-in and custom); Conditional Access application names | `POST /v1.0/directoryObjects/getByIds` (up to 1000 IDs per request); `GET /v1.0/roleManagement/directory/roleDefinitions`; `GET /v1.0/servicePrincipals?$filter=appId in (...)` (15 app IDs per request; a built-in name map is used only for IDs Graph does not return) |
+| `Policy.Read.All` | Named location names in Conditional Access | `GET /v1.0/identity/conditionalAccess/namedLocations` |
+| `DeviceManagementConfiguration.Read.All` | Assignment filter and scope tag names; custom compliance rules (Compare only) | `GET /beta/deviceManagement/assignmentFilters`, `GET /beta/deviceManagement/roleScopeTags`, `GET /beta/deviceManagement/deviceCompliancePolicies('{id}')` |
+
+Conditional Access lookups (roles, named locations, applications) run for Export; compliance rules are fetched only by Compare.
+
+Behaviour:
+
+- `429`, `5xx` and network failures are retried (up to 3 attempts). `401` and `403` are not retried: a warning names the scope the call most likely lacks, and those names stay as raw IDs.
+- Lists follow `@odata.nextLink` up to 10,000 items; a warning says when more were available.
+- The name maps are built per tenant and per call, so one tenant's names never appear in another tenant's document.
 
 ---
 

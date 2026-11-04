@@ -153,7 +153,7 @@ Retrieves tenant information. Optionally filter by `-TenantId` (Microsoft Tenant
 
 - **API-key login (beta):** the list already holds every field (`ClientTenantId`, licenses, `SecureScore`, `IsBaseline`, tags, alignment summaries), so `-Detailed` changes nothing and is ignored. That keeps scripts portable between both logins.
 - **Client-credentials login (v1):** the list holds only `TenantFriendlyName`, `TenantDnsName` and `MsTenantId`. `-Detailed`, or `-TenantId`, loads each tenant's full record (licenses, `SecureScore`, `IsBaseline`, tags, alignment summaries, `LastBackupTimestamp`, `AuthenticationMode`) with one extra call per tenant, with throttling (`Retry-After`) and a progress bar. `-TenantId <GUID>` makes only that one call; a name is first looked up in the tenant list. `ClientTenantId` does not exist on v1.
-- **`-TenantId` uses the session's cached tenant list** (fetched again once when the tenant is not in it). Run `Get-InforcerTenant` without `-TenantId` to fetch the list fresh, for example after a tenant changed.
+- **`-TenantId` always returns the current record:** with an API key the tenant list is fetched once per call (piped tenants share that fetch); with client credentials the tenant is fetched by id.
 - **JSON:** with client credentials `-OutputType JsonObject` is always a JSON array, also for one tenant. With an API key a single tenant is a bare JSON object, as in 0.8.0.
 
 **Endpoints called (beta)**: `GET /beta/tenants`

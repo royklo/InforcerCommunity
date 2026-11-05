@@ -7,8 +7,7 @@ function Get-InforcerDocData {
         back) and fetches the policies directly with Invoke-InforcerApiRequest -ObjectType Policy (the
         same raw objects, without a JSON round trip of the largest payload). Returns a hashtable bundle.
         This is Stage 1 of the documentation pipeline -- no normalization, just collection.
-        Works with both login types. On v1, when the policies hold no Intune policy, it warns once
-        and the bundle carries a Notes entry that the documents show.
+        Works with both login types.
     .PARAMETER TenantId
         Tenant to collect data for. Accepts numeric ID, GUID, or tenant name.
     .PARAMETER SettingsCatalogPath
@@ -16,7 +15,7 @@ function Get-InforcerDocData {
         is resolved automatically at runtime via Get-InforcerSettingsCatalogPath.
     .OUTPUTS
         Hashtable with keys: Tenant ($null when it could not be loaded), Baselines, Policies,
-        TenantId (int on beta, Microsoft tenant ID on v1), CollectedAt, and Notes (v1 only, when set).
+        TenantId (int on beta, Microsoft tenant ID on v1) and CollectedAt.
     #>
     [CmdletBinding()]
     param(
@@ -95,10 +94,6 @@ function Get-InforcerDocData {
         Policies    = $policies
         TenantId    = $resolvedTenantId
         CollectedAt = [datetime]::UtcNow
-    }
-    if ($isV1 -and -not @($policies).Where({ $_.product -eq 'Intune' }, 'First')) {
-        Write-Warning "The v1 API currently returns no Intune policies for this tenant (a known gap in inforcer's v1 API). Connecting with an API key still returns them."
-        $docData['Notes'] = @('The inforcer v1 API (client-credentials login) currently returns no Intune policies and no Defender settings catalog policies, so they are missing here. Connect with an API key (Connect-Inforcer -ApiKey) to include them.')
     }
     $docData
 }

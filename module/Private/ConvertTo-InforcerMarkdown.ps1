@@ -110,11 +110,6 @@ function ConvertTo-InforcerMarkdown {
         [void]$sb.AppendLine("*Tag: $($DocModel.FilterTag)*")
         [void]$sb.AppendLine()
     }
-    foreach ($note in @($DocModel.Notes)) {
-        if ([string]::IsNullOrWhiteSpace($note)) { continue }
-        [void]$sb.AppendLine("> **Note:** $note")
-        [void]$sb.AppendLine()
-    }
 
     # -------------------------------------------------------------------------
     # Table of Contents

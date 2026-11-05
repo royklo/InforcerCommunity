@@ -847,10 +847,6 @@ h3:first-child { margin-top: var(--sp-4); }
     [void]$sb.AppendLine('    </h1>')
     [void]$sb.AppendLine("    <div class=`"report-meta`">Generated $generatedAt<br>$totalItems settings compared</div>")
     [void]$sb.AppendLine('</header>')
-    foreach ($note in @($ComparisonModel.Notes)) {
-        if ([string]::IsNullOrWhiteSpace($note)) { continue }
-        [void]$sb.AppendLine("<div class=`"report-note`" role=`"note`" style=`"margin:0 0 var(--sp-12);padding:var(--sp-8) var(--sp-12);border-left:3px solid var(--warn);background:var(--warn-bg)`"><strong>Note:</strong> $([System.Net.WebUtility]::HtmlEncode($note))</div>")
-    }
 
     # ── Action bar — leads with what needs attention ───────────────────────
     [void]$sb.AppendLine('<div class="action-bar">')

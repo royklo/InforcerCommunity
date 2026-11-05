@@ -57,11 +57,6 @@ function Export-InforcerDocExcel {
         $Rows
     }
 
-    $notes = @($DocModel.Notes | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    if ($notes.Count -gt 0) {
-        & $asText @($notes | ForEach-Object { [PSCustomObject]@{ Note = $_ } }) |
-            Export-Excel -Path $FilePath -WorksheetName 'Notes' -BoldTopRow -NoHyperLinkConversion '*'
-    }
 
     foreach ($prodName in $DocModel.Products.Keys) {
         $product = $DocModel.Products[$prodName]

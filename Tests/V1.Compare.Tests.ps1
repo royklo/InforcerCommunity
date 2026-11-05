@@ -101,7 +101,6 @@ Context 'Get-InforcerDocData tenant selection' {
         $d.Tenant.clientTenantId | Should -Be 2
         $d.Tenant.tenantFriendlyName | Should -BeExactly 'Fabrikam'
         @($d.Policies).Count | Should -Be 3
-        $d.ContainsKey('Notes') | Should -BeFalse
     }
 
     It 'v1: when the tenant record cannot be loaded it warns and names the tenant by id, not another tenant' {
@@ -169,26 +168,16 @@ Context 'ConvertTo-InforcerDocModel' {
         $beta = InModuleScope InforcerCommunity { ConvertTo-InforcerDocModel -DocData (Get-InforcerDocData -TenantId 2) }
         $beta.Products['Intune'].Categories['Devices / Windows'][0].Basics.ProfileType | Should -BeExactly 'Conditional Access Named Location'
         $beta.Products['Intune'].Categories['Devices / Windows'][0].Basics.Id | Should -Be '1001'
-        $beta.ContainsKey('Notes') | Should -BeFalse
     }
 }
 
 Context 'Export-InforcerTenantDocumentation' {
-    It 'v1: one Intune warning, and the DocModel carries the note' {
-        Set-V1CompareSession
-        $m = Export-InforcerTenantDocumentation -TenantId $T2 -WarningVariable w -WarningAction SilentlyContinue 6>$null
-        (& $IntuneWarnings $w).Count | Should -Be 1
-        @($m.Notes).Count | Should -Be 1
-        $m.Notes[0] | Should -Match 'v1 API'
-        $m.Notes[0] | Should -Match 'no Intune policies'
-        $m.Notes[0] | Should -Match 'Connect-Inforcer -ApiKey'
-        $m.Notes[0] | Should -Not -Match 'reported'
-        $m.TenantName | Should -BeExactly 'Fabrikam'
-    } -TestCases @{ T2 = '00000000-0000-0000-0000-000000000002' }
-
-    It 'beta: no Intune warning and no Notes key' {
-        Set-V1CompareSession -Beta
-        $m = Export-InforcerTenantDocumentation -TenantId 2 -WarningVariable w -WarningAction SilentlyContinue 6>$null
+    It '<Mode>: no Intune warning and no Notes, also when the result holds no Intune' -ForEach @(
+        @{ Mode = 'v1'; Beta = $false; Id = '00000000-0000-0000-0000-000000000002' }
+        @{ Mode = 'beta'; Beta = $true; Id = 2 }
+    ) {
+        Set-V1CompareSession -Beta:$Beta
+        $m = Export-InforcerTenantDocumentation -TenantId $Id -WarningVariable w -WarningAction SilentlyContinue 6>$null
         (& $IntuneWarnings $w).Count | Should -Be 0
         $m.ContainsKey('Notes') | Should -BeFalse
         $m.TenantName | Should -BeExactly 'Fabrikam'
@@ -206,16 +195,14 @@ Context 'Export-InforcerTenantDocumentation' {
 }
 
 Context 'Compare-InforcerEnvironments' {
-    It 'v1: both sides get the note in the model and a warning each' {
+    It 'v1: no Intune warning and no Notes in the model' {
         Set-V1CompareSession
         $model = Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -WarningVariable w -WarningAction SilentlyContinue 6>$null
-        (& $IntuneWarnings $w).Count | Should -Be 2
-        @($model.Notes).Count | Should -Be 2
-        $model.Notes[0] | Should -BeLike 'Source (Contoso): *Intune*'
-        $model.Notes[1] | Should -BeLike 'Destination (Fabrikam): *Intune*'
+        (& $IntuneWarnings $w).Count | Should -Be 0
+        $model.ContainsKey('Notes') | Should -BeFalse
     }
 
-    It 'mixed sessions: each side calls its own API, only the v1 side gets the note, and the session is restored' {
+    It 'mixed sessions: each side calls its own API and the session is restored' {
         Set-V1CompareSession -None
         $src = New-V1CompareSession -Beta
         $dst = New-V1CompareSession
@@ -223,8 +210,6 @@ Context 'Compare-InforcerEnvironments' {
         $model | Should -Not -BeNullOrEmpty
         $model.SourceName | Should -BeExactly 'Contoso'
         $model.DestinationName | Should -BeExactly 'Fabrikam'
-        @($model.Notes).Count | Should -Be 1
-        $model.Notes[0] | Should -BeLike 'Destination (Fabrikam): *'
         $global:V1CompareCalls | Should -Contain 'https://api.example.invalid/api/beta/tenants/1/policies'
         $global:V1CompareCalls | Should -Contain "https://api.example.invalid/v1/tenants/$T2/policies"
         (InModuleScope InforcerCommunity { $null -eq $script:InforcerSession }) | Should -BeTrue

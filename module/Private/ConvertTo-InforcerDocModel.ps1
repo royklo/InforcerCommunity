@@ -143,7 +143,7 @@ function ConvertTo-InforcerDocModel {
         no API calls (per NORM-06).
     .PARAMETER DocData
         Hashtable from Get-InforcerDocData containing:
-        Tenant, Baselines, Policies, TenantId, CollectedAt, and optionally Notes (copied to the DocModel).
+        Tenant, Baselines, Policies, TenantId and CollectedAt.
     .OUTPUTS
         Hashtable representing the DocModel tree (per D-10).
     #>
@@ -504,6 +504,5 @@ function ConvertTo-InforcerDocModel {
         Baselines    = $baselineNames
         Products     = $products
     }
-    if ($DocData.Notes) { $docModel['Notes'] = @($DocData.Notes) }
     $docModel
 }

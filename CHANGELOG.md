@@ -15,7 +15,7 @@ inforcer now has a versioned API (v1) with API clients that log in with a client
 - **`-TenantId` takes a Microsoft tenant ID (GUID) or a tenant name with both logins.** Numeric tenant IDs only work with an API key; with client credentials they fail with an error that says what to pass instead.
 - **`Invoke-InforcerAssessment` shows inforcer's own compliance score with client credentials**, the number the portal shows. With an API key it is still `Pass ÷ (Pass + Fail)`.
 - **v1 rate limits are handled:** a `429` is retried up to 3 times, honouring `Retry-After` (at most 300 s per wait). Report-file downloads are not retried on `429`. API-key behaviour is unchanged (a `429` fails at once).
-- **Intune gap warning.** The v1 policies endpoint currently returns no Intune policies and no Defender settings-catalog policies, without reporting an error. `Get-InforcerTenantPolicies` warns when that happens. `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` add a note to the report. Until inforcer fixes this, use an API key for Intune documentation and comparisons.
+- **Skipped policy types are named.** With client credentials, `Get-InforcerTenantPolicies`, Export and Compare warn when inforcer could not read a policy type, naming the type and the reason (the API's `failedPolicyTypes`).
 - **`Compare-InforcerEnvironments` can compare across logins:** pass one session from each login with `-SourceSession` / `-DestinationSession`.
 - **Piped tenants are labelled.** Piping tenants into `Get-InforcerBaseline`, `Get-InforcerAlignmentDetails`, `Get-InforcerTenantPolicies`, `Get-InforcerUser`, `Get-InforcerGroup`, `Get-InforcerRole` or `Get-InforcerSecureScore` adds `TenantId` to each result, and `-OutputType JsonObject` returns one JSON array for all of them. Piping one tenant into `Invoke-InforcerAssessment` adds `TenantId` to its checks. Calls without pipeline input are unchanged.
 - **`Compare-InforcerEnvironments` collects both tenants at the same time**, so a comparison takes about as long as its slower side.
@@ -56,18 +56,17 @@ API-key output is identical to 0.8.0 (checked live, side by side), except for th
 1. Create an API client in the inforcer portal (Configure > REST API) and grant the permissions for the cmdlets you use. The secret is shown once; keep it in a vault or as a `SecureString`.
 2. Replace `Connect-Inforcer -ApiKey $key` with `Connect-Inforcer -ClientId $id -ClientSecret $secret`.
 3. Replace numeric tenant IDs with the Microsoft tenant ID or tenant name, and read `MsTenantId` instead of `ClientTenantId`.
-4. Keep an API key for Intune documentation and comparisons until inforcer's v1 returns Intune policies (see the Intune gap above).
 
 The full per-object difference list is in [docs/API-REFERENCE.md](docs/API-REFERENCE.md#v1-api-client-credentials); the login table is in the README.
 
 ### Documentation
 
-- README, CMDLET-REFERENCE and API-REFERENCE cover both logins, the migration steps, the v1 permissions per cmdlet, the Intune gap and a short note on personal data in output files.
+- README, CMDLET-REFERENCE and API-REFERENCE cover both logins, the migration steps, the v1 permissions per cmdlet and a short note on personal data in output files.
 - New: the Graph scopes and endpoints `-FetchGraphData` uses, the download rules for report files, redirect handling, the alignment-details field mapping, and per-endpoint sections for assessments and alignment details. Endpoint lists, example output and help examples were checked against the code (examples use tenant names or GUIDs, so they work with both logins).
 
 ### Tests
 
-- About 330 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (829 pass in total).
+- About 330 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (828 pass in total).
 
 ## [0.8.0] - 2026-10-22
 

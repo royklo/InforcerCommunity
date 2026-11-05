@@ -18,9 +18,7 @@
 
     Before calling this cmdlet, you must be connected via Connect-Inforcer. If no active session
     exists, the cmdlet emits a non-terminating error and returns immediately. Both login types
-    work. With client credentials (v1 API) the API currently returns no Intune policies: a warning
-    says so, and the document (and the returned DocModel's Notes) carry a visible note. Connect
-    with an API key to include them.
+    work.
 
     Nothing is written unless -OutputPath is given: without it the DocModel is returned so a
     caller can read the configuration without producing files. With it, output is auto-named

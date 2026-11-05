@@ -19,7 +19,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [Errors](#errors)
   - [Pagination](#pagination)
   - [Rate limits](#rate-limits)
-  - [failedPolicyTypes and the Intune gap](#failedpolicytypes-and-the-intune-gap)
+  - [failedPolicyTypes](#failedpolicytypes)
   - [v1 endpoints](#v1-endpoints)
   - [How v1 fields map to the module's names](#how-v1-fields-map-to-the-modules-names)
     - [Alignment details renames](#alignment-details-renames)
@@ -280,11 +280,11 @@ Lists that page return `continuationToken`; pass it back until it is empty. Page
 
 v1: **400 calls per minute per partner**, shared by every client of the partner. Beta: **400 calls per hour per API key**. A throttled v1 call answers `429` with `Retry-After`; the module waits (at most 300 s) and retries up to three times, also for assessment runs. Report-file downloads are not retried on `429`. An API-key (beta) call is not retried: it fails on the first `429`, as in 0.8.0. Anything that fans out per tenant (Export, Compare, piped tenants) costs one call per tenant.
 
-### `failedPolicyTypes` and the Intune gap
+### `failedPolicyTypes`
 
 `GET /v1/tenants/{msTenantId}/policies` returns `{ "policies": [ ... ], "failedPolicyTypes": { ... } }`. A non-empty `failedPolicyTypes` means the result is partial (policy types that could not be read, with a reason); `Get-InforcerTenantPolicies` writes a warning for it.
 
-**Known gap:** as of 2026-11 the endpoint returns **no Intune policies** and no Defender settings-catalog policies (`policyTypeId` 10), while `failedPolicyTypes` is empty, so the response looks complete. Every other product (Entra, Exchange, SharePoint, Teams, Purview, M365 Admin Center, other Defender types) matches beta. `GET /v1/tenants/{msTenantId}/alignmentDetails` does carry Intune policies. `Get-InforcerTenantPolicies` warns once per v1 tenant with zero Intune policies ("The v1 API currently returns no Intune policies for this tenant (a known gap in inforcer's v1 API). Connecting with an API key still returns them."); `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` reuse that warning and add a note to their reports (see their CMDLET-REFERENCE sections). Notes appear only on v1 when Intune is missing. An API-key login does not have the gap. Also on v1: policy `id` is the Microsoft policy ID (beta: the inforcer ID), so the module keys on `policyData.id` where it can, and `GET /v1/baselines` `items` are policy categories (beta: item references).
+The v1 result holds the same policies as beta, Intune and Defender settings-catalog (`policyTypeId` 10) included (inforcer fixed the earlier gap on 2026-11-05, ENG-6967). A type inforcer could not read is listed in `failedPolicyTypes` with its reason, for example `"Cloud PC User Settings": "Insufficient permissions in the tenant"` (also when the tenant has no Windows 365 licence); beta leaves such types out without saying so. Also on v1: policy `id` is the Microsoft policy ID (beta: the inforcer ID), so the module keys on `policyData.id` where it can, and `GET /v1/baselines` `items` are policy categories (beta: item references).
 
 ### v1 endpoints
 

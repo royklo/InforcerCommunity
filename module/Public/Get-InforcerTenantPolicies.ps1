@@ -46,8 +46,8 @@ function EnrichPolicyObject {
     (API key); Policies + Tenants (only for a tenant name) permission (API client, unconfirmed).
 .DESCRIPTION
     Gets all policies for the specified tenant. TenantId accepts a numeric ID (API-key login only), Microsoft tenant GUID, or tenant name.
-    Works with both login types. With client credentials (v1) the API currently returns no Intune policies;
-    when the result holds none, one warning says so. An API-key login still returns them.
+    Works with both login types. With client credentials, policy types inforcer could not read are named
+    in one warning (the API's failedPolicyTypes).
     Output is normalized to use PolicyName (from displayName or name) so properties are consistent across all rows.
 .PARAMETER Format
     Raw (default).
@@ -120,9 +120,6 @@ if ($script:InforcerSession.ApiVersion -eq 'v1') {
     $policies = @(Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -ObjectType Policy -ErrorVariable apiErr)
     if ($apiErr) { return }
 
-    if (-not @($policies | Where-Object { $_.product -eq 'Intune' })) {
-        Write-Warning "The v1 API currently returns no Intune policies for this tenant (a known gap in inforcer's v1 API). Connecting with an API key still returns them."
-    }
     foreach ($item in $policies) { & $addTenantId $item }
     if ($OutputType -eq 'JsonObject') {
         if ($piped) { $pipedJson.AddRange([object[]]$policies); return }

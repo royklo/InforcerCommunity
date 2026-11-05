@@ -900,10 +900,6 @@ tr:hover td { background: var(--row-hover); }
         [void]$sb.AppendLine("<span class=`"meta-item`" style=`"color:var(--accent);font-weight:600`">Tag: $filterTagEsc</span>")
     }
     [void]$sb.AppendLine('</div>')
-    foreach ($note in @($DocModel.Notes)) {
-        if ([string]::IsNullOrWhiteSpace($note)) { continue }
-        [void]$sb.AppendLine("<div class=`"report-note`" role=`"note`" style=`"margin-top:var(--sp-12);padding:var(--sp-8) var(--sp-12);border-left:3px solid var(--warn);background:var(--warn-bg)`"><strong>Note:</strong> $([System.Net.WebUtility]::HtmlEncode($note))</div>")
-    }
     [void]$sb.AppendLine('<div class="search-bar" style="margin-top:var(--sp-12)">')
     [void]$sb.AppendLine('<input class="search-input" type="text" id="search-input" placeholder="Search policies, settings, values..." aria-label="Search" oninput="searchPolicies(this.value)">')
     [void]$sb.AppendLine('<div class="search-result-count" id="search-count"></div>')

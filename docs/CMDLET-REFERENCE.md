@@ -257,11 +257,11 @@ Use `| Select-Object *` to see all properties including `autoAddNewPolicies`, `i
 
 ## Get-InforcerTenantPolicies
 
-Retrieves policies for a specified tenant. TenantId accepts a Microsoft Tenant ID (GUID) or tenant name (also a numeric Client Tenant ID with an API key). On a client-credentials login the v1 API currently returns no Intune policies; the cmdlet warns when a tenant has none.
+Retrieves policies for a specified tenant. TenantId accepts a Microsoft Tenant ID (GUID) or tenant name (also a numeric Client Tenant ID with an API key). With client credentials, policy types inforcer could not read are named in one warning.
 
 **Pipeline:** piped tenants (for example `Get-InforcerTenant | Get-InforcerTenantPolicies`) are handled one by one; each result gets a `TenantId` property naming its tenant, and `-OutputType JsonObject` returns one JSON array for all of them. Calls without pipeline input are unchanged.
 
-> **Intune gap on v1:** with a client-credentials login the v1 API returns no Intune policies and no Defender settings-catalog policies (type 10), and reports no error. The cmdlet writes a warning when a tenant returns no Intune policies, and a warning when the response lists `failedPolicyTypes` (a partial result). An API-key login is not affected. Policy `Id` is the Microsoft policy ID on v1 and the inforcer ID on beta.
+> **v1:** the cmdlet writes a warning when the response lists `failedPolicyTypes` (a partial result: the types inforcer could not read, with the reason). Beta leaves such types out without a warning. Policy `Id` is the Microsoft policy ID on v1 and the inforcer ID on beta.
 
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/policies` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (used by `Resolve-InforcerTenantId` to look up the numeric `clientTenantId`).
 **Required API scope(s) (API key, beta)**: `tenants.policies.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
@@ -761,8 +761,6 @@ Piped tenants are documented one by one, each with its own Graph data (no names 
 
 > **Personal data:** written documents can contain names and UPNs (for example assignment and group details). See [Personal data](#personal-data).
 
-> **Intune on v1:** the v1 policies endpoint currently returns no Intune policies, so a client-credentials login documents every other product but not Intune. The console warning from `Get-InforcerTenantPolicies` is reused (no second warning), and the document carries this note: "The inforcer v1 API (client-credentials login) currently returns no Intune policies and no Defender settings catalog policies, so they are missing here. Connect with an API key (Connect-Inforcer -ApiKey) to include them." HTML: a "Note:" block in the report header; Markdown: a `> **Note:** ...` line after the tag line; Excel: a first worksheet "Notes" with one row per note. API-key output is unchanged.
-
 **Endpoints called (beta)**: `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies`; with `-Baseline` also `GET /beta/tenants/{tenantId}/alignmentDetails`.
 **Required API scope(s) (API key, beta)**: `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read`
 **Endpoints on v1**: `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}`, `GET /v1/baselines`, `GET /v1/tenants/{msTenantId}/policies`; with `-Baseline` also `GET /v1/tenants/{msTenantId}/alignmentDetails`
@@ -867,7 +865,7 @@ Compares the Intune policy configuration of two tenants and generates an interac
 
 Source and destination are collected at the same time (the destination in a background runspace), so a comparison takes about as long as its slower side; the destination's warnings appear after the source's progress lines.
 
-> **Intune on v1:** the cmdlet compares Intune configuration, and the v1 policies endpoint currently returns none. The HTML report shows a "Note:" block right after the header, prefixed per affected side ("Source (<tenant name>): ..." and/or "Destination (<tenant name>): ..."), with the text: "The inforcer v1 API (client-credentials login) currently returns no Intune policies and no Defender settings catalog policies, so they are missing here. Connect with an API key (Connect-Inforcer -ApiKey) to include them." Mixed sessions are supported: `-SourceSession` from an API-key `Connect-Inforcer -PassThru` and `-DestinationSession` from a client-credentials one (or the reverse), so an API-key session can supply the Intune side. Mixed-session compares pair policies by `Basics.Id`, which differs between beta and v1 ids. API-key-only output is unchanged.
+The two sides may use different logins: pass `-SourceSession` from an API-key `Connect-Inforcer -PassThru` and `-DestinationSession` from a client-credentials one (or the reverse). Such a comparison pairs policies by `Basics.Id`, which is the inforcer ID on beta and the Microsoft policy ID on v1, so across logins the ids never match and policies are paired by their settings instead.
 
 **Endpoints called (beta)**: `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` per side; with a baseline also `GET /beta/tenants/{tenantId}/alignmentDetails`.
 **Required API scope(s) (API key, beta)**: `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read`

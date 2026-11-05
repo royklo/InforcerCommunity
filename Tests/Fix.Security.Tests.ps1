@@ -95,10 +95,10 @@ BeforeAll {
     }
 
     function global:New-SecDocModel {
-        param([string]$PolicyName = 'Policy', [object[]]$Settings = @(), [string[]]$Notes = @())
+        param([string]$PolicyName = 'Policy', [object[]]$Settings = @())
         @{
             TenantName = 'Contoso'; TenantId = 1; GeneratedAt = [datetime]::new(2026, 1, 15, 0, 0, 0, [System.DateTimeKind]::Utc)
-            BaselineName = ''; Notes = $Notes
+            BaselineName = ''
             Products = [ordered]@{
                 'Intune' = @{
                     Categories = [ordered]@{
@@ -327,7 +327,7 @@ Describe 'F6: comparison report category filter builds options safely' {
 
 Describe 'F4: Excel export writes tenant data as text' -Skip:(-not (Get-Module -ListAvailable -Name ImportExcel)) {
     It 'leaves no formula and no hyperlink in the workbook' {
-        $model = New-SecDocModel -PolicyName '=1+1' -Notes @('=2+2') -Settings @(
+        $model = New-SecDocModel -PolicyName '=1+1' -Settings @(
             [pscustomobject]@{ Name = '+cmd'; Value = '=HYPERLINK("https://example.invalid","x")'; Indent = 0; IsConfigured = $true }
             [pscustomobject]@{ Name = '-cmd'; Value = 'https://example.invalid/x'; Indent = 0; IsConfigured = $true }
             [pscustomobject]@{ Name = "`tTab"; Value = "`r=3+3"; Indent = 0; IsConfigured = $true })
@@ -341,7 +341,6 @@ Describe 'F4: Excel export writes tenant data as text' -Skip:(-not (Get-Module -
             @($cells | Where-Object { $_.Hyperlink }).Count | Should -Be 0
             $values = @($cells | ForEach-Object { $_.Value })
             $values | Should -Contain "'=1+1"
-            $values | Should -Contain "'=2+2"
             $values | Should -Contain 'https://example.invalid/x'
             $values | Should -Contain '+cmd'
         } finally { Close-ExcelPackage $pkg -NoSave }

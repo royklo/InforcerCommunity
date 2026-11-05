@@ -376,7 +376,6 @@ Describe 'performance F1: Compare collects source and destination in parallel' {
 
         $model.SourceName | Should -BeExactly 'Contoso'
         $model.DestinationName | Should -BeExactly 'Fabrikam'
-        @($w | Where-Object { "$_" -match 'no Intune policies' }).Count | Should -Be 1
         $calls = @($Log.ToArray() | Where-Object { $_.Path -match '/policies$' })
         $calls.Count | Should -Be 2
         ($calls | Measure-Object -Property Start -Maximum).Maximum | Should -BeLessThan ($calls | Measure-Object -Property End -Minimum).Minimum

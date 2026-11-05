@@ -423,29 +423,24 @@ Describe 'Get-InforcerTenantPolicies' {
         @($p.id) | Should -Be @('p1', 'p2')
     }
 
-    It 'warns once on v1 when no Intune policies are returned' {
+    It 'v1: a result without Intune is not a warning (inforcer fixed the gap); skipped types are' {
         Set-DirSession
         Set-DirRoute { param($Uri, $Method, $Body) New-DirResponse '{"policies":[{"id":"p1","displayName":"Policy One","product":"Entra","policyTypeName":"Conditional Access"}],"failedPolicyTypes":{}}' }
         $p = @(Get-InforcerTenantPolicies -TenantId $script:Tid -WarningVariable w -WarningAction SilentlyContinue)
         $p.Count | Should -Be 1
-        @($w).Count | Should -Be 1
-        "$($w[0])" | Should -BeLike '*Intune*known gap*inforcer*'
-        $p[0].PolicyName | Should -Be 'Policy One'
-    }
-
-    It 'does not warn on v1 when an Intune policy is present' {
-        Set-DirSession
-        Set-DirRoute { param($Uri, $Method, $Body) New-DirResponse '{"policies":[{"id":"p1","displayName":"Policy One","product":"Intune"}],"failedPolicyTypes":{}}' }
-        $null = Get-InforcerTenantPolicies -TenantId $script:Tid -WarningVariable w -WarningAction SilentlyContinue
         @($w).Count | Should -Be 0
+        $p[0].PolicyName | Should -Be 'Policy One'
+        Set-DirRoute { param($Uri, $Method, $Body) New-DirResponse '{"policies":[],"failedPolicyTypes":{"Cloud PC User Settings":"Insufficient permissions in the tenant"}}' }
+        $null = Get-InforcerTenantPolicies -TenantId $script:Tid -WarningVariable w -WarningAction SilentlyContinue
+        @($w).Count | Should -Be 1
+        "$($w[0])" | Should -BeLike '*Cloud PC User Settings (Insufficient permissions in the tenant)*'
     }
 
-    It 'returns a JSON array on v1, also for a single policy, and still warns' {
+    It 'returns a JSON array on v1, also for a single policy' {
         Set-DirSession
         Set-DirRoute { param($Uri, $Method, $Body) New-DirResponse '{"policies":[{"id":"p1","displayName":"Policy One","product":"Entra"}],"failedPolicyTypes":{}}' }
         $json = Get-InforcerTenantPolicies -TenantId $script:Tid -OutputType JsonObject -WarningVariable w -WarningAction SilentlyContinue
         $json.TrimStart() | Should -BeLike '[[]*'
-        @($w).Count | Should -Be 1
     }
 
     It 'leaves beta output and warnings unchanged' {

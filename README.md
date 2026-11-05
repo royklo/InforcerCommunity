@@ -145,7 +145,6 @@ Steps:
 1. Create an API client in the inforcer portal (Configure > REST API) and grant the permissions for the cmdlets you use. Keep the secret in a vault or SecureString; it is shown once.
 2. Replace the `Connect-Inforcer -ApiKey` line with the `-ClientId`/`-ClientSecret` form.
 3. Replace numeric tenant IDs with the Microsoft tenant ID or name (`Get-InforcerTenant` lists them). Scripts that read `ClientTenantId` should read `MsTenantId`.
-4. **Intune gap for now:** the v1 tenant policies endpoint currently returns no Intune policies (and no Defender settings-catalog policies, type 10), with no error. `Get-InforcerTenantPolicies` warns about it once per tenant, and `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` add a note to their reports (no second warning). Until inforcer fixes this, use an API key for Intune-centred documentation and comparison. API-key output is unchanged.
 
 The full list of differences per object is in the [API Reference](docs/API-REFERENCE.md#v1-api-client-credentials).
 

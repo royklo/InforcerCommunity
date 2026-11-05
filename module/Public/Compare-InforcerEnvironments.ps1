@@ -18,10 +18,6 @@
     For cross-account comparison, use Connect-Inforcer -PassThru to obtain session objects
     and pass them via -SourceSession / -DestinationSession. The two sessions may use different
     login types (API key and client credentials); each side uses its own session's API.
-
-    With client credentials (v1 API) the API currently returns no Intune policies. A side that
-    receives none gets a warning, and the report and the returned model (Notes) say so; connect
-    that side with an API key to include them.
 .PARAMETER SourceTenantId
     Source tenant identifier: numeric ID (API-key session only), Microsoft Tenant ID GUID, or friendly name.
     Can be omitted when -SourceBaselineId is specified — the baseline owner tenant is used automatically.
@@ -310,11 +306,6 @@ if ($null -eq $model) {
     return
 }
 
-$notes = @(
-    foreach ($n in @($compData.SourceModel.Notes)) { if ($n) { "Source ($($compData.SourceName)): $n" } }
-    foreach ($n in @($compData.DestinationModel.Notes)) { if ($n) { "Destination ($($compData.DestinationName)): $n" } }
-)
-if ($notes.Count -gt 0) { $model['Notes'] = $notes }
 
 Write-Host "  Alignment score: $($model.AlignmentScore)%" -ForegroundColor Gray
 Write-Host "  Total items:     $($model.TotalItems)" -ForegroundColor Gray

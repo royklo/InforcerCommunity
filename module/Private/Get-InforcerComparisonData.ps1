@@ -137,7 +137,9 @@ function Get-InforcerComparisonData {
             try {
                 $out = $destPs.EndInvoke($destAsync)
                 $last = if ($out.Count -gt 0) { $out[$out.Count - 1] } else { $null }
-                if ($last -is [hashtable]) {
+                # A result whose fetch reported an error is incomplete: fetch it again in the foreground,
+                # so the error reaches the caller under its own -ErrorAction.
+                if ($last -is [hashtable] -and $destPs.Streams.Error.Count -eq 0) {
                     $destDocData = [hashtable]$last
                     foreach ($w in $destPs.Streams.Warning) { Write-Warning $w.Message }
                 }

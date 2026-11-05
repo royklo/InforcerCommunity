@@ -123,7 +123,12 @@ if (-not $piped) {
     }
 
     if ($OutputType -eq 'JsonObject') {
-        $json = if ($isV1) { ConvertTo-Json -InputObject $baselines -Depth 100 } else { $baselines | ConvertTo-Json -Depth 100 }
+        if ($isV1) {
+            # v1 list contract: always a JSON array, also for one match or none.
+            $selected = @(foreach ($b in $baselines) { if ($null -eq $resolvedTenantId -or ($b -is [PSObject] -and (& $hasTenant $b $resolvedTenantId))) { $b } })
+            return ConvertTo-Json -InputObject $selected -Depth 100
+        }
+        $json = $baselines | ConvertTo-Json -Depth 100
         if ($null -eq $json) { return }
         if ($null -eq $resolvedTenantId) { return $json }
         return Filter-InforcerResponse -InputObject $json -FilterScript { param($p) & $hasTenant $p $resolvedTenantId } -OutputType JsonObject

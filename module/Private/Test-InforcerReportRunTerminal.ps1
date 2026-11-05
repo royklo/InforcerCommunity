@@ -9,7 +9,7 @@ function Test-InforcerReportRunTerminal {
 
         beta wraps the outputs as { data: { outputs: [...] } }; v1 returns { outputs: [...] } with
         msTenantId, which is mapped to the module's tenantId (null for a collated output).
-        A v1 401 renews the access token and retries once.
+        A v1 401 renews the access token and retries once; a v1 429 waits for Retry-After (at most 3 times).
 
         Used as the polling probe by Get-InforcerReportRun -Wait. Returns a typed result rather
         than throwing on the "not yet" case, so polling loops can branch cleanly.
@@ -48,6 +48,7 @@ function Test-InforcerReportRunTerminal {
     Write-Verbose "Probing terminal state: GET $uri"
 
     $forceRefresh = $false
+    $retries429 = 0
     while ($true) {
         $headers = Get-InforcerAuthHeader -ForceRefresh:$forceRefresh
         if (-not $headers) { return }
@@ -65,6 +66,13 @@ function Test-InforcerReportRunTerminal {
         if ($isV1 -and -not $forceRefresh -and [int]$response.StatusCode -eq 401) {
             Write-Verbose 'HTTP 401: renewing the access token and retrying once.'
             $forceRefresh = $true
+            continue
+        }
+        if ($isV1 -and [int]$response.StatusCode -eq 429 -and $retries429 -lt 3) {
+            $retries429++
+            $delay = Get-InforcerRetryDelay -Value (Get-InforcerHeaderValue -Headers $response.Headers -Name 'Retry-After') -Attempt $retries429
+            Write-Verbose "Rate limited (HTTP 429). Retrying in $delay second(s) (attempt $retries429 of 3)."
+            Start-Sleep -Seconds $delay
             continue
         }
         break

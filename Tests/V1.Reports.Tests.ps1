@@ -144,6 +144,13 @@ Describe 'Invoke-InforcerReport request body' {
         }
     }
 
+    It 'v1 -NoWait -OutputType JsonObject returns a JSON array for one run' {
+        Set-ReportsTestSession -Mode v1
+        $json = Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId $script:Tid1 -NoWait -OutputType JsonObject
+        $json.TrimStart() | Should -BeLike '`[*'
+        ($json | ConvertFrom-Json -NoEnumerate).Count | Should -Be 1
+    }
+
     It 'v1 passes collate and the auto-defaulted report-period parameter' {
         Set-ReportsTestSession -Mode v1
         $null = Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId $script:Tid1 -NoWait

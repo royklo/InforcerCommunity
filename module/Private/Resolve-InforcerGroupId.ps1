@@ -37,10 +37,11 @@ function Resolve-InforcerGroupId {
         $apiErr = @()
         $items = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group -ErrorVariable apiErr -ErrorAction SilentlyContinue)
 
+        # A failed page means an incomplete result: never pick a group from it.
+        if ($apiErr.Count -gt 0) {
+            throw [System.InvalidOperationException]::new("Failed to search for group '$groupIdString': $($apiErr[-1].Exception.Message)")
+        }
         if ($items.Count -eq 0) {
-            if ($apiErr.Count -gt 0) {
-                throw [System.InvalidOperationException]::new("Failed to search for group '$groupIdString': $($apiErr[-1].Exception.Message)")
-            }
             throw [System.InvalidOperationException]::new("No group found with name: $groupIdString")
         }
 

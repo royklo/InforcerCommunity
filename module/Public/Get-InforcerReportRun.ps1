@@ -110,6 +110,7 @@ begin {
     # don't share state.
     $cachedListResponse = $null
     $listResponseFetched = $false
+    $listFailed = $false
     $polledOutputsByRunId = @{}
 }
 
@@ -153,13 +154,15 @@ if ($Wait.IsPresent) {
 # --- Fetch list once, reuse for every piped RunId ---
 if (-not $listResponseFetched) {
     Write-Verbose 'GET /reports/runs'
-    $cachedListResponse = Invoke-InforcerApiRequest -Endpoint '/reports/runs' -Method GET -OutputType PowerShellObject -ObjectType ReportRun
+    $listErr = $null
+    $cachedListResponse = @(Invoke-InforcerApiRequest -Endpoint '/reports/runs' -Method GET -OutputType PowerShellObject -ObjectType ReportRun -ErrorVariable listErr)
+    $listFailed = [bool]$listErr
     $listResponseFetched = $true
 }
-$response = $cachedListResponse
-if ($null -eq $response) { return }
+# A failed request returns nothing; an empty run list is still a result.
+if ($listFailed) { return }
 
-$runs = @($response)
+$runs = @($cachedListResponse)
 
 if ($PSBoundParameters.ContainsKey('RunId')) {
     $needle = $RunId.ToString()
@@ -247,6 +250,8 @@ if ($IncludeOutputs.IsPresent -and -not $polledOutputs) {
 
 # --- Shape output ---
 if ($OutputType -eq 'JsonObject') {
+    # v1 list contract: always a JSON array (`[]` for no runs); beta keeps the 0.8.0 shape.
+    if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject @($runs) -Depth 100 }
     return ($runs | ConvertTo-Json -Depth 100)
 }
 

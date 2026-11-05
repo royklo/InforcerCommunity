@@ -92,6 +92,11 @@ param(
 begin { $pipedTenantIds = [System.Collections.Generic.List[object]]::new() }
 process { if ($null -ne $TenantId) { foreach ($t in @($TenantId)) { $pipedTenantIds.Add($t) } } }
 end {
+# Piped input that held no tenant (an empty filter result) must not fall through to an all-tenant run.
+if ($PSCmdlet.MyInvocation.ExpectingInput -and $pipedTenantIds.Count -eq 0) {
+    Write-Verbose 'No tenants were piped in; nothing to assess.'
+    return
+}
 if ($pipedTenantIds.Count -gt 0) { $TenantId = $pipedTenantIds.ToArray() }
 
 if (-not (Test-InforcerSession)) {

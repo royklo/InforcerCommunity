@@ -228,6 +228,17 @@ Describe 'Pipeline binding of -TenantId (ClientTenantId / MsTenantId aliases)' {
 }
 
 Describe 'Get-InforcerBaseline' {
+    It 'v1: -TenantId -OutputType JsonObject stays a JSON array for one match and for none' {
+        Set-V1TenantsSession
+        $one = Get-InforcerBaseline -TenantId $script:T2 -OutputType JsonObject
+        $one.TrimStart() | Should -BeLike '`[*'
+        ($one | ConvertFrom-Json -NoEnumerate).Count | Should -Be 1
+        $global:V1TenantsRoutes['/v1/tenants$'] = '{"tenants":[{"msTenantId":"00000000-0000-0000-0000-000000000009","name":"Lonely","dnsName":"lonely.onmicrosoft.com"}]}'
+        & $script:M { $script:InforcerTenantListCache = $null }
+        $none = Get-InforcerBaseline -TenantId '00000000-0000-0000-0000-000000000009' -OutputType JsonObject
+        $none.Trim() | Should -Be '[]'
+    }
+
     It 'v1: maps the owner and members to the module names' {
         Set-V1TenantsSession
         $r = @(Get-InforcerBaseline)

@@ -693,6 +693,7 @@ if ($NoWait.IsPresent) {
     # in the host until the next progress write in the runspace.
     Write-Progress -Id $progressId -Activity 'Invoke-InforcerReport' -Completed
     if ($OutputType -eq 'JsonObject') {
+        if ($isV1) { return ConvertTo-Json -InputObject @($runs) -Depth 100 }
         return ($runs | ConvertTo-Json -Depth 100)
     }
     foreach ($run in $runs) {

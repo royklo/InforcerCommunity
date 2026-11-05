@@ -56,6 +56,8 @@ function Select-InforcerBaselinePolicies {
     # Collect policy names AND GUIDs from baseline alignment status arrays
     $baselinePolicyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $baselinePolicyGuids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    # One entry per baseline policy (its name and every id that identifies it), for counting and the not-found list.
+    $baselineEntries = [System.Collections.Generic.List[object]]::new()
     $alignment = $alignResponse.alignment
     if ($null -ne $alignment) {
         $baselineArrays = @('matchedPolicies', 'matchedWithAcceptedDeviations', 'deviatedUnaccepted', 'missingFromSubjectUnaccepted')
@@ -64,26 +66,27 @@ function Select-InforcerBaselinePolicies {
             if ($arr -and $null -ne $arr.Value) {
                 foreach ($p in @($arr.Value)) {
                     if ($p -is [PSObject]) {
-                        if ($p.PSObject.Properties['policyName'] -and $p.policyName) {
-                            [void]$baselinePolicyNames.Add($p.policyName)
-                        }
+                        $entryName = if ($p.PSObject.Properties['policyName'] -and $p.policyName) { [string]$p.policyName }
+                        $entryIds = [System.Collections.Generic.List[string]]::new()
+                        if ($entryName) { [void]$baselinePolicyNames.Add($entryName) }
                         if ($p.PSObject.Properties['policyGuid']) {
-                            if ($p.policyGuid) { [void]$baselinePolicyGuids.Add($p.policyGuid) }
+                            if ($p.policyGuid) { $entryIds.Add([string]$p.policyGuid) }
                         } else {
                             # v1: ids are Microsoft 365 ids; matchingSubjectPolicies[].id is the subject tenant's own policy.
-                            if ($p.id) { [void]$baselinePolicyGuids.Add($p.id) }
+                            if ($p.id) { $entryIds.Add([string]$p.id) }
                             foreach ($m in @($p.matchingSubjectPolicies)) {
-                                if ($m.id) { [void]$baselinePolicyGuids.Add($m.id) }
+                                if ($m.id) { $entryIds.Add([string]$m.id) }
                             }
                         }
+                        foreach ($g in $entryIds) { [void]$baselinePolicyGuids.Add($g) }
+                        if ($entryName -or $entryIds.Count) { $baselineEntries.Add([PSCustomObject]@{ Name = $entryName; Ids = $entryIds }) }
                     }
                 }
             }
         }
     }
 
-    $baselineTotal = $baselinePolicyNames.Count
-    if ($baselinePolicyGuids.Count -gt $baselineTotal) { $baselineTotal = $baselinePolicyGuids.Count }
+    $baselineTotal = $baselineEntries.Count
 
     if ($baselineTotal -eq 0) {
         Write-Warning "Baseline '$baselineFilterName' contains no policies in alignment data."
@@ -112,23 +115,32 @@ function Select-InforcerBaselinePolicies {
     $matchedCount = @($DocData.Policies).Count
     Write-Host "  Filtered to $matchedCount of $originalCount policies in baseline '$baselineFilterName'" -ForegroundColor Gray
 
-    # Warn about unmatched baseline policies
+    # Warn about baseline policies the tenant has under neither their name nor any of their ids
     if ($matchedCount -lt $baselineTotal) {
         $matchedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $matchedIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($pol in @($DocData.Policies)) {
-            foreach ($n in @($pol.displayName, $pol.friendlyName, $pol.name)) {
+            foreach ($n in @($pol.displayName, $pol.friendlyName, $pol.name, $pol.inforcerPolicyTypeName)) {
                 if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$matchedNames.Add($n) }
+            }
+            foreach ($g in @($pol.policyGuid, $pol.id)) {
+                if (-not [string]::IsNullOrWhiteSpace($g)) { [void]$matchedIds.Add($g) }
             }
             if ($pol.policyData) {
                 foreach ($n in @($pol.policyData.displayName, $pol.policyData.name)) {
                     if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$matchedNames.Add($n) }
                 }
+                if ($pol.policyData.id) { [void]$matchedIds.Add($pol.policyData.id) }
             }
         }
-        $unmatched = @($baselinePolicyNames | Where-Object { -not $matchedNames.Contains($_) })
+        $unmatched = @(foreach ($e in $baselineEntries) {
+            if ($e.Name -and $matchedNames.Contains($e.Name)) { continue }
+            if (@($e.Ids | Where-Object { $matchedIds.Contains($_) }).Count) { continue }
+            if ($e.Name) { $e.Name } else { $e.Ids[0] }
+        })
         if ($unmatched.Count -gt 0) {
             Write-Warning "$($unmatched.Count) baseline policies not found in tenant:"
-            foreach ($u in $unmatched | Sort-Object) { Write-Warning "  - $u" }
+            foreach ($u in $unmatched | Sort-Object -Unique) { Write-Warning "  - $u" }
         }
     }
 

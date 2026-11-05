@@ -13,7 +13,7 @@
           <ListEntry>
             <ListItems>
               <!-- Conditional rows: API-key tenants always carry these properties (view unchanged);
-                   client-credentials tenants lack ClientTenantId and have detail fields only with -Detailed/-TenantId. -->
+                   client-credentials tenants lack ClientTenantId. -->
               <ListItem>
                 <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['clientTenantId']</ScriptBlock></ItemSelectionCondition>
                 <Label>ClientTenantId</Label><PropertyName>ClientTenantId</PropertyName>

@@ -3,8 +3,8 @@ function Get-InforcerTenantList {
     .SYNOPSIS
         Returns the tenant list with canonical property names, cached per session (Private helper).
     .DESCRIPTION
-        beta: GET /tenants (rich objects incl. clientTenantId). v1: GET /tenants mapped to canonical
-        names (msTenantId, tenantFriendlyName, tenantDnsName). Cached in $script:InforcerTenantListCache
+        beta: GET /tenants (rich objects incl. clientTenantId). v1: GET /tenants (the same fields
+        without clientTenantId), mapped to the beta property names. Cached in $script:InforcerTenantListCache
         for the session that fetched it, so swapping sessions (Compare-InforcerEnvironments) never
         returns another account's tenants. Cleared with the other Inforcer*Cache* variables on
         Connect/Disconnect. A failed request is not cached; its error goes to the error stream.

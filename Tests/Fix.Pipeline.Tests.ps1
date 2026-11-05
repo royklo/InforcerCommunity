@@ -17,7 +17,7 @@ Describe 'Fix 1.5.9b: pipeline, TenantId, caching' {
         function global:Reset-FixPipeRoutes {
             $global:FixPipeRoutes = [ordered]@{
                 # v1 (client credentials)
-                '/v1/tenants$' = '{"tenants":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.example.invalid"},{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.example.invalid"}]}'
+                '/v1/tenants$' = '{"tenants":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.example.invalid","isBaseline":true,"tags":[{"name":"Production","description":""}],"alignmentSummaries":[],"licenses":[]},{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.example.invalid","isBaseline":false,"tags":[{"name":"Test","description":""}],"alignmentSummaries":[{"alignedBaselineId":"00000000-0000-0000-0000-0000000000b1","alignedBaselineMsTenantId":"00000000-0000-0000-0000-000000000001","alignedBaselineName":"Contoso Baseline","alignmentScore":80.5}],"licenses":[]}]}'
                 '/v1/tenants/00000000-0000-0000-0000-000000000001$' = '{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.example.invalid","isBaseline":true,"tags":[{"name":"Production","description":""}],"alignmentSummaries":[],"licenses":[]}'
                 '/v1/tenants/00000000-0000-0000-0000-000000000002$' = '{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.example.invalid","isBaseline":false,"tags":[{"name":"Test","description":""}],"alignmentSummaries":[],"licenses":[]}'
                 '/v1/baselines$' = '{"baselines":[{"id":"00000000-0000-0000-0000-0000000000b1","name":"Contoso Baseline","description":"","baselineTenant":{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.example.invalid"},"mode":"Monitor","alignedThreshold":90,"semiAlignedThreshold":70,"members":[{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.example.invalid"}],"items":[]},{"id":"00000000-0000-0000-0000-0000000000b2","name":"Other Baseline","description":"","baselineTenant":{"msTenantId":"00000000-0000-0000-0000-000000000003","name":"Northwind","dnsName":"northwind.example.invalid"},"mode":"Monitor","alignedThreshold":90,"semiAlignedThreshold":70,"members":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.example.invalid"}],"items":[]}]}'
@@ -157,12 +157,13 @@ Describe 'Fix 1.5.9b: pipeline, TenantId, caching' {
             @($json[0] | ConvertFrom-Json).Count | Should -Be 2
         }
 
-        It 'v1: -Tag loads the tenant records once for the whole pipeline' {
+        It 'v1: -Tag reads the tenant list once for the whole pipeline, with no per-tenant calls' {
             Set-FixPipeSession
             $r = @(Get-FixPipeTenants | Get-InforcerAlignmentDetails -Tag 'Prod')
             @($r.TargetTenantMsTenantId | Sort-Object) | Should -Be @($script:T1, $script:T2)
-            Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
-            Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -match '/v1/baselines$' }
+            Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
+            Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants$' }
+            Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly -ParameterFilter { $Request.Uri -match '/v1/baselines$' }
         }
 
         It '<Mode>: -BaselineId queries each piped tenant once; rows and JSON carry TenantId' -ForEach @(

@@ -5,7 +5,7 @@
     Required API scope(s): Audit.Read (API key, unconfirmed — see docs/API-REFERENCE.md); Activity
     permission (API client, unconfirmed).
 .DESCRIPTION
-    POST /auditEvents/search on both login types (API key: /beta, client credentials: /v1). With client credentials the response has no ClientId, Message, RelId or RelType fields. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
+    POST /auditEvents/search on both login types (API key: /beta, client credentials: /v1). With client credentials the response has no ClientId or Message fields. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
     When -EventType is not specified, no event-type filter is sent and the API searches all types (one search, both login types).
     Events come back in the API's order. The -EventType tab-completion list is not refreshed by this
     cmdlet; run Get-InforcerSupportedEventType for that.

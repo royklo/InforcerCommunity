@@ -265,15 +265,15 @@ Context 'performance F6: DocData without the JSON round trip' {
 Context 'decision 4: Profile type on beta' {
     It 'fills ProfileType from policyTypeId when the API sends no type name; ids without evidence stay blank' {
         InModuleScope InforcerCommunity {
-            Get-InforcerPolicyTypeName -PolicyTypeId 10 | Should -BeExactly 'Configuration'
-            Get-InforcerPolicyTypeName -PolicyTypeId '3' | Should -BeExactly 'Device Compliance'
+            Get-InforcerPolicyTypeName -PolicyTypeId 10 | Should -BeExactly 'Intune Configuration Policies'
+            Get-InforcerPolicyTypeName -PolicyTypeId '3' | Should -BeExactly 'Device Compliance Policy'
             foreach ($id in 5, 29, 30, 10202, 10204, 10215, 10234, 10235, 10268, 10306) { Get-InforcerPolicyTypeName -PolicyTypeId $id | Should -BeExactly '' }
             Get-InforcerPolicyTypeName -PolicyTypeId $null | Should -BeExactly ''
             $m = ConvertTo-InforcerDocModel -DocData @{ TenantId = 1; Policies = @(
                 [pscustomobject]@{ id = 1; policyTypeId = 3; displayName = 'a'; product = 'Intune'; primaryGroup = 'A' }
                 [pscustomobject]@{ id = 2; policyTypeId = 3; inforcerPolicyTypeName = 'Name from the API'; displayName = 'b'; product = 'Intune'; primaryGroup = 'B' }
             ) }
-            $m.Products['Intune'].Categories['A'][0].Basics.ProfileType | Should -BeExactly 'Device Compliance'
+            $m.Products['Intune'].Categories['A'][0].Basics.ProfileType | Should -BeExactly 'Device Compliance Policy'
             $m.Products['Intune'].Categories['B'][0].Basics.ProfileType | Should -BeExactly 'Name from the API'
         }
     }

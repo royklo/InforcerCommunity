@@ -225,13 +225,18 @@ $processResults = {
     return ,$checks
 }
 
-# Helper: counts and score; checks that were not assessed stay out of the score
+# Helper: counts and score; checks that were not assessed stay out of the score.
+# v1 sends inforcer's own score (summary.score, the portal's number); beta has none, so it is computed.
 $summarize = {
-    param($checks)
+    param($checks, $response)
     $passed = 0; $failed = 0
     foreach ($c in $checks) { if ($c.Status -eq 'Pass') { $passed++ } elseif ($c.Status -eq 'Fail') { $failed++ } }
+    $apiSummary = if ($response -is [PSObject]) { $response.PSObject.Properties['summary'].Value }
+    $apiScore = if ($apiSummary -is [PSObject]) { $apiSummary.PSObject.Properties['score'].Value }
+    # Only a real 0-100 number is trusted; it lands in HTML reports. Anything else falls back to the computed score.
+    $useApi = $apiScore -is [ValueType] -and $apiScore -isnot [bool] -and [double]$apiScore -ge 0 -and [double]$apiScore -le 100
     @{
-        Score       = if ($passed + $failed -gt 0) { [math]::Round(($passed / ($passed + $failed)) * 100, 1) } else { 0 }
+        Score       = if ($useApi) { [double]$apiScore } elseif ($passed + $failed -gt 0) { [math]::Round(($passed / ($passed + $failed)) * 100, 1) } else { 0 }
         Passed      = $passed
         Failed      = $failed
         NotAssessed = $checks.Count - $passed - $failed
@@ -310,7 +315,7 @@ if ($isMultiTenant) {
         $resultsProp = $response.PSObject.Properties['results']
         $results = if ($resultsProp -and $resultsProp.Value -is [array]) { $resultsProp.Value } else { @() }
         $checks = & $processResults $results
-        [void]$allTenantResults.Add(@{ TenantId = $tenant.Id; TenantName = $tenant.Name; Checks = @($checks) } + (& $summarize $checks))
+        [void]$allTenantResults.Add(@{ TenantId = $tenant.Id; TenantName = $tenant.Name; Checks = @($checks) } + (& $summarize $checks $response))
     }
 
     $totalStopwatch.Stop()
@@ -454,7 +459,7 @@ if ($OutputType -eq 'JsonObject') {
 $resultsProp = $response.PSObject.Properties['results']
 $results = if ($resultsProp -and $resultsProp.Value -is [array]) { $resultsProp.Value } else { @() }
 $processedChecks = & $processResults $results
-$summary = & $summarize $processedChecks
+$summary = & $summarize $processedChecks $response
 $score = $summary.Score
 
 Write-Host ""

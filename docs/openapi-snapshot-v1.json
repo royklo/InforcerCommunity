@@ -1179,7 +1179,77 @@
           "tenants": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/tenant"
+              "$ref": "#/components/schemas/tenantListItem"
+            }
+          }
+        }
+      },
+      "tenantListItem": {
+        "required": [
+          "msTenantId",
+          "name",
+          "dnsName",
+          "isBaseline",
+          "recentChanges",
+          "tags",
+          "alignmentSummaries",
+          "licenses"
+        ],
+        "type": "object",
+        "properties": {
+          "msTenantId": {
+            "$ref": "#/components/schemas/msTenantId"
+          },
+          "name": {
+            "type": "string",
+            "description": "The tenant's display name"
+          },
+          "dnsName": {
+            "type": "string",
+            "description": "The tenant's primary DNS name"
+          },
+          "secureScore": {
+            "type": "number",
+            "description": "The tenant's latest Microsoft Secure Score, or null when the tenant has not been scored",
+            "format": "double",
+            "nullable": true
+          },
+          "isBaseline": {
+            "type": "boolean",
+            "description": "Whether the tenant is a baseline"
+          },
+          "lastBackupTimestamp": {
+            "type": "string",
+            "description": "When the tenant was last backed up",
+            "format": "date-time",
+            "nullable": true
+          },
+          "recentChanges": {
+            "type": "integer",
+            "description": "The number of policy changes detected recently",
+            "format": "int32"
+          },
+          "policyDiff": {
+            "type": "string",
+            "description": "A summary of the tenant's policy drift",
+            "nullable": true
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/tenantTag"
+            }
+          },
+          "alignmentSummaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/alignmentSummary"
+            }
+          },
+          "licenses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/tenantLicense"
             }
           }
         }
@@ -1608,6 +1678,7 @@
           "id",
           "policyTypeId",
           "policyTypeName",
+          "policyTypeFriendlyName",
           "displayName",
           "friendlyName",
           "description",
@@ -1635,7 +1706,11 @@
           },
           "policyTypeName": {
             "type": "string",
-            "description": "inforcer's name for the policy type",
+            "description": "inforcer's name for the policy type, or an empty string when the type is not recognised"
+          },
+          "policyTypeFriendlyName": {
+            "type": "string",
+            "description": "The policy type's display label",
             "nullable": true
           },
           "displayName": {
@@ -1882,6 +1957,7 @@
           "name",
           "policyTypeId",
           "policyTypeName",
+          "policyTypeFriendlyName",
           "categoryName",
           "similarityScore",
           "similarityReason",
@@ -1909,6 +1985,12 @@
           },
           "policyTypeName": {
             "type": "string",
+            "description": "inforcer's name for the policy type, or an empty string when the type is not recognised",
+            "nullable": true
+          },
+          "policyTypeFriendlyName": {
+            "type": "string",
+            "description": "The policy type's display label",
             "nullable": true
           },
           "categoryName": {
@@ -2595,6 +2677,7 @@
         "required": [
           "assessmentId",
           "name",
+          "summary",
           "results"
         ],
         "type": "object",
@@ -2608,6 +2691,9 @@
             "description": "The name of the assessment that was run",
             "nullable": true
           },
+          "summary": {
+            "$ref": "#/components/schemas/assessmentRunSummary"
+          },
           "results": {
             "type": "array",
             "items": {
@@ -2616,6 +2702,53 @@
             "description": "The result of each of the assessment's checks"
           }
         }
+      },
+      "assessmentRunSummary": {
+        "required": [
+          "total",
+          "assessed",
+          "passed",
+          "failed",
+          "notRun",
+          "score"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "The number of checks in the run",
+            "format": "int32"
+          },
+          "assessed": {
+            "type": "integer",
+            "description": "The number of checks with an outcome, all but notRun",
+            "format": "int32"
+          },
+          "passed": {
+            "type": "integer",
+            "description": "The number of checks that passed",
+            "format": "int32"
+          },
+          "failed": {
+            "type": "integer",
+            "description": "The number of checks that failed",
+            "format": "int32"
+          },
+          "notRun": {
+            "type": "integer",
+            "description": "The number of checks not assessed, through insufficient permissions or an error",
+            "format": "int32"
+          },
+          "score": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer",
+            "description": "Passed checks as a percentage of assessed checks, rounded down. Null when no check was assessed",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "description": "Counts of the run's checks by outcome"
       },
       "assessmentCheckResult": {
         "required": [
@@ -4130,6 +4263,8 @@
         "required": [
           "id",
           "correlationId",
+          "relType",
+          "relId",
           "eventType",
           "code",
           "user",
@@ -4146,6 +4281,16 @@
             "type": "string",
             "description": "Shared by events that belong to the same operation",
             "format": "uuid",
+            "nullable": true
+          },
+          "relType": {
+            "type": "string",
+            "description": "The type of the entity the event relates to",
+            "nullable": true
+          },
+          "relId": {
+            "type": "string",
+            "description": "The id of the entity the event relates to",
             "nullable": true
           },
           "eventType": {

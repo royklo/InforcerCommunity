@@ -192,10 +192,10 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Connect-Inforcer` | `POST /oauth/token` (no permission needed; any valid client connects) and a best-effort `GET /v1/reports/types` to prime the report catalog | None |
 | `Disconnect-Inforcer` | none | None |
 | `Test-InforcerConnection` | `GET /v1/baselines` | Baselines; without it the test returns `False` |
-| `Get-InforcerTenant` | `GET /v1/tenants`; with `-Detailed` also `GET /v1/tenants/{msTenantId}` per tenant. `-TenantId <GUID>` makes only `GET /v1/tenants/{msTenantId}`; a name adds the cached list | Tenants |
+| `Get-InforcerTenant` | `GET /v1/tenants`. `-TenantId <GUID>` makes only `GET /v1/tenants/{msTenantId}`; a name adds the cached list | Tenants |
 | `Get-InforcerBaseline` | `GET /v1/baselines` (+ `GET /v1/tenants` for a tenant name) | Baselines, Tenants† |
 | `Get-InforcerTenantPolicies` | `GET /v1/tenants/{msTenantId}/policies` | Policies, Tenants† |
-| `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails`; with `-Tag` also `GET /v1/tenants/{msTenantId}` per tenant (v1 tags are only on the tenant record) | Baselines + Align + Tenants |
+| `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails` | Baselines + Align + Tenants |
 | `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search` | Activity |
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
 | `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]` | User & Group Management, Tenants† |
@@ -278,7 +278,7 @@ Lists that page return `continuationToken`; pass it back until it is empty. Page
 
 ### Rate limits
 
-v1: **400 calls per minute per partner**, shared by every client of the partner. Beta: **400 calls per hour per API key**. A throttled v1 call answers `429` with `Retry-After`; the module waits (at most 300 s) and retries up to three times, also for assessment runs. Report-file downloads are not retried on `429`. An API-key (beta) call is not retried: it fails on the first `429`, as in 0.8.0. `Get-InforcerTenant -Detailed` and anything else that fans out per tenant costs one call per tenant.
+v1: **400 calls per minute per partner**, shared by every client of the partner. Beta: **400 calls per hour per API key**. A throttled v1 call answers `429` with `Retry-After`; the module waits (at most 300 s) and retries up to three times, also for assessment runs. Report-file downloads are not retried on `429`. An API-key (beta) call is not retried: it fails on the first `429`, as in 0.8.0. Anything that fans out per tenant (Export, Compare, piped tenants) costs one call per tenant.
 
 ### `failedPolicyTypes` and the Intune gap
 
@@ -293,7 +293,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | v1 path | Method | Beta equivalent | Cmdlet |
 |---------|--------|-----------------|--------|
 | `/v1/tenants` | GET | `/beta/tenants` | `Get-InforcerTenant` |
-| `/v1/tenants/{msTenantId}` | GET | `/beta/tenants/{tenantId}` | `Get-InforcerTenant -Detailed` / `-TenantId` (the sanctioned use of this endpoint); also reached through it by Export, Compare and `Get-InforcerAlignmentDetails -Tag` |
+| `/v1/tenants/{msTenantId}` | GET | `/beta/tenants/{tenantId}` | `Get-InforcerTenant -TenantId` (the sanctioned use of this endpoint); also reached through it by Export and Compare |
 | `/v1/tenants/{msTenantId}/policies` | GET | `/beta/tenants/{tenantId}/policies` | `Get-InforcerTenantPolicies`, Export, Compare |
 | `/v1/tenants/{msTenantId}/alignmentDetails` | GET (`baselineId` required) | `/beta/tenants/{tenantId}/alignmentDetails` (`customBaselineId`) | `Get-InforcerAlignmentDetails`; Export/Compare baseline scoping |
 | `/v1/tenants/{msTenantId}/secureScores` | GET | `/beta/tenants/{tenantId}/secureScores` | `Get-InforcerSecureScore` |
@@ -320,13 +320,13 @@ That is 21 paths and 22 operations (`/v1/reports/runs` has GET and POST). Path p
 
 | Object | v1 field → module property | No v1 equivalent / v1 only |
 |--------|----------------------------|----------------------------|
-| Tenant | `name` → `tenantFriendlyName`, `dnsName` → `tenantDnsName`; alignment summary `lastAlignmentTimestamp` → `lastAlignmentDateTime` | no `clientTenantId`; list holds only `msTenantId`, name and DNS name (use `-Detailed`); `authenticationMode` is v1 only |
+| Tenant | `name` → `tenantFriendlyName`, `dnsName` → `tenantDnsName`; alignment summary `lastAlignmentTimestamp` → `lastAlignmentDateTime` | no `clientTenantId`; `authenticationMode` is v1 only and only on the single-tenant record (`-TenantId`) |
 | Policy | `policyTypeName` → `inforcerPolicyTypeName` | `id` is the Microsoft policy ID; no `policyCategoryId` |
 | Baseline | `baselineTenant{}` flattened to `baselineMsTenantId`, `baselineTenantFriendlyName`, `baselineTenantDnsName`; members `name`/`dnsName` → `tenantFriendlyName`/`tenantDnsName`; items `product`, `primaryGroup`, `secondaryGroup` → `policyCategory*` | no `baselineClientTenantId`; `description`, `isSharedCopy`, member `lastAlignmentScore` are v1 only |
 | Alignment score | `tenantName` → `tenantFriendlyName`, `alignedBaselineId` → `baselineGroupId`, `alignedBaselineName` → `baselineGroupName`, `alignmentScore` → `score`, `lastAlignmentTimestamp` → `lastComparisonDateTime` | `msTenantId` replaces the numeric `tenantId` |
 | Alignment details | buckets `matched`, `matchedWithAcceptedDeviations`, `deviated`, `missingFromTenant`, `additionalInTenant` → `matchedPolicies`, `matchedWithAcceptedDeviations`, `deviatedUnaccepted`, `missingFromSubjectUnaccepted`, `additionalInSubjectUnaccepted`; `tenantDataTimestamp` → `subjectDataTimestamp`; per-policy `displayName` → `policyName`, `tenantPolicies` → `matchingSubjectPolicies`; more renames in [Alignment details renames](#alignment-details-renames) | compared policies are richer (diffs, similar policies) |
 | User | list `groupCount`/`roleCount` → `groups`/`roles` | list has counts, not arrays |
-| Group, role, secure score, assessment, report type, audit event type | unchanged | audit events lack `clientId`, `message`, `relId`, `relType`; v1 has 130 event types (beta 139) |
+| Group, role, secure score, assessment, report type, audit event type | unchanged | audit events lack `clientId` and `message`; v1 lists only the event types a partner can see (191 on 2026-11-05), beta lists every type, including internal ones and types still in development (147) |
 | Assessment run | `assessmentId` → `assessment` | |
 | Report run / output | `reportRunId` → `runId`; output `msTenantId` → `tenantId` (`null` = collated) | |
 
@@ -429,7 +429,7 @@ Retrieves a specific tenant by ID.
 
 **Response**: [Tenant](#tenant)
 
-> **Implementation Note**: On beta the module uses `GET /beta/tenants` with client-side filtering for consistency and deduplication. On v1 `Get-InforcerTenant -Detailed` and `-TenantId` call `GET /v1/tenants/{msTenantId}` per tenant, because the v1 list holds only the name, DNS name and ID.
+> **Implementation Note**: On beta the module uses `GET /beta/tenants` with client-side filtering for consistency and deduplication. On v1 the list holds the same fields; `-TenantId` calls `GET /v1/tenants/{msTenantId}`, which adds `authenticationMode`.
 
 ---
 
@@ -612,7 +612,7 @@ Runs an assessment against one tenant and returns the results in the same respon
 | `tenantId` | path | integer | Yes | Client Tenant ID. |
 | `assessmentId` | path | string | Yes | Assessment ID from `GET /beta/assessments` (an alphanumeric string, not a GUID). |
 
-**Response**: `{ data: { assessment, name, results: [AssessmentCheck, ...] } }`. Runs can answer `500` or `502`. The module runs the request in a background runspace; on v1 it renews the token once after a `401` and honours `Retry-After` on a `429` (up to 3 times), and on both logins it refuses a redirect (see [Redirects](#redirects)).
+**Response**: `{ data: { assessment, name, results: [AssessmentCheck, ...] } }`. v1 (`POST /v1/tenants/{msTenantId}/assessments/{assessmentId}/runs`) answers `{ assessmentId, name, summary, results }`; `summary` is `{ total, assessed, passed, failed, notRun, score }`, where `score` is passed checks as a percentage of assessed checks, rounded down (`null` when nothing was assessed). `Invoke-InforcerAssessment` shows that score; beta has no summary, so the module computes `Pass ÷ (Pass + Fail)`. Runs can answer `500` or `502`. The module runs the request in a background runspace; on v1 it renews the token once after a `401` and honours `Retry-After` on a `429` (up to 3 times), and on both logins it refuses a redirect (see [Redirects](#redirects)).
 
 ### Reports
 
@@ -877,7 +877,7 @@ Represents a policy associated with a tenant.
 
 > **Note**: The PowerShell module normalizes policy names to `PolicyName` for consistency across different policy types.
 
-> **Policy type name**: v1 sends `policyTypeName` (mapped to `inforcerPolicyTypeName`); the beta list currently sends no type name. `Export-InforcerTenantDocumentation` then fills its "Profile type" column from `policyTypeId`, using names the inforcer API returned for that id; ids without a known name stay blank. Note that v1 `/policies` and `alignmentDetails` use different names for some ids.
+> **Policy type name**: v1 sends `policyTypeName` (mapped to `inforcerPolicyTypeName`); the beta list currently sends no type name. `Export-InforcerTenantDocumentation` then fills its "Profile type" column from `policyTypeId`, using names the inforcer API returned for that id; ids without a known name stay blank. Since 2026-11-05 v1 `/policies` and `alignmentDetails` use the same name per id; `alignmentDetails` keeps the older label in `policyTypeFriendlyName`.
 
 ---
 

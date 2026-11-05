@@ -13,7 +13,7 @@ inforcer now has a versioned API (v1) with API clients that log in with a client
 - **`Connect-Inforcer -ClientId <id> -ClientSecret <secret> -Region uk`** logs in with an inforcer API client and uses the v1 API. The access token is requested at connect and renewed automatically before it expires, or once after a `401`. The secret may be a `SecureString` or a string. `-PassThru`, verbose output and error records never contain the secret, key or token.
 - **Every cmdlet works with both logins and returns the module's usual property names.** v1 responses are mapped to the existing names, so most scripts run unchanged. v1-only fields are added, and fields v1 does not have are absent (most visibly `ClientTenantId`; use `MsTenantId`).
 - **`-TenantId` takes a Microsoft tenant ID (GUID) or a tenant name with both logins.** Numeric tenant IDs only work with an API key; with client credentials they fail with an error that says what to pass instead.
-- **`Get-InforcerTenant -Detailed`** fetches the full tenant details (licenses, tags, secure score, alignment summaries, baseline flag) on v1, whose tenant list returns only name, DNS name and tenant ID. With an API key the switch is ignored, so scripts can pass it with both logins.
+- **`Invoke-InforcerAssessment` shows inforcer's own compliance score with client credentials**, the number the portal shows. With an API key it is still `Pass ÷ (Pass + Fail)`.
 - **v1 rate limits are handled:** a `429` is retried up to 3 times, honouring `Retry-After` (at most 300 s per wait). Report-file downloads are not retried on `429`. API-key behaviour is unchanged (a `429` fails at once).
 - **Intune gap warning.** The v1 policies endpoint currently returns no Intune policies and no Defender settings-catalog policies, without reporting an error. `Get-InforcerTenantPolicies` warns when that happens. `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` add a note to the report. Until inforcer fixes this, use an API key for Intune documentation and comparisons.
 - **`Compare-InforcerEnvironments` can compare across logins:** pass one session from each login with `-SourceSession` / `-DestinationSession`.
@@ -42,6 +42,7 @@ API-key output is identical to 0.8.0 (checked live, side by side), except for th
 - **Exported files neutralise formulas:** Excel documentation writes values that start with `=` as text (`'=…`) and no longer turns web addresses into links; `Invoke-InforcerAssessment` CSV files prefix values that start with `=`, `+`, `-`, `@`, a tab or a carriage return with `'`. Markdown documentation encodes `&`, `<` and `>` (same text once rendered), and HTML reports show names with quotes or markup as plain text.
 - **The settings catalog updates again** when a newer catalog is released (it never refreshed after the first download), and a broken or oversized download no longer replaces the cached catalog.
 - **Piping tenants into `Get-InforcerBaseline` or `Get-InforcerAlignmentDetails`** reads baselines and scores once per call, so results no longer repeat.
+- `Get-InforcerAlignmentDetails -Tag` with a tag no tenant has returns no rows and a warning; it used to return every row. The same goes for piped tenants that do not exist.
 - `Get-InforcerAuditEvent` without `-EventType` makes one search instead of one per 10 event types. Events come back in the API's order instead of grouped by type, `-MaxResults` returns the first events of that order, and the call no longer refreshes the `-EventType` completion list. Events whose type the old per-type search missed, such as `apiKeyCreate` and `apiClientCreate`, are now returned.
 - `Export-InforcerTenantDocumentation`:
   - The "Profile type" column is filled again (from the policy type id; the legacy API stopped sending the name).
@@ -55,8 +56,7 @@ API-key output is identical to 0.8.0 (checked live, side by side), except for th
 1. Create an API client in the inforcer portal (Configure > REST API) and grant the permissions for the cmdlets you use. The secret is shown once; keep it in a vault or as a `SecureString`.
 2. Replace `Connect-Inforcer -ApiKey $key` with `Connect-Inforcer -ClientId $id -ClientSecret $secret`.
 3. Replace numeric tenant IDs with the Microsoft tenant ID or tenant name, and read `MsTenantId` instead of `ClientTenantId`.
-4. Add `-Detailed` where a script reads licenses, tags, secure score, alignment summaries or `IsBaseline` from `Get-InforcerTenant`.
-5. Keep an API key for Intune documentation and comparisons until inforcer's v1 returns Intune policies (see the Intune gap above).
+4. Keep an API key for Intune documentation and comparisons until inforcer's v1 returns Intune policies (see the Intune gap above).
 
 The full per-object difference list is in [docs/API-REFERENCE.md](docs/API-REFERENCE.md#v1-api-client-credentials); the login table is in the README.
 

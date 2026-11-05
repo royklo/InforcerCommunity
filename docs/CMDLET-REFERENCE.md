@@ -151,14 +151,14 @@ WARNING: Not connected. To connect, run: Connect-Inforcer -ClientId <ClientId> -
 
 Retrieves tenant information. Optionally filter by `-TenantId` (Microsoft Tenant ID GUID or tenant name; the numeric Client Tenant ID only with an API key). Licenses are shown as a comma-separated string; `PolicyDiff` shows policy change info when the API provides it.
 
-- **API-key login (beta):** the list already holds every field (`ClientTenantId`, licenses, `SecureScore`, `IsBaseline`, tags, alignment summaries), so `-Detailed` changes nothing and is ignored. That keeps scripts portable between both logins.
-- **Client-credentials login (v1):** the list holds only `TenantFriendlyName`, `TenantDnsName` and `MsTenantId`. `-Detailed`, or `-TenantId`, loads each tenant's full record (licenses, `SecureScore`, `IsBaseline`, tags, alignment summaries, `LastBackupTimestamp`, `AuthenticationMode`) with one extra call per tenant, with throttling (`Retry-After`) and a progress bar. `-TenantId <GUID>` makes only that one call; a name is first looked up in the tenant list. `ClientTenantId` does not exist on v1.
+- **Both logins:** the list holds every field (licenses, `SecureScore`, `IsBaseline`, tags, alignment summaries, `LastBackupTimestamp`).
+- **Client-credentials login (v1):** `ClientTenantId` does not exist. `-TenantId` loads the tenant's own record, which adds `AuthenticationMode`; `-TenantId <GUID>` makes only that one call, a name is first looked up in the tenant list.
 - **`-TenantId` always returns the current record:** with an API key the tenant list is fetched once per call (piped tenants share that fetch); with client credentials the tenant is fetched by id.
 - **JSON:** with client credentials `-OutputType JsonObject` is always a JSON array, also for one tenant. With an API key a single tenant is a bare JSON object, as in 0.8.0.
 
 **Endpoints called (beta)**: `GET /beta/tenants`
 **Required API scope(s) (API key, beta)**: `Tenants.Read`
-**Endpoints on v1**: `GET /v1/tenants`; with `-Detailed` also `GET /v1/tenants/{msTenantId}` per tenant; `-TenantId <GUID>` calls only `GET /v1/tenants/{msTenantId}` (a name also reads the tenant list)
+**Endpoints on v1**: `GET /v1/tenants`; `-TenantId <GUID>` calls only `GET /v1/tenants/{msTenantId}` (a name also reads the tenant list)
 **Required API client permission(s) (v1)**: Tenants *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`
@@ -166,21 +166,20 @@ Retrieves tenant information. Optionally filter by `-TenantId` (Microsoft Tenant
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
-| **TenantId** | Object | No | Filter to this tenant and return its full record: Microsoft tenant ID (GUID), tenant name or DNS name; numeric Client Tenant ID with an API key only. Aliases: `ClientTenantId`, `MsTenantId`. |
-| **Detailed** | Switch | No | Load the full record of every tenant (v1; no-op with an API key). |
+| **TenantId** | Object | No | Filter to this tenant: Microsoft tenant ID (GUID), tenant name or DNS name; numeric Client Tenant ID with an API key only. Aliases: `ClientTenantId`, `MsTenantId`. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
 
 ```powershell
 Get-InforcerTenant
-Get-InforcerTenant -Detailed | Where-Object IsBaseline
+Get-InforcerTenant | Where-Object IsBaseline
 Get-InforcerTenant -TenantId 'Contoso'
 Get-InforcerTenant -TenantId 102            # API key only (numeric Client Tenant ID)
 Get-InforcerTenant -OutputType JsonObject
 ```
 
-### Example output — list of tenants (API key, or client credentials with -Detailed)
+### Example output — list of tenants (API key; client credentials has no ClientTenantId)
 
 ```
 ClientTenantId      : 101
@@ -204,21 +203,9 @@ LastBackupTimestamp : 2025-03-01T09:00:00Z
 
 The default view shows 8 key properties. Use `| Select-Object *` to see all properties including `alignmentSummaries`, `policyDiff`, `tags`, and `recentChanges`.
 
-### Example output — list of tenants (client credentials, without -Detailed)
-
-```
-MsTenantId          : 00000000-0000-0000-0000-000000000001
-TenantFriendlyName  : Contoso Ltd
-TenantDnsName       : contoso.onmicrosoft.com
-
-MsTenantId          : 00000000-0000-0000-0000-000000000002
-TenantFriendlyName  : Fabrikam Inc
-TenantDnsName       : fabrikam.onmicrosoft.com
-```
-
 ### Example output — single tenant with -TenantId
 
-Same shape as one of the detailed objects above (one tenant). With client credentials it has no `ClientTenantId` and adds `AuthenticationMode`.
+Same shape as one of the objects above (one tenant). With client credentials it has no `ClientTenantId` and adds `AuthenticationMode`.
 
 ---
 
@@ -331,7 +318,7 @@ Retrieves alignment scores or detailed alignment data. **Format Table** (default
 
 **Endpoints called (beta)**: `GET /beta/baselines`, `GET /beta/alignmentScores`, `GET /beta/tenants`, `GET /beta/tenants/{tenantId}/alignmentDetails`
 **Required API scope(s) (API key, beta)**: `Baselines.Read` + `AlignmentScores.Read` + `Tenants.Read` + `tenants.policies.Read`
-**Endpoints on v1**: `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails`; with `-Tag` also `GET /v1/tenants/{msTenantId}` per tenant (tags are only on the full tenant record)
+**Endpoints on v1**: `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails`
 **Required API client permission(s) (v1)**: Baselines + Align + Tenants *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schema**: [AlignmentScore](./API-REFERENCE.md#alignmentscore) — includes `score`, `baselineGroupId`, `lastComparisonDateTime`
@@ -341,7 +328,7 @@ Retrieves alignment scores or detailed alignment data. **Format Table** (default
 | **Format** | String | No | `Table` (default) or `Raw`. |
 | **TenantId** | Object | No | Filter to this tenant (Microsoft tenant ID (GUID) or tenant name; numeric Client Tenant ID with an API key only). Aliases: `ClientTenantId`, `MsTenantId`. When used with `-BaselineId`, queries that specific tenant. |
 | **BaselineId** | String | No | Baseline GUID or friendly name. When used alone (without `-TenantId`), queries the first member tenant (baseline policies are identical across members). |
-| **Tag** | String | No | When Format is Table (without `-BaselineId`), filter to tenants with tag containing this value (case-insensitive). |
+| **Tag** | String | No | When Format is Table (without `-BaselineId`), filter to tenants with tag containing this value (case-insensitive). No match returns no rows and a warning. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -415,7 +402,7 @@ A JSON string (array of objects) with properties such as `tenantId`, `tenantFrie
 
 Retrieves audit events from the inforcer API. Supports optional `-EventType`, `-DateFrom`, `-DateTo`, `-User`, `-PageSize`, and `-MaxResults`.
 
-> **v1:** events have no `ClientId`, `Message`, `RelId` or `RelType`; there are 130 event types (beta: 139).
+> **v1:** events have no `ClientId` or `Message`. v1 lists only the event types a partner can see, including the API client events (`apiClientCreate`, `apiClientTokenReject`, ...); beta also lists internal types and types still in development.
 
 > **Personal data:** events carry user names, UPNs and IP addresses. See [Personal data](#personal-data).
 
@@ -1073,7 +1060,7 @@ Scores           : {@{objectId=00000000-0000-0000-0000-000000000001; score=100; 
 
 ### Status values
 
-`Status` is `Pass`, `Fail`, `InsufficientPermissions` or `Error`. The last two mean the API could not assess the check (missing permissions, or data that could not be read from the tenant). They are not counted as failures: the compliance score is `Pass ÷ (Pass + Fail)`, and the HTML reports show them as **Not Assessed**. Multi-tenant `-OutputType JsonObject` reports them per tenant as `NotAssessed`, next to `Passed` and `Failed`.
+`Status` is `Pass`, `Fail`, `InsufficientPermissions` or `Error`. The last two mean the API could not assess the check (missing permissions, or data that could not be read from the tenant). They are not counted as failures, and the HTML reports show them as **Not Assessed**. The compliance score is inforcer's own score with client credentials (the run's `summary.score`, the number the portal shows, rounded down to a whole percentage); with an API key, which has no score, it is `Pass ÷ (Pass + Fail)` to one decimal. Multi-tenant `-OutputType JsonObject` reports them per tenant as `NotAssessed`, next to `Passed` and `Failed`.
 
 ---
 

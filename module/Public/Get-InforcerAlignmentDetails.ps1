@@ -16,7 +16,7 @@
 
     API-key login: table rows identify the tenant by TargetTenantClientTenantId.
     Client-credentials login: numeric tenant ids do not exist; table rows carry TargetTenantMsTenantId
-    instead, and -Tag loads every tenant's record (one call per tenant) because only that holds tags.
+    instead.
 
     Piped tenants (Get-InforcerTenant | Get-InforcerAlignmentDetails): scores, baselines and tenant
     records are fetched once for the whole pipeline, each row carries TenantId, no row repeats, and
@@ -32,7 +32,7 @@
     Optional. Baseline GUID or friendly name. When provided, retrieves detailed alignment
     data. Without -TenantId, queries the first member tenant of the baseline.
 .PARAMETER Tag
-    Optional. When Format is Table (without -BaselineId), filter to tenants with tag containing this value (case-insensitive).
+    Optional. When Format is Table (without -BaselineId), filter to tenants with tag containing this value (case-insensitive). No match returns no rows and a warning.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON uses Depth 100.
 .EXAMPLE
@@ -448,44 +448,52 @@ $needTenants = (-not $flatFormat) -or $anyTenantRequested -or -not [string]::IsN
 $allTenants = @()
 if ($needTenants) {
     Write-Verbose 'Retrieving tenant information for alignment table...'
-    $allTenants = @(if ($isV1 -and -not [string]::IsNullOrWhiteSpace($Tag)) {
-        # v1 tenant tags exist only on the per-tenant record.
-        Get-InforcerTenant -Detailed
-    } else {
-        Get-InforcerTenantList
-    })
+    $allTenants = @(Get-InforcerTenantList)
     if ($allTenants.Count -eq 0) { return }
 }
 
-# beta: add to $targetIds any tenant that is aligned to a baseline owned by an ID in $baselineOwnerIds
+# Add to $targetIds every tenant aligned to a baseline owned by an id in $baselineOwnerIds,
+# read from the tenant list's alignmentSummaries (beta alignedBaselineTenantId, v1 alignedBaselineMsTenantId).
 function Add-ChildTenantIdsFromAlignments {
     param([System.Collections.Hashtable]$targetIds, [array]$allTenants, [array]$baselineOwnerIds)
+    $ownerName = if ($isV1) { 'alignedBaselineMsTenantId' } else { 'alignedBaselineTenantId' }
     foreach ($t in $allTenants) {
         if (-not ($t -is [PSObject])) { continue }
         $sumProp = $t.PSObject.Properties['alignmentSummaries']
         if (-not $sumProp -or $null -eq $sumProp.Value) { continue }
-        $sums = $sumProp.Value
-        if ($sums -isnot [object[]]) { $sums = @($sums) }
-        foreach ($s in $sums) {
+        foreach ($s in @($sumProp.Value)) {
             if (-not ($s -is [PSObject])) { continue }
-            $abtProp = $s.PSObject.Properties['alignedBaselineTenantId']
-            if ($abtProp -and $null -ne $abtProp.Value) {
-                $abt = 0
-                if ([int]::TryParse($abtProp.Value.ToString(), [ref]$abt) -and ($baselineOwnerIds -contains $abt)) {
-                    $childId = 0
-                    $childProp = $t.PSObject.Properties['clientTenantId']
-                    if ($childProp -and [int]::TryParse($childProp.Value.ToString(), [ref]$childId)) {
-                        $targetIds[$childId] = $true
-                    }
-                }
+            $ownerProp = $s.PSObject.Properties[$ownerName]
+            if (-not $ownerProp -or $null -eq $ownerProp.Value) { continue }
+            $owner = $ownerProp.Value.ToString()
+            if (-not $isV1) {
+                $n = 0
+                if (-not [int]::TryParse($owner, [ref]$n)) { continue }
+                $owner = $n
             }
+            if ($baselineOwnerIds -notcontains $owner) { continue }
+            $childId = Get-TenantKey $t
+            if ($null -ne $childId) { $targetIds[$childId] = $true }
         }
     }
+}
+
+# True when one of the tenant's tags contains $Tag (v1 tags are {name, description}; beta tags are strings).
+function Test-TenantTag($Tenant) {
+    $tagsProp = $Tenant.PSObject.Properties['tags']
+    if (-not $tagsProp -or $null -eq $tagsProp.Value) { return $false }
+    foreach ($x in @($tagsProp.Value)) {
+        $text = if ($x -is [PSObject] -and $x.PSObject.Properties['name']) { $x.PSObject.Properties['name'].Value } else { $x }
+        if ($text -and $text.ToString().IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+    }
+    $false
 }
 
 # Only filter by tenant when a tenant or -Tag was given; otherwise show all alignment rows.
 # Piped tenants: the union of what each tenant alone would select, built once.
 $tenantIds = @{}
+# A requested tenant or -Tag that matches nothing must return nothing, not every row.
+$filterTenants = $anyTenantRequested -or -not [string]::IsNullOrWhiteSpace($Tag)
 foreach ($requestedTenantId in $requested) {
     $tenants = @($allTenants | Where-Object { $_ -is [PSObject] })
 
@@ -508,24 +516,7 @@ foreach ($requestedTenantId in $requested) {
 
     if (-not [string]::IsNullOrWhiteSpace($Tag)) {
         Write-Verbose "Filtering to tenants with tag containing: $Tag"
-        $tenants = @($tenants | Where-Object {
-            $tagsProp = $_.PSObject.Properties['tags']
-            if (-not $tagsProp -or $null -eq $tagsProp.Value) { return $false }
-            $val = $tagsProp.Value
-            if ($isV1) {
-                foreach ($x in @($val)) {
-                    $text = if ($x -is [PSObject] -and $x.PSObject.Properties['name']) { $x.PSObject.Properties['name'].Value } else { $x }
-                    if ($text -and $text.ToString().IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
-                }
-            } elseif ($val -is [object[]]) {
-                foreach ($x in $val) {
-                    if ($x -and $x.ToString().IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
-                }
-            } else {
-                if ($val.ToString().IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
-            }
-            $false
-        })
+        $tenants = @($tenants | Where-Object { Test-TenantTag $_ })
     }
 
     if ($null -eq $requestedTenantId -and [string]::IsNullOrWhiteSpace($Tag)) { continue }
@@ -536,22 +527,13 @@ foreach ($requestedTenantId in $requested) {
     }
     # If the requested tenant is a baseline owner, also include tenants aligned TO it
     if ($null -ne $requestedTenantId -and $selectedIds.Count -gt 0) {
-        $baselineOwnerIds = @($selectedIds.Keys)
-        if ($isV1) {
-            # v1 tenants carry no alignmentSummaries in the list; baseline members are the aligned tenants.
-            if ($null -eq $allBaselines) { $allBaselines = @(Get-InforcerBaselineList -Refresh) }
-            foreach ($bl in $allBaselines) {
-                if ($bl -isnot [PSObject] -or "$($bl.PSObject.Properties['baselineMsTenantId'].Value)" -notin $baselineOwnerIds) { continue }
-                foreach ($m in @($bl.PSObject.Properties['members'].Value)) {
-                    $mId = if ($m -is [PSObject]) { Get-TenantKey $m }
-                    if ($null -ne $mId) { $selectedIds[$mId] = $true }
-                }
-            }
-        } else {
-            Add-ChildTenantIdsFromAlignments -targetIds $selectedIds -allTenants $allTenants -baselineOwnerIds $baselineOwnerIds
-        }
+        Add-ChildTenantIdsFromAlignments -targetIds $selectedIds -allTenants $allTenants -baselineOwnerIds @($selectedIds.Keys)
     }
     foreach ($id in $selectedIds.Keys) { $tenantIds[$id] = $true }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Tag) -and -not @($allTenants | Where-Object { $_ -is [PSObject] -and (Test-TenantTag $_) }).Count) {
+    Write-Warning "No tenant has a tag matching '$Tag'."
 }
 
 Write-Verbose "Building alignment table from alignment scores ($($allAlignmentData.Count) source(s))..."
@@ -567,7 +549,7 @@ if ($flatFormat) {
 
         if ($isV1) {
             $targetTenantMsTenantId = Get-TenantKey $item
-            if ($tenantIds.Count -gt 0 -and ($null -eq $targetTenantMsTenantId -or -not $tenantIds.ContainsKey($targetTenantMsTenantId))) { continue }
+            if ($filterTenants -and ($null -eq $targetTenantMsTenantId -or -not $tenantIds.ContainsKey($targetTenantMsTenantId))) { continue }
             $row = [PSCustomObject]@{
                 TargetTenantFriendlyName    = ($item.PSObject.Properties['tenantFriendlyName'].Value -as [string])
                 TargetTenantMsTenantId      = $targetTenantMsTenantId
@@ -584,7 +566,7 @@ if ($flatFormat) {
             if ($tidProp -and $null -ne $tidProp.Value) {
                 if (-not [int]::TryParse($tidProp.Value.ToString(), [ref]$targetTenantClientTenantId)) { continue }
             }
-            if ($tenantIds.Count -gt 0 -and -not $tenantIds.ContainsKey($targetTenantClientTenantId)) { continue }
+            if ($filterTenants -and -not $tenantIds.ContainsKey($targetTenantClientTenantId)) { continue }
             $row = [PSCustomObject]@{
                 TargetTenantFriendlyName    = ($item.PSObject.Properties['tenantFriendlyName'].Value -as [string])
                 TargetTenantClientTenantId  = $targetTenantClientTenantId
@@ -606,7 +588,7 @@ if ($flatFormat) {
         if ($null -ne $cidProp -and $null -ne $cidProp.Value) {
             if (-not [int]::TryParse($cidProp.Value.ToString(), [ref]$targetTenantClientTenantId)) { continue }
         }
-        if ($tenantIds.Count -gt 0 -and -not $tenantIds.ContainsKey($targetTenantClientTenantId)) { continue }
+        if ($filterTenants -and -not $tenantIds.ContainsKey($targetTenantClientTenantId)) { continue }
 
         $summariesProp = $tenant.PSObject.Properties['alignmentSummaries']
         if (-not $summariesProp -or $null -eq $summariesProp.Value) { continue }

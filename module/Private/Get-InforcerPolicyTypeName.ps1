@@ -4,10 +4,10 @@ function Get-InforcerPolicyTypeName {
         Returns the inforcer policy type name for a policyTypeId, or '' when it is not known (Private helper).
     .DESCRIPTION
         The beta /tenants/{id}/policies list stopped sending inforcerPolicyTypeName, which left the
-        Export "Profile type" column empty. This table puts the name back. Every entry is a name the
-        inforcer API itself returned for that id (2026-11-03/04): v1 /tenants/{id}/policies
-        policyTypeName first, v1 alignmentDetails policyTypeName for ids the v1 policies list never
-        returns (alignmentDetails uses different names for many ids, so it is only the fallback).
+        Export "Profile type" column empty. This table puts the name back. Every entry is the
+        policyTypeName the inforcer v1 API returned for that id on 2026-11-05, from
+        /tenants/{id}/policies or /tenants/{id}/alignmentDetails (both routes use the same name since
+        ENG-6992; alignmentDetails keeps the older label in policyTypeFriendlyName).
         Ids without such evidence are left out on purpose and stay blank.
         Remove this helper and its one caller in ConvertTo-InforcerDocModel once beta sends the field
         again (see .claude/FINDINGS.md).
@@ -25,11 +25,12 @@ function Get-InforcerPolicyTypeName {
 $script:InforcerPolicyTypeNames = @{
     1     = 'Conditional Access Policy'
     2     = 'Conditional Access Named Location'
-    3     = 'Device Compliance'
-    4     = 'Device Configuration'
-    6     = 'Managed App'
-    9     = 'Windows Autopilot Deployment Profile'
-    10    = 'Configuration'
+    3     = 'Device Compliance Policy'
+    4     = 'Device Configuration Policy'
+    6     = 'Managed App Policies'
+    8     = 'Intune Settings V2'
+    9     = 'Windows Autopilot Deployment Profiles'
+    10    = 'Intune Configuration Policies'
     12    = 'Azure AD'
     14    = 'SharePoint'
     15    = 'Exchange'
@@ -42,9 +43,11 @@ $script:InforcerPolicyTypeNames = @{
     23    = 'Exchange Spam Policy (inbound)'
     24    = 'Exchange Spam Policy (outbound)'
     25    = 'Mail Flow Rules'
-    28    = 'Feature Update Profile'
+    28    = 'Feature update profiles'
     33    = 'Quarantine Policy'
-    35    = 'Intune Script Mac Os'
+    34    = 'Intune Script (Windows)'
+    35    = 'Intune Script (Mac)'
+    37    = 'Detection and Remediation Script'
     40    = 'Teams Meeting Policies'
     60    = 'Intune Settings'
     61    = 'Password Expiration Policy'
@@ -59,9 +62,11 @@ $script:InforcerPolicyTypeNames = @{
     100   = 'Autopilot Esp'
     101   = 'Defender For Endpoint Settings'
     103   = 'Windows Quality Update Policy'
+    104   = 'Device Compliance Script'
+    10199 = 'Intune Role'
     10224 = 'Intune Windows Store Apps'
     10349 = 'System Preferred Authentication'
-    10441 = 'Role Scope Tags'
+    10441 = 'Scope Tags'
     20227 = 'Exchange ExternalInOutlook'
     20238 = 'Teams Events Policies'
     20255 = 'Exchange Organization Config'

@@ -8,23 +8,18 @@
     When the API returns licenses as an array, it is converted to a comma-separated string in the
     licenses property. PolicyDiff shows policy change information when available.
 
-    API-key login: the list already holds every tenant field (ClientTenantId, licenses, SecureScore,
-    IsBaseline, tags, alignmentSummaries, ...), so -Detailed changes nothing.
-    Client-credentials login: the list holds only TenantFriendlyName, TenantDnsName and MsTenantId.
-    -Detailed, or -TenantId, loads each tenant's full record (licenses, SecureScore, IsBaseline, tags,
-    alignmentSummaries, LastBackupTimestamp, AuthenticationMode) with one extra call per tenant.
-    -TenantId <GUID> makes that one call only; a name is first resolved from the session's tenant list.
-    With client credentials -OutputType JsonObject is always a JSON array, also for one tenant.
+    The list holds every tenant field (licenses, SecureScore, IsBaseline, tags, alignmentSummaries, ...)
+    with both logins. Client-credentials login: -TenantId loads the tenant's own record, which adds
+    AuthenticationMode; -TenantId <GUID> makes that one call only, a name is first resolved from the
+    session's tenant list. With client credentials -OutputType JsonObject is always a JSON array, also
+    for one tenant.
 
     ClientTenantId does not exist with client credentials; use MsTenantId or the tenant name.
 .PARAMETER Format
     Output format. Raw = raw API response (default).
 .PARAMETER TenantId
-    Optional. Return this tenant only, with its full record. Accepts the Microsoft Tenant ID (GUID),
-    the tenant name or DNS name, or (API-key login only) the numeric Client Tenant ID.
-.PARAMETER Detailed
-    Load the full record of every tenant. Client-credentials login only; with an API key the list is
-    already complete and the switch is ignored, so scripts work with both logins.
+    Optional. Return this tenant only. Accepts the Microsoft Tenant ID (GUID), the tenant name or
+    DNS name, or (API-key login only) the numeric Client Tenant ID.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 .EXAMPLE
@@ -34,10 +29,10 @@
     API-key login: returns the tenant with Client Tenant ID 102.
 .EXAMPLE
     Get-InforcerTenant -TenantId 'Contoso'
-    Returns the tenant named Contoso with its full record (works with both logins).
+    Returns the tenant named Contoso (works with both logins).
 .EXAMPLE
-    Get-InforcerTenant -Detailed | Where-Object IsBaseline
-    Lists baseline tenants. With client credentials -Detailed is needed for IsBaseline.
+    Get-InforcerTenant | Where-Object IsBaseline
+    Lists baseline tenants.
 .EXAMPLE
     Get-InforcerTenant -Format Raw -OutputType JsonObject
 .OUTPUTS
@@ -58,9 +53,6 @@ param(
     [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
     [Alias('ClientTenantId', 'MsTenantId')]
     [object]$TenantId,
-
-    [Parameter(Mandatory = $false)]
-    [switch]$Detailed,
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('PowerShellObject', 'JsonObject')]
@@ -121,32 +113,6 @@ process {
         $tenantData = @(Get-InforcerTenantList -Refresh:(-not $listRefreshed))
         $listRefreshed = $true
         if ($tenantData.Count -eq 0) { return }
-    }
-
-    if ($null -eq $TenantId -and $isV1 -and $Detailed) {
-        $seenIds = @{}
-        $unique = @(foreach ($t in $tenantData) {
-            $id = $t.PSObject.Properties['msTenantId'].Value
-            if ($null -eq $id -or $seenIds.ContainsKey("$id")) { continue }
-            $seenIds["$id"] = $true
-            $t
-        })
-        $details = [System.Collections.Generic.List[object]]::new($unique.Count)
-        for ($i = 0; $i -lt $unique.Count; $i++) {
-            $t = $unique[$i]
-            $name = $t.PSObject.Properties['tenantFriendlyName'].Value
-            Write-Progress -Activity 'Loading tenant details' -Status "$($i + 1) of $($unique.Count): $name" -PercentComplete ([int](100 * $i / $unique.Count))
-            $detailErr = $null
-            $detail = Invoke-InforcerApiRequest -Endpoint "/tenants/$($t.msTenantId)" -Method GET -ObjectType Tenant -ErrorAction SilentlyContinue -ErrorVariable detailErr
-            if ($null -eq $detail) {
-                $reason = if ($detailErr) { $detailErr[-1].Exception.Message } else { 'empty response' }
-                Write-Warning "Could not load details for tenant '$name'; returning its summary. $reason"
-                $detail = $t
-            }
-            $details.Add($detail)
-        }
-        Write-Progress -Activity 'Loading tenant details' -Completed
-        $tenantData = $details.ToArray()
     }
 
     if ($OutputType -eq 'JsonObject') {

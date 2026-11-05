@@ -250,7 +250,7 @@ function sCol(s){return s>=90?'var(--pass)':s>=70?'var(--cyan)':'var(--fail)'}
 function buildCbs(){
   var h='';T.forEach(function(t,i){
     var c=sCol(t.score);
-    h+='<label><input type=checkbox checked data-i="'+i+'">'+esc(t.name)+'<span class="t-score" style="color:'+c+'">'+t.score+'%</span></label>';
+    h+='<label><input type=checkbox checked data-i="'+i+'">'+esc(t.name)+'<span class="t-score" style="color:'+c+'">'+esc(t.score)+'%</span></label>';
   });
   document.getElementById('tCbs').innerHTML=h;
 }
@@ -294,7 +294,7 @@ function render(){
   var th='<tr><th>Check</th>';
   vt.forEach(function(t){
     var c=sCol(t.score);
-    th+='<th>'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span><span class="th-detail">'+t.passed+' / '+(t.passed+t.failed)+' passed</span>'+(t.na?'<span class="th-detail">'+t.na+' not assessed</span>':'')+'</th>';
+    th+='<th>'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+esc(t.score)+'%</span><span class="th-detail">'+t.passed+' / '+(t.passed+t.failed)+' passed</span>'+(t.na?'<span class="th-detail">'+t.na+' not assessed</span>':'')+'</th>';
   });
   th+='</tr>';document.getElementById('mHead').innerHTML=th;
   // Body

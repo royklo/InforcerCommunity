@@ -38,7 +38,7 @@
         PSData = @{
             ProjectUri   = 'https://github.com/royklo/InforcerCommunity'
             LicenseUri   = 'https://github.com/royklo/InforcerCommunity/blob/main/LICENSE'
-            ReleaseNotes = 'v1.0.0: log in with an inforcer API client (Connect-Inforcer -ClientId/-ClientSecret) to use the versioned v1 API; API keys keep working on the legacy beta API with a warning. Every cmdlet works with both logins, -TenantId takes a tenant GUID or name, Get-InforcerTenant -Detailed adds full tenant details on v1. Piping several tenants now handles all of them. See CHANGELOG.md for the API-key changes and migration steps.'
+            ReleaseNotes = 'v1.0.0: log in with an inforcer API client (Connect-Inforcer -ClientId/-ClientSecret) to use the versioned v1 API; API keys keep working on the legacy beta API with a warning. Every cmdlet works with both logins, -TenantId takes a tenant GUID or name. Piping several tenants now handles all of them. See CHANGELOG.md for the API-key changes and migration steps.'
             Tags         = @('Inforcer', 'API', 'Community')
         }
     }

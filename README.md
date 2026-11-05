@@ -78,11 +78,8 @@ Always run `Import-Module` from the **repository root** and use `./module/Inforc
 $secret = Read-Host -AsSecureString -Prompt 'Client secret'
 Connect-Inforcer -ClientId '<client-id>' -ClientSecret $secret -Region uk
 
-# List tenants (name, DNS name and Microsoft tenant ID)
+# List tenants (licenses, secure score, baseline flag, tags, alignment)
 Get-InforcerTenant
-
-# Full tenant records (licenses, secure score, baseline flag, tags, alignment) - one extra call per tenant
-Get-InforcerTenant -Detailed
 
 # Tenants are addressed by Microsoft tenant ID (GUID) or name
 Get-InforcerTenantPolicies -TenantId '00000000-0000-0000-0000-000000000000'
@@ -138,7 +135,7 @@ inforcer's API keys use the **legacy beta API**, which inforcer says is due to b
 | Login | `Connect-Inforcer -ApiKey $key -Region uk` | `Connect-Inforcer -ClientId $id -ClientSecret $secret -Region uk` |
 | Tenant ID | numeric Client Tenant ID, Microsoft tenant ID (GUID) or name | Microsoft tenant ID (GUID) or tenant name. A numeric ID fails with an error that says to use the GUID or name (`InvalidTenantId`; `TenantResolutionFailed` in `Invoke-InforcerReport`). |
 | `ClientTenantId` property | present | **absent** (use `MsTenantId`) |
-| `Get-InforcerTenant` | rich objects | name, DNS name and Microsoft tenant ID; add `-Detailed` (or `-TenantId`) for the rich fields. `-Detailed` is ignored with an API key, so scripts work with both logins. |
+| `Get-InforcerTenant` | rich objects | the same rich objects, without `ClientTenantId` |
 | Permissions | key scopes (`Tenants.Read`, ...) | API client permissions plus optional tenant filters, set in the portal |
 | Rate limit | 400 calls/hour per key; a throttled (`429`) call fails at once | 400 calls/minute per partner; throttled calls are retried using `Retry-After` (up to 3 times, at most 300 s each). Report-file downloads are not retried on `429`. |
 | Output | unchanged | the same property names; v1 responses are mapped to them. v1-only fields are added; fields v1 does not have are missing. |
@@ -148,8 +145,7 @@ Steps:
 1. Create an API client in the inforcer portal (Configure > REST API) and grant the permissions for the cmdlets you use. Keep the secret in a vault or SecureString; it is shown once.
 2. Replace the `Connect-Inforcer -ApiKey` line with the `-ClientId`/`-ClientSecret` form.
 3. Replace numeric tenant IDs with the Microsoft tenant ID or name (`Get-InforcerTenant` lists them). Scripts that read `ClientTenantId` should read `MsTenantId`.
-4. Add `-Detailed` where a script reads `IsBaseline`, licenses, tags, `SecureScore` or alignment summaries from `Get-InforcerTenant`.
-5. **Intune gap for now:** the v1 tenant policies endpoint currently returns no Intune policies (and no Defender settings-catalog policies, type 10), with no error. `Get-InforcerTenantPolicies` warns about it once per tenant, and `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` add a note to their reports (no second warning). Until inforcer fixes this, use an API key for Intune-centred documentation and comparison. API-key output is unchanged.
+4. **Intune gap for now:** the v1 tenant policies endpoint currently returns no Intune policies (and no Defender settings-catalog policies, type 10), with no error. `Get-InforcerTenantPolicies` warns about it once per tenant, and `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments` add a note to their reports (no second warning). Until inforcer fixes this, use an API key for Intune-centred documentation and comparison. API-key output is unchanged.
 
 The full list of differences per object is in the [API Reference](docs/API-REFERENCE.md#v1-api-client-credentials).
 
@@ -183,7 +179,7 @@ Some output contains personal data (names, UPNs, email addresses, IP addresses, 
 | **Connect-Inforcer**           | Establishes a secure connection to the inforcer REST API with an API client (`-ClientId`/`-ClientSecret`, v1) or a legacy API key (`-ApiKey`, beta). Supports `-FetchGraphData` to also connect Microsoft Graph. |
 | **Disconnect-Inforcer**        | Disconnects and clears the session (including Graph if connected). |
 | **Test-InforcerConnection**    | Tests the API connection; returns `$true` or `$false`.      |
-| **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId; `-Detailed` loads the full record on v1). |
+| **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId). |
 | **Get-InforcerBaseline**       | Retrieves baseline groups and members.                      |
 | **Get-InforcerTenantPolicies** | Retrieves policies for a specified tenant.                  |
 | **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |

@@ -1280,6 +1280,40 @@ Describe 'Private helpers (via module scope)' {
             $json[0].ComplianceScore | Should -Be 50
         }
 
+        It 'uses the API score (v1 summary.score) when the run carries one, also for the HTML report' {
+            Mock -ModuleName InforcerCommunity Invoke-InforcerAssessmentRun { [PSCustomObject]@{ results = $script:runResults; summary = [PSCustomObject]@{ total = 6; assessed = 4; passed = 2; failed = 2; notRun = 2; score = 49 } } }
+            $json = Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputType JsonObject 6>$null | ConvertFrom-Json
+            $json[0].ComplianceScore | Should -Be 49
+            $json[0].Passed | Should -Be 2
+            $path = Join-Path $TestDrive 'api-score.html'
+            Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'a1' -OutputPath $path 6>$null | Out-Null
+            Get-Content -Raw $path | Should -Match '<span class="pct">49%</span>'
+        }
+
+        It 'ignores an API score that is not a number from 0 to 100 (<Label>) and computes it; the matrix escapes the score' -ForEach @(
+            @{ Label = 'markup'; Score = '<img src=x onerror=alert(1)>' }
+            @{ Label = 'numeric string'; Score = '90' }
+            @{ Label = 'above 100'; Score = 150 }
+            @{ Label = 'negative'; Score = -5 }
+            @{ Label = 'boolean'; Score = $true }
+            @{ Label = 'object'; Score = [PSCustomObject]@{ v = 1 } }
+        ) {
+            $script:badScore = $Score
+            Mock -ModuleName InforcerCommunity Invoke-InforcerAssessmentRun { [PSCustomObject]@{ results = $script:runResults; summary = [PSCustomObject]@{ score = $script:badScore } } }
+            $json = Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputType JsonObject 6>$null | ConvertFrom-Json
+            $json[0].ComplianceScore | Should -Be 50
+            $path = Join-Path $TestDrive "bad-score-$Label.html"
+            Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputPath $path 6>$null | Out-Null
+            Get-Content -Raw $path | Should -Not -Match 'onerror'
+            Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'a1' -OutputPath (Join-Path $TestDrive "bad-single-$Label.html") 6>$null | Out-Null
+        }
+
+        It 'computes the score when the API score is null (nothing assessed on v1)' {
+            Mock -ModuleName InforcerCommunity Invoke-InforcerAssessmentRun { [PSCustomObject]@{ results = $script:runResults; summary = [PSCustomObject]@{ score = $null } } }
+            $json = Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputType JsonObject 6>$null | ConvertFrom-Json
+            $json[0].ComplianceScore | Should -Be 50
+        }
+
         It 'writes the assessed counts, score and category percentage to the single-tenant HTML report' {
             $path = Join-Path $TestDrive 'report.html'
             Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'a1' -OutputPath $path 6>$null | Out-Null

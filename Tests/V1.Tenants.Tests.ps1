@@ -16,7 +16,7 @@ BeforeAll {
     function global:Reset-V1TenantsRoutes {
         $global:V1TenantsRoutes = [ordered]@{
             # v1 (client credentials)
-            '/v1/tenants$' = '{"tenants":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.onmicrosoft.com"},{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.onmicrosoft.com"}]}'
+            '/v1/tenants$' = '{"tenants":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.onmicrosoft.com","secureScore":50.5,"isBaseline":true,"lastBackupTimestamp":"2026-01-01T00:00:00Z","recentChanges":0,"policyDiff":null,"tags":[{"name":"Production","description":"Live tenants"}],"alignmentSummaries":[],"licenses":[{"sku":"SPE_E5"}]},{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.onmicrosoft.com","secureScore":40,"isBaseline":false,"lastBackupTimestamp":"2026-01-01T00:00:00Z","recentChanges":1,"policyDiff":null,"tags":[{"name":"Test","description":""}],"alignmentSummaries":[{"alignedBaselineId":"00000000-0000-0000-0000-0000000000b1","alignedBaselineMsTenantId":"00000000-0000-0000-0000-000000000001","alignedBaselineName":"Contoso Baseline","alignmentScore":80.5,"alignedThreshold":90,"semiAlignedThreshold":70,"lastAlignmentTimestamp":"2026-01-02T00:00:00Z"}],"licenses":[{"sku":"SPE_E3"},{"sku":"EMS"}]}]}'
             '/v1/tenants/00000000-0000-0000-0000-000000000001$' = '{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.onmicrosoft.com","secureScore":50.5,"isBaseline":true,"lastBackupTimestamp":"2026-01-01T00:00:00Z","recentChanges":0,"policyDiff":null,"tags":[{"name":"Production","description":"Live tenants"}],"alignmentSummaries":[],"licenses":[{"sku":"SPE_E5"}],"authenticationMode":"Standard"}'
             '/v1/tenants/00000000-0000-0000-0000-000000000002$' = '{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.onmicrosoft.com","secureScore":40,"isBaseline":false,"lastBackupTimestamp":"2026-01-01T00:00:00Z","recentChanges":1,"policyDiff":null,"tags":[{"name":"Test","description":""}],"alignmentSummaries":[{"alignedBaselineId":"00000000-0000-0000-0000-0000000000b1","alignedBaselineMsTenantId":"00000000-0000-0000-0000-000000000001","alignedBaselineName":"Contoso Baseline","alignmentScore":80.5,"alignedThreshold":90,"semiAlignedThreshold":70,"lastAlignmentTimestamp":"2026-01-02T00:00:00Z"}],"licenses":[{"sku":"SPE_E3"},{"sku":"EMS"}],"authenticationMode":"Standard"}'
             '/v1/baselines$' = '{"baselines":[{"id":"00000000-0000-0000-0000-0000000000b1","name":"Contoso Baseline","description":"","baselineTenant":{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.onmicrosoft.com"},"mode":"Monitor","alignedThreshold":90,"semiAlignedThreshold":70,"autoAddNewPolicies":false,"isComplete":true,"isShared":false,"isSharedCopy":false,"members":[{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.onmicrosoft.com","lastAlignmentScore":80.5,"lastAlignmentTimestamp":"2026-01-02T00:00:00Z"}],"items":[]},{"id":"00000000-0000-0000-0000-0000000000b2","name":"Other Baseline","description":"","baselineTenant":{"msTenantId":"00000000-0000-0000-0000-000000000003","name":"Northwind","dnsName":"northwind.onmicrosoft.com"},"mode":"Monitor","alignedThreshold":90,"semiAlignedThreshold":70,"autoAddNewPolicies":false,"isComplete":true,"isShared":true,"isSharedCopy":false,"members":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.onmicrosoft.com","lastAlignmentScore":100,"lastAlignmentTimestamp":"2026-01-02T00:00:00Z"}],"items":[]}]}'
@@ -79,7 +79,7 @@ BeforeEach {
 }
 
 Describe 'Get-InforcerTenant' {
-    It 'v1: the plain list returns the light objects and makes no per-tenant calls' {
+    It 'v1: the list holds every field with canonical names and makes no per-tenant calls' {
         Set-V1TenantsSession
         $r = @(Get-InforcerTenant)
         $r.Count | Should -Be 2
@@ -87,26 +87,19 @@ Describe 'Get-InforcerTenant' {
         $r[0].TenantDnsName | Should -BeExactly 'contoso.onmicrosoft.com'
         $r[0].MsTenantId | Should -Be $script:T1
         $r[0].PSObject.Properties['clientTenantId'] | Should -BeNullOrEmpty
+        $r[0].PSObject.Properties['name'] | Should -BeNullOrEmpty
+        $r[0].IsBaseline | Should -BeTrue
+        $r[0].licenses | Should -BeExactly 'SPE_E5'
+        $r[1].licenses | Should -BeExactly 'SPE_E3, EMS'
+        $r[0].Tags[0].name | Should -BeExactly 'Production'
+        $r[1].alignmentSummaries[0].PSObject.Properties.Name | Should -Contain 'lastAlignmentDateTime'
         $r[0].PSObject.TypeNames[0] | Should -Be 'InforcerCommunity.Tenant'
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly
     }
 
-    It 'v1: -Detailed loads each tenant record with canonical names' {
+    It 'v1: -OutputType JsonObject returns a JSON array with the raw licenses array' {
         Set-V1TenantsSession
-        $r = @(Get-InforcerTenant -Detailed)
-        $r.Count | Should -Be 2
-        $r[0].IsBaseline | Should -BeTrue
-        $r[0].licenses | Should -BeExactly 'SPE_E5'
-        $r[1].licenses | Should -BeExactly 'SPE_E3, EMS'
-        $r[0].AuthenticationMode | Should -BeExactly 'Standard'
-        $r[1].alignmentSummaries[0].PSObject.Properties.Name | Should -Contain 'lastAlignmentDateTime'
-        $r[0].PSObject.Properties['name'] | Should -BeNullOrEmpty
-        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
-    }
-
-    It 'v1: -Detailed -OutputType JsonObject returns a JSON array with the raw licenses array' {
-        Set-V1TenantsSession
-        $json = Get-InforcerTenant -Detailed -OutputType JsonObject
+        $json = Get-InforcerTenant -OutputType JsonObject
         $json.TrimStart() | Should -BeLike '`[*'
         $parsed = @($json | ConvertFrom-Json -Depth 100)
         $parsed.Count | Should -Be 2
@@ -135,32 +128,6 @@ Describe 'Get-InforcerTenant' {
         $e2[0].Exception.Message | Should -Match 'API key'
     }
 
-    It 'v1: -Detailed keeps the summary and warns when one tenant record fails' {
-        Set-V1TenantsSession
-        $global:V1TenantsRoutes['/v1/tenants/00000000-0000-0000-0000-000000000002$'] = @{ Status = 500; Body = '{"title":"Server error","status":500}' }
-        $r = @(Get-InforcerTenant -Detailed -WarningVariable w -WarningAction SilentlyContinue)
-        $r.Count | Should -Be 2
-        $r[1].PSObject.Properties['isBaseline'] | Should -BeNullOrEmpty
-        $r[1].TenantFriendlyName | Should -BeExactly 'Fabrikam'
-        @($w).Count | Should -Be 1
-        "$($w[0])" | Should -Match 'Fabrikam'
-    }
-
-    It 'v1: -Detailed loads a tenant listed twice only once' {
-        Set-V1TenantsSession
-        $global:V1TenantsRoutes['/v1/tenants$'] = '{"tenants":[{"msTenantId":"00000000-0000-0000-0000-000000000001","name":"Contoso","dnsName":"contoso.onmicrosoft.com"},{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.onmicrosoft.com"},{"msTenantId":"00000000-0000-0000-0000-000000000002","name":"Fabrikam","dnsName":"fabrikam.onmicrosoft.com"}]}'
-        @(Get-InforcerTenant -Detailed -OutputType JsonObject | ConvertFrom-Json -Depth 100).Count | Should -Be 2
-        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
-    }
-
-    It 'beta: -Detailed is a no-op and makes no per-tenant calls' {
-        Set-V1TenantsSession -Beta
-        $plain = Get-InforcerTenant -OutputType JsonObject
-        $detailed = Get-InforcerTenant -Detailed -OutputType JsonObject
-        $detailed | Should -BeExactly $plain
-        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly -ParameterFilter { $Request.Uri -match '/beta/tenants/\d+$' }
-    }
-
     It 'beta: PowerShell output dedupes by ClientTenantId; JSON keeps the API list; -TenantId numeric filters' {
         Set-V1TenantsSession -Beta
         $r = @(Get-InforcerTenant)
@@ -179,9 +146,6 @@ Describe 'Get-InforcerTenant' {
         $cached[0].PSObject.TypeNames | Should -Not -Contain 'InforcerCommunity.Tenant'
     }
 
-    It 'documents -Detailed in help' {
-        (Get-Help Get-InforcerTenant -Parameter Detailed).Name | Should -Be 'Detailed'
-    }
 }
 
 Describe 'Resolve-InforcerTenantId with the cached tenant list' {
@@ -337,12 +301,37 @@ Describe 'Get-InforcerAlignmentDetails' {
         @(Get-InforcerAlignmentDetails -TenantId 2).TargetTenantClientTenantId | Should -Be @(2)
     }
 
-    It 'v1: -Tag loads tenant records and matches the tag name' {
+    It 'v1: -Tag matches the tag name from the tenant list, with no per-tenant calls' {
         Set-V1TenantsSession
-        $r = @(Get-InforcerAlignmentDetails -Tag 'prod')
+        $r = @(Get-InforcerAlignmentDetails -Tag 'prod' -WarningVariable w)
         $r.TargetTenantMsTenantId | Should -Be @($script:T1)
-        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
+        $w | Should -BeNullOrEmpty
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly -ParameterFilter { $Request.Uri -match '/v1/tenants/[0-9a-f-]{36}$' }
         @(Get-InforcerAlignmentDetails -Tag 'Test').TargetTenantMsTenantId | Should -Be @('00000000-0000-0000-0000-000000000002')
+    }
+
+    It '<Mode>: -Tag that matches no tenant returns no rows and warns' -ForEach @(
+        @{ Mode = 'v1'; Beta = $false }
+        @{ Mode = 'beta'; Beta = $true }
+    ) {
+        Set-V1TenantsSession -Beta:$Beta
+        @(Get-InforcerAlignmentDetails).Count | Should -BeGreaterThan 0
+        $r = @(Get-InforcerAlignmentDetails -Tag 'zz-no-such-tag' -WarningVariable w -WarningAction SilentlyContinue)
+        $r.Count | Should -Be 0
+        "$($w[0])" | Should -Match "zz-no-such-tag"
+    }
+
+    It 'v1: -TenantId plus a -Tag another tenant has returns no rows and no tag warning' {
+        Set-V1TenantsSession
+        $r = @(Get-InforcerAlignmentDetails -TenantId 'Contoso' -Tag 'Test' -WarningVariable w -WarningAction SilentlyContinue)
+        $r.Count | Should -Be 0
+        $w | Should -BeNullOrEmpty
+    }
+
+    It 'v1: piped tenants that do not exist return no rows, not every row' {
+        Set-V1TenantsSession
+        $r = @([pscustomobject]@{ MsTenantId = '00000000-0000-0000-0000-000000000009' } | Get-InforcerAlignmentDetails -ErrorAction SilentlyContinue)
+        $r.Count | Should -Be 0
     }
 
     It 'v1: -Format Raw -TenantId filters on msTenantId in both output types' {
@@ -386,16 +375,17 @@ Describe 'Get-InforcerAlignmentDetails' {
 }
 
 Describe 'Format.ps1xml views' {
-    It 'Tenant: beta shows ClientTenantId; v1 shows MsTenantId and hides rows it has no data for' {
+    It 'Tenant: beta shows ClientTenantId; v1 shows MsTenantId, and AuthenticationMode only on the -TenantId record' {
         Set-V1TenantsSession -Beta
         $beta = @(Get-InforcerTenant)[0] | Format-List | Out-String
         $beta | Should -Match 'ClientTenantId\s+: 1'
         $beta | Should -Match 'licenses\s+: SPE_E5'
         $beta | Should -Not -Match 'AuthenticationMode'
         Set-V1TenantsSession
-        $light = @(Get-InforcerTenant)[0] | Format-List | Out-String
-        $light | Should -Not -Match 'ClientTenantId|licenses|IsBaseline'
-        $light | Should -Match "MsTenantId\s+: $($script:T1)"
+        $list = @(Get-InforcerTenant)[0] | Format-List | Out-String
+        $list | Should -Not -Match 'ClientTenantId|AuthenticationMode'
+        $list | Should -Match 'IsBaseline\s+: True'
+        $list | Should -Match "MsTenantId\s+: $($script:T1)"
         $detail = Get-InforcerTenant -TenantId 'Contoso' | Format-List | Out-String
         $detail | Should -Match 'IsBaseline\s+: True'
         $detail | Should -Match 'AuthenticationMode\s+: Standard'

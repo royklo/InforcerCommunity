@@ -67,7 +67,7 @@ The full per-object difference list is in [docs/API-REFERENCE.md](docs/API-REFER
 
 ### Tests
 
-- About 330 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (827 pass in total).
+- About 330 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (829 pass in total).
 
 ## [0.8.0] - 2026-10-22
 

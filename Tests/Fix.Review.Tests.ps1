@@ -138,4 +138,19 @@ Describe 'v1 JSON is always an array' {
         Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest { [pscustomobject]@{ runId = '11111111-2222-3333-4444-555555555555'; status = 'completed' } }
         (Get-InforcerReportRun -OutputType JsonObject).TrimStart() | Should -BeLike '{*'
     }
+
+    It 'v1: Get-InforcerTenant and the alignment table return [] for an account with no tenants' {
+        Set-ReviewSession
+        & $script:M { $script:InforcerTenantListCache = $null }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest { }
+        (Get-InforcerTenant -OutputType JsonObject).Trim() | Should -Be '[]'
+        (Get-InforcerAlignmentDetails -OutputType JsonObject).Trim() | Should -Be '[]'
+    }
+
+    It 'v1: Get-InforcerTenant returns nothing when the tenant list request fails' {
+        Set-ReviewSession
+        & $script:M { $script:InforcerTenantListCache = $null }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest { Write-Error 'boom' -ErrorId 'ApiRequestFailed_500' }
+        Get-InforcerTenant -OutputType JsonObject -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
+    }
 }

@@ -110,9 +110,11 @@ process {
             }
         }
     } else {
-        $tenantData = @(Get-InforcerTenantList -Refresh:(-not $listRefreshed))
+        $listErr = $null
+        $tenantData = @(Get-InforcerTenantList -Refresh:(-not $listRefreshed) -ErrorVariable listErr)
         $listRefreshed = $true
-        if ($tenantData.Count -eq 0) { return }
+        # A failed request returns nothing; an empty v1 list is still `[]` in JSON.
+        if ($listErr -or ($tenantData.Count -eq 0 -and -not ($isV1 -and $OutputType -eq 'JsonObject'))) { return }
     }
 
     if ($OutputType -eq 'JsonObject') {

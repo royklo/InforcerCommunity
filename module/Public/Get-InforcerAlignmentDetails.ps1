@@ -432,8 +432,13 @@ if ($Format -eq 'Raw') {
 
 # Format Table: alignment scores, joined with the tenant list only when filtering needs it
 Write-Verbose 'Retrieving alignment scores for table...'
-$alignmentResponse = Invoke-InforcerApiRequest -Endpoint '/alignmentScores' -Method GET -OutputType PowerShellObject -ObjectType AlignmentScore
-if ($null -eq $alignmentResponse) { return }
+$scoresErr = $null
+$alignmentResponse = Invoke-InforcerApiRequest -Endpoint '/alignmentScores' -Method GET -OutputType PowerShellObject -ObjectType AlignmentScore -ErrorVariable scoresErr
+if ($null -eq $alignmentResponse) {
+    # No scores means no rows: the v1 (and piped) JSON table is still an array; a failed request returns nothing.
+    if (-not $scoresErr -and $OutputType -eq 'JsonObject' -and ($isV1 -or $piped)) { return '[]' }
+    return
+}
 
 $allAlignmentData = ConvertTo-InforcerArray $alignmentResponse
 $scoreTenantProperty = if ($isV1) { 'msTenantId' } else { 'tenantId' }

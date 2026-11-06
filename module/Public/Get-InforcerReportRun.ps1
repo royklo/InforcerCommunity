@@ -2,9 +2,12 @@
 .SYNOPSIS
     Lists report runs from the Inforcer Reports API, with optional polling and outputs embedding.
 
-    Required API scope(s): Reports.Read
+    Required API scope(s): Reports.Read (API key); Reports permission (API client, unconfirmed).
 .DESCRIPTION
-    GET /beta/reports/runs returns the most recent runs (server-side cap: 500 items, 7-day window;
+    Works with both login types (API key: legacy API; client ID and secret: v1 API). The run
+    objects have the same properties either way (v1 reportRunId is exposed as runId).
+
+    GET /reports/runs returns the most recent runs (server-side cap: 500 items, 7-day window;
     query parameters are silently ignored at the time of writing — filter client-side).
 
     Two known characteristics worth calling out before relying on this endpoint:
@@ -22,7 +25,8 @@
     Filter to a single run by GUID. Combined with -Wait, polls that run until terminal.
 .PARAMETER Wait
     Poll runs via GET /runs/{id}/outputs until terminal (200) or -TimeoutSeconds elapses.
-    Requires -RunId.
+    Requires -RunId. A 404 means "not ready yet" and, on v1, also "outside the API client's
+    tenant scope", so an unreadable run polls until the timeout.
 .PARAMETER IncludeOutputs
     For each returned run, fetch GET /runs/{id}/outputs and embed the array on .outputs. Adds
     one API call per run; use sparingly on large result sets.
@@ -36,18 +40,23 @@
     PowerShellObject (default) or JsonObject. JSON uses Depth 100.
 .EXAMPLE
     Get-InforcerReportRun
+
     Lists every visible run (up to 500, last 7 days).
 .EXAMPLE
-    Get-InforcerReportRun -RunId 094a49ed-b9b8-492b-870f-0f76fd3b2954
+    Get-InforcerReportRun -RunId 00000000-0000-0000-0000-000000000009
+
     Returns metadata for a single run (subject to the list-endpoint propagation lag).
 .EXAMPLE
-    Get-InforcerReportRun -RunId 094a49ed-b9b8-492b-870f-0f76fd3b2954 -Wait
+    Get-InforcerReportRun -RunId 00000000-0000-0000-0000-000000000009 -Wait
+
     Polls the run until terminal and returns its metadata with outputs embedded.
 .EXAMPLE
     Get-InforcerReportRun -IncludeOutputs
+
     Returns every run with its outputs array embedded (1 extra API call per run).
 .EXAMPLE
-    Get-InforcerReportRun -RunId 8842 -OutputType JsonObject
+    Get-InforcerReportRun -RunId 00000000-0000-0000-0000-000000000009 -OutputType JsonObject
+
     Returns the run as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS
@@ -101,6 +110,7 @@ begin {
     # don't share state.
     $cachedListResponse = $null
     $listResponseFetched = $false
+    $listFailed = $false
     $polledOutputsByRunId = @{}
 }
 
@@ -143,14 +153,16 @@ if ($Wait.IsPresent) {
 
 # --- Fetch list once, reuse for every piped RunId ---
 if (-not $listResponseFetched) {
-    Write-Verbose 'GET /beta/reports/runs'
-    $cachedListResponse = Invoke-InforcerApiRequest -Endpoint '/beta/reports/runs' -Method GET -OutputType PowerShellObject
+    Write-Verbose 'GET /reports/runs'
+    $listErr = $null
+    $cachedListResponse = @(Invoke-InforcerApiRequest -Endpoint '/reports/runs' -Method GET -OutputType PowerShellObject -ObjectType ReportRun -ErrorVariable listErr)
+    $listFailed = [bool]$listErr
     $listResponseFetched = $true
 }
-$response = $cachedListResponse
-if ($null -eq $response) { return }
+# A failed request returns nothing; an empty run list is still a result.
+if ($listFailed) { return }
 
-$runs = @($response)
+$runs = @($cachedListResponse)
 
 if ($PSBoundParameters.ContainsKey('RunId')) {
     $needle = $RunId.ToString()
@@ -238,6 +250,8 @@ if ($IncludeOutputs.IsPresent -and -not $polledOutputs) {
 
 # --- Shape output ---
 if ($OutputType -eq 'JsonObject') {
+    # v1 list contract: always a JSON array (`[]` for no runs); beta keeps the 0.8.0 shape.
+    if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject @($runs) -Depth 100 }
     return ($runs | ConvertTo-Json -Depth 100)
 }
 

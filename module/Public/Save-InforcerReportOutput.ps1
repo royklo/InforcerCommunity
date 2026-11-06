@@ -2,11 +2,17 @@
 .SYNOPSIS
     Downloads a report output to disk.
 
-    Required API scope(s): Reports.Read
+    Required API scope(s): Reports.Read (API key); Reports permission (API client, unconfirmed).
 .DESCRIPTION
-    GET /beta/reports/runs/{runId}/outputs/{outputId} returns the raw bytes plus a
+    GET /reports/runs/{runId}/outputs/{outputId} (legacy API for an API-key login, v1 API for a
+    client ID and secret login) returns the raw bytes plus a
     Content-Disposition filename. This cmdlet writes those bytes to -OutputPath using the
     server-suggested filename (sanitized) and emits a result object per saved file.
+
+    The server's name is reduced to a plain file name (a leading dot becomes '_', so '.csv' is
+    saved as '_.csv'), an existing file is never overwritten, and on Windows saved files are marked
+    as downloaded from the internet. A redirect fails instead of being followed, and a throttled
+    (429) download is not retried.
 
     Pipeline-friendly: pipe output records from Invoke-InforcerReport -NoSave or
     Get-InforcerReportRun -IncludeOutputs and every output is downloaded.
@@ -23,18 +29,23 @@
     Pipeline-bindable. Same as ReportType — propagated from the upstream record when piped.
 .PARAMETER TenantId
     Pipeline-bindable. Same as ReportType — propagated from the upstream record when piped.
+    API key: numeric Client Tenant ID; client ID and secret: Microsoft tenant ID (GUID). Collated
+    outputs carry no tenant ($null). Aliases: -ClientTenantId, -MsTenantId.
 .PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
-    Created if it doesn't exist.
+    Created if it doesn't exist. Existing files are never overwritten: when the name is taken,
+    the output is saved as 'name (1).ext', 'name (2).ext', and so on.
 .PARAMETER FileName
-    Override the server-suggested filename. Sanitized for cross-platform safety.
+    Override the server-suggested filename. Sanitized for cross-platform safety. The file is
+    written under this name directly; the server's name is not used at all. An existing file of
+    this name is kept and the output is saved as 'name (1).ext'.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject.
 .EXAMPLE
-    Save-InforcerReportOutput -RunId <run> -OutputId <output>
+    Save-InforcerReportOutput -RunId 00000000-0000-0000-0000-000000000009 -OutputId out-1
     Saves a single output to the current directory.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -NoSave |
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 'Contoso' -NoSave |
         Save-InforcerReportOutput -OutputPath ./reports
     Queues + polls a report without saving, then downloads every output to ./reports.
 .EXAMPLE
@@ -43,7 +54,7 @@
         Save-InforcerReportOutput -OutputPath ./bulk
     Bulk-downloads every output from every visible run.
 .EXAMPLE
-    Save-InforcerReportOutput -RunId 8842 -OutputId 1 -OutputPath ./out -OutputType JsonObject
+    Save-InforcerReportOutput -RunId 00000000-0000-0000-0000-000000000009 -OutputId out-1 -OutputPath ./out -OutputType JsonObject
     Returns the saved-file result as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS
@@ -78,7 +89,7 @@ param(
     [string]$OutputFormat,
 
     [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
-    [Alias('ClientTenantId')]
+    [Alias('ClientTenantId', 'MsTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -133,13 +144,11 @@ process {
     }
 
     $runIdStr = $RunId.ToString()
-    $endpoint = "/beta/reports/runs/$runIdStr/outputs/$OutputId"
+    $endpoint = "/reports/runs/$runIdStr/outputs/$OutputId"
 
-    # When -FileName is supplied the user's choice wins (after filesystem-safety sanitization).
-    # Otherwise the server's Content-Disposition filename is used (via Invoke-InforcerRawDownload).
-    # -FileName has ValidateNotNullOrEmpty so we won't get '' here, but still guard against whitespace.
-    $userSuppliedName = $PSBoundParameters.ContainsKey('FileName') -and -not [string]::IsNullOrWhiteSpace($FileName)
-    $defaultName = if ($userSuppliedName) { $FileName } else { ('{0}-{1}' -f $runIdStr, $OutputId) }
+    # -FileName wins over the server's Content-Disposition name; the helper sanitizes either one.
+    $downloadParams = @{ Endpoint = $endpoint; DefaultFileName = ('{0}-{1}' -f $runIdStr, $OutputId); DestinationDirectory = $resolvedOutputPath }
+    if (-not [string]::IsNullOrWhiteSpace($FileName)) { $downloadParams['FileName'] = $FileName }
 
     $target = "$runIdStr / $OutputId → $resolvedOutputPath"
     if (-not $PSCmdlet.ShouldProcess($target, 'Download report output')) { return }
@@ -147,9 +156,7 @@ process {
     Write-Verbose "Downloading: $endpoint"
     try {
         # Stream straight to disk so multi-GB report outputs don't materialize in memory.
-        # The helper renames the temp file to the Content-Disposition filename for us.
-        $download = Invoke-InforcerRawDownload -Endpoint $endpoint -DefaultFileName $defaultName `
-            -DestinationDirectory $resolvedOutputPath -ErrorAction Stop
+        $download = Invoke-InforcerRawDownload @downloadParams -ErrorAction Stop
     } catch {
         Write-Error -Message "Failed to download output ${OutputId}: $($_.Exception.Message)" `
             -ErrorId 'DownloadFailed' -Category ReadError
@@ -159,21 +166,6 @@ process {
 
     $filePath = $download.FilePath
     $effectiveName = $download.FileName
-
-    # When the user supplied an explicit -FileName, rename from the server-derived name to theirs.
-    if ($userSuppliedName) {
-        $overrideName = Resolve-InforcerReportOutputFileName -ContentDisposition $null -DefaultName $FileName
-        $overridePath = Join-Path -Path $resolvedOutputPath -ChildPath $overrideName
-        if ($overridePath -ne $filePath) {
-            try {
-                Move-Item -LiteralPath $filePath -Destination $overridePath -Force -ErrorAction Stop
-                $filePath = $overridePath
-                $effectiveName = $overrideName
-            } catch {
-                Write-Warning "Could not rename to user-requested '$overrideName': $($_.Exception.Message)"
-            }
-        }
-    }
 
     $fileSize = if ($download.PSObject.Properties['FileSize']) { $download.FileSize } else { (Get-Item -LiteralPath $filePath -ErrorAction SilentlyContinue).Length }
 

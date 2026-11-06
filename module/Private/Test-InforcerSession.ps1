@@ -3,23 +3,26 @@ function Test-InforcerSession {
     .SYNOPSIS
         Verifies that an Inforcer API session is active.
     .DESCRIPTION
-        Checks that $script:InforcerSession exists and has a non-empty ApiKey and BaseUrl.
+        True when the session has a host (ApiHost or BaseUrl) and a non-empty credential:
+        an ApiKey (API-key login, beta API) or a ClientSecret (client-credentials login, v1 API).
         Used by all data cmdlets before making API calls. Does not throw.
+    .PARAMETER Session
+        Session hashtable to test. Defaults to the current session.
     .OUTPUTS
         System.Boolean - True if session is valid, false otherwise.
     #>
     [CmdletBinding()]
     [OutputType([bool])]
-    param()
+    param(
+        [Parameter(Mandatory = $false)]
+        [hashtable]$Session = $script:InforcerSession
+    )
 
-    if (-not $script:InforcerSession) {
-        return $false
-    }
+    if (-not $Session) { return $false }
 
-    $session = $script:InforcerSession
-    if (-not $session.ApiKey -or -not $session.BaseUrl) {
-        return $false
-    }
+    $hasHost = -not [string]::IsNullOrWhiteSpace($Session.ApiHost) -or -not [string]::IsNullOrWhiteSpace($Session.BaseUrl)
+    if (-not $hasHost) { return $false }
 
-    return ($session.ApiKey.Length -gt 0) -and -not [string]::IsNullOrWhiteSpace($session.BaseUrl)
+    $credential = if ($Session.ApiVersion -eq 'v1') { $Session.ClientSecret } else { $Session.ApiKey }
+    return ($null -ne $credential -and $credential.Length -gt 0)
 }

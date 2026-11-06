@@ -712,8 +712,8 @@ Describe 'Compare-InforcerDocModels - noise exclusion' -Tag 'noise-exclusion' {
     It 'excludes standalone GUID values from comparison output' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
-            $src  = & $buildModel 'Some Setting' 'a0b1c2d3-e4f5-1234-5678-abcdef012345' 'Source' 'src-id'
-            $dest = & $buildModel 'Some Setting' 'a0b1c2d3-e4f5-1234-5678-abcdef012345' 'Dest'   'dest-id'
+            $src  = & $buildModel 'Some Setting' 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' 'Source' 'src-id'
+            $dest = & $buildModel 'Some Setting' 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' 'Dest'   'dest-id'
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $buildModelWithSetting }
         $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0
@@ -722,8 +722,8 @@ Describe 'Compare-InforcerDocModels - noise exclusion' -Tag 'noise-exclusion' {
     It 'excludes uppercase GUID values from comparison output' {
         $result = InModuleScope InforcerCommunity {
             param($buildModel)
-            $src  = & $buildModel 'Some Setting' 'A0B1C2D3-E4F5-1234-5678-ABCDEF012345' 'Source' 'src-id'
-            $dest = & $buildModel 'Some Setting' 'A0B1C2D3-E4F5-1234-5678-ABCDEF012345' 'Dest'   'dest-id'
+            $src  = & $buildModel 'Some Setting' 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' 'Source' 'src-id'
+            $dest = & $buildModel 'Some Setting' 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' 'Dest'   'dest-id'
             Compare-InforcerDocModels -SourceModel $src -DestinationModel $dest
         } -Parameters @{ buildModel = $buildModelWithSetting }
         $result.Products.Windows.Categories.'Settings Catalog'.ComparisonRows | Should -HaveCount 0

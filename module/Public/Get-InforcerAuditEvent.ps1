@@ -2,10 +2,13 @@
 .SYNOPSIS
     Retrieves audit events from the Inforcer API.
 
-    Required API scope(s): Audit.Read (unconfirmed — see docs/API-REFERENCE.md)
+    Required API scope(s): Audit.Read (API key, unconfirmed — see docs/API-REFERENCE.md); Activity
+    permission (API client, unconfirmed).
 .DESCRIPTION
-    POST /beta/auditEvents/search. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
-    When -EventType is not specified, uses all event types from the API (or fallback authentication, failedAuthentication).
+    POST /auditEvents/search on both login types (API key: /beta, client credentials: /v1). With client credentials the response has no ClientId or Message fields. When -DateFrom and -DateTo are omitted, uses a wide default range (10 years ago to now).
+    When -EventType is not specified, no event-type filter is sent and the API searches all types (one search, both login types).
+    Events come back in the API's order. The -EventType tab-completion list is not refreshed by this
+    cmdlet; run Get-InforcerSupportedEventType for that.
     Use -Id to retrieve a specific event by its event ID. Use -CorrelationId to retrieve all events
     sharing a correlation ID. Both perform a broad search and filter client-side.
 .PARAMETER Id
@@ -31,10 +34,10 @@
 .EXAMPLE
     Get-InforcerAuditEvent
 .EXAMPLE
-    Get-InforcerAuditEvent -Id "2070eb50-5ac2-4b9b-a157-0003dd3982fe"
+    Get-InforcerAuditEvent -Id "00000000-0000-0000-0000-00000000000a"
     Retrieves a single audit event by its ID.
 .EXAMPLE
-    Get-InforcerAuditEvent -CorrelationId "e7ec6f01-a24b-4012-bab7-e8f0e53e2dab"
+    Get-InforcerAuditEvent -CorrelationId "00000000-0000-0000-0000-00000000000b"
     Retrieves all audit events sharing a correlation ID.
 .EXAMPLE
     Get-InforcerAuditEvent -DateFrom (Get-Date).AddDays(-7) -DateTo (Get-Date)
@@ -42,7 +45,7 @@
     Get-InforcerAuditEvent -EventType authentication,failedAuthentication -DateFrom $from -DateTo $to
 .EXAMPLE
     Get-InforcerAuditEvent -OutputType JsonObject
-    Returns a JSON array string; output objects do not include a metadata property (flattened to top-level fields).
+    Returns a JSON string (a JSON array on v1 even for zero or one event); output objects do not include a metadata property (flattened to top-level fields).
 .OUTPUTS
     PSObject or String (JSON array when -OutputType JsonObject)
 .LINK
@@ -121,24 +124,10 @@ if (-not (Test-InforcerSession)) {
     return
 }
 
-# Resolve event types
-$eventTypes = @()
-if ($null -eq $EventType -or $EventType.Count -eq 0) {
-    Write-Verbose 'Fetching all audit event types from API...'
-    try {
-        $eventTypes = @(Get-InforcerSupportedEventType -ErrorAction SilentlyContinue)
-    } catch {
-        $eventTypes = @()
-    }
-    if ($eventTypes.Count -eq 0) {
-        Write-Verbose 'Event types API failed or returned none; using authentication, failedAuthentication.'
-        $eventTypes = @('authentication', 'failedAuthentication')
-    } else {
-        Write-Verbose "Using all $($eventTypes.Count) event type(s)."
-    }
-} else {
-    $eventTypes = @($EventType)
-}
+# No -EventType: eventTypes is omitted and the API searches every type (both logins; checked live on
+# beta, where it returns the same events as listing all types).
+$isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
+$eventTypes = @($EventType | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
 # Date range
 $dateFromVal = $DateFrom
@@ -150,71 +139,31 @@ if (-not $dateFromVal -and -not $dateToVal) {
     $dateFromVal = $dateToVal.AddYears(-10)
 }
 $dateFromStr = $dateFromVal.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-$dateToStr = $dateToVal.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+$dateToStr = $dateToVal.ToUniversalTime().ToString($(if ($isV1) { 'yyyy-MM-ddTHH:mm:ssZ' } else { 'yyyy-MM-ddTHH:mm:ss.fffZ' }))
 
-$allItems = [System.Collections.ArrayList]::new()
-$hasLimit = $MaxResults -gt 0
-$batchSize = 10
-$typeBatches = [System.Collections.Generic.List[object]]::new()
-for ($i = 0; $i -lt $eventTypes.Count; $i += $batchSize) {
-    $end = [Math]::Min($i + $batchSize, $eventTypes.Count)
-    [void]$typeBatches.Add(@($eventTypes[$i..($end - 1)]))
+$allItems = [System.Collections.Generic.List[object]]::new()
+
+$bodyObj = @{
+    dateFrom = $dateFromStr
+    dateTo   = $dateToStr
+    pageSize = $PageSize
 }
+if ($eventTypes.Count -gt 0) { $bodyObj['eventTypes'] = $eventTypes }
+if ($User) { $bodyObj['user'] = $User }
 
-foreach ($batch in $typeBatches) {
-    if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
-    $continuationToken = $null
-    do {
-        $bodyObj = @{
-            eventTypes = @($batch)
-            dateFrom   = $dateFromStr
-            dateTo     = $dateToStr
-            pageSize   = $PageSize
-        }
-        if ($User) {
-            $bodyObj['user'] = $User
-        }
-        if ($continuationToken) {
-            $bodyObj['continuationToken'] = $continuationToken
-        }
-        $body = $bodyObj | ConvertTo-Json -Depth 100 -Compress
-
-        Write-Verbose 'Searching audit events...'
-        $response = Invoke-InforcerApiRequest -Endpoint '/beta/auditEvents/search' -Method POST -Body $body -OutputType PowerShellObject -PreserveStructure
-        if ($null -eq $response) { break }
-
-        # After -PreserveStructure, .data is already unwrapped but inner structure (items + continuationToken) is intact
-        $root = $response
-        $items = $null
-        foreach ($propName in 'items', 'Items') {
-            $prop = $root.PSObject.Properties[$propName]
-            if ($prop -and $null -ne $prop.Value) { $items = $prop.Value; break }
-        }
-
-        if ($items) {
-            foreach ($item in @($items)) {
-                if ($item -is [PSObject]) {
-                    $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent
-                    $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AuditEvent')
-                    [void]$allItems.Add($item)
-                    if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
-                }
-            }
-        }
-
-        $continuationToken = $null
-        foreach ($tokenProp in 'continuationToken', 'ContinuationToken') {
-            $tp = $root.PSObject.Properties[$tokenProp]
-            if ($tp -and $tp.Value) { $continuationToken = $tp.Value; break }
-        }
-        if ($hasLimit -and $allItems.Count -ge $MaxResults) { break }
-    } while ($continuationToken)
+Write-Verbose 'Searching audit events...'
+foreach ($item in @(Invoke-InforcerPagedRequest -Endpoint '/auditEvents/search' -Method POST -Body $bodyObj -ObjectType AuditEvent -MaxResults $MaxResults)) {
+    if ($item -is [PSObject]) {
+        $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent
+        $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AuditEvent')
+        $allItems.Add($item)
+    }
 }
 
 # Filter by -Id or -CorrelationId when specified
 if (-not [string]::IsNullOrWhiteSpace($Id)) {
     $idTrimmed = $Id.Trim()
-    $allItems = [System.Collections.ArrayList]@($allItems | Where-Object {
+    $allItems = [System.Collections.Generic.List[object]]@($allItems | Where-Object {
         $idProp = $_.PSObject.Properties['id']
         $idProp -and $idProp.Value -and $idProp.Value.ToString() -eq $idTrimmed
     })
@@ -225,7 +174,7 @@ if (-not [string]::IsNullOrWhiteSpace($Id)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($CorrelationId)) {
     $corrTrimmed = $CorrelationId.Trim()
-    $allItems = [System.Collections.ArrayList]@($allItems | Where-Object {
+    $allItems = [System.Collections.Generic.List[object]]@($allItems | Where-Object {
         $corrProp = $_.PSObject.Properties['correlationId']
         $corrProp -and $corrProp.Value -and $corrProp.Value.ToString() -eq $corrTrimmed
     })
@@ -236,8 +185,8 @@ if (-not [string]::IsNullOrWhiteSpace($CorrelationId)) {
 }
 
 if ($OutputType -eq 'JsonObject') {
-    $json = $allItems | ConvertTo-Json -Depth 100
-    return $json
+    if ($isV1) { return ConvertTo-Json -InputObject @($allItems) -Depth 100 }
+    return $allItems | ConvertTo-Json -Depth 100
 } else {
     $allItems
 }

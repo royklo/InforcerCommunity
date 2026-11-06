@@ -1,6 +1,6 @@
 @{
     RootModule        = 'InforcerCommunity.psm1'
-    ModuleVersion     = '0.8.0'
+    ModuleVersion     = '1.0.0'
     GUID              = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
     Author            = 'Roy Klooster'
     Description       = 'Community PowerShell module for the Inforcer API. Created by Roy Klooster. Not owned or officially maintained by Inforcer.'
@@ -38,7 +38,7 @@
         PSData = @{
             ProjectUri   = 'https://github.com/royklo/InforcerCommunity'
             LicenseUri   = 'https://github.com/royklo/InforcerCommunity/blob/main/LICENSE'
-            ReleaseNotes = 'v0.6.0: New cmdlet Get-InforcerSecureScore wraps GET /beta/tenants/{tenantId}/secureScores — current + 90-day daily score history, per-category scores, and actionable control profiles with remediation. Get-InforcerAuditEvent gains a -User parameter for server-side filtering and now exposes the raw event id as PascalCase Id. -EventType tab completion is now dynamic — reads $global:InforcerCachedEventTypes refreshed by Get-InforcerSupportedEventType, so new server-side event types show up automatically without a module release. Required API scope(s) documentation added to Get-Help output for 13 cmdlets that were missing it. Stale PolicyDiffFormatted mention removed from CMDLET-REFERENCE. See CHANGELOG.md for full details.'
+            ReleaseNotes = 'v1.0.0: log in with an inforcer API client (Connect-Inforcer -ClientId/-ClientSecret) to use the versioned v1 API; API keys keep working on the legacy beta API with a warning. Every cmdlet works with both logins, -TenantId takes a tenant GUID or name. Piping several tenants now handles all of them. See CHANGELOG.md for the API-key changes and migration steps.'
             Tags         = @('Inforcer', 'API', 'Community')
         }
     }

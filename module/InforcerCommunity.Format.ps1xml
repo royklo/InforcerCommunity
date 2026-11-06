@@ -12,14 +12,35 @@
         <ListEntries>
           <ListEntry>
             <ListItems>
-              <ListItem><Label>ClientTenantId</Label><PropertyName>ClientTenantId</PropertyName></ListItem>
+              <!-- Conditional rows: API-key tenants always carry these properties (view unchanged);
+                   client-credentials tenants lack ClientTenantId. -->
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['clientTenantId']</ScriptBlock></ItemSelectionCondition>
+                <Label>ClientTenantId</Label><PropertyName>ClientTenantId</PropertyName>
+              </ListItem>
               <ListItem><Label>MsTenantId</Label><PropertyName>MsTenantId</PropertyName></ListItem>
               <ListItem><Label>TenantFriendlyName</Label><PropertyName>TenantFriendlyName</PropertyName></ListItem>
               <ListItem><Label>TenantDnsName</Label><PropertyName>TenantDnsName</PropertyName></ListItem>
-              <ListItem><Label>licenses</Label><PropertyName>licenses</PropertyName></ListItem>
-              <ListItem><Label>SecureScore</Label><PropertyName>SecureScore</PropertyName></ListItem>
-              <ListItem><Label>IsBaseline</Label><PropertyName>IsBaseline</PropertyName></ListItem>
-              <ListItem><Label>LastBackupTimestamp</Label><PropertyName>LastBackupTimestamp</PropertyName></ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['licenses']</ScriptBlock></ItemSelectionCondition>
+                <Label>licenses</Label><PropertyName>licenses</PropertyName>
+              </ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['secureScore']</ScriptBlock></ItemSelectionCondition>
+                <Label>SecureScore</Label><PropertyName>SecureScore</PropertyName>
+              </ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['isBaseline']</ScriptBlock></ItemSelectionCondition>
+                <Label>IsBaseline</Label><PropertyName>IsBaseline</PropertyName>
+              </ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['lastBackupTimestamp']</ScriptBlock></ItemSelectionCondition>
+                <Label>LastBackupTimestamp</Label><PropertyName>LastBackupTimestamp</PropertyName>
+              </ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['authenticationMode']</ScriptBlock></ItemSelectionCondition>
+                <Label>AuthenticationMode</Label><PropertyName>AuthenticationMode</PropertyName>
+              </ListItem>
             </ListItems>
           </ListEntry>
         </ListEntries>
@@ -39,8 +60,15 @@
               <ListItem><Label>BaselineName</Label><PropertyName>BaselineName</PropertyName></ListItem>
               <ListItem><Label>BaselineId</Label><PropertyName>BaselineId</PropertyName></ListItem>
               <ListItem><Label>Owner</Label><PropertyName>BaselineTenantFriendlyName</PropertyName></ListItem>
-              <ListItem><Label>OwnerTenantId</Label><PropertyName>BaselineClientTenantId</PropertyName></ListItem>
-              <ListItem><Label>Members</Label><ScriptBlock>if ($_.members -and $_.members.Count -gt 0) { ($_.members | ForEach-Object { "$($_.TenantFriendlyName) ($($_.ClientTenantId))" }) -join ', ' } else { '(none)' }</ScriptBlock></ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['baselineClientTenantId']</ScriptBlock></ItemSelectionCondition>
+                <Label>OwnerTenantId</Label><PropertyName>BaselineClientTenantId</PropertyName>
+              </ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -eq $_.PSObject.Properties['baselineClientTenantId']</ScriptBlock></ItemSelectionCondition>
+                <Label>OwnerTenantId</Label><PropertyName>BaselineMsTenantId</PropertyName>
+              </ListItem>
+              <ListItem><Label>Members</Label><ScriptBlock>if ($_.members -and $_.members.Count -gt 0) { ($_.members | ForEach-Object { "$($_.TenantFriendlyName) ($(if ($null -ne $_.PSObject.Properties['clientTenantId']) { $_.ClientTenantId } else { $_.MsTenantId }))" }) -join ', ' } else { '(none)' }</ScriptBlock></ListItem>
               <ListItem><Label>AlignedThreshold</Label><PropertyName>AlignedThreshold</PropertyName></ListItem>
               <ListItem><Label>SemiAlignedThreshold</Label><PropertyName>SemiAlignedThreshold</PropertyName></ListItem>
               <ListItem><Label>Mode</Label><ScriptBlock>$_.mode</ScriptBlock></ListItem>
@@ -129,7 +157,14 @@
           <ListEntry>
             <ListItems>
               <ListItem><Label>Tenant</Label><PropertyName>TargetTenantFriendlyName</PropertyName></ListItem>
-              <ListItem><Label>TenantId</Label><PropertyName>TargetTenantClientTenantId</PropertyName></ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['TargetTenantClientTenantId']</ScriptBlock></ItemSelectionCondition>
+                <Label>TenantId</Label><PropertyName>TargetTenantClientTenantId</PropertyName>
+              </ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.PSObject.Properties['TargetTenantMsTenantId']</ScriptBlock></ItemSelectionCondition>
+                <Label>TenantId</Label><PropertyName>TargetTenantMsTenantId</PropertyName>
+              </ListItem>
               <ListItem><Label>AlignmentScore</Label><PropertyName>AlignmentScore</PropertyName></ListItem>
               <ListItem><Label>BaselineName</Label><PropertyName>BaselineName</PropertyName></ListItem>
               <ListItem><Label>LastComparisonDateTime</Label><PropertyName>LastComparisonDateTime</PropertyName></ListItem>
@@ -277,11 +312,6 @@
                 <Label>GroupTypes</Label>
                 <ScriptBlock>if ($_.groupTypes) { ($_.groupTypes) -join ', ' } else { '' }</ScriptBlock>
               </ListItem>
-              <!-- ponytail: dormant today. GET /beta/tenants/{id}/groups emits the membershipRule
-                   key but always null, even for DynamicMembership groups; only the by-ID endpoint
-                   fills it. The condition means this costs a null check and renders nothing, and
-                   lights up on its own if the API starts populating the list. Drop it if the API
-                   removes the key instead. -->
               <ListItem>
                 <ItemSelectionCondition>
                   <ScriptBlock>-not [string]::IsNullOrWhiteSpace($_.membershipRule)</ScriptBlock>

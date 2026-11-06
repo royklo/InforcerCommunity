@@ -2,10 +2,12 @@
 .SYNOPSIS
     Retrieves available assessments from the Inforcer API.
 
-    Required API scope(s): Assessments.Read
+    Required API scope(s): Assessments.Read (API key); Tenant Assessment permission (API client, unconfirmed).
 .DESCRIPTION
     Lists all assessments available for evaluation (e.g. Copilot Readiness, CIS Benchmarks,
     Essential Eight). Each assessment has an ID, name, description, tags, and type.
+    Works with both login types: an API key uses the legacy API, a client ID and secret
+    (Connect-Inforcer -ClientId) uses the v1 API. The output has the same properties either way.
 .PARAMETER Format
     Raw (default).
 .PARAMETER OutputType
@@ -45,7 +47,7 @@ if (-not (Test-InforcerSession)) {
 
 Write-Verbose 'Retrieving assessments...'
 
-$response = Invoke-InforcerApiRequest -Endpoint '/beta/assessments' -Method GET -OutputType $OutputType
+$response = Invoke-InforcerApiRequest -Endpoint '/assessments' -Method GET -OutputType $OutputType -ObjectType Assessment
 if ($null -eq $response) { return }
 
 if ($OutputType -eq 'JsonObject') {

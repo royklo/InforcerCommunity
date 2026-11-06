@@ -2,10 +2,13 @@
 .SYNOPSIS
     Queues one or more Inforcer reports, waits for completion, and saves the outputs.
 
-    Required API scope(s): Reports.Read, Reports.Run
+    Required API scope(s): Reports.Read + Reports.Run + Tenants.Read (only when -TenantId is a GUID or
+    tenant name) (API key); Reports permission with run access on every target tenant + Tenants (only
+    for a tenant name) (API client, unconfirmed).
 .DESCRIPTION
-    POST /beta/reports/runs submits a batch of (ReportType, OutputFormat) pairs against the
-    target tenants. By default the cmdlet runs synchronously: it polls the outputs endpoint
+    POST /reports/runs submits a batch of (ReportType, OutputFormat) pairs against the
+    target tenants. Works with both login types: an API key uses the legacy API (tenants as numeric
+    Client Tenant IDs), a client ID and secret uses the v1 API (tenants as Microsoft tenant IDs). By default the cmdlet runs synchronously: it polls the outputs endpoint
     until each run is terminal, downloads every output to the current directory (or -OutputPath),
     and emits a result object per saved file.
 
@@ -23,7 +26,13 @@
         otherwise renders all duplicates in the last-listed format.
       * -Collate is rejected when the catalog reports collatable:false on the type.
       * Unknown -Parameter keys are rejected — the server would otherwise silently ignore them.
-      * Each tenant identifier is validated and resolved to a numeric Client Tenant ID before POST.
+      * Each tenant identifier is validated and resolved before POST: to a numeric Client Tenant ID
+        with an API key, to a Microsoft tenant ID (GUID) with an API client.
+
+    Saving: the server's file name is reduced to a plain file name (a leading dot becomes '_'), an
+    existing file is never overwritten, and on Windows saved files are marked as downloaded from the
+    internet. A download that answers with a redirect fails instead of following it, and a
+    throttled (429) download is not retried.
 .PARAMETER ReportType
     One or more report type keys (e.g. CopilotAdoption, TenantAuditReport, Assessment). Case-
     insensitive. Get-InforcerReportType lists every available key. Pipeline-bindable by
@@ -32,8 +41,10 @@
     One or more output formats (csv, json, pdf, html, xlsx, ...). Must be supported by every
     paired report type or the cmdlet errors before submitting. Case-insensitive.
 .PARAMETER TenantId
-    One or more tenant identifiers (numeric Client Tenant ID, Microsoft Tenant GUID, or tenant
-    friendly/DNS name). Resolved via Resolve-InforcerTenantId.
+    One or more tenant identifiers. API key: numeric Client Tenant ID, Microsoft Tenant GUID, or
+    tenant friendly/DNS name. API client: Microsoft Tenant GUID or tenant friendly/DNS name
+    (numeric ids exist only on the legacy API). Resolved via Resolve-InforcerTenantId.
+    Aliases: -ClientTenantId, -MsTenantId.
 .PARAMETER ReportPeriod
     Optional integer days — applied as the report-period parameter when supported.
     CopilotAdoption and ShadowAiDetection auto-default to 30 when omitted.
@@ -54,12 +65,17 @@
     Poll until terminal but do not download the output bytes. Returns outputs metadata.
 .PARAMETER Open
     After each output is saved, launch it with the OS default handler (Invoke-Item).
+    Only common document types are launched (csv, json, html, pdf, xlsx, xml, txt, zip, md,
+    tsv; legacy .xls is not launched); for anything else, or more than 5 files, the output
+    directory is opened instead.
     Ignored when -NoWait or -NoSave is set (nothing was saved to open). Aliases: -Show, -ShowResult.
 .PARAMETER OutputPath
     Directory where downloaded outputs are written. Defaults to the current working directory.
-    Created if it doesn't exist.
+    Created if it doesn't exist. Existing files are never overwritten: when the name is taken,
+    the output is saved as 'name (1).ext', 'name (2).ext', and so on.
 .PARAMETER TimeoutSeconds
     Maximum total time to wait for any run to become terminal. Default: 600 (10 minutes).
+    The access token of an API client is renewed automatically during long waits.
 .PARAMETER PollIntervalSeconds
     Initial poll interval. Doubles up to a 15-second cap. Default: 2.
 .PARAMETER Format
@@ -68,34 +84,44 @@
     PowerShellObject (default) or JsonObject. Affects pipeline output only; the saved files
     are unchanged.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 'Contoso'
+
     Queues, waits, and saves ActiveUserCount.csv to the current directory.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType TenantAuditReport, ActiveUserCount -OutputFormat pdf, csv -TenantId 482
+    Invoke-InforcerReport -ReportType TenantAuditReport, ActiveUserCount -OutputFormat pdf, csv -TenantId 'Contoso'
+
     Pairs by index: TenantAuditReport→pdf, ActiveUserCount→csv.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 482, 139 -NoWait
+    Invoke-InforcerReport -ReportType CopilotAdoption -OutputFormat csv -TenantId 'Contoso', 'Fabrikam' -NoWait
+
     Submits and returns immediately with the RunIds.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType Assessment -AssessmentId l1f8wd29pl44pp1j66r9 -OutputFormat pdf -TenantId 482
+    Invoke-InforcerReport -ReportType Assessment -AssessmentId l1f8wd29pl44pp1j66r9 -OutputFormat pdf -TenantId 'Contoso'
+
     Runs a specific assessment as a report.
 .EXAMPLE
-    Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 482
+    Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -TenantId 'Contoso'
+
     Pipeline-discover-then-run: each catalog entry's 'Key' alias binds to -ReportType
     via ValueFromPipelineByPropertyName, so every Security-tagged type is queued in
     one call.
 .EXAMPLE
-    Invoke-InforcerReport -Key TenantAuditReport -OutputFormat html -TenantId 482 -Open
+    Invoke-InforcerReport -Key TenantAuditReport -OutputFormat html -TenantId 'Contoso' -Open
+
     Runs the report, saves it, and immediately opens the HTML in the default browser.
 .EXAMPLE
-    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 482 -OutputType JsonObject
+    Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 'Contoso' -OutputType JsonObject
+
     Returns the run result as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS
     PSObject or String. The shape depends on the mode:
-      -NoWait        → one object per run with { RunId, Status='queued', TenantId, ReportType, ... }
+      -NoWait        → one object per queued run with only RunId (poll it with
+                       Get-InforcerReportRun -RunId <id> -Wait)
       -NoSave        → one object per output with { RunId, OutputId, FileName, FileSize, ... }
       default        → one object per saved output with { RunId, OutputId, FilePath, FileName, ... }
+    TenantId on the result is the Client Tenant ID (API key) or Microsoft tenant ID (API client);
+    'Collated' for a cross-tenant output.
 .LINK
     https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#invoke-inforcerreport
 .LINK
@@ -189,7 +215,7 @@ param(
     [string[]]$OutputFormat,
 
     [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
-    [Alias('ClientTenantId')]
+    [Alias('ClientTenantId', 'MsTenantId')]
     [object[]]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -212,7 +238,7 @@ param(
 
         # If the user has explicitly typed -ReportType <something other than Assessment>,
         # the completer is irrelevant — return empty.
-        $bound = @($fakeBoundParameters['ReportType'])
+        $bound = @($fakeBoundParameters['ReportType'] | Where-Object { $_ })
         if ($bound.Count -gt 0) {
             $hasAssessment = $false
             foreach ($t in $bound) {
@@ -231,16 +257,17 @@ param(
             )
         }
 
-        # Snapshot session + cache + denial sentinel inside module scope.
+        # Snapshot session state + cache + denial sentinel inside module scope. Credentials never
+        # leave the module: the lazy fetch below gets its URI and header from the module's helpers.
         $state = & $module {
             [PSCustomObject]@{
-                Connected = [bool]($script:InforcerSession -and $script:InforcerSession.ApiKey -and $script:InforcerSession.BaseUrl)
+                Connected = [bool](Test-InforcerSession)
+                IsV1      = [bool]($script:InforcerSession -and $script:InforcerSession.ApiVersion -eq 'v1')
                 Cache     = $script:InforcerAssessmentCache
                 Denied    = $script:InforcerAssessmentCacheDeniedAt
-                BaseUrl   = if ($script:InforcerSession) { $script:InforcerSession.BaseUrl } else { $null }
-                ApiKey    = if ($script:InforcerSession) { $script:InforcerSession.ApiKey } else { $null }
             }
         }
+        $deniedLabel = if ($state.IsV1) { '<Tenant Assessment permission required>' } else { '<Assessments.Read API scope required>' }
 
         if (-not $state.Connected) {
             return @(
@@ -254,8 +281,9 @@ param(
         if ($state.Denied) {
             return @(
                 [System.Management.Automation.CompletionResult]::new(
-                    "''", '<Assessments.Read API scope required>', 'ParameterValue',
-                    'The current API key lacks the Assessments.Read scope. Re-key with sufficient scope, then re-run Connect-Inforcer.'
+                    "''", $deniedLabel, 'ParameterValue',
+                    $(if ($state.IsV1) { 'The current API client lacks the Tenant Assessment permission. Grant it to the client in the inforcer portal, then re-run Connect-Inforcer.' }
+                      else { 'The current API key lacks the Assessments.Read scope. Re-key with sufficient scope, then re-run Connect-Inforcer.' })
                 )
             )
         }
@@ -265,36 +293,40 @@ param(
         if (-not $items) {
             # Lazy fetch with a tight 2-second budget so TAB never hangs.
             try {
-                $secure = $state.ApiKey
-                $bstr   = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-                try   { $apiKeyPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
-                finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-
-                $uri = $state.BaseUrl + '/beta/assessments'
-                $hdr = @{ 'Inf-Api-Key' = $apiKeyPlain; 'Accept' = 'application/json' }
-                $resp = Invoke-RestMethod -Uri $uri -Method GET -Headers $hdr -TimeoutSec 2 -ErrorAction Stop
-                $items = @($resp.data)
-                & $module ([scriptblock]::Create('$script:InforcerAssessmentCache = $args[0]')) $items
-            } catch {
-                # 401 (APIM gateway) or 403 → cache denial so subsequent TABs are instant.
-                $sc = 0
-                if ($_.Exception.Response) {
-                    # Intentional empty catch — best-effort status-code extraction inside a TAB
-                    # completer must never throw. Falling back to $sc=0 → "not 401/403" branch.
-                    try { $sc = [int]$_.Exception.Response.StatusCode } catch { $null }
+                $request = & $module {
+                    $hdr = Get-InforcerAuthHeader -ErrorAction SilentlyContinue
+                    if ($hdr) {
+                        $hdr['Accept'] = 'application/json'
+                        [PSCustomObject]@{ Uri = (Get-InforcerBaseUrl -Endpoint '/assessments'); Headers = $hdr }
+                    }
                 }
-                if ($sc -eq 401 -or $sc -eq 403) {
+                if (-not $request) { return @() }
+                $sc = 0
+                $resp = Invoke-RestMethod -Uri $request.Uri -Method GET -Headers $request.Headers -TimeoutSec 2 `
+                    -MaximumRedirection 0 -SkipHttpErrorCheck -StatusCodeVariable sc -ErrorAction Stop
+            } catch {
+                & $module { param($r) Clear-InforcerRequestCredential -ErrorRecord $r } $_
+                # Transient network failure: empty completion, no caching, retry on next TAB.
+                return @()
+            }
+            if ($sc -ge 300) {
+                # 403 (and, with an API key, a 401 from the APIM gateway) → cache denial so subsequent
+                # TABs are instant. A v1 401 means a bad token, not a missing permission.
+                if ($sc -eq 403 -or ($sc -eq 401 -and -not $state.IsV1)) {
                     & $module { $script:InforcerAssessmentCacheDeniedAt = Get-Date }
                     return @(
                         [System.Management.Automation.CompletionResult]::new(
-                            "''", '<Assessments.Read API scope required>', 'ParameterValue',
-                            'The current API key lacks the Assessments.Read scope (or APIM rejected the subscription).'
+                            "''", $deniedLabel, 'ParameterValue',
+                            $(if ($state.IsV1) { 'The current API client lacks the Tenant Assessment permission.' }
+                              else { 'The current API key lacks the Assessments.Read scope (or APIM rejected the subscription).' })
                         )
                     )
                 }
                 # Transient: empty completion, no caching, retry on next TAB.
                 return @()
             }
+            $items = if ($state.IsV1) { @($resp.assessments) } else { @($resp.data) }
+            & $module ([scriptblock]::Create('$script:InforcerAssessmentCache = $args[0]')) $items
         }
 
         # Filter + shape results: GUID as CompletionText, friendly name as ListItemText.
@@ -414,6 +446,8 @@ if (-not (Test-InforcerSession)) {
     return
 }
 
+$isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
+
 # Per-invocation progress ID — avoids collision with caller-side bars that may use -Id 1.
 # Uses a monotonically-increasing counter (atomic via Interlocked) so concurrent invocations
 # in the same runspace are guaranteed unique IDs. Random would have ~12% collision at 50
@@ -503,46 +537,57 @@ if ($entries.Count -eq 0) {
 # --- Resolve tenants ---
 # Reject obviously-wrong tenant types up-front. $true, hashtables, and arbitrary objects
 # would otherwise stringify to "True" / "System.Collections.Hashtable" and trigger a
-# needless /beta/tenants lookup just to fail.
+# needless tenant lookup just to fail.
 $invalidTenants = @($TenantId | Where-Object {
     $_ -isnot [int] -and $_ -isnot [long] -and $_ -isnot [string] -and $_ -isnot [guid]
 })
 if ($invalidTenants.Count -gt 0) {
     $badTypes = ($invalidTenants | ForEach-Object { $_.GetType().Name } | Sort-Object -Unique) -join ', '
-    Write-Error -Message "Tenant identifiers must be numeric Client Tenant ID, GUID, or tenant name (string). Received unsupported type(s): $badTypes." `
+    $acceptedIds = if ($isV1) { 'Microsoft tenant ID (GUID) or tenant name (string)' } else { 'numeric Client Tenant ID, GUID, or tenant name (string)' }
+    Write-Error -Message "Tenant identifiers must be $acceptedIds. Received unsupported type(s): $badTypes." `
         -ErrorId 'InvalidTenantIdType' -Category InvalidArgument
     return
 }
 
-# Fast path: if every -TenantId is already a numeric Client Tenant ID, skip the
-# /beta/tenants lookup entirely (it needs Tenants.Read scope which a Reports-only
-# key won't have). Only when the user passes a name or GUID do we need the list.
+# Fast path: skip the tenant list when every -TenantId can be used as-is (API key: a numeric
+# Client Tenant ID; API client: a Microsoft tenant ID GUID). The list needs the tenants read
+# permission, which a Reports-only credential won't have. Names (and GUIDs on the API-key
+# login) need it. A numeric id on v1 is refused by Resolve-InforcerTenantId with a clear message.
 $tenantData = $null
-$resolvedTenants = [System.Collections.Generic.List[int]]::new()
+$resolvedTenants = [System.Collections.Generic.List[object]]::new()
 [int]$tenantParseTmp = 0
-$needsLookup = $false
-foreach ($t in $TenantId) {
-    if ($t -isnot [int] -and -not [int]::TryParse(($t -as [string]), [ref]$tenantParseTmp)) {
-        $needsLookup = $true; break
-    }
-}
-if ($needsLookup) {
-    $tenantData = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject -ErrorVariable tenantListErr -ErrorAction SilentlyContinue)
+$guidParseTmp = [guid]::Empty
+$lookupInputs = @($TenantId | Where-Object {
+    $_ -isnot [int] -and -not [int]::TryParse(($_ -as [string]), [ref]$tenantParseTmp) -and
+    -not ($isV1 -and [guid]::TryParse(($_ -as [string]), [ref]$guidParseTmp))
+})
+if ($lookupInputs.Count -gt 0) {
+    $tenantData = @(Get-InforcerTenantList -Refresh -ErrorVariable tenantListErr -ErrorAction SilentlyContinue)
     if (-not $tenantData -or $tenantData.Count -eq 0) {
         $apiErr = if ($tenantListErr) { $tenantListErr[-1].Exception.Message } else { 'no response' }
         $isAuthFail = ($tenantListErr -and $tenantListErr.FullyQualifiedErrorId -match 'ApiRequestFailed_(401|403)')
-        # Only blame the values that actually need a lookup — passing numeric IDs alongside
-        # names should not have the user "re-pass numeric IDs" when they already did.
-        $unresolvable = @($TenantId | Where-Object { $_ -isnot [int] -and -not [int]::TryParse(($_ -as [string]), [ref]$tenantParseTmp) })
-        $numericCount = @($TenantId).Count - $unresolvable.Count
-        $unresolvableList = $unresolvable -join "', '"
-        $mixedHint = if ($numericCount -gt 0) {
-            "$numericCount numeric tenant ID(s) were also provided and would have worked on their own; only the name/GUID inputs need Tenants.Read for resolution."
-        } else { '' }
-        $hint = if ($isAuthFail) {
-            "The API key was rejected when looking up tenant '$unresolvableList' against GET /beta/tenants (this endpoint requires the Tenants.Read scope, which a Reports-only key does not include). Pass the numeric Client Tenant ID for that tenant directly, or re-key with Tenants.Read to enable name / GUID resolution. $mixedHint".Trim()
+        # Only blame the values that actually need a lookup — passing directly usable ids alongside
+        # names should not have the user "re-pass ids" when they already did.
+        $unresolvableList = $lookupInputs -join "', '"
+        $directCount = @($TenantId).Count - $lookupInputs.Count
+        $hint = if ($isV1) {
+            $mixedHint = if ($directCount -gt 0) {
+                "$directCount tenant ID(s) were also provided as Microsoft tenant IDs and would have worked on their own; only the names need the Tenants permission for resolution."
+            } else { '' }
+            if ($isAuthFail) {
+                "The API client was rejected when looking up tenant '$unresolvableList' (listing tenants requires the Tenants permission, which a Reports-only API client does not include). Pass the Microsoft tenant ID (GUID) for that tenant directly, or grant the API client the Tenants permission to enable name resolution. $mixedHint".Trim()
+            } else {
+                "Could not retrieve the tenant list to resolve '$unresolvableList'. Underlying error: $apiErr. $mixedHint".Trim()
+            }
         } else {
-            "Could not retrieve the tenant list to resolve '$unresolvableList'. Underlying error: $apiErr. $mixedHint".Trim()
+            $mixedHint = if ($directCount -gt 0) {
+                "$directCount numeric tenant ID(s) were also provided and would have worked on their own; only the name/GUID inputs need Tenants.Read for resolution."
+            } else { '' }
+            if ($isAuthFail) {
+                "The API key was rejected when looking up tenant '$unresolvableList' against the tenant list (this endpoint requires the Tenants.Read scope, which a Reports-only key does not include). Pass the numeric Client Tenant ID for that tenant directly, or re-key with Tenants.Read to enable name / GUID resolution. $mixedHint".Trim()
+            } else {
+                "Could not retrieve the tenant list to resolve '$unresolvableList'. Underlying error: $apiErr. $mixedHint".Trim()
+            }
         }
         Write-Error -Message $hint -ErrorId 'TenantLookupUnavailable' -Category PermissionDenied
         return
@@ -555,23 +600,32 @@ foreach ($t in $TenantId) {
         } else {
             Resolve-InforcerTenantId -TenantId $t
         }
-        if ($null -ne $resolvedId) { [void]$resolvedTenants.Add([int]$resolvedId) }
+        if ($null -ne $resolvedId) {
+            if ($isV1) { [void]$resolvedTenants.Add([string]$resolvedId) } else { [void]$resolvedTenants.Add([int]$resolvedId) }
+        }
     } catch {
         Write-Error -Message $_.Exception.Message -ErrorId 'TenantResolutionFailed' -Category InvalidArgument
         return
     }
 }
 
-# Reject non-positive IDs and dedupe — duplicates in includeTenants either 400 server-side
-# or silently dedupe, both of which produce confusing telemetry. Validate eagerly.
-$invalidIds = @($resolvedTenants | Where-Object { $_ -le 0 })
-if ($invalidIds.Count -gt 0) {
-    Write-Error -Message ("Tenant ID(s) must be positive integers. Got: {0}." -f ($invalidIds -join ', ')) `
-        -ErrorId 'InvalidTenantId' -Category InvalidArgument
-    return
-}
+# Dedupe — duplicates in the tenant list either 400 server-side or silently dedupe, both of
+# which produce confusing telemetry. API key: reject non-positive ids first; v1 ids are GUIDs.
 $beforeDedup = $resolvedTenants.Count
-$resolvedTenants = [System.Collections.Generic.List[int]]@($resolvedTenants | Sort-Object -Unique)
+if ($isV1) {
+    $seenTenants = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $uniqueTenants = [System.Collections.Generic.List[object]]::new()
+    foreach ($g in $resolvedTenants) { if ($seenTenants.Add($g)) { [void]$uniqueTenants.Add($g) } }
+    $resolvedTenants = $uniqueTenants
+} else {
+    $invalidIds = @($resolvedTenants | Where-Object { $_ -le 0 })
+    if ($invalidIds.Count -gt 0) {
+        Write-Error -Message ("Tenant ID(s) must be positive integers. Got: {0}." -f ($invalidIds -join ', ')) `
+            -ErrorId 'InvalidTenantId' -Category InvalidArgument
+        return
+    }
+    $resolvedTenants = [System.Collections.Generic.List[int]]@($resolvedTenants | Sort-Object -Unique)
+}
 if ($resolvedTenants.Count -lt $beforeDedup) {
     Write-Verbose ("Removed {0} duplicate tenant ID(s) before POST." -f ($beforeDedup - $resolvedTenants.Count))
 }
@@ -606,24 +660,25 @@ if ($wantSave) {
 }
 
 # --- Build POST body ---
-$body = @{
-    reports = @($entries)
-    tenants = @{ includeTenants = @($resolvedTenants) }
+$body = if ($isV1) {
+    [ordered]@{ reports = @($entries); msTenantIds = @($resolvedTenants) }
+} else {
+    @{ reports = @($entries); tenants = @{ includeTenants = @($resolvedTenants) } }
 }
 $bodyJson = $body | ConvertTo-Json -Depth 100
 
 $summary = "Queue $($entries.Count) report(s) across $($resolvedTenants.Count) tenant(s)"
-if (-not $PSCmdlet.ShouldProcess($summary, 'POST /beta/reports/runs')) {
+if (-not $PSCmdlet.ShouldProcess($summary, 'POST /reports/runs')) {
     return
 }
 
-Write-Verbose "POST /beta/reports/runs with $($entries.Count) report(s), tenants: $($resolvedTenants -join ', ')"
+Write-Verbose "POST /reports/runs with $($entries.Count) report(s), tenants: $($resolvedTenants -join ', ')"
 
 Write-Progress -Id $progressId -Activity 'Invoke-InforcerReport' `
     -Status "Queuing $($entries.Count) report(s) across $($resolvedTenants.Count) tenant(s)..." `
     -PercentComplete 0
 
-$queueResponse = Invoke-InforcerApiRequest -Endpoint '/beta/reports/runs' -Method POST -Body $bodyJson
+$queueResponse = Invoke-InforcerApiRequest -Endpoint '/reports/runs' -Method POST -Body $bodyJson -ObjectType ReportRun
 if ($null -eq $queueResponse) {
     Write-Progress -Id $progressId -Activity 'Invoke-InforcerReport' -Completed
     return
@@ -638,6 +693,7 @@ if ($NoWait.IsPresent) {
     # in the host until the next progress write in the runspace.
     Write-Progress -Id $progressId -Activity 'Invoke-InforcerReport' -Completed
     if ($OutputType -eq 'JsonObject') {
+        if ($isV1) { return ConvertTo-Json -InputObject @($runs) -Depth 100 }
         return ($runs | ConvertTo-Json -Depth 100)
     }
     foreach ($run in $runs) {
@@ -657,8 +713,8 @@ $totalRuns = $runs.Count
 $completedRuns = 0
 
 foreach ($run in $runs) {
-    # POST response shape is { data: { runId: "<guid>" } } unwrapped by Invoke-InforcerApiRequest;
-    # list endpoint also uses runId. Accept either runId or id for forward-compatibility.
+    # POST response is { runId } (beta, unwrapped by Invoke-InforcerApiRequest) or { reportRunId }
+    # (v1, mapped to runId). Accept either runId or id for forward-compatibility.
     $runIdProp = $run.PSObject.Properties['runId']
     if (-not $runIdProp) { $runIdProp = $run.PSObject.Properties['id'] }
     $runIdValue = if ($runIdProp) { $runIdProp.Value -as [string] } else { $null }
@@ -706,18 +762,19 @@ foreach ($run in $runs) {
     }
 
     if ($timedOut) {
-        Write-Error -Message "Timed out waiting for run $runIdValue to complete (waited $TimeoutSeconds s). Use Get-InforcerReportRun -RunId $runIdValue to check status." `
+        $scopeNote = if ($isV1) { ' (a run outside the API client''s tenant scope also reports "not ready")' } else { '' }
+        Write-Error -Message "Timed out waiting for run $runIdValue to complete (waited $TimeoutSeconds s)$scopeNote. Use Get-InforcerReportRun -RunId $runIdValue to check status." `
             -ErrorId 'PollTimeout' -Category OperationStopped
         continue
     }
 
-    # The outputs response shape (confirmed against api-uk.inforcer.com):
-    #   { data: { outputs: [ { id, reportType, tenantId, format, sizeBytes }, ... ] } }
-    # Test-InforcerReportRunTerminal unwraps to the inner outputs array.
+    # Output records: { id, reportType, tenantId, format, sizeBytes } — beta unwraps
+    # { data: { outputs } }, v1 maps msTenantId to tenantId. Test-InforcerReportRunTerminal
+    # returns the inner outputs array.
     $outputs = @($outputsObj)
 
     if ($outputs.Count -eq 0) {
-        Write-Warning "Run $runIdValue is terminal but returned no outputs. Either the report produced no data, or no outputs are within this API key's tenant scope (collated outputs require the key to cover every tenant the run targeted)."
+        Write-Warning "Run $runIdValue is terminal but returned no outputs. Either the report produced no data, or no outputs are within this $(if ($isV1) { 'API client' } else { 'API key' })'s tenant scope (collated outputs require the $(if ($isV1) { 'client' } else { 'key' }) to cover every tenant the run targeted)."
     } elseif ($outputs.Count -lt $entries.Count -and $totalRuns -eq 1) {
         Write-Warning "Run $runIdValue produced $($outputs.Count) output(s) but $($entries.Count) report(s) were requested."
     }
@@ -764,7 +821,7 @@ foreach ($run in $runs) {
         #   { id, reportType, tenantId, format, sizeBytes }
         # No server-side fileName — the Content-Disposition header is the source of truth.
         # Streams to disk via -DestinationDirectory so large outputs don't load into memory.
-        $downloadEndpoint = "/beta/reports/runs/$runIdValue/outputs/$outId"
+        $downloadEndpoint = "/reports/runs/$runIdValue/outputs/$outId"
         $defaultName = ('{0}-{1}' -f $runIdValue, $outId)
         try {
             $download = Invoke-InforcerRawDownload -Endpoint $downloadEndpoint -DefaultFileName $defaultName `
@@ -784,17 +841,17 @@ foreach ($run in $runs) {
         $formatValue = $out.PSObject.Properties['format']
 
         # Collated cross-tenant outputs report tenantId as 0, null, or an absent field
-        # (server behavior is inconsistent — see Reports-API-Feedback.md §16). When -Collate
-        # was requested on the run, OR the record has no positive tenantId, surface 'Collated'
-        # as a sentinel so it doesn't collide with the integer tenant-ID space.
-        $rawTenantId = $null
-        if ($tenantIdValue -and $null -ne $tenantIdValue.Value) {
-            $rawTenantId = $tenantIdValue.Value -as [int]
-        }
-        $tenantOut = if ($Collate.IsPresent -or $null -eq $rawTenantId -or $rawTenantId -le 0) {
+        # (server behavior is inconsistent — see Reports-API-Feedback.md §16; v1 always sends null).
+        # When -Collate was requested on the run, OR the record has no usable tenant id, surface
+        # 'Collated' as a sentinel so it doesn't collide with the tenant-ID space.
+        $rawTenantId = if ($tenantIdValue) { $tenantIdValue.Value } else { $null }
+        $tenantOut = if ($Collate.IsPresent -or $null -eq $rawTenantId -or [string]::IsNullOrWhiteSpace("$rawTenantId")) {
             'Collated'
+        } elseif ($isV1) {
+            "$rawTenantId"
         } else {
-            $rawTenantId
+            $numericTenantId = $rawTenantId -as [int]
+            if ($null -eq $numericTenantId -or $numericTenantId -le 0) { 'Collated' } else { $numericTenantId }
         }
 
         $result = [PSCustomObject][ordered]@{
@@ -826,7 +883,7 @@ if ($Open.IsPresent -and $results.Count -gt 0) {
     # .workflow, …) could let a compromised or malicious upstream auto-execute attacker
     # code via the OS file-type association. For non-allowlisted files, open the directory
     # instead so the user can choose what to do with them.
-    $openAllowlist = @('.csv','.json','.html','.htm','.pdf','.xlsx','.xls','.xml','.txt','.zip','.md','.tsv')
+    $openAllowlist = @('.csv','.json','.html','.htm','.pdf','.xlsx','.xml','.txt','.zip','.md','.tsv')
     $openMax = 5
     $unsafe = @($results | Where-Object {
         $ext = ([System.IO.Path]::GetExtension($_.FilePath) -as [string]).ToLowerInvariant()

@@ -323,14 +323,12 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
     return
 }
 
+# The percentage exactly as inforcer reports it (a number, already rounded to two decimals by the API).
 function FormatAlignmentScore($scoreVal) {
     if ($null -eq $scoreVal) { return $null }
-    $scoreStr = $scoreVal.ToString().Replace(',', '.')
     $scoreNumeric = 0.0
-    if (-not [double]::TryParse($scoreStr, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$scoreNumeric)) { return $null }
-    $rounded = [Math]::Round($scoreNumeric, 1)
-    if ($rounded -eq [Math]::Floor($rounded)) { return [int][Math]::Floor($rounded).ToString() }
-    return $rounded.ToString('F1', [System.Globalization.CultureInfo]::InvariantCulture).Replace('.', ',')
+    if (-not [double]::TryParse($scoreVal.ToString().Replace(',', '.'), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$scoreNumeric)) { return $null }
+    $scoreNumeric
 }
 
 if ($Format -eq 'Raw') {

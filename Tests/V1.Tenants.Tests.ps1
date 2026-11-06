@@ -288,7 +288,8 @@ Describe 'Get-InforcerAlignmentDetails' {
         $r.Count | Should -Be 2
         $r[0].PSObject.Properties.Name | Should -Be @('TargetTenantFriendlyName', 'TargetTenantMsTenantId', 'AlignmentScore', 'BaselineName', 'BaselineId', 'LastComparisonDateTime')
         $r[0].TargetTenantMsTenantId | Should -Be $script:T2
-        $r[0].AlignmentScore | Should -BeExactly '80,5'
+        $r[0].AlignmentScore | Should -BeOfType [double]
+        $r[0].AlignmentScore | Should -Be 80.5
         $r[0].BaselineId | Should -Be $script:B1
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly
     }

@@ -32,7 +32,7 @@ Describe 'Resolve-InforcerGroupId' {
         Set-ReviewSession
         Mock -ModuleName InforcerCommunity Invoke-InforcerPagedRequest {
             [pscustomobject]@{ id = '00000000-0000-0000-0000-0000000000a1'; displayName = 'Admins' }
-            Write-Error 'page 2 failed' -ErrorId 'ApiRequestFailed_500'
+            Write-Error 'page 2 failed' -ErrorId 'ApiRequestFailed_500' -ErrorAction Continue
         }
         { & $script:M { Resolve-InforcerGroupId -GroupId 'Admins' -TenantId '00000000-0000-0000-0000-000000000001' } } |
             Should -Throw '*Failed to search for group*'
@@ -128,7 +128,7 @@ Describe 'v1 JSON is always an array' {
 
     It 'Get-InforcerReportRun returns nothing when the list request fails' {
         Set-ReviewSession
-        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest { Write-Error 'boom' -ErrorId 'ApiRequestFailed_500' }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest { Write-Error 'boom' -ErrorId 'ApiRequestFailed_500' -ErrorAction Continue }
         $json = Get-InforcerReportRun -OutputType JsonObject -ErrorAction SilentlyContinue
         $json | Should -BeNullOrEmpty
     }
@@ -150,7 +150,7 @@ Describe 'v1 JSON is always an array' {
     It 'v1: Get-InforcerTenant returns nothing when the tenant list request fails' {
         Set-ReviewSession
         & $script:M { $script:InforcerTenantListCache = $null }
-        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest { Write-Error 'boom' -ErrorId 'ApiRequestFailed_500' }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest { Write-Error 'boom' -ErrorId 'ApiRequestFailed_500' -ErrorAction Continue }
         Get-InforcerTenant -OutputType JsonObject -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
     }
 }

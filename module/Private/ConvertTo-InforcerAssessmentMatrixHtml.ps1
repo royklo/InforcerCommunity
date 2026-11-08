@@ -242,7 +242,7 @@ tbody tr:hover td:first-child{background:#f3f4f6}
 </div>
 <script>
 var T=$($tenantsJson -replace '<','\u003c'),M=$($matrixJson -replace '<','\u003c');
-var vis=new Set(T.map(function(t){return t.name}));
+var vis=new Set(T.map(function(t){return String(t.id)}));
 var filt='all';
 
 function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -255,12 +255,12 @@ function buildCbs(){
   });
   document.getElementById('tCbs').innerHTML=h;
 }
-document.getElementById('tCbs').addEventListener('change',function(e){var i=e.target.getAttribute('data-i');if(i!==null)togT(e.target,T[+i].name)});
+document.getElementById('tCbs').addEventListener('change',function(e){var i=e.target.getAttribute('data-i');if(i!==null)togT(e.target,String(T[+i].id))});
 function toggleDrop(e){e.stopPropagation();document.getElementById('tDrop').classList.toggle('open')}
 document.addEventListener('click',function(){document.getElementById('tDrop').classList.remove('open')});
 document.getElementById('tDrop').addEventListener('click',function(e){e.stopPropagation()});
 function togT(cb,n){if(cb.checked)vis.add(n);else vis.delete(n);render()}
-function togAll(on){vis=on?new Set(T.map(function(t){return t.name})):new Set();document.querySelectorAll('#tCbs input').forEach(function(c){c.checked=on});render()}
+function togAll(on){vis=on?new Set(T.map(function(t){return String(t.id)})):new Set();document.querySelectorAll('#tCbs input').forEach(function(c){c.checked=on});render()}
 function setFilter(f,btn){filt=f;document.querySelectorAll('.pill-btn').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');applyFilters()}
 
 function applyFilters(){
@@ -290,7 +290,7 @@ function applyFilters(){
 }
 
 function render(){
-  var vt=T.filter(function(t){return vis.has(t.name)});
+  var vt=T.filter(function(t){return vis.has(String(t.id))});
   // Head with score + passed/total
   var th='<tr><th>Check</th>';
   vt.forEach(function(t){

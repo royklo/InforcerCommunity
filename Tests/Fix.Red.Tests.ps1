@@ -106,6 +106,9 @@ Describe 'Assessment matrix with two tenants of the same name' {
         $rows = [regex]::Match($html, 'M=(\[.*?\]);').Groups[1].Value | ConvertFrom-Json
         $rows[0].statuses.'00000000-0000-0000-0000-000000000001' | Should -Be 'Fail'
         $rows[0].statuses.'00000000-0000-0000-0000-000000000002' | Should -Be 'Pass'
+        # The tenant checkboxes toggle by id too, so each same-named column hides on its own.
+        $html | Should -Match ([regex]::Escape('vis.has(String(t.id))'))
+        $html | Should -Not -Match 'vis\.has\(t\.name\)|return t\.name\}'
     }
 }
 

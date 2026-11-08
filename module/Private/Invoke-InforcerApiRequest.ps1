@@ -204,7 +204,7 @@ function Invoke-InforcerApiRequest {
         return
     }
 
-    if ($null -eq $rawResponse) {
+    if ($null -eq $rawResponse -or ($rawResponse -is [string] -and [string]::IsNullOrWhiteSpace($rawResponse))) {
         Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData
         return
     }

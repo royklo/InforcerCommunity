@@ -152,7 +152,10 @@ if ($eventTypes.Count -gt 0) { $bodyObj['eventTypes'] = $eventTypes }
 if ($User) { $bodyObj['user'] = $User }
 
 Write-Verbose 'Searching audit events...'
-foreach ($item in @(Invoke-InforcerPagedRequest -Endpoint '/auditEvents/search' -Method POST -Body $bodyObj -ObjectType AuditEvent -MaxResults $MaxResults)) {
+$searchErr = @()
+$found = @(Invoke-InforcerPagedRequest -Endpoint '/auditEvents/search' -Method POST -Body $bodyObj -ObjectType AuditEvent -MaxResults $MaxResults -ErrorVariable searchErr)
+if ($searchErr.Count -gt 0) { return }
+foreach ($item in $found) {
     if ($item -is [PSObject]) {
         $null = Add-InforcerPropertyAliases -InputObject $item -ObjectType AuditEvent
         $item.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AuditEvent')

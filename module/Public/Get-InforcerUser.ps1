@@ -125,11 +125,10 @@ function Get-InforcerUser {
             $response = Invoke-InforcerApiRequest -Endpoint $endpoint -Method GET -OutputType PowerShellObject -PreserveStructure -ObjectType User -ErrorVariable err -ErrorAction SilentlyContinue
 
             if ($null -eq $response) {
-                # Only emit UserNotFound if API returned 404; otherwise the API helper already wrote the real error
-                if ($err -and $err[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
+                if (-not $err -or $err[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*') {
                     Write-Error -Message "User '$UserId' not found in tenant '$resolvedTenantId'." -ErrorId 'UserNotFound' -Category ObjectNotFound
-                } elseif (-not $err) {
-                    Write-Error -Message "User '$UserId' not found in tenant '$resolvedTenantId'." -ErrorId 'UserNotFound' -Category ObjectNotFound
+                } else {
+                    Write-Error -ErrorRecord $err[-1]
                 }
                 return
             }
@@ -150,7 +149,8 @@ function Get-InforcerUser {
         if ($Search) { $endpoint += '?search=' + [System.Uri]::EscapeDataString($Search) }
 
         if ($OutputType -eq 'JsonObject') {
-            $users = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType User -MaxResults $MaxResults)
+            $users = @(Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType User -MaxResults $MaxResults -ErrorVariable listErr)
+            if ($listErr) { return }
             if ($piped) { foreach ($u in $users) { & $addTenantId $u; $pipedJson.Add($u) }; return }
             if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject $users -Depth 100 }
             return $users | ConvertTo-Json -Depth 100

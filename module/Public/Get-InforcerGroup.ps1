@@ -196,16 +196,18 @@ function Get-InforcerGroup {
 
         # Streams; -MaxResults counts matches, so with -Filter it applies after filtering.
         $listGroups = {
-            if (-not $Filter) { return Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group -MaxResults $MaxResults }
+            if (-not $Filter) { return Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group -MaxResults $MaxResults -ErrorVariable listErr }
             $first = if ($MaxResults -gt 0) { $MaxResults } else { [int]::MaxValue }
-            Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group | Where-Object {
+            Invoke-InforcerPagedRequest -Endpoint $endpoint -ObjectType Group -ErrorVariable listErr | Where-Object {
                 $dn = $_.PSObject.Properties['displayName'].Value
                 $dn -and $dn -like $Filter
             } | Select-Object -First $first
         }
 
         if ($OutputType -eq 'JsonObject') {
-            $groups = @(& $listGroups)
+            $listErr = @()
+            $groups = @(. $listGroups)
+            if ($listErr) { return }
             if ($piped) { foreach ($g in $groups) { & $addTenantId $g; $pipedJson.Add($g) }; return }
             if ($script:InforcerSession.ApiVersion -eq 'v1') { return ConvertTo-Json -InputObject $groups -Depth 100 }
             return $groups | ConvertTo-Json -Depth 100

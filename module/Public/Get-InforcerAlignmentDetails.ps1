@@ -221,9 +221,8 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineId)) {
         $detailEndpoint = "/tenants/$tId/alignmentDetails?customBaselineId=$baselineGuid"
         $response = Invoke-InforcerApiRequest -Endpoint $detailEndpoint -Method GET -OutputType $requestOutputType -PreserveStructure:$pipedJson -ObjectType AlignmentDetails -ErrorAction SilentlyContinue -ErrorVariable apiErr
         if ($null -eq $response) {
-            $errMsg = if ($apiErr -and $apiErr.Count -gt 0) { $apiErr[-1].Exception.Message } else { $null }
-            if ($errMsg -match 'permission|forbidden|access') {
-                Write-Warning "No access to alignment details for tenant '$tName' ($tId). You may not have permission to view this baseline's data."
+            if ($apiErr -and $apiErr.Count -gt 0) {
+                Write-Error -ErrorRecord $apiErr[-1]
             } else {
                 Write-Warning "No alignment data returned for tenant '$tName' ($tId)."
             }

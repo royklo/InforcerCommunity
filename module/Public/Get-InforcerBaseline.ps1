@@ -146,6 +146,7 @@ if (-not $piped) {
 $rows = [System.Collections.Generic.List[object]]::new()
 $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($requested in $requestedTenantIds) {
+    if ($null -eq $requested) { continue }
     $resolvedTenantId = $null
     if ($null -ne $requested) {
         try {

@@ -326,7 +326,7 @@ That is 21 paths and 22 operations (`/v1/reports/runs` has GET and POST). Path p
 | Alignment score | `tenantName` → `tenantFriendlyName`, `alignedBaselineId` → `baselineGroupId`, `alignedBaselineName` → `baselineGroupName`, `alignmentScore` → `score`, `lastAlignmentTimestamp` → `lastComparisonDateTime` | `msTenantId` replaces the numeric `tenantId` |
 | Alignment details | buckets `matched`, `matchedWithAcceptedDeviations`, `deviated`, `missingFromTenant`, `additionalInTenant` → `matchedPolicies`, `matchedWithAcceptedDeviations`, `deviatedUnaccepted`, `missingFromSubjectUnaccepted`, `additionalInSubjectUnaccepted`; `tenantDataTimestamp` → `subjectDataTimestamp`; per-policy `displayName` → `policyName`, `tenantPolicies` → `matchingSubjectPolicies`; more renames in [Alignment details renames](#alignment-details-renames) | compared policies are richer (diffs, similar policies) |
 | User | list `groupCount`/`roleCount` → `groups`/`roles` | list has counts, not arrays |
-| Group, role, secure score, assessment, report type, audit event type | unchanged | audit events lack `clientId` and `message`; v1 lists only the event types a partner can see (191 on 2026-11-05), beta lists every type, including internal ones and types still in development (147) |
+| Group, role, secure score, assessment, report type, audit event type | unchanged | audit events lack `clientId` and `message`; v1 lists the event types a partner can use (191 on 2026-11-05); beta's list is older (147) and also holds internal types and types still in development |
 | Assessment run | `assessmentId` → `assessment` | |
 | Report run / output | `reportRunId` → `runId`; output `msTenantId` → `tenantId` (`null` = collated) | |
 

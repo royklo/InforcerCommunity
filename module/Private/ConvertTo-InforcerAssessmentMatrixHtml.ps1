@@ -33,10 +33,11 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
     foreach ($tr in $TenantResults) {
         $map = @{}
         foreach ($c in $tr.Checks) { $map["$($c.category)|$($c.name)"] = $c.Status }
-        $tenantCheckMap[$tr.TenantName] = $map
+        $tenantCheckMap["$($tr.TenantId)"] = $map
     }
 
     $tenantNames = @($TenantResults | ForEach-Object { $_.TenantName })
+    $tenantKeys = @($TenantResults | ForEach-Object { "$($_.TenantId)" })
     $dateStr = Get-Date -Format 'yyyy-MM-dd'
     $timeStr = Get-Date -Format 'HH:mm'
     $avgScore = if ($TenantResults.Count -gt 0) { [math]::Round(($TenantResults | ForEach-Object { $_.Score } | Measure-Object -Average).Average, 1) } else { 0 }
@@ -50,9 +51,9 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
     foreach ($ck in $allChecks) {
         $key = "$($ck.category)|$($ck.name)"
         $statuses = [ordered]@{}
-        foreach ($tn in $tenantNames) {
-            $st = if ($tenantCheckMap[$tn].ContainsKey($key)) { $tenantCheckMap[$tn][$key] } else { 'N/A' }
-            $statuses[$tn] = $st
+        foreach ($tk in $tenantKeys) {
+            $st = if ($tenantCheckMap[$tk].ContainsKey($key)) { $tenantCheckMap[$tk][$key] } else { 'N/A' }
+            $statuses[$tk] = $st
         }
         $desc = if ($ck.description) { ($ck.description -replace "`r?`n", '\n') } else { '' }
         $impact = if ($ck.impact) { ($ck.impact -replace "`r?`n", '\n') } else { '' }
@@ -310,7 +311,7 @@ function render(){
     if(hasDetail)tb+='<button class="ck-toggle" onclick="event.stopPropagation();openPanel('+idx+')">&#x2139; Details</button>';
     tb+='</div></td>';
     vt.forEach(function(t){
-      var st=r.statuses[t.name]||'N/A';
+      var st=r.statuses[t.id]||'N/A';
       if(st==='Pass')tb+='<td><span class="st st-p">\u2713</span></td>';
       else if(st==='Fail')tb+='<td><span class="st st-f">\u2717</span></td>';
       else if(st!=='N/A')tb+='<td><span class="st st-u" title="Not assessed: '+esc(st)+'">?</span></td>';

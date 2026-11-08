@@ -366,7 +366,7 @@ if ($Format -eq 'Raw') {
         $items = @(ConvertTo-InforcerArray $response)
         $keep = [bool[]]::new($items.Count)
         foreach ($requestedTenantId in $requested) {
-            if ($null -eq $requestedTenantId) { for ($i = 0; $i -lt $items.Count; $i++) { $keep[$i] = $true }; continue }
+            if ($null -eq $requestedTenantId) { continue }
             try {
                 $resolvedTenantId = Resolve-InforcerTenantId -TenantId $requestedTenantId -ErrorAction Stop
             } catch {

@@ -1352,7 +1352,7 @@ Describe 'Private helpers (via module scope)' {
                     )
                 })
                 $html = ConvertTo-InforcerAssessmentMatrixHtml -AssessmentName 'T' -TenantResults $tr
-                $html | Should -Match '"T1":"InsufficientPermissions"'
+                $html | Should -Match '"1":"InsufficientPermissions"'
                 $html | Should -Match '"na":1'
                 $html | Should -Match "setFilter\('na',this\)"
                 $html | Should -Match "filt==='na'"

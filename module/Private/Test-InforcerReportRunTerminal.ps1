@@ -55,7 +55,7 @@ function Test-InforcerReportRunTerminal {
         $headers['Accept'] = 'application/json'
 
         try {
-            $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck -UseBasicParsing -MaximumRedirection 0 -ErrorAction Ignore
+            $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck -UseBasicParsing -MaximumRedirection 0 -Debug:$false -Verbose:$false -ErrorAction Ignore
         } catch {
             Clear-InforcerRequestCredential -ErrorRecord $_
             $msg = Protect-InforcerApiKeyInText -Text $_.Exception.Message

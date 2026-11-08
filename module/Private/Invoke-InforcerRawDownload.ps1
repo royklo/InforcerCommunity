@@ -90,10 +90,10 @@ function Invoke-InforcerRawDownload {
             # -SkipHttpErrorCheck lets us inspect status code and body without exception-based flow.
             if ($tempStreamPath) {
                 $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck `
-                    -MaximumRedirection 0 -UseBasicParsing -OutFile $tempStreamPath -PassThru -ErrorAction Stop
+                    -MaximumRedirection 0 -UseBasicParsing -Debug:$false -Verbose:$false -OutFile $tempStreamPath -PassThru -ErrorAction Stop
             } else {
                 $response = Invoke-WebRequest -Uri $uri -Method GET -Headers $headers -SkipHttpErrorCheck `
-                    -MaximumRedirection 0 -UseBasicParsing -ErrorAction Stop
+                    -MaximumRedirection 0 -UseBasicParsing -Debug:$false -Verbose:$false -ErrorAction Stop
             }
         } catch {
             Clear-InforcerRequestCredential -ErrorRecord $_

@@ -103,7 +103,7 @@ function ConvertTo-InforcerMarkdown {
     # FilterBaseline, not BaselineName: BaselineName is just the tenant's first attached
     # baseline, so it named the wrong baseline (or any baseline at all) when -Baseline filtered.
     if (-not [string]::IsNullOrWhiteSpace($DocModel.FilterBaseline)) {
-        [void]$sb.AppendLine("*Baseline: $($DocModel.FilterBaseline)*")
+        [void]$sb.AppendLine("*Baseline: $(ConvertTo-MarkdownText $DocModel.FilterBaseline)*")
         [void]$sb.AppendLine()
     }
     if (-not [string]::IsNullOrWhiteSpace($DocModel.FilterTag)) {
@@ -119,11 +119,11 @@ function ConvertTo-InforcerMarkdown {
 
     foreach ($prodName in $DocModel.Products.Keys) {
         $prodAnchor = ConvertTo-MarkdownAnchor -Text $prodName
-        [void]$sb.AppendLine("- [$prodName](#$prodAnchor)")
+        [void]$sb.AppendLine("- [$(ConvertTo-MarkdownText $prodName)](#$prodAnchor)")
         $product = $DocModel.Products[$prodName]
         foreach ($catName in $product.Categories.Keys) {
             $catAnchor = ConvertTo-MarkdownAnchor -Text $catName
-            [void]$sb.AppendLine("  - [$catName](#$catAnchor)")
+            [void]$sb.AppendLine("  - [$(ConvertTo-MarkdownText $catName)](#$catAnchor)")
         }
     }
     [void]$sb.AppendLine()
@@ -134,13 +134,13 @@ function ConvertTo-InforcerMarkdown {
     # Content sections
     # -------------------------------------------------------------------------
     foreach ($prodName in $DocModel.Products.Keys) {
-        [void]$sb.AppendLine("## $prodName")
+        [void]$sb.AppendLine("## $(ConvertTo-MarkdownText $prodName)")
         [void]$sb.AppendLine()
 
         $product = $DocModel.Products[$prodName]
 
         foreach ($catName in $product.Categories.Keys) {
-            [void]$sb.AppendLine("### $catName")
+            [void]$sb.AppendLine("### $(ConvertTo-MarkdownText $catName)")
             [void]$sb.AppendLine()
 
             $policies = $product.Categories[$catName]

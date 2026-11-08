@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
-## [1.0.0] - 2026-11-04
+## [1.0.0] - 2026-11-08
 
 inforcer now has a versioned API (v1) with API clients that log in with a client ID and secret. API keys keep working, but they only reach inforcer's legacy beta API, which inforcer says is due to be retired (no date announced). 1.0.0 supports both. The login decides which API is used, and every cmdlet works with either.
 
@@ -67,7 +67,7 @@ The full per-object difference list is in [docs/API-REFERENCE.md](docs/API-REFER
 
 ### Tests
 
-- About 330 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (828 pass in total).
+- 354 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (832 in total).
 
 ## [0.8.0] - 2026-10-22
 

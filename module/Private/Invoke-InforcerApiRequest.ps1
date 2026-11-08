@@ -216,7 +216,7 @@ function Invoke-InforcerApiRequest {
         } catch {
             $preview = $rawResponse
             if ($preview.Length -gt 200) { $preview = $preview.Substring(0, 200) + '...' }
-            Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $preview" `
+            Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $(Protect-InforcerApiKeyInText -Text $preview -Session $session)" `
                 -ErrorId 'NonJsonResponse' -Category InvalidData
             return
         }
@@ -224,7 +224,7 @@ function Invoke-InforcerApiRequest {
     if ($rawResponse -isnot [PSObject] -and $rawResponse -isnot [array]) {
         $preview = $rawResponse.ToString()
         if ($preview.Length -gt 200) { $preview = $preview.Substring(0, 200) + '...' }
-        Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $preview" `
+        Write-Error -Message "API returned non-JSON response. Base URL may be incorrect. Response starts with: $(Protect-InforcerApiKeyInText -Text $preview -Session $session)" `
             -ErrorId 'NonJsonResponse' -Category InvalidData
         return
     }

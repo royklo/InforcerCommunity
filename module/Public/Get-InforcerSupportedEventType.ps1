@@ -1,5 +1,4 @@
-# Internal: returns audit event type names from the API.
-# Used by Get-InforcerAuditEvent when -EventType is omitted (resolve "all types").
+# Returns audit event type names from the API.
 # $global:InforcerCachedEventTypes is populated at module import from the static
 # fallback below, then refreshed with the live API response on the first
 # authenticated call. The -EventType ArgumentCompleter in Get-InforcerAuditEvent.ps1

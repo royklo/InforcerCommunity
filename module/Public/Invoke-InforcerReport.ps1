@@ -303,7 +303,7 @@ param(
                 if (-not $request) { return @() }
                 $sc = 0
                 $resp = Invoke-RestMethod -Uri $request.Uri -Method GET -Headers $request.Headers -TimeoutSec 2 `
-                    -MaximumRedirection 0 -SkipHttpErrorCheck -StatusCodeVariable sc -ErrorAction Stop
+                    -MaximumRedirection 0 -SkipHttpErrorCheck -StatusCodeVariable sc -Debug:$false -Verbose:$false -ErrorAction Stop
             } catch {
                 & $module { param($r) Clear-InforcerRequestCredential -ErrorRecord $r } $_
                 # Transient network failure: empty completion, no caching, retry on next TAB.

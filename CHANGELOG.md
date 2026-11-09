@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
-## [1.0.0] - 2026-11-08
+## [1.0.0] - 2026-11-09
 
 inforcer now has a versioned API (v1) with API clients that log in with a client ID and secret. API keys keep working, but they only reach inforcer's legacy beta API, which inforcer says is due to be retired (no date announced). 1.0.0 supports both. The login decides which API is used, and every cmdlet works with either.
 
@@ -36,6 +36,7 @@ API-key output is identical to 0.8.0 (checked live, side by side), except for th
 - Error messages: HTTP 400 errors show the API's title, detail and field errors. Network failures carry the `Inforcer API request failed:` prefix. Export and Compare report a failed policy fetch as a short message instead of a stack trace. `-ErrorVariable` holds the module's `ApiRequestFailed_<status>` record.
 - Security: `$Error` and `Get-Error` no longer contain the API key after a failed call (0.8.0 kept it in the request headers), and `Test-InforcerConnection -Verbose` no longer prints part of the key. `-Debug` on report downloads and run polling (`Save-InforcerReportOutput`, `Invoke-InforcerReport`, `Get-InforcerReportRun -Wait`) no longer prints the key in the request headers, and an error about a non-JSON answer no longer quotes it.
 - Export and Compare no longer label a report with another tenant's name when a tenant record is missing.
+- `Export-InforcerTenantDocumentation` HTML: the header counts only the baselines the tenant is the source or a member of (it counted every baseline the credential can see), shows no count when `-Baseline` filters the report, and reads "1 product", "1 policy", "1 baseline".
 - **Failed requests are no longer hidden.** `Get-InforcerUser -UserId` reports a failed request (it returned nothing, even with `-ErrorAction Stop`). `Get-InforcerAlignmentDetails -BaselineId` reports it as an error instead of a warning. An empty answer from the API gives "API returned an empty response" instead of "You cannot call a method on a null-valued expression". `Get-InforcerUser`, `Get-InforcerGroup` and `Get-InforcerAuditEvent -OutputType JsonObject` return nothing when a page fails, instead of an incomplete list.
 - `Invoke-InforcerReport`: TAB completion of assessment IDs works before `-ReportType` is bound.
 - **Report downloads** (`Invoke-InforcerReport`, `Save-InforcerReportOutput`) never overwrite an existing file: a taken name is saved as `name (1).ext`, `name (2).ext`, and so on. A server file name that starts with a dot gets a leading underscore (`.csv` becomes `_.csv`), and `-FileName` writes your name directly. On Windows the files are marked as downloaded from the internet, so Office opens them in Protected View. `Invoke-InforcerReport -Open` no longer launches `.xls` files; it opens the folder.
@@ -69,7 +70,7 @@ The full per-object difference list is in [docs/API-REFERENCE.md](docs/API-REFER
 
 ### Tests
 
-- 374 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (852 in total).
+- 378 new Pester tests cover the v1 transport, token renewal, field mapping, every cmdlet on v1, error scrubbing, pipeline input, download safety, redirect refusal, settings-catalog refresh and Graph enrichment (856 in total).
 
 ## [0.8.0] - 2026-10-22
 

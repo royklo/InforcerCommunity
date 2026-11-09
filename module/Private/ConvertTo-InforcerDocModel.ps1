@@ -260,10 +260,15 @@ function ConvertTo-InforcerDocModel {
     if ([string]::IsNullOrWhiteSpace($tenantName) -and $null -ne $tenant) { $tenantName = $tenant.tenantDnsName }
     if ([string]::IsNullOrWhiteSpace($tenantName)) { $tenantName = "Tenant $($DocData.TenantId)" }
 
-    # Collect all baseline names for this tenant
+    # The baseline list holds every baseline the credential sees: keep the ones this tenant is the source or a member of.
     $baselineNames = [System.Collections.Generic.List[string]]::new()
-    if ($null -ne $baselines -and $baselines.Count -gt 0) {
+    $tenantGuid = if ($null -ne $tenant) { "$($tenant.msTenantId)" }
+    if ($null -ne $baselines -and $baselines.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($tenantGuid)) {
         foreach ($bl in @($baselines)) {
+            if ($null -eq $bl) { continue }
+            $isSource = "$($bl.baselineMsTenantId)" -eq $tenantGuid
+            $isMember = @($bl.members | Where-Object { $null -ne $_ -and "$($_.msTenantId)" -eq $tenantGuid }).Count -gt 0
+            if (-not ($isSource -or $isMember)) { continue }
             $blName = $bl.name
             if ([string]::IsNullOrWhiteSpace($blName)) { $blName = $bl.baselineGroupName }
             if (-not [string]::IsNullOrWhiteSpace($blName)) { [void]$baselineNames.Add($blName) }

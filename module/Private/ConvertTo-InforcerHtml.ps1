@@ -886,10 +886,10 @@ tr:hover td { background: var(--row-hover); }
     [void]$sb.AppendLine("<h1>$tenantNameEsc</h1>")
     [void]$sb.AppendLine('<div class="report-meta">')
     [void]$sb.AppendLine("<span class=`"meta-item`">$generatedAt UTC</span>")
-    [void]$sb.AppendLine("<span class=`"meta-item`">$totalProducts products</span>")
-    [void]$sb.AppendLine("<span class=`"meta-item`">$totalPolicies policies</span>")
-    if ($baselineNames.Count -gt 0) {
-        [void]$sb.AppendLine("<span class=`"meta-item`">$($baselineNames.Count) baselines</span>")
+    [void]$sb.AppendLine("<span class=`"meta-item`">$totalProducts product$(if ($totalProducts -ne 1) { 's' })</span>")
+    [void]$sb.AppendLine("<span class=`"meta-item`">$totalPolicies polic$(if ($totalPolicies -ne 1) { 'ies' } else { 'y' })</span>")
+    if ($baselineNames.Count -gt 0 -and -not $DocModel.FilterBaseline) {
+        [void]$sb.AppendLine("<span class=`"meta-item`">$($baselineNames.Count) baseline$(if ($baselineNames.Count -ne 1) { 's' })</span>")
     }
     if ($DocModel.FilterBaseline) {
         $filterBaselineEsc = [System.Net.WebUtility]::HtmlEncode($DocModel.FilterBaseline)

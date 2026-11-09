@@ -1545,3 +1545,56 @@ Describe 'Compare-InforcerDocModels - cross-category reconciliation' -Tag 'Cross
         $result.Counters.DestOnly | Should -Be 0
     }
 }
+
+# ---------------------------------------------------------------------------
+# Describe: the baseline count in the report header (2026-11-09)
+# ---------------------------------------------------------------------------
+Describe 'Documentation baselines are this tenant''s, not every baseline the credential sees' {
+    BeforeAll {
+        $script:BlTenant = '0000000a-0000-0000-0000-00000000000b'
+        $script:BlDocModel = InModuleScope InforcerCommunity -Parameters @{ T = $script:BlTenant } {
+            $member = { param($id) [pscustomobject]@{ msTenantId = $id; tenantFriendlyName = 'x' } }
+            $docData = @{
+                Tenant      = [pscustomobject]@{ tenantFriendlyName = 'Contoso'; msTenantId = $T.ToUpper() }
+                TenantId    = $T
+                CollectedAt = [datetime]::UtcNow
+                Policies    = @()
+                Baselines   = @(
+                    [pscustomobject]@{ id = 'b1'; name = 'Source of'; baselineMsTenantId = $T; members = @() }
+                    [pscustomobject]@{ id = 'b2'; name = 'Member of'; baselineMsTenantId = '11111111-1111-1111-1111-111111111111'; members = @((& $member $T)) }
+                    [pscustomobject]@{ id = 'b3'; name = 'Unrelated'; baselineMsTenantId = '22222222-2222-2222-2222-222222222222'; members = @((& $member '33333333-3333-3333-3333-333333333333')) }
+                    [pscustomobject]@{ id = 'b4'; name = 'No members'; baselineMsTenantId = '44444444-4444-4444-4444-444444444444'; members = $null }
+                )
+            }
+            ConvertTo-InforcerDocModel -DocData $docData
+        }
+    }
+
+    It 'lists only baselines the tenant is the source or a member of' {
+        @($script:BlDocModel.Baselines) | Should -Be @('Source of', 'Member of')
+    }
+
+    It 'the HTML header counts the tenant''s baselines' {
+        $html = InModuleScope InforcerCommunity -Parameters @{ M = $script:BlDocModel } { ConvertTo-InforcerHtml -DocModel $M }
+        $html | Should -Match '>2 baselines<'
+    }
+
+    It 'the HTML header shows no count when the report is filtered to one baseline' {
+        $filtered = $script:BlDocModel.Clone(); $filtered['FilterBaseline'] = 'Source of'
+        $html = InModuleScope InforcerCommunity -Parameters @{ M = $filtered } { ConvertTo-InforcerHtml -DocModel $M }
+        $html | Should -Not -Match '\d+ baselines<'
+        $html | Should -Match 'Baseline: Source of'
+    }
+}
+
+Describe 'HTML header counts read as numbers of things' {
+    It 'one product, one policy and one baseline are singular' {
+        $model = @{ TenantName = 'T'; TenantId = 1; GeneratedAt = [datetime]'2026-01-15'; Baselines = @('B')
+            Products = [ordered]@{ 'P' = @{ Categories = [ordered]@{ 'C' = [System.Collections.Generic.List[object]]@(
+                @{ Basics = @{ Name = 'Pol' }; Settings = @(); Assignments = @() }) } } } }
+        $html = InModuleScope InforcerCommunity -Parameters @{ M = $model } { ConvertTo-InforcerHtml -DocModel $M }
+        $html | Should -Match '>1 product<'
+        $html | Should -Match '>1 policy<'
+        $html | Should -Match '>1 baseline<'
+    }
+}

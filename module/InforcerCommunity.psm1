@@ -13,7 +13,7 @@ $script:InforcerProgressIdSeed = 10000
 
 # Warn users who force-reimport the module mid-session that session and caches are lost.
 $ExecutionContext.SessionState.Module.OnRemove = {
-    if ($script:InforcerSession -and $script:InforcerSession.ApiKey -and $script:InforcerSession.BaseUrl) {
+    if ($script:InforcerSession -and ($script:InforcerSession.ApiKey -or $script:InforcerSession.ClientSecret)) {
         Write-Warning 'InforcerCommunity module unloaded — active session and caches are cleared. Re-run Connect-Inforcer to continue.'
     }
 }

@@ -1,5 +1,4 @@
-# Internal: returns audit event type names from the API.
-# Used by Get-InforcerAuditEvent when -EventType is omitted (resolve "all types").
+# Returns audit event type names from the API.
 # $global:InforcerCachedEventTypes is populated at module import from the static
 # fallback below, then refreshed with the live API response on the first
 # authenticated call. The -EventType ArgumentCompleter in Get-InforcerAuditEvent.ps1
@@ -60,7 +59,8 @@ function Get-InforcerSupportedEventType {
     .SYNOPSIS
     Returns a list of available audit event types from the Inforcer API.
 
-    Required API scope(s): Audit.Read (unconfirmed — see docs/API-REFERENCE.md)
+    Required API scope(s): Audit.Read (API key, unconfirmed — see docs/API-REFERENCE.md); Activity
+    permission (API client, unconfirmed).
 
     .DESCRIPTION
     Retrieves the valid event type names that can be used with Get-InforcerAuditEvent.
@@ -76,7 +76,7 @@ function Get-InforcerSupportedEventType {
     Returns all available audit event type names for use with Get-InforcerAuditEvent.
 
     .LINK
-    https://github.com/royklo/InforcerCommunity/blob/main/docs/Get-InforcerSupportedEventType.md
+    https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcersupportedeventtype
     #>
     [CmdletBinding()]
     [OutputType([string])]
@@ -92,7 +92,7 @@ function Get-InforcerSupportedEventType {
     }
 
     try {
-        $response = Invoke-InforcerApiRequest -Endpoint '/beta/auditEvents/eventTypes' -Method GET -OutputType PowerShellObject
+        $response = Invoke-InforcerApiRequest -Endpoint '/auditEvents/eventTypes' -Method GET -OutputType PowerShellObject -ObjectType AuditEventType
         if ($null -eq $response) {
             if ($global:InforcerCachedEventTypes -and $global:InforcerCachedEventTypes.Count -gt 0) {
                 $global:InforcerCachedEventTypes | ForEach-Object { $_ }
@@ -101,31 +101,17 @@ function Get-InforcerSupportedEventType {
         }
 
         function GetEventTypeName($o) {
+            if ($o -is [string]) { return $o }
             if ($o -is [PSObject]) {
-                $n = $o.PSObject.Properties['name'].Value
-                if (-not $n) { $n = $o.PSObject.Properties['Name'].Value }
-                return $n?.ToString()
+                $nameProp = $o.PSObject.Properties['name']
+                if ($nameProp -and $null -ne $nameProp.Value) { return [string]$nameProp.Value }
+                return $null
             }
-            return $o?.ToString()
+            if ($null -ne $o) { return [string]$o }
+            return $null
         }
 
-        function ResolveEventTypes($typesObj) {
-            if ($null -eq $typesObj) { return @() }
-            if ($typesObj -is [array]) {
-                return @($typesObj | ForEach-Object { GetEventTypeName $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
-            }
-            if ($typesObj -is [PSObject]) {
-                foreach ($propName in 'eventTypes', 'EventTypes', 'data', 'Data', 'items', 'Items') {
-                    $prop = $typesObj.PSObject.Properties[$propName].Value
-                    if ($prop -is [object[]]) {
-                        return @($prop | ForEach-Object { GetEventTypeName $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
-                    }
-                }
-            }
-            return @()
-        }
-
-        $types = ResolveEventTypes $response
+        $types = @($response | ForEach-Object { GetEventTypeName $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
         if ($types -and $types.Count -gt 0) {
             $global:InforcerCachedEventTypes = @($types)
         }

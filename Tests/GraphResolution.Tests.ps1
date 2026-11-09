@@ -214,7 +214,7 @@ Describe 'ConvertTo-InforcerDocModel — CA GUID resolution' {
     It 'resolves named location GUIDs in flat settings values' {
         $result = InModuleScope InforcerCommunity {
             $locationNameMap = @{
-                '1ae7b9a2-1741-4a96-ae39-6c0edb057049' = 'Trusted corporate network'
+                '00000000-0000-0000-0000-00000000000d' = 'Trusted corporate network'
             }
             $docData = @{
                 Tenant      = [PSCustomObject]@{ tenantFriendlyName = 'Test' }
@@ -233,7 +233,7 @@ Describe 'ConvertTo-InforcerDocModel — CA GUID resolution' {
                             description = ''
                             conditions = [PSCustomObject]@{
                                 locations = [PSCustomObject]@{
-                                    excludeLocations = @('1ae7b9a2-1741-4a96-ae39-6c0edb057049')
+                                    excludeLocations = @('00000000-0000-0000-0000-00000000000d')
                                 }
                             }
                         }

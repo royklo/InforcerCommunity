@@ -2,12 +2,13 @@
 .SYNOPSIS
     Generates comprehensive tenant documentation across all M365 products managed via Inforcer.
 
-    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read
+    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read (API key);
+    Tenants + Baselines + Policies (+ Align with -Baseline) permission (API client, unconfirmed).
 .DESCRIPTION
-    Export-InforcerTenantDocumentation collects configuration data for the specified tenant by calling
-    Get-InforcerBaseline, Get-InforcerTenant, and Get-InforcerTenantPolicies (each using
-    -OutputType JsonObject), normalizes the raw API data into a format-agnostic DocModel via
-    ConvertTo-InforcerDocModel, and renders the DocModel to one or more output formats.
+    Export-InforcerTenantDocumentation collects the tenant, its baselines and its policies (the raw
+    API data, as Get-InforcerTenant, Get-InforcerBaseline and Get-InforcerTenantPolicies return it),
+    normalizes it into a format-agnostic DocModel via ConvertTo-InforcerDocModel, and renders the
+    DocModel to one or more output formats.
 
     Intune Settings Catalog settingDefinitionIDs are resolved to friendly names and descriptions
     using a settings.json catalog sourced from the IntuneSettingsCatalogData GitHub repository.
@@ -16,25 +17,34 @@
     settingDefinitionId values instead.
 
     Before calling this cmdlet, you must be connected via Connect-Inforcer. If no active session
-    exists, the cmdlet emits a non-terminating error and returns immediately.
+    exists, the cmdlet emits a non-terminating error and returns immediately. Both login types
+    work.
 
     Nothing is written unless -OutputPath is given: without it the DocModel is returned so a
     caller can read the configuration without producing files. With it, output is auto-named
     {TenantName}-Documentation.{ext} (e.g., Contoso-Documentation.html).
+
+    The Profile type column is filled from the policy type id when the API sends no type name.
+    Excel: values that start with '=' are written as text with a leading apostrophe, and web
+    addresses are not turned into links. Markdown: & < > in cells and headings are encoded.
 .PARAMETER Format
     Output format(s) to generate. Accepted values: Html, Markdown, Excel. Multiple formats
     can be specified as a comma-separated list or array. Defaults to Html. Excel format
     creates an .xlsx workbook with one sheet per product (requires ImportExcel module).
 .PARAMETER TenantId
-    Tenant to document. Accepts a numeric ID, GUID, or tenant name. Required.
+    Tenant to document. Accepts a numeric ID (API-key login only), Microsoft tenant ID (GUID), or
+    tenant name. Required.
 .PARAMETER OutputPath
     Directory to write output files to. Files are auto-named {TenantName}-Documentation.{ext}.
     When a single format is specified and this path has a file extension, it is treated as an
-    explicit output file path. Omit it and no files are written: the DocModel is returned instead.
-    There is no default - writing is always something you asked for.
+    explicit output file path; that only works for one tenant, so piping a second tenant to a file
+    path stops with an OutputPathIsFileForSeveralTenants error before anything is fetched for it.
+    Pass a directory when piping several tenants. Omit it and no files are written: the DocModel is
+    returned instead. There is no default - writing is always something you asked for.
 .PARAMETER Show
     Open the generated HTML in the default browser. Requires -OutputPath and -Format Html — there
-    is nothing to open when no file is written.
+    is nothing to open when no file is written. Each HTML file is opened at most once per call, also
+    when several tenants are piped in.
 
     Defaults to ON in an interactive session and OFF on a CI runner (CI, TF_BUILD, GITHUB_ACTIONS
     and similar), so a human who asked for a report gets to look at it while a build agent does
@@ -43,15 +53,17 @@
 .PARAMETER SettingsCatalogPath
     Path to a local settings.json file for Settings Catalog resolution. When omitted, the cmdlet
     automatically downloads and caches the latest data from the IntuneSettingsCatalogData GitHub
-    repository (~65 MB, cached at ~/.inforcercommunity/data/settings.json with a 24-hour TTL).
-    If download fails and no cached copy exists, Settings Catalog policies show raw
-    settingDefinitionId values and a warning is emitted.
+    repository (~65 MB, cached at ~/.inforcercommunity/data/settings.json). After 24 hours it checks
+    for a newer release and downloads it; a download that is not a valid catalog, or is larger than
+    512 MB, never replaces the cached copy. If download fails and no cached copy exists, Settings
+    Catalog policies show raw settingDefinitionId values and a warning is emitted.
 .PARAMETER FetchGraphData
-    When specified, uses Invoke-MgGraphRequest to enrich the documentation with live data from
-    Microsoft Graph. Currently resolves assignment group/user ObjectIDs to their display names
-    via the /directoryObjects endpoint. Requires the Microsoft.Graph.Authentication module and
-    an active Graph session (Connect-MgGraph). If Graph is not connected, falls back to raw
-    ObjectIDs with a warning.
+    When specified, signs in to Microsoft Graph for the tenant and resolves IDs to names: assignment
+    groups and filters, scope tags, and the groups, directory roles (built-in and custom), named
+    locations and applications in Conditional Access policies. Requests the read scopes
+    Directory.Read.All, Policy.Read.All and DeviceManagementConfiguration.Read.All. Requires the
+    Microsoft.Graph.Authentication module. If Graph cannot be reached, or refuses a call for a
+    missing permission, the affected names stay as raw IDs with a warning.
 .PARAMETER Baseline
     Filter to only policies that belong to a specific baseline. Accepts a baseline GUID or
     friendly name (e.g., "Inforcer Blueprint Baseline - Tier 1 - Foundations"). Uses the
@@ -64,15 +76,15 @@
     The DocModel (hashtable) when -OutputPath is omitted, otherwise System.IO.FileInfo for each
     exported file.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 482 -Format Html
+    Export-InforcerTenantDocumentation -TenantId 'Contoso' -Format Html
 
     Returns the DocModel. No file is written - pass -OutputPath for that.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 482 -Format Html -OutputPath ./docs -Show
+    Export-InforcerTenantDocumentation -TenantId 'Contoso' -Format Html -OutputPath ./docs -Show
 
     Writes Contoso-Documentation.html to ./docs and opens it.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 482 -Format Html,Markdown,Excel -OutputPath C:\Reports
+    Export-InforcerTenantDocumentation -TenantId 'Contoso' -Format Html,Markdown,Excel -OutputPath C:\Reports
 
     Writes three documentation files to C:\Reports.
 .EXAMPLE
@@ -80,7 +92,7 @@
 
     Uses an explicit settings.json path for Settings Catalog resolution.
 .EXAMPLE
-    Export-InforcerTenantDocumentation -TenantId 139 -Baseline "Inforcer Blueprint Baseline - Tier 1 - Foundations" -Format Html
+    Export-InforcerTenantDocumentation -TenantId 'Contoso' -Baseline "Inforcer Blueprint Baseline - Tier 1 - Foundations" -Format Html
 
     Exports only the policies that belong to the specified baseline.
 .LINK
@@ -97,7 +109,7 @@ param(
     [string[]]$Format = @('Html'),
 
     [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
-    [Alias('ClientTenantId')]
+    [Alias('ClientTenantId', 'MsTenantId')]
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
@@ -120,6 +132,20 @@ param(
     [string]$Tag
 )
 
+begin {
+    $tenantCount = 0
+    $openedHtml = [System.Collections.Generic.HashSet[string]]::new()
+}
+
+process {
+
+$tenantCount++
+if ($tenantCount -gt 1 -and $Format.Count -eq 1 -and $OutputPath -and [System.IO.Path]::HasExtension($OutputPath)) {
+    throw [System.Management.Automation.ErrorRecord]::new(
+        [System.ArgumentException]::new("-OutputPath '$OutputPath' is a file, so a second tenant would overwrite the first. Pass a directory when piping several tenants; each gets its own {TenantName}-Documentation file."),
+        'OutputPathIsFileForSeveralTenants', [System.Management.Automation.ErrorCategory]::InvalidArgument, $OutputPath)
+}
+
 if (-not (Test-InforcerSession)) {
     Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' `
         -ErrorId 'NotConnected' -Category ConnectionError
@@ -127,7 +153,7 @@ if (-not (Test-InforcerSession)) {
 }
 
 try {
-    $clientTenantId = Resolve-InforcerTenantId -TenantId $TenantId
+    $resolvedTenantId = Resolve-InforcerTenantId -TenantId $TenantId
 } catch {
     Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
     return
@@ -138,7 +164,7 @@ $resolvedCatalogPath = $SettingsCatalogPath
 
 # Collect data from the 3 source cmdlets and build DocModel
 Write-Host 'Collecting tenant data...' -ForegroundColor Cyan
-$docDataParams = @{ TenantId = $clientTenantId }
+$docDataParams = @{ TenantId = $resolvedTenantId }
 if (-not [string]::IsNullOrEmpty($resolvedCatalogPath)) {
     $docDataParams['SettingsCatalogPath'] = $resolvedCatalogPath
 }
@@ -206,189 +232,19 @@ if ($hasCatalogPolicies) {
     Write-Host '  No Intune/Defender policies found, skipping Settings Catalog load' -ForegroundColor Gray
 }
 
-# Build Graph enrichment maps before DocModel (so assignments resolve during normalization)
+# Graph maps are built fresh for this tenant only; nothing carries over between piped tenants or calls.
+$graphMaps = @{}
 if ($FetchGraphData) {
-    # Extract Azure AD tenant GUID and friendly name for Graph sign-in
-    $msTenantId = $null
-    $tenantLabel = ''
-    if ($docData.Tenant) {
-        if ($docData.Tenant.PSObject.Properties['msTenantId']) { $msTenantId = $docData.Tenant.msTenantId }
-        if ($docData.Tenant.PSObject.Properties['tenantFriendlyName'] -and $docData.Tenant.tenantFriendlyName) {
-            $tenantLabel = " for $($docData.Tenant.tenantFriendlyName)"
-        }
-    }
+    $tenantLabel = if ($docData.Tenant -and $docData.Tenant.tenantFriendlyName) { " for $($docData.Tenant.tenantFriendlyName)" } else { '' }
     Write-Host "Connecting to Microsoft Graph$tenantLabel..." -ForegroundColor Cyan
-    $graphConnectParams = @{ RequiredScopes = @('Directory.Read.All') }
-    if ($msTenantId) { $graphConnectParams['TenantId'] = $msTenantId }
-    $graphCtx = Connect-InforcerGraph @graphConnectParams
-
-    if (-not $graphCtx) {
-        Write-Warning 'Microsoft Graph connection failed. Falling back to raw ObjectIDs.'
-    } else {
-        Write-Host "  Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
-
-        # Validate Graph is connected to the correct tenant
-        if ($msTenantId -and $graphCtx.TenantId -and $graphCtx.TenantId -ne $msTenantId) {
-            $tenantName = $docData.Tenant.tenantFriendlyName
-            Write-Warning "Graph signed into tenant $($graphCtx.TenantId) but exporting tenant '$tenantName' ($msTenantId). Group names and filters may not resolve correctly."
-            Write-Warning "Sign in with an account that has access to tenant '$tenantName' or skip -FetchGraphData."
-        }
-
-        # Collect all unique group/role ObjectIDs from raw policy data
-        $objectIds    = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $roleIds      = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $locationIds  = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $appIds       = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($policy in @($docData.Policies)) {
-            # Standard Intune assignments
-            $rawAssign = $policy.policyData.assignments
-            if ($null -eq $rawAssign) { $rawAssign = $policy.assignments }
-            if ($null -ne $rawAssign) {
-                foreach ($a in @($rawAssign)) {
-                    $t = $a.target; if ($null -eq $t) { $t = $a }
-                    if ($t.groupId -and $t.groupId -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
-                        [void]$objectIds.Add($t.groupId)
-                    }
-                }
-            }
-
-            # Conditional Access conditions — collect group and role IDs
-            $conditions = $policy.policyData.conditions
-            if ($null -ne $conditions -and $null -ne $conditions.users) {
-                $caUsers = $conditions.users
-                foreach ($prop in @('includeGroups', 'excludeGroups')) {
-                    $ids = $caUsers.$prop
-                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { [void]$objectIds.Add($id) } } }
-                }
-                foreach ($prop in @('includeRoles', 'excludeRoles')) {
-                    $ids = $caUsers.$prop
-                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { [void]$roleIds.Add($id) } } }
-                }
-            }
-            if ($null -ne $conditions.locations) {
-                $caLocations = $conditions.locations
-                foreach ($prop in @('includeLocations', 'excludeLocations')) {
-                    $ids = $caLocations.$prop
-                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { [void]$locationIds.Add($id) } } }
-                }
-            }
-            if ($null -ne $conditions.applications) {
-                $caApps = $conditions.applications
-                foreach ($prop in @('includeApplications', 'excludeApplications')) {
-                    $ids = $caApps.$prop
-                    if ($ids) { foreach ($id in @($ids)) { if ($id -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') { [void]$appIds.Add($id) } } }
-                }
-            }
-        }
-
-        if ($objectIds.Count -gt 0) {
-            Write-Host "  Resolving $($objectIds.Count) unique group/object IDs..." -ForegroundColor Gray
-            $groupNameMap = @{}
-            $resolved = 0
-            foreach ($oid in $objectIds) {
-                $obj = Invoke-InforcerGraphRequest -Uri "https://graph.microsoft.com/v1.0/directoryObjects/$oid" -SingleObject
-                if ($obj -and $obj.displayName) {
-                    $groupNameMap[$oid] = $obj.displayName
-                    $resolved++
-                } else {
-                    $groupNameMap[$oid] = $oid
-                }
-            }
-            Write-Host "  Resolved $resolved of $($objectIds.Count) group names" -ForegroundColor Gray
-        }
-
-        # Fetch assignment filters from Intune
-        Write-Host '  Fetching assignment filters...' -ForegroundColor Gray
-        $rawFilters = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/beta/deviceManagement/assignmentFilters'
-        $filterMap = @{}
-        if ($rawFilters) {
-            foreach ($f in $rawFilters) { $filterMap[$f.id] = $f }
-            Write-Host "  Loaded $($filterMap.Count) assignment filters" -ForegroundColor Gray
-        }
-
-        # Fetch directory role definitions for CA policy resolution
-        $roleNameMap = @{}
-        if ($roleIds.Count -gt 0) {
-            Write-Host "  Resolving $($roleIds.Count) unique role IDs..." -ForegroundColor Gray
-            $roleTemplates = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/v1.0/directoryRoleTemplates'
-            if ($roleTemplates) {
-                foreach ($rt in $roleTemplates) { $roleNameMap[$rt.id] = $rt.displayName }
-            }
-            $resolvedRoles = @($roleIds | Where-Object { $roleNameMap.ContainsKey($_) }).Count
-            Write-Host "  Resolved $resolvedRoles of $($roleIds.Count) role names" -ForegroundColor Gray
-        }
-
-        # Fetch named locations for CA policy resolution
-        $locationNameMap = @{}
-        if ($locationIds.Count -gt 0) {
-            Write-Host "  Resolving $($locationIds.Count) unique named location IDs..." -ForegroundColor Gray
-            $namedLocations = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations'
-            if ($namedLocations) {
-                foreach ($nl in $namedLocations) { $locationNameMap[$nl.id] = $nl.displayName }
-            }
-            $resolvedLocations = @($locationIds | Where-Object { $locationNameMap.ContainsKey($_) }).Count
-            Write-Host "  Resolved $resolvedLocations of $($locationIds.Count) named location names" -ForegroundColor Gray
-        }
-
-        # Resolve application IDs for CA policies (well-known + Graph fallback)
-        $appNameMap = @{
-            '0000000a-0000-0000-c000-000000000000' = 'Microsoft Intune'
-            '00000002-0000-0000-c000-000000000000' = 'Azure Active Directory Graph (Legacy)'
-            '00000002-0000-0ff1-ce00-000000000000' = 'Office 365 Exchange Online'
-            '00000003-0000-0000-c000-000000000000' = 'Microsoft Graph'
-            '00000003-0000-0ff1-ce00-000000000000' = 'Office 365 SharePoint Online'
-            '00000004-0000-0ff1-ce00-000000000000' = 'Office 365 Skype for Business'
-            '0000000c-0000-0000-c000-000000000000' = 'Microsoft App Access Panel'
-            '00000007-0000-0000-c000-000000000000' = 'Dynamics CRM Online'
-            '00000006-0000-0ff1-ce00-000000000000' = 'Microsoft Office 365 Portal'
-            '00000009-0000-0000-c000-000000000000' = 'Power BI Service'
-            '00000015-0000-0000-c000-000000000000' = 'Microsoft Dynamics ERP'
-            '01cb2876-7ebd-4aa4-9cc9-d28bd4d359a9' = 'Microsoft Entra Internet Access / Global Secure Access'
-            'd4ebce55-015a-49b5-a083-c84d1797ae8c' = 'Microsoft 365 / Office (Desktop Client)'
-            'fc780465-2017-40d4-a0c5-307022471b92' = 'Windows Sign In'
-            '04b07795-8ddb-461a-bbee-02f9e1bf7b46' = 'Azure CLI'
-            '1950a258-227b-4e31-a9cf-717495945fc2' = 'Azure PowerShell'
-            'fb78d390-0c51-40cd-8e17-fdbfab77341b' = 'Microsoft Exchange REST API'
-            'de8bc8b5-d9f9-48b1-a8ad-b748da725064' = 'Microsoft Graph Command Line Tools'
-            '1fec8e78-bce4-4aaf-ab1b-5451cc387264' = 'Microsoft Teams'
-            'cc15fd57-2c6c-4117-a88c-83b1d56b4bbe' = 'Microsoft Teams Web Client'
-            '27922004-5251-4030-b22d-91ecd9a37ea4' = 'Outlook Mobile'
-            '4765445b-32c6-49b0-83e6-1d93765276ca' = 'Microsoft 365 Defender'
-        }
-        if ($appIds.Count -gt 0) {
-            $unresolvedApps = @($appIds | Where-Object { -not $appNameMap.ContainsKey($_) })
-            if ($unresolvedApps.Count -gt 0) {
-                Write-Host "  Resolving $($unresolvedApps.Count) application IDs via Graph..." -ForegroundColor Gray
-                foreach ($appId in $unresolvedApps) {
-                    $sp = Invoke-InforcerGraphRequest -Uri "https://graph.microsoft.com/v1.0/servicePrincipals(appId='$appId')" -SingleObject
-                    if ($sp -and $sp.displayName) {
-                        $appNameMap[$appId] = $sp.displayName
-                    }
-                }
-            }
-            $resolvedApps = @($appIds | Where-Object { $appNameMap.ContainsKey($_) }).Count
-            Write-Host "  Resolved $resolvedApps of $($appIds.Count) application names" -ForegroundColor Gray
-        }
-
-        # Fetch scope tags from Intune and build ID -> displayName map
-        Write-Host '  Fetching scope tags...' -ForegroundColor Gray
-        $rawScopeTags = Invoke-InforcerGraphRequest -Uri 'https://graph.microsoft.com/beta/deviceManagement/roleScopeTags'
-        $script:InforcerScopeTagMap = @{}
-        if ($rawScopeTags) {
-            foreach ($st in $rawScopeTags) { $script:InforcerScopeTagMap[$st.id.ToString()] = $st.displayName }
-            Write-Host "  Loaded $($script:InforcerScopeTagMap.Count) scope tags" -ForegroundColor Gray
-        }
-    }
+    $graphMaps = Resolve-InforcerGraphEnrichment -DocData $docData -ConditionalAccess
 }
 
 Write-Host 'Building documentation model...' -ForegroundColor Cyan
 $docModelParams = @{ DocData = $docData }
-if ($groupNameMap)              { $docModelParams['GroupNameMap']  = $groupNameMap }
-if ($filterMap)                 { $docModelParams['FilterMap']     = $filterMap }
-if ($roleNameMap)               { $docModelParams['RoleNameMap']   = $roleNameMap }
-if ($locationNameMap)           { $docModelParams['LocationNameMap'] = $locationNameMap }
-if ($appNameMap)                { $docModelParams['AppNameMap']    = $appNameMap }
-if ($script:InforcerScopeTagMap) { $docModelParams['ScopeTagMap'] = $script:InforcerScopeTagMap }
+foreach ($key in 'GroupNameMap', 'FilterMap', 'RoleNameMap', 'LocationNameMap', 'AppNameMap', 'ScopeTagMap') {
+    if ($graphMaps[$key]) { $docModelParams[$key] = $graphMaps[$key] }
+}
 $docModel = ConvertTo-InforcerDocModel @docModelParams
 if ($null -eq $docModel) { return }
 
@@ -414,6 +270,7 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 # Render each requested format and write to disk
 $extensionMap = @{ Html = 'html'; Markdown = 'md'; Excel = 'xlsx' }
 $formatIndex = 0
+$htmlFile = $null
 $safeName = $docModel.TenantName -replace '[^\w\-]', '-'
 
 foreach ($fmt in $Format) {
@@ -443,6 +300,7 @@ foreach ($fmt in $Format) {
             'Markdown' { ConvertTo-InforcerMarkdown -DocModel $docModel }
         }
         Set-Content -Path $filePath -Value $content -Encoding UTF8
+        if ($fmt -eq 'Html') { $htmlFile = $filePath }
     }
 
     $fileInfo = Get-Item -LiteralPath $filePath
@@ -453,13 +311,9 @@ foreach ($fmt in $Format) {
 
 # -Show defaults to on interactively and off in CI (Test-InforcerInteractiveHost), so a human
 # who asked for a report sees it while a build agent is never handed a browser to open.
-if ($Show) {
-    $htmlFile = $Format | Where-Object { $_ -eq 'Html' } | ForEach-Object {
-        if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) { $OutputPath }
-        else { Join-Path $OutputPath "$safeName-Documentation.html" }
-    }
-    if ($htmlFile -and (Test-Path -LiteralPath $htmlFile)) {
-        $fullHtmlPath = (Resolve-Path -LiteralPath $htmlFile).Path
+if ($Show -and $htmlFile -and (Test-Path -LiteralPath $htmlFile)) {
+    $fullHtmlPath = (Resolve-Path -LiteralPath $htmlFile).Path
+    if ($openedHtml.Add($fullHtmlPath)) {
         if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullHtmlPath }
         elseif ($IsWindows) { Start-Process $fullHtmlPath }
         elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullHtmlPath }
@@ -467,4 +321,5 @@ if ($Show) {
 }
 
 Write-Host "Done. $($Format.Count) file(s) exported for tenant '$($docModel.TenantName)'." -ForegroundColor Cyan
+}
 }

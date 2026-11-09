@@ -1148,9 +1148,16 @@ function searchPolicies(q){
     prods.forEach(function(pr){
         pr.querySelectorAll('.policy-card:not(.search-hidden):not(.tag-hidden) td, .policy-card:not(.search-hidden):not(.tag-hidden) .policy-title').forEach(function(el){
             el.childNodes.forEach(function(n){
+                re.lastIndex=0;
                 if(n.nodeType===3&&re.test(n.textContent)){
-                    var s=document.createElement('span');
-                    s.innerHTML=n.textContent.replace(re,'<mark class="search-highlight">$1</mark>');
+                    var t=n.textContent,s=document.createElement('span'),last=0,m;
+                    re.lastIndex=0;
+                    while((m=re.exec(t))!==null){
+                        s.appendChild(document.createTextNode(t.slice(last,m.index)));
+                        var mk=document.createElement('mark');mk.className='search-highlight';mk.textContent=m[0];s.appendChild(mk);
+                        last=m.index+m[0].length;
+                    }
+                    s.appendChild(document.createTextNode(t.slice(last)));
                     n.parentNode.replaceChild(s,n);
                 }
             });

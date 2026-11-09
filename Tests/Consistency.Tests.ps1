@@ -41,7 +41,7 @@ Describe 'Consistency contract' {
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
         )
         $script:expectedParameters = @{
-            'Connect-Inforcer'              = @('ApiKey', 'Region', 'BaseUrl', 'FetchGraphData', 'PassThru')
+            'Connect-Inforcer'              = @('ApiKey', 'ClientId', 'ClientSecret', 'Region', 'BaseUrl', 'FetchGraphData', 'PassThru')
             'Disconnect-Inforcer'           = @()
             'Test-InforcerConnection'       = @()
             'Get-InforcerTenant'            = @('Format', 'TenantId', 'OutputType')
@@ -90,6 +90,14 @@ Describe 'Consistency contract' {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'OutputType'
         }
+    }
+
+    It 'Every cmdlet that takes pipeline input has a process block' {
+        $missing = foreach ($cmd in (Get-Command -Module InforcerCommunity -CommandType Function)) {
+            $piped = $cmd.Parameters.Values | Where-Object { $_.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] -and ($_.ValueFromPipeline -or $_.ValueFromPipelineByPropertyName) } }
+            if ($piped -and -not $cmd.ScriptBlock.Ast.Body.ProcessBlock) { $cmd.Name }
+        }
+        @($missing) | Should -BeNullOrEmpty -Because 'without process {} only the last piped object is handled'
     }
 
     It 'Every exported cmdlet has comment-based help (Synopsis and at least one Example)' {
@@ -629,7 +637,7 @@ Describe 'Private helpers (via module scope)' {
     Context 'Resolve-InforcerBaselineId' {
         It 'Passes through a valid GUID' {
             & (Get-Module InforcerCommunity) {
-                $guid = '91e0b0f7-69f1-453f-8d73-5a6f726b5b21'
+                $guid = '00000000-0000-0000-0000-000000000004'
                 $result = Resolve-InforcerBaselineId -BaselineId $guid
                 $result | Should -Be $guid
             }
@@ -676,7 +684,7 @@ Describe 'Private helpers (via module scope)' {
     Context 'Resolve-InforcerGroupId' {
         It 'Passes through a valid GUID' {
             & (Get-Module InforcerCommunity) {
-                $guid = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $guid = '00000000-0000-0000-0000-000000000006'
                 $result = Resolve-InforcerGroupId -GroupId $guid -TenantId 1
                 $result | Should -Be $guid
             }
@@ -684,7 +692,7 @@ Describe 'Private helpers (via module scope)' {
 
         It 'Passes through a GUID with mixed case' {
             & (Get-Module InforcerCommunity) {
-                $guid = 'F44F2F5C-3160-420B-900D-5ECBEDE954FC'
+                $guid = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'
                 $result = Resolve-InforcerGroupId -GroupId $guid -TenantId 1
                 $result | Should -Be $guid
             }
@@ -789,7 +797,7 @@ Describe 'Private helpers (via module scope)' {
         It 'GroupSummary: adds PascalCase aliases' {
             & (Get-Module InforcerCommunity) {
                 $group = [PSCustomObject]@{
-                    id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                    id = '00000000-0000-0000-0000-000000000006'
                     displayName = 'All Company'
                     description = 'Default group'
                     mail = 'allcompany@contoso.com'
@@ -797,7 +805,7 @@ Describe 'Private helpers (via module scope)' {
                     groupTypes = @('Unified')
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $group -ObjectType GroupSummary
-                $group.Id | Should -Be 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $group.Id | Should -Be '00000000-0000-0000-0000-000000000006'
                 $group.DisplayName | Should -Be 'All Company'
                 $group.Description | Should -Be 'Default group'
                 $group.Mail | Should -Be 'allcompany@contoso.com'
@@ -809,7 +817,7 @@ Describe 'Private helpers (via module scope)' {
         It 'Group: adds PascalCase aliases including detail properties' {
             & (Get-Module InforcerCommunity) {
                 $group = [PSCustomObject]@{
-                    id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                    id = '00000000-0000-0000-0000-000000000006'
                     displayName = 'All Company'
                     description = 'Default group'
                     mail = 'allcompany@contoso.com'
@@ -823,7 +831,7 @@ Describe 'Private helpers (via module scope)' {
                     members = @([PSCustomObject]@{ id = 'u1'; displayName = 'John'; type = '#microsoft.graph.user' })
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $group -ObjectType Group
-                $group.Id | Should -Be 'f44f2f5c-3160-420b-900d-5ecbede954fc'
+                $group.Id | Should -Be '00000000-0000-0000-0000-000000000006'
                 $group.DisplayName | Should -Be 'All Company'
                 $group.MailNickname | Should -Be 'allcompany'
                 $group.MailEnabled | Should -BeTrue
@@ -1249,7 +1257,7 @@ Describe 'Private helpers (via module scope)' {
             )
             Mock -ModuleName InforcerCommunity Test-InforcerSession { $true }
             Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
-                if ($Endpoint -eq '/beta/tenants') {
+                if (($Endpoint -replace '^/beta', '') -eq '/tenants') {
                     @([PSCustomObject]@{ clientTenantId = 1; tenantFriendlyName = 'Contoso' }, [PSCustomObject]@{ clientTenantId = 2; tenantFriendlyName = 'Fabrikam' })
                 } else {
                     @([PSCustomObject]@{ id = 'a1'; name = 'Test Assessment' })
@@ -1269,6 +1277,40 @@ Describe 'Private helpers (via module scope)' {
             $json[0].Failed | Should -Be 2
             $json[0].NotAssessed | Should -Be 2
             $json[0].TotalChecks | Should -Be 6
+            $json[0].ComplianceScore | Should -Be 50
+        }
+
+        It 'uses the API score (v1 summary.score) when the run carries one, also for the HTML report' {
+            Mock -ModuleName InforcerCommunity Invoke-InforcerAssessmentRun { [PSCustomObject]@{ results = $script:runResults; summary = [PSCustomObject]@{ total = 6; assessed = 4; passed = 2; failed = 2; notRun = 2; score = 49 } } }
+            $json = Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputType JsonObject 6>$null | ConvertFrom-Json
+            $json[0].ComplianceScore | Should -Be 49
+            $json[0].Passed | Should -Be 2
+            $path = Join-Path $TestDrive 'api-score.html'
+            Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'a1' -OutputPath $path 6>$null | Out-Null
+            Get-Content -Raw $path | Should -Match '<span class="pct">49%</span>'
+        }
+
+        It 'ignores an API score that is not a number from 0 to 100 (<Label>) and computes it; the matrix escapes the score' -ForEach @(
+            @{ Label = 'markup'; Score = '<img src=x onerror=alert(1)>' }
+            @{ Label = 'numeric string'; Score = '90' }
+            @{ Label = 'above 100'; Score = 150 }
+            @{ Label = 'negative'; Score = -5 }
+            @{ Label = 'boolean'; Score = $true }
+            @{ Label = 'object'; Score = [PSCustomObject]@{ v = 1 } }
+        ) {
+            $script:badScore = $Score
+            Mock -ModuleName InforcerCommunity Invoke-InforcerAssessmentRun { [PSCustomObject]@{ results = $script:runResults; summary = [PSCustomObject]@{ score = $script:badScore } } }
+            $json = Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputType JsonObject 6>$null | ConvertFrom-Json
+            $json[0].ComplianceScore | Should -Be 50
+            $path = Join-Path $TestDrive "bad-score-$Label.html"
+            Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputPath $path 6>$null | Out-Null
+            Get-Content -Raw $path | Should -Not -Match 'onerror'
+            Invoke-InforcerAssessment -TenantId 1 -AssessmentId 'a1' -OutputPath (Join-Path $TestDrive "bad-single-$Label.html") 6>$null | Out-Null
+        }
+
+        It 'computes the score when the API score is null (nothing assessed on v1)' {
+            Mock -ModuleName InforcerCommunity Invoke-InforcerAssessmentRun { [PSCustomObject]@{ results = $script:runResults; summary = [PSCustomObject]@{ score = $null } } }
+            $json = Invoke-InforcerAssessment -TenantId 1, 2 -AssessmentId 'a1' -OutputType JsonObject 6>$null | ConvertFrom-Json
             $json[0].ComplianceScore | Should -Be 50
         }
 
@@ -1310,7 +1352,7 @@ Describe 'Private helpers (via module scope)' {
                     )
                 })
                 $html = ConvertTo-InforcerAssessmentMatrixHtml -AssessmentName 'T' -TenantResults $tr
-                $html | Should -Match '"T1":"InsufficientPermissions"'
+                $html | Should -Match '"1":"InsufficientPermissions"'
                 $html | Should -Match '"na":1'
                 $html | Should -Match "setFilter\('na',this\)"
                 $html | Should -Match "filt==='na'"
@@ -1541,7 +1583,7 @@ Describe 'Private helpers (via module scope)' {
                 # Source shape verified: runId, status, reportTypes[], outputFormats[],
                 # triggeredByType, createdAt, startedAt, completedAt, outputCount.
                 $obj = [pscustomobject]@{
-                    runId            = '094a49ed-b9b8-492b-870f-0f76fd3b2954'
+                    runId            = '00000000-0000-0000-0000-000000000009'
                     status           = 'completed'
                     reportTypes      = @('activeusercount')
                     outputFormats    = @('csv')
@@ -1552,7 +1594,7 @@ Describe 'Private helpers (via module scope)' {
                     outputCount      = 1
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $obj -ObjectType ReportRun
-                $obj.RunId | Should -Be '094a49ed-b9b8-492b-870f-0f76fd3b2954'
+                $obj.RunId | Should -Be '00000000-0000-0000-0000-000000000009'
                 $obj.Status | Should -Be 'completed'
                 ($obj.ReportTypes -join ',') | Should -Be 'activeusercount'
                 ($obj.OutputFormats -join ',') | Should -Be 'csv'
@@ -1565,14 +1607,14 @@ Describe 'Private helpers (via module scope)' {
             & (Get-Module InforcerCommunity) {
                 # Source shape verified: id, reportType, tenantId, format, sizeBytes.
                 $obj = [pscustomobject]@{
-                    id          = '45c94952-e649-45af-b35e-9cd0e7b1bf45'
+                    id          = '00000000-0000-0000-0000-00000000000c'
                     reportType  = 'ActiveUserCount'
                     tenantId    = 14436
                     format      = 'csv'
                     sizeBytes   = 60
                 }
                 $null = Add-InforcerPropertyAliases -InputObject $obj -ObjectType ReportOutput
-                $obj.OutputId | Should -Be '45c94952-e649-45af-b35e-9cd0e7b1bf45'
+                $obj.OutputId | Should -Be '00000000-0000-0000-0000-00000000000c'
                 $obj.ReportType | Should -Be 'ActiveUserCount'
                 $obj.TenantId | Should -Be 14436
                 $obj.OutputFormat | Should -Be 'csv'
@@ -1609,6 +1651,7 @@ Describe 'Private helpers (via module scope)' {
             $r.StatusCode | Should -Be 200
             $r.Outputs.Count | Should -Be 1
             $r.Outputs[0].id | Should -Be 'out-1'
+            $r.Outputs[0].runId | Should -Be '11111111-2222-3333-4444-555555555555'
             $r.CorrelationId | Should -Be 'cor-1'
         }
 
@@ -1679,7 +1722,7 @@ Describe 'Private helpers (via module scope)' {
                     Content    = $bytes
                 }
             }
-            $r = & (Get-Module InforcerCommunity) { Invoke-InforcerRawDownload -Endpoint '/beta/reports/runs/abc/outputs/xyz' }
+            $r = & (Get-Module InforcerCommunity) { Invoke-InforcerRawDownload -Endpoint '/reports/runs/abc/outputs/xyz' }
             $r.FileName | Should -Be 'MyReport.csv'
             $r.ContentType | Should -Be 'text/csv'
             $r.CorrelationId | Should -Be 'cor-7'
@@ -1740,7 +1783,7 @@ Describe 'Private helpers (via module scope)' {
             }
             try {
                 $r = & (Get-Module InforcerCommunity) {
-                    param($dir) Invoke-InforcerRawDownload -Endpoint '/beta/reports/runs/x/outputs/y' -DestinationDirectory $dir
+                    param($dir) Invoke-InforcerRawDownload -Endpoint '/reports/runs/x/outputs/y' -DestinationDirectory $dir
                 } $tempDir
                 $r.FilePath | Should -Not -BeNullOrEmpty
                 $r.FileName | Should -Be 'StreamedReport.csv'
@@ -2254,8 +2297,8 @@ Describe 'Private helpers (via module scope)' {
         }
         It 'Filename .csv (extension-only, no stem) — GetFileNameWithoutExtension is empty' {
             $r = & (Get-Module InforcerCommunity) { Resolve-InforcerReportOutputFileName -DefaultName '.csv' }
-            # Allowed — leading-dot is a normal Unix dotfile, no reserved-name conflict
-            $r | Should -Be '.csv'
+            # A leading dot is prefixed so a server-chosen name never becomes a hidden dotfile (security F1)
+            $r | Should -Be '_.csv'
         }
         It 'Filename with mixed allowlisted + unusual extensions still passes resolver' {
             $r = & (Get-Module InforcerCommunity) { Resolve-InforcerReportOutputFileName -DefaultName 'report.parquet' }
@@ -2352,7 +2395,7 @@ Describe 'Private helpers (via module scope)' {
                 ($g | Format-List | Out-String)
             }
             $script:GroupBase = @{
-                id = 'f44f2f5c-3160-420b-900d-5ecbede954fc'; displayName = 'G'; description = 'd'
+                id = '00000000-0000-0000-0000-000000000006'; displayName = 'G'; description = 'd'
                 mail = $null; visibility = $null; groupTypes = @(); membershipRule = $null
                 mailEnabled = $false; createdDateTime = '2026-01-01'; onPremisesSyncEnabled = $null
                 members = @()

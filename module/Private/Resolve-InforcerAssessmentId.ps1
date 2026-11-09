@@ -9,7 +9,7 @@ function Resolve-InforcerAssessmentId {
     .PARAMETER AssessmentId
         Assessment ID string or friendly assessment name.
     .PARAMETER AssessmentData
-        Optional. Pre-fetched array of assessment objects (e.g. from GET /beta/assessments). When provided
+        Optional. Pre-fetched array of assessment objects (e.g. from GET /assessments). When provided
         and AssessmentId is a name, resolution is done from this data instead of calling the API.
     .OUTPUTS
         System.String - The resolved assessment ID.
@@ -30,7 +30,7 @@ function Resolve-InforcerAssessmentId {
         Write-Verbose "Resolving assessment: '$assessmentIdString'..."
         $assessmentsToUse = $AssessmentData
         if ($null -eq $assessmentsToUse -or $assessmentsToUse.Count -eq 0) {
-            $assessmentsToUse = @(Invoke-InforcerApiRequest -Endpoint '/beta/assessments' -Method GET -OutputType PowerShellObject)
+            $assessmentsToUse = @(Invoke-InforcerApiRequest -Endpoint '/assessments' -Method GET -OutputType PowerShellObject -ObjectType Assessment)
         }
         $assessments = if ($assessmentsToUse -is [array]) { $assessmentsToUse } else { @($assessmentsToUse) }
 

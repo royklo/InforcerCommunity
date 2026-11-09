@@ -33,10 +33,11 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
     foreach ($tr in $TenantResults) {
         $map = @{}
         foreach ($c in $tr.Checks) { $map["$($c.category)|$($c.name)"] = $c.Status }
-        $tenantCheckMap[$tr.TenantName] = $map
+        $tenantCheckMap["$($tr.TenantId)"] = $map
     }
 
     $tenantNames = @($TenantResults | ForEach-Object { $_.TenantName })
+    $tenantKeys = @($TenantResults | ForEach-Object { "$($_.TenantId)" })
     $dateStr = Get-Date -Format 'yyyy-MM-dd'
     $timeStr = Get-Date -Format 'HH:mm'
     $avgScore = if ($TenantResults.Count -gt 0) { [math]::Round(($TenantResults | ForEach-Object { $_.Score } | Measure-Object -Average).Average, 1) } else { 0 }
@@ -50,9 +51,9 @@ function ConvertTo-InforcerAssessmentMatrixHtml {
     foreach ($ck in $allChecks) {
         $key = "$($ck.category)|$($ck.name)"
         $statuses = [ordered]@{}
-        foreach ($tn in $tenantNames) {
-            $st = if ($tenantCheckMap[$tn].ContainsKey($key)) { $tenantCheckMap[$tn][$key] } else { 'N/A' }
-            $statuses[$tn] = $st
+        foreach ($tk in $tenantKeys) {
+            $st = if ($tenantCheckMap[$tk].ContainsKey($key)) { $tenantCheckMap[$tk][$key] } else { 'N/A' }
+            $statuses[$tk] = $st
         }
         $desc = if ($ck.description) { ($ck.description -replace "`r?`n", '\n') } else { '' }
         $impact = if ($ck.impact) { ($ck.impact -replace "`r?`n", '\n') } else { '' }
@@ -240,25 +241,26 @@ tbody tr:hover td:first-child{background:#f3f4f6}
   </div>
 </div>
 <script>
-var T=$($tenantsJson -replace '</','<\/'),M=$($matrixJson -replace '</','<\/');
-var vis=new Set(T.map(function(t){return t.name}));
+var T=$($tenantsJson -replace '<','\u003c'),M=$($matrixJson -replace '<','\u003c');
+var vis=new Set(T.map(function(t){return String(t.id)}));
 var filt='all';
 
-function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function sCol(s){return s>=90?'var(--pass)':s>=70?'var(--cyan)':'var(--fail)'}
 
 function buildCbs(){
-  var h='';T.forEach(function(t){
+  var h='';T.forEach(function(t,i){
     var c=sCol(t.score);
-    h+='<label><input type=checkbox checked onchange="togT(this,\''+esc(t.name).replace(/'/g,"\\'")+'\')">'+esc(t.name)+'<span class="t-score" style="color:'+c+'">'+t.score+'%</span></label>';
+    h+='<label><input type=checkbox checked data-i="'+i+'">'+esc(t.name)+'<span class="t-score" style="color:'+c+'">'+esc(t.score)+'%</span></label>';
   });
   document.getElementById('tCbs').innerHTML=h;
 }
+document.getElementById('tCbs').addEventListener('change',function(e){var i=e.target.getAttribute('data-i');if(i!==null)togT(e.target,String(T[+i].id))});
 function toggleDrop(e){e.stopPropagation();document.getElementById('tDrop').classList.toggle('open')}
 document.addEventListener('click',function(){document.getElementById('tDrop').classList.remove('open')});
 document.getElementById('tDrop').addEventListener('click',function(e){e.stopPropagation()});
 function togT(cb,n){if(cb.checked)vis.add(n);else vis.delete(n);render()}
-function togAll(on){vis=on?new Set(T.map(function(t){return t.name})):new Set();document.querySelectorAll('#tCbs input').forEach(function(c){c.checked=on});render()}
+function togAll(on){vis=on?new Set(T.map(function(t){return String(t.id)})):new Set();document.querySelectorAll('#tCbs input').forEach(function(c){c.checked=on});render()}
 function setFilter(f,btn){filt=f;document.querySelectorAll('.pill-btn').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');applyFilters()}
 
 function applyFilters(){
@@ -288,12 +290,12 @@ function applyFilters(){
 }
 
 function render(){
-  var vt=T.filter(function(t){return vis.has(t.name)});
+  var vt=T.filter(function(t){return vis.has(String(t.id))});
   // Head with score + passed/total
   var th='<tr><th>Check</th>';
   vt.forEach(function(t){
     var c=sCol(t.score);
-    th+='<th>'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+t.score+'%</span><span class="th-detail">'+t.passed+' / '+(t.passed+t.failed)+' passed</span>'+(t.na?'<span class="th-detail">'+t.na+' not assessed</span>':'')+'</th>';
+    th+='<th>'+esc(t.name)+'<span class="th-s" style="color:'+c+'">'+esc(t.score)+'%</span><span class="th-detail">'+t.passed+' / '+(t.passed+t.failed)+' passed</span>'+(t.na?'<span class="th-detail">'+t.na+' not assessed</span>':'')+'</th>';
   });
   th+='</tr>';document.getElementById('mHead').innerHTML=th;
   // Body
@@ -309,7 +311,7 @@ function render(){
     if(hasDetail)tb+='<button class="ck-toggle" onclick="event.stopPropagation();openPanel('+idx+')">&#x2139; Details</button>';
     tb+='</div></td>';
     vt.forEach(function(t){
-      var st=r.statuses[t.name]||'N/A';
+      var st=r.statuses[t.id]||'N/A';
       if(st==='Pass')tb+='<td><span class="st st-p">\u2713</span></td>';
       else if(st==='Fail')tb+='<td><span class="st st-f">\u2717</span></td>';
       else if(st!=='N/A')tb+='<td><span class="st st-u" title="Not assessed: '+esc(st)+'">?</span></td>';

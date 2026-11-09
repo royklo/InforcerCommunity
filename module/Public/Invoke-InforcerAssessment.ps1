@@ -2,7 +2,8 @@
 .SYNOPSIS
     Runs an assessment against one or more tenants via the Inforcer API.
 
-    Required API scope(s): Tenants.Read + Assessments.Read + Assessments.Run
+    Required API scope(s): Tenants.Read + Assessments.Read + Assessments.Run (API key);
+    Tenants (read) + Tenant Assessment (run) permissions (API client, unconfirmed).
 .DESCRIPTION
     Triggers an assessment run and returns detailed results including per-check scores,
     passes, violations, warnings, and framework metadata.
@@ -10,26 +11,37 @@
     API could not assess the check; they are reported but left out of the compliance score.
     Supports single-tenant, multi-tenant (all tenants), and subset modes.
     Use -MultiTenant to run against all tenants, or pass multiple values to -TenantId.
+    Works with both login types. With an API key (legacy API) tenants are identified by numeric
+    Client Tenant ID, GUID or name; with a client ID and secret (v1 API) by Microsoft tenant ID
+    (GUID) or name, and the TenantId on the output is the Microsoft tenant ID. v1 runs return
+    when the assessment completes, exactly like the legacy runs.
     When -OutputPath is specified with multi-tenant, generates an HTML matrix report.
+    With client credentials a throttled run (429) is retried after Retry-After and a 401 renews the
+    token once; with an API key neither is retried. A run that answers with a redirect fails.
 .PARAMETER TenantId
-    Tenant(s) to run the assessment against. Accepts numeric ID, GUID, or friendly name.
+    Tenant(s) to run the assessment against. Accepts numeric Client Tenant ID (API key only),
+    Microsoft tenant GUID, or friendly name. Aliases: -ClientTenantId, -MsTenantId.
     Pass multiple values for subset multi-tenant mode.
     Optional when -MultiTenant is used (defaults to all tenants).
+    Piped tenants are collected into one run; every check then carries TenantId.
 .PARAMETER AssessmentId
     The assessment to run. Accepts an assessment ID string or a friendly assessment name.
 .PARAMETER MultiTenant
     Switch. Runs the assessment against all tenants (or subset if -TenantId also specified).
     Requires -OutputPath with HTML extension for the matrix report.
 .PARAMETER OutputPath
-    Optional. File path to export results. Auto-detects format from file extension.
-    Single tenant: HTML (.html) report or CSV (.csv).
+    Optional. File path (not a directory) to export results; the extension picks the format, and
+    any other extension fails with UnsupportedFormat.
+    Single tenant: HTML (.html or .htm) report or CSV (.csv).
     Multi-tenant: HTML (.html) matrix report or CSV (.csv) with tenant column.
+    CSV values that start with =, +, -, @, a tab or a carriage return get a leading ' so Excel
+    shows them as text instead of running them as formulas.
     Returns System.IO.FileInfo when specified.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON uses Depth 100.
 .EXAMPLE
-    Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness"
-    Runs the Copilot Readiness assessment against tenant 144.
+    Invoke-InforcerAssessment -TenantId 'Contoso' -AssessmentId "Copilot Readiness"
+    Runs the Copilot Readiness assessment against the tenant Contoso.
 .EXAMPLE
     Invoke-InforcerAssessment -TenantId "Contoso" -AssessmentId "Copilot Readiness" -OutputPath ./report.html
     Generates an interactive HTML assessment report.
@@ -40,10 +52,10 @@
     Invoke-InforcerAssessment -TenantId "Contoso","Fabrikam","Woodgrove" -AssessmentId "Copilot Readiness" -OutputPath ./matrix.html
     Runs the assessment against specific tenants and generates a matrix report.
 .EXAMPLE
-    Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness" -OutputPath ./report.csv
+    Invoke-InforcerAssessment -TenantId 'Contoso' -AssessmentId "Copilot Readiness" -OutputPath ./report.csv
     Exports assessment results to CSV.
 .EXAMPLE
-    Invoke-InforcerAssessment -TenantId 144 -AssessmentId "Copilot Readiness" -OutputType JsonObject
+    Invoke-InforcerAssessment -TenantId 'Contoso' -AssessmentId "Copilot Readiness" -OutputType JsonObject
     Returns the assessment results as a JSON string (depth 100) instead of objects.
 
 .OUTPUTS
@@ -60,7 +72,7 @@ function Invoke-InforcerAssessment {
 [OutputType([PSObject], [string], [System.IO.FileInfo])]
 param(
     [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName = $true)]
-    [Alias('ClientTenantId')]
+    [Alias('ClientTenantId', 'MsTenantId')]
     [object[]]$TenantId,
 
     [Parameter(Mandatory = $true)]
@@ -77,6 +89,16 @@ param(
     [string]$OutputType = 'PowerShellObject'
 )
 
+begin { $pipedTenantIds = [System.Collections.Generic.List[object]]::new() }
+process { if ($null -ne $TenantId) { foreach ($t in @($TenantId)) { $pipedTenantIds.Add($t) } } }
+end {
+# Piped input that held no tenant (an empty filter result) must not fall through to an all-tenant run.
+if ($PSCmdlet.MyInvocation.ExpectingInput -and $pipedTenantIds.Count -eq 0) {
+    Write-Verbose 'No tenants were piped in; nothing to assess.'
+    return
+}
+if ($pipedTenantIds.Count -gt 0) { $TenantId = $pipedTenantIds.ToArray() }
+
 if (-not (Test-InforcerSession)) {
     Write-Error -Message 'Not connected yet. Please run Connect-Inforcer first.' -ErrorId 'NotConnected' -Category ConnectionError
     return
@@ -90,12 +112,14 @@ if (-not $isMultiTenant -and ($null -eq $TenantId -or @($TenantId).Count -eq 0))
 }
 
 # Fetch tenant list (needed for name resolution and multi-tenant)
-$tenantData = @(Invoke-InforcerApiRequest -Endpoint '/beta/tenants' -Method GET -OutputType PowerShellObject)
+$isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
+$tenantIdProperty = if ($isV1) { 'msTenantId' } else { 'clientTenantId' }
+$tenantData = @(Get-InforcerTenantList -Refresh)
 
 # Resolve assessment
 $assessmentData = $null
 try {
-    $assessmentData = @(Invoke-InforcerApiRequest -Endpoint '/beta/assessments' -Method GET -OutputType PowerShellObject)
+    $assessmentData = @(Invoke-InforcerApiRequest -Endpoint '/assessments' -Method GET -OutputType PowerShellObject -ObjectType Assessment)
     $resolvedAssessmentId = Resolve-InforcerAssessmentId -AssessmentId $AssessmentId -AssessmentData $assessmentData
 } catch {
     Write-Error -Message $_.Exception.Message -ErrorId 'InvalidAssessmentId' -Category InvalidArgument
@@ -115,22 +139,32 @@ foreach ($a in $assessmentData) {
     }
 }
 
-# Helper: resolve tenant friendly name from tenant data
+# Helper: resolve tenant friendly name from tenant data (id -> name, first match wins)
+$tenantNames = @{}
+foreach ($t in $tenantData) {
+    if ($t -isnot [PSObject]) { continue }
+    $cidProp = $t.PSObject.Properties[$tenantIdProperty]
+    if (-not $cidProp -or $null -eq $cidProp.Value -or $tenantNames.ContainsKey("$($cidProp.Value)")) { continue }
+    $fn = $t.PSObject.Properties['tenantFriendlyName']
+    $dn = $t.PSObject.Properties['tenantDnsName']
+    $tenantNames["$($cidProp.Value)"] = if ($fn -and -not [string]::IsNullOrWhiteSpace($fn.Value) -and $fn.Value -ne 'Tenant') { $fn.Value }
+        elseif ($dn -and -not [string]::IsNullOrWhiteSpace($dn.Value)) { $dn.Value }
+        else { "$($cidProp.Value)" }
+}
 $resolveTenantName = {
-    param([int]$cid, [array]$data)
-    foreach ($t in $data) {
-        if ($t -is [PSObject]) {
-            $cidProp = $t.PSObject.Properties['clientTenantId']
-            if ($cidProp -and [int]$cidProp.Value -eq $cid) {
-                $fn = $t.PSObject.Properties['tenantFriendlyName']
-                $dn = $t.PSObject.Properties['tenantDnsName']
-                if ($fn -and -not [string]::IsNullOrWhiteSpace($fn.Value) -and $fn.Value -ne 'Tenant') { return $fn.Value }
-                if ($dn -and -not [string]::IsNullOrWhiteSpace($dn.Value)) { return $dn.Value }
-                return "$cid"
-            }
-        }
-    }
+    param($cid)
+    if ($tenantNames.ContainsKey("$cid")) { return $tenantNames["$cid"] }
     return "$cid"
+}
+
+# CSV cells that start with = + - @ tab or CR are formulas in Excel: prefix them with a quote.
+$csvSafe = {
+    param($row)
+    foreach ($prop in $row.PSObject.Properties) {
+        $v = $prop.Value
+        if ($v -is [string] -and $v.Length -gt 0 -and "=+-@`t`r".IndexOf($v[0]) -ge 0) { $prop.Value = "'" + $v }
+    }
+    $row
 }
 
 # Helper: process raw API results into enriched check objects
@@ -196,13 +230,18 @@ $processResults = {
     return ,$checks
 }
 
-# Helper: counts and score; checks that were not assessed stay out of the score
+# Helper: counts and score; checks that were not assessed stay out of the score.
+# v1 sends inforcer's own score (summary.score, the portal's number); beta has none, so it is computed.
 $summarize = {
-    param($checks)
+    param($checks, $response)
     $passed = 0; $failed = 0
     foreach ($c in $checks) { if ($c.Status -eq 'Pass') { $passed++ } elseif ($c.Status -eq 'Fail') { $failed++ } }
+    $apiSummary = if ($response -is [PSObject]) { $response.PSObject.Properties['summary'].Value }
+    $apiScore = if ($apiSummary -is [PSObject]) { $apiSummary.PSObject.Properties['score'].Value }
+    # Only a real 0-100 number is trusted; it lands in HTML reports. Anything else falls back to the computed score.
+    $useApi = $apiScore -is [ValueType] -and $apiScore -isnot [bool] -and [double]$apiScore -ge 0 -and [double]$apiScore -le 100
     @{
-        Score       = if ($passed + $failed -gt 0) { [math]::Round(($passed / ($passed + $failed)) * 100, 1) } else { 0 }
+        Score       = if ($useApi) { [double]$apiScore } elseif ($passed + $failed -gt 0) { [math]::Round(($passed / ($passed + $failed)) * 100, 1) } else { 0 }
         Passed      = $passed
         Failed      = $failed
         NotAssessed = $checks.Count - $passed - $failed
@@ -220,7 +259,7 @@ if ($isMultiTenant) {
         foreach ($tid in @($TenantId)) {
             try {
                 $cid = Resolve-InforcerTenantId -TenantId $tid -TenantData $tenantData
-                $tname = & $resolveTenantName $cid $tenantData
+                $tname = & $resolveTenantName $cid
                 [void]$tenantsToRun.Add(@{ Id = $cid; Name = $tname })
             } catch {
                 Write-Warning "Skipping tenant '$tid': $($_.Exception.Message)"
@@ -230,10 +269,10 @@ if ($isMultiTenant) {
         # All tenants
         foreach ($t in $tenantData) {
             if ($t -is [PSObject]) {
-                $cidProp = $t.PSObject.Properties['clientTenantId']
-                if ($cidProp) {
-                    $cid = [int]$cidProp.Value
-                    $tname = & $resolveTenantName $cid $tenantData
+                $cidProp = $t.PSObject.Properties[$tenantIdProperty]
+                if ($cidProp -and $null -ne $cidProp.Value) {
+                    $cid = if ($isV1) { "$($cidProp.Value)" } else { [int]$cidProp.Value }
+                    $tname = & $resolveTenantName $cid
                     [void]$tenantsToRun.Add(@{ Id = $cid; Name = $tname })
                 }
             }
@@ -268,7 +307,7 @@ if ($isMultiTenant) {
         $tenantIndex++
         Write-Host "[$tenantIndex/$($tenantsToRun.Count)] " -NoNewline
         $response = Invoke-InforcerAssessmentRun `
-            -ClientTenantId $tenant.Id `
+            -TenantId $tenant.Id `
             -ResolvedAssessmentId $resolvedAssessmentId `
             -TenantDisplayName $tenant.Name `
             -AssessmentDisplayName $assessmentDisplayName
@@ -281,7 +320,7 @@ if ($isMultiTenant) {
         $resultsProp = $response.PSObject.Properties['results']
         $results = if ($resultsProp -and $resultsProp.Value -is [array]) { $resultsProp.Value } else { @() }
         $checks = & $processResults $results
-        [void]$allTenantResults.Add(@{ TenantId = $tenant.Id; TenantName = $tenant.Name; Checks = @($checks) } + (& $summarize $checks))
+        [void]$allTenantResults.Add(@{ TenantId = $tenant.Id; TenantName = $tenant.Name; Checks = @($checks) } + (& $summarize $checks $response))
     }
 
     $totalStopwatch.Stop()
@@ -354,7 +393,7 @@ if ($isMultiTenant) {
             $csvRows = [System.Collections.Generic.List[object]]::new()
             foreach ($tr in $allTenantResults) {
                 foreach ($c in $tr.Checks) {
-                    [void]$csvRows.Add([PSCustomObject]@{
+                    [void]$csvRows.Add((& $csvSafe ([PSCustomObject]@{
                         Tenant           = $tr.TenantName
                         TenantId         = $tr.TenantId
                         Status           = $c.Status
@@ -367,7 +406,7 @@ if ($isMultiTenant) {
                         Violations       = ($c.Violations -join '; ')
                         Warnings         = ($c.Warnings -join '; ')
                         Passes           = ($c.Passes -join '; ')
-                    })
+                    })))
                 }
             }
             $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding utf8NoBOM
@@ -400,17 +439,23 @@ try {
     Write-Error -Message $_.Exception.Message -ErrorId 'InvalidTenantId' -Category InvalidArgument
     return
 }
-$tenantDisplayName = & $resolveTenantName $clientTenantId $tenantData
+$tenantDisplayName = & $resolveTenantName $clientTenantId
 
 $response = Invoke-InforcerAssessmentRun `
-    -ClientTenantId $clientTenantId `
+    -TenantId $clientTenantId `
     -ResolvedAssessmentId $resolvedAssessmentId `
     -TenantDisplayName $tenantDisplayName `
     -AssessmentDisplayName $assessmentDisplayName
 
 if ($null -eq $response) { return }
 
+# A piped tenant: results carry its id, as in multi-tenant mode.
+$pipedTenantId = if ($PSCmdlet.MyInvocation.ExpectingInput) { $clientTenantId } else { $null }
+
 if ($OutputType -eq 'JsonObject') {
+    if ($null -ne $pipedTenantId -and $response -is [PSObject] -and -not $response.PSObject.Properties['TenantId']) {
+        $response.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('TenantId', $pipedTenantId))
+    }
     $response | ConvertTo-Json -Depth 100
     return
 }
@@ -419,7 +464,7 @@ if ($OutputType -eq 'JsonObject') {
 $resultsProp = $response.PSObject.Properties['results']
 $results = if ($resultsProp -and $resultsProp.Value -is [array]) { $resultsProp.Value } else { @() }
 $processedChecks = & $processResults $results
-$summary = & $summarize $processedChecks
+$summary = & $summarize $processedChecks $response
 $score = $summary.Score
 
 Write-Host ""
@@ -446,7 +491,7 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     }
     elseif ($ext -eq '.csv') {
         $csvRows = foreach ($c in $processedChecks) {
-            [PSCustomObject]@{
+            & $csvSafe ([PSCustomObject]@{
                 Status           = $c.Status
                 Name             = $c.name
                 Category         = $c.category
@@ -457,7 +502,7 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
                 Violations       = ($c.Violations -join '; ')
                 Warnings         = ($c.Warnings -join '; ')
                 Passes           = ($c.Passes -join '; ')
-            }
+            })
         }
         $csvRows | Export-Csv -Path $resolvedPath -NoTypeInformation -Encoding utf8NoBOM
         Write-Host "CSV report saved to: $resolvedPath"
@@ -470,5 +515,9 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     return
 }
 
-foreach ($c in $processedChecks) { $c }
+foreach ($c in $processedChecks) {
+    if ($null -ne $pipedTenantId -and -not $c.PSObject.Properties['TenantId']) { $c | Add-Member -NotePropertyName 'TenantId' -NotePropertyValue $pipedTenantId }
+    $c
+}
+}
 }

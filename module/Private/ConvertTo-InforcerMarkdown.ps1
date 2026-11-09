@@ -11,6 +11,12 @@ function ConvertTo-MarkdownAnchor {
     ($Text.ToLower() -replace '[^a-z0-9\s-]', '' -replace '\s+', '-').Trim('-')
 }
 
+function ConvertTo-MarkdownText {
+    # Tenant data must not become live HTML in Markdown viewers that render raw HTML.
+    param([string]$Text)
+    $Text.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;')
+}
+
 function ConvertTo-MarkdownTable {
     <#
     .SYNOPSIS
@@ -41,7 +47,7 @@ function ConvertTo-MarkdownTable {
     # Data rows
     foreach ($row in $Rows) {
         $cells = @($row) | ForEach-Object {
-            $val = if ($null -eq $_ -or "$_" -eq '') { [char]0x2014 } else { "$_" }
+            $val = if ($null -eq $_ -or "$_" -eq '') { [char]0x2014 } else { ConvertTo-MarkdownText "$_" }
             # Escape pipe characters (D-20)
             $val = $val -replace '\|', '\|'
             # Newlines end the row in GFM, so multi-line values (scripts, plists) need <br>
@@ -65,7 +71,8 @@ function ConvertTo-InforcerMarkdown {
         - Anchor-based Table of Contents (Products -> Categories, two-level)
         - Per-product (##), per-category (###), per-policy (####) headings
         - Basics table (Property | Value), Settings table (Setting | Value), Assignments table
-        - Pipe characters in cell values escaped as \| (per D-20)
+        - Pipe characters in cell values escaped as \| (per D-20); & < > in cells, the tenant name
+          and policy headings HTML-encoded so tenant data never renders as HTML
         - Null/empty values rendered as em dash (U+2014) (per D-10)
         - Child settings (Indent > 0) prefixed with arrow markers (U+21B3) (per D-08)
 
@@ -88,7 +95,7 @@ function ConvertTo-InforcerMarkdown {
     # -------------------------------------------------------------------------
     # Document header
     # -------------------------------------------------------------------------
-    [void]$sb.AppendLine("# Tenant Documentation: $($DocModel.TenantName)")
+    [void]$sb.AppendLine("# Tenant Documentation: $(ConvertTo-MarkdownText $DocModel.TenantName)")
     [void]$sb.AppendLine()
     [void]$sb.AppendLine("*Generated: $($DocModel.GeneratedAt.ToString('yyyy-MM-dd HH:mm:ss')) UTC*")
     [void]$sb.AppendLine()
@@ -96,7 +103,7 @@ function ConvertTo-InforcerMarkdown {
     # FilterBaseline, not BaselineName: BaselineName is just the tenant's first attached
     # baseline, so it named the wrong baseline (or any baseline at all) when -Baseline filtered.
     if (-not [string]::IsNullOrWhiteSpace($DocModel.FilterBaseline)) {
-        [void]$sb.AppendLine("*Baseline: $($DocModel.FilterBaseline)*")
+        [void]$sb.AppendLine("*Baseline: $(ConvertTo-MarkdownText $DocModel.FilterBaseline)*")
         [void]$sb.AppendLine()
     }
     if (-not [string]::IsNullOrWhiteSpace($DocModel.FilterTag)) {
@@ -112,11 +119,11 @@ function ConvertTo-InforcerMarkdown {
 
     foreach ($prodName in $DocModel.Products.Keys) {
         $prodAnchor = ConvertTo-MarkdownAnchor -Text $prodName
-        [void]$sb.AppendLine("- [$prodName](#$prodAnchor)")
+        [void]$sb.AppendLine("- [$(ConvertTo-MarkdownText $prodName)](#$prodAnchor)")
         $product = $DocModel.Products[$prodName]
         foreach ($catName in $product.Categories.Keys) {
             $catAnchor = ConvertTo-MarkdownAnchor -Text $catName
-            [void]$sb.AppendLine("  - [$catName](#$catAnchor)")
+            [void]$sb.AppendLine("  - [$(ConvertTo-MarkdownText $catName)](#$catAnchor)")
         }
     }
     [void]$sb.AppendLine()
@@ -127,20 +134,20 @@ function ConvertTo-InforcerMarkdown {
     # Content sections
     # -------------------------------------------------------------------------
     foreach ($prodName in $DocModel.Products.Keys) {
-        [void]$sb.AppendLine("## $prodName")
+        [void]$sb.AppendLine("## $(ConvertTo-MarkdownText $prodName)")
         [void]$sb.AppendLine()
 
         $product = $DocModel.Products[$prodName]
 
         foreach ($catName in $product.Categories.Keys) {
-            [void]$sb.AppendLine("### $catName")
+            [void]$sb.AppendLine("### $(ConvertTo-MarkdownText $catName)")
             [void]$sb.AppendLine()
 
             $policies = $product.Categories[$catName]
 
             foreach ($policy in @($policies)) {
                 $policyName = if ($policy.Basics -and $policy.Basics.Name) { $policy.Basics.Name } else { 'Unknown Policy' }
-                [void]$sb.AppendLine("#### $policyName")
+                [void]$sb.AppendLine("#### $(ConvertTo-MarkdownText $policyName)")
                 [void]$sb.AppendLine()
 
                 # Basics table - skip Name row (it is the heading)

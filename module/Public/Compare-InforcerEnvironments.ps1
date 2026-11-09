@@ -2,22 +2,27 @@
 .SYNOPSIS
     Compares the Intune policy configuration of two tenants and generates an HTML report.
 
-    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read
+    Required API scope(s): Tenants.Read + Baselines.Read + tenants.policies.Read (API key);
+    Tenants + Baselines + Policies (+ Align with a baseline) permission (API client, unconfirmed).
 .DESCRIPTION
-    Fetches all policies from two tenants via Get-InforcerTenantPolicies, compares Intune
+    Fetches all policies from two tenants, compares Intune
     Settings Catalog settings at the settingDefinitionId level, and produces a self-contained
     HTML report showing alignment score, matches, conflicts, source-only/destination-only items,
     and non-Settings-Catalog policies for manual review. When -FetchGraphData is specified,
     also fetches compliance policy detection rules (rulesContent) that the Inforcer API does
     not return.
 
+    The two tenants are collected at the same time (the destination in a background runspace), so
+    a comparison takes about as long as its slower side.
+
     For cross-account comparison, use Connect-Inforcer -PassThru to obtain session objects
-    and pass them via -SourceSession / -DestinationSession.
+    and pass them via -SourceSession / -DestinationSession. The two sessions may use different
+    login types (API key and client credentials); each side uses its own session's API.
 .PARAMETER SourceTenantId
-    Source tenant identifier: numeric ID, Microsoft Tenant ID GUID, or friendly name.
+    Source tenant identifier: numeric ID (API-key session only), Microsoft Tenant ID GUID, or friendly name.
     Can be omitted when -SourceBaselineId is specified — the baseline owner tenant is used automatically.
 .PARAMETER DestinationTenantId
-    Destination tenant identifier: numeric ID, Microsoft Tenant ID GUID, or friendly name.
+    Destination tenant identifier: numeric ID (API-key session only), Microsoft Tenant ID GUID, or friendly name.
     Can be omitted when -DestinationBaselineId is specified — the baseline owner tenant is used automatically.
 .PARAMETER SourceSession
     Session hashtable from Connect-Inforcer -PassThru. If omitted, uses the current session.
@@ -40,13 +45,18 @@
     When specified, fetches and displays Graph assignment data in the report.
     Assignments are informational only and do not affect the alignment score.
 .PARAMETER SettingsCatalogPath
-    Path to the IntuneSettingsCatalogViewer settings.json file.
-    Auto-discovers from sibling repo if omitted.
+    Path to a local settings.json file for Settings Catalog resolution. When omitted, the latest
+    data is downloaded from the IntuneSettingsCatalogData GitHub repository and cached at
+    ~/.inforcercommunity/data/settings.json. After 24 hours it checks for a newer release and
+    downloads it; a download that is not a valid catalog, or is larger than 512 MB, never replaces
+    the cached copy.
 .PARAMETER FetchGraphData
     When specified, connects to Microsoft Graph to enrich comparison data beyond what the
     Inforcer API provides. Requires the Microsoft.Graph.Authentication module and interactive
     sign-in. If tenants are in different Azure AD tenants, you will be prompted for each.
-    Requires DeviceManagementConfiguration.Read.All scope for compliance rules.
+    Requests the read scopes Directory.Read.All, Policy.Read.All and
+    DeviceManagementConfiguration.Read.All; a call Graph refuses leaves those names as raw IDs
+    with a warning.
 
     Graph supplementations:
     - Assignment group name resolution (ObjectID to display name)
@@ -91,13 +101,19 @@
     $dst = Connect-Inforcer -ApiKey $key2 -Region eu -PassThru
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -SourceSession $src -DestinationSession $dst
 .EXAMPLE
-    Compare-InforcerEnvironments -SourceTenantId 482 -DestinationTenantId 139 -IncludingAssignments
+    $src = Connect-Inforcer -ApiKey $key -Region uk -PassThru
+    $dst = Connect-Inforcer -ClientId $clientId -ClientSecret $secret -Region uk -PassThru
+    Compare-InforcerEnvironments -SourceTenantId 101 -DestinationTenantId '00000000-0000-0000-0000-000000000002' -SourceSession $src -DestinationSession $dst   # API key only for the numeric source id
+
+    Mixed login types: the source uses the API-key (beta) API, the destination the client-credentials (v1) API.
+.EXAMPLE
+    Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fabrikam' -IncludingAssignments
 .EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1 Foundations' -DestinationTenantId 'Fabrikam'
     # Compares the 'Tier 1 Foundations' baseline policies on both sides. Fabrikam is scoped to the
     # same baseline unless -DestinationBaselineId says otherwise.
 .EXAMPLE
-    Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' -DestinationTenantId 14506
+    Compare-InforcerEnvironments -SourceBaselineId 'Inforcer Blueprint Baseline - Tier 1 - Foundations' -DestinationTenantId 'Fabrikam'
     # Compares the baseline (auto-resolves owner tenant) against a specific tenant.
 .EXAMPLE
     Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1' -DestinationTenantId 'Fabrikam' -DestinationBaselineId 'Tier 2'
@@ -161,55 +177,46 @@ if (-not $hasExplicitSessions -and -not (Test-InforcerSession)) {
 }
 
 # ── Resolve baseline owner when tenant ID is omitted ─────────────────────────
-# When -SourceBaselineId is given without -SourceTenantId, resolve the baseline
-# owner tenant automatically. Same for destination.
-$baselineCache = $null  # fetch once, reuse
-if ([string]::IsNullOrWhiteSpace($SourceTenantId) -and -not [string]::IsNullOrWhiteSpace($SourceBaselineId)) {
-    # Temporarily activate source session for API call when explicit sessions are used
+# When -SourceBaselineId is given without -SourceTenantId, resolve the baseline owner tenant
+# automatically. Same for destination. Each side resolves in its own session, so the owner id
+# fits that side's API (beta: numeric client tenant id, v1: Microsoft tenant id).
+$baselineCache = $null  # fetched once per session, reused
+foreach ($side in @(
+    @{ Name = 'source';      TenantVar = 'SourceTenantId';      BaselineId = $SourceBaselineId;      Session = $SourceSession }
+    @{ Name = 'destination'; TenantVar = 'DestinationTenantId'; BaselineId = $DestinationBaselineId; Session = $DestinationSession }
+)) {
+    if (-not [string]::IsNullOrWhiteSpace((Get-Variable -Name $side.TenantVar -ValueOnly)) -or
+        [string]::IsNullOrWhiteSpace($side.BaselineId)) { continue }
+
+    $sideSession = if ($null -ne $side.Session) { $side.Session } else { $script:InforcerSession }
     $savedSession = $script:InforcerSession
-    if ($null -ne $SourceSession) { $script:InforcerSession = $SourceSession }
+    $script:InforcerSession = $sideSession
     try {
-        $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
+        if ($null -eq $baselineCache -or -not [object]::ReferenceEquals($baselineCache.Session, $sideSession)) {
+            $baselineCache = @{
+                Session = $sideSession
+                Data    = @(Invoke-InforcerApiRequest -Endpoint '/baselines' -Method GET -OutputType PowerShellObject -ObjectType Baseline)
+            }
+        }
+        $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $side.BaselineId -BaselineData $baselineCache.Data
     } finally {
         $script:InforcerSession = $savedSession
     }
-    $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $SourceBaselineId -BaselineData $baselineCache
-    foreach ($bl in $baselineCache) {
+
+    $ownerId = $null
+    foreach ($bl in $baselineCache.Data) {
         if ($bl.id -eq $resolvedGuid) {
-            $SourceTenantId = $bl.baselineClientTenantId
-            Write-Verbose "Resolved source baseline owner tenant: $SourceTenantId"
+            $ownerId = if ($null -ne $bl.baselineClientTenantId) { $bl.baselineClientTenantId } else { $bl.baselineMsTenantId }
+            Write-Verbose "Resolved $($side.Name) baseline owner tenant: $ownerId"
             break
         }
     }
-    if ([string]::IsNullOrWhiteSpace($SourceTenantId)) {
-        Write-Error -Message "Could not resolve owner tenant for baseline '$SourceBaselineId'." `
+    if ([string]::IsNullOrWhiteSpace($ownerId)) {
+        Write-Error -Message "Could not resolve owner tenant for baseline '$($side.BaselineId)'." `
             -ErrorId 'BaselineOwnerNotFound' -Category InvalidArgument
         return
     }
-}
-if ([string]::IsNullOrWhiteSpace($DestinationTenantId) -and -not [string]::IsNullOrWhiteSpace($DestinationBaselineId)) {
-    if ($null -eq $baselineCache) {
-        $savedSession = $script:InforcerSession
-        if ($null -ne $DestinationSession) { $script:InforcerSession = $DestinationSession }
-        try {
-            $baselineCache = @(Invoke-InforcerApiRequest -Endpoint '/beta/baselines' -Method GET -OutputType PowerShellObject)
-        } finally {
-            $script:InforcerSession = $savedSession
-        }
-    }
-    $resolvedGuid = Resolve-InforcerBaselineId -BaselineId $DestinationBaselineId -BaselineData $baselineCache
-    foreach ($bl in $baselineCache) {
-        if ($bl.id -eq $resolvedGuid) {
-            $DestinationTenantId = $bl.baselineClientTenantId
-            Write-Verbose "Resolved destination baseline owner tenant: $DestinationTenantId"
-            break
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($DestinationTenantId)) {
-        Write-Error -Message "Could not resolve owner tenant for baseline '$DestinationBaselineId'." `
-            -ErrorId 'BaselineOwnerNotFound' -Category InvalidArgument
-        return
-    }
+    Set-Variable -Name $side.TenantVar -Value $ownerId
 }
 
 # Validate we have both tenant identifiers
@@ -298,6 +305,7 @@ if ($null -eq $model) {
         -ErrorId 'ModelBuildFailed' -Category InvalidResult
     return
 }
+
 
 Write-Host "  Alignment score: $($model.AlignmentScore)%" -ForegroundColor Gray
 Write-Host "  Total items:     $($model.TotalItems)" -ForegroundColor Gray

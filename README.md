@@ -185,6 +185,8 @@ Some output contains personal data (names, UPNs, email addresses, IP addresses, 
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 | **Get-InforcerSupportedEventType** | Returns the canonical list of audit event types accepted by `Get-InforcerAuditEvent -EventType`. Drives the tab completer; cached after first call. |
 | **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId). |
+| **New-InforcerUser**           | Creates a Microsoft Entra user in a tenant (API client login only). |
+| **Set-InforcerUser**           | Updates a user's profile, manager or sign-in; only the fields you pass change (API client login only). |
 | **Get-InforcerGroup**          | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
 | **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Get-InforcerSecureScore**    | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |

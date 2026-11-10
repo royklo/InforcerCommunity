@@ -4,7 +4,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
-> **Logins**: every cmdlet works with both logins. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
+> **Logins**: every cmdlet works with both logins, except `New-InforcerUser` and `Set-InforcerUser`, which need an API client because the beta API cannot create or change users. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
 
 > **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
 
@@ -528,6 +528,104 @@ IsGlobalAdmin    : False
 IsCloudOnly      : True
 IsMfaRegistered  : False
 RiskLevel        :
+```
+
+---
+
+## New-InforcerUser
+
+Creates a Microsoft Entra user in a tenant. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot create users.
+
+The user can sign in by default and must change the password at the first sign-in. `-MailNickname` defaults to the part of `-UserPrincipalName` before the `@`. The password must meet the tenant's password policy; it is sent only in the request body and never written to verbose output. A new user can take a few seconds to show in `Get-InforcerUser`. Supports `-WhatIf` and `-Confirm`.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tenants/{msTenantId}/users` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+**Output schema**: [CreatedUser](./API-REFERENCE.md#createduser), with `TenantId`, `displayName` and `userPrincipalName` added.
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **DisplayName** | String | Yes | The name shown for the user. |
+| **UserPrincipalName** | String | Yes | The sign-in name, such as `jo.bloggs@contoso.com`. The domain must be verified in the tenant. |
+| **Password** | SecureString | Yes | The initial password. |
+| **MailNickname** | String | No | The mail alias. Default: the part of `-UserPrincipalName` before the `@`. |
+| **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the password at the first sign-in. Default: `$true`. |
+| **AccountEnabled** | Bool | No | Whether the user can sign in. Default: `$true`. |
+| **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType**, **Mail** | String | No | Profile fields, sent as given. |
+| **UsageLocation** | String | No | Two-letter country code (ISO 3166) where the user's licences are used, such as `GB`. Needed before licences can be assigned. |
+| **BusinessPhones** | String[] | No | Business phone number. Microsoft Entra allows one. |
+| **OtherMails** | String[] | No | Other email addresses. |
+| **ManagerId** | String | No | The Microsoft Entra object id of the user's manager. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100; piped tenants return one array. |
+
+### Examples
+
+```powershell
+$password = Read-Host -AsSecureString -Prompt 'Initial password'
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -GivenName 'Jo' -Surname 'Bloggs' -Department 'Sales' -UsageLocation 'GB' -AccountEnabled $false
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -WhatIf
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -OutputType JsonObject
+```
+
+### Example output
+
+```
+DisplayName       : Jo Bloggs
+UserPrincipalName : jo.bloggs@contoso.com
+Id                : 00000000-0000-0000-0000-000000000005
+TenantId          : 00000000-0000-0000-0000-000000000001
+```
+
+---
+
+## Set-InforcerUser
+
+Updates a Microsoft Entra user's profile, manager or whether they can sign in. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
+
+Only the parameters you pass are changed; every other field stays as it is. Pass an empty string (`''`) or `$null` to clear a field, such as `-JobTitle ''`, or `-ManagerId ''` to remove the manager. `DisplayName`, `MailNickname`, `UserPrincipalName` and `Mail` cannot be cleared. `-AccountEnabled $false` blocks sign-in, but existing sessions last until their tokens expire. A change can take a few seconds to show in `Get-InforcerUser`. Returns nothing. Supports `-WhatIf` and `-Confirm`.
+
+When the manager could not be changed but the other changes were saved (HTTP 502), the error lists each step and whether it was applied, for example `Steps: profile: succeeded; manager: failed (Manager not found)`.
+
+**Pipeline:** users from `Get-InforcerUser` or `New-InforcerUser` can be piped in; `-UserId` binds from their `id` and `-TenantId` from their `TenantId` when they have one.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+**Request schema**: [UserUpdate](./API-REFERENCE.md#userupdate)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **UserId** | String | Yes | The user's Microsoft Entra object id. Alias: `Id`. Supports pipeline input by property name. |
+| **AccountEnabled** | Bool | No | Whether the user can sign in. |
+| **DisplayName**, **MailNickname**, **UserPrincipalName**, **Mail** | String | No | Cannot be cleared; an empty value is refused. |
+| **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **UsageLocation**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType** | String | No | Profile fields; `''` clears the field. |
+| **BusinessPhones**, **OtherMails** | String[] | No | Replace the whole list; `@()` clears it. |
+| **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
+
+At least one field must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
+
+### Examples
+
+```powershell
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Department 'Sales' -JobTitle 'Account Manager'
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false
+Get-InforcerUser -TenantId 'Contoso' -Search 'Adele' | Set-InforcerUser -TenantId 'Contoso' -ManagerId ''
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
+```
+
+### Example output
+
+None. With `-WhatIf`:
+
+```
+What if: Performing the operation "Update usageLocation" on target "user 00000000-0000-0000-0000-000000000005 in tenant 00000000-0000-0000-0000-000000000001".
 ```
 
 ---

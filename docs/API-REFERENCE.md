@@ -21,6 +21,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [Rate limits](#rate-limits)
   - [failedPolicyTypes](#failedpolicytypes)
   - [v1 endpoints](#v1-endpoints)
+  - [Creating and updating users (v1 only)](#creating-and-updating-users-v1-only)
   - [How v1 fields map to the module's names](#how-v1-fields-map-to-the-modules-names)
     - [Alignment details renames](#alignment-details-renames)
 - [Beta endpoints](#beta-endpoints)
@@ -52,6 +53,8 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [UserSummary](#usersummary)
   - [User](#user)
   - [UserLicense](#userlicense)
+  - [CreatedUser](#createduser)
+  - [UserUpdate](#userupdate)
   - [TenantGroupSummary](#tenantgroupsummary)
   - [TenantGroup](#tenantgroup)
   - [TenantRole](#tenantrole)
@@ -143,6 +146,8 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Get-InforcerAuditEvent` | `POST /beta/auditEvents/search` (one search; without `-EventType` no event-type filter is sent) | `Audit.Read` *(unmapped — see note above)* |
 | `Get-InforcerSupportedEventType` | `GET /beta/auditEvents/eventTypes` | `Audit.Read` *(unmapped — see note above)* |
 | `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Users.Read` + `Tenants.Read`† |
+| `New-InforcerUser` | none: the beta API cannot create users (the cmdlet needs an API client) | not available with an API key |
+| `Set-InforcerUser` | none: the beta API cannot update users (the cmdlet needs an API client) | not available with an API key |
 | `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
 | `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
 | `Get-InforcerSecureScore` | `GET /beta/tenants/{tenantId}/secureScores` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.SecureScores.Read` + `Tenants.Read`† |
@@ -174,6 +179,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}` | unconfirmed |
 | Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
 | Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
+| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}` | unconfirmed (which write grant) |
 | Tenants / Entra Dashboard | Read: View | `/v1/tenants/{msTenantId}/secureScores`, `/v1/tenants/{msTenantId}/directoryRoles` | unconfirmed |
 | Align / Baselines | Read: View | `/v1/baselines` | unconfirmed |
 | Align / Align | Read: View | `/v1/alignmentScores`, `/v1/tenants/{msTenantId}/alignmentDetails` | unconfirmed |
@@ -199,6 +205,8 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search` | Activity |
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
 | `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]` | User & Group Management, Tenants† |
+| `New-InforcerUser` | `POST /v1/tenants/{msTenantId}/users` | User & Group Management (write), Tenants† |
+| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}` | User & Group Management (write), Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
@@ -298,7 +306,9 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tenants/{msTenantId}/alignmentDetails` | GET (`baselineId` required) | `/beta/tenants/{tenantId}/alignmentDetails` (`customBaselineId`) | `Get-InforcerAlignmentDetails`; Export/Compare baseline scoping |
 | `/v1/tenants/{msTenantId}/secureScores` | GET | `/beta/tenants/{tenantId}/secureScores` | `Get-InforcerSecureScore` |
 | `/v1/tenants/{msTenantId}/users` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/users` | `Get-InforcerUser` |
+| `/v1/tenants/{msTenantId}/users` | POST (201 `{ id }`) | none (v1 only) | `New-InforcerUser` |
 | `/v1/tenants/{msTenantId}/users/{userId}` | GET | `/beta/tenants/{tenantId}/users/{userId}` | `Get-InforcerUser -UserId` |
+| `/v1/tenants/{msTenantId}/users/{userId}` | PATCH (JSON Merge Patch, 204) | none (v1 only) | `Set-InforcerUser` |
 | `/v1/tenants/{msTenantId}/groups` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/groups` | `Get-InforcerGroup` |
 | `/v1/tenants/{msTenantId}/groups/{groupId}` | GET | `/beta/tenants/{tenantId}/groups/{groupId}` | `Get-InforcerGroup -Group` |
 | `/v1/tenants/{msTenantId}/groups/{groupId}/members` | GET (`continuationToken`) | none (v1 only) | `Get-InforcerGroup -Group` (attached as members) |
@@ -314,7 +324,33 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 21 paths and 22 operations (`/v1/reports/runs` has GET and POST). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 21 paths and 24 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+
+### Creating and updating users (v1 only)
+
+The beta API has no equivalent, so `New-InforcerUser` and `Set-InforcerUser` need an API client; an API-key login stops with `RequiresApiClient`.
+
+#### `POST /v1/tenants/{msTenantId}/users`
+
+Creates a Microsoft Entra user in the tenant.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: the [UserUpdate](#userupdate) profile fields, of which `accountEnabled`, `displayName`, `mailNickname` and `userPrincipalName` are required, plus `passwordProfile` `{ password, forceChangePasswordNextSignIn }` (both required; the password must meet the tenant's password policy).
+
+**Response**: `201` with [CreatedUser](#createduser) and a `Location` header. Errors: `400` (invalid field, with `errors{}`), `404` (tenant), `409` (for example the user principal name is taken).
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}`
+
+Updates a user's profile, manager and whether they can sign in. JSON Merge Patch (RFC 7396): a property left out is kept, `null` clears it.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [UserUpdate](#userupdate), at least one property. Sent as `application/json` (the API also takes `application/merge-patch+json`).
+
+**Response**: `204` without a body; a change can take a few seconds to show in a `GET`. When the manager could not be changed but the other changes were saved, the API answers `502` with problem+json and `results[]`: one `{ step, status, title?, statusCode? }` per step (`profile`, `manager`). The module adds them to the error text as `Steps: profile: succeeded; manager: failed (reason)`.
 
 ### How v1 fields map to the module's names
 
@@ -1024,6 +1060,38 @@ License assignment on a user, used in both UserSummary and User schemas.
 | isExpired | boolean | Whether the license is expired. |
 | isCancelled | boolean | Whether the license is cancelled. |
 | state | string | License assignment state. |
+
+### CreatedUser
+
+Returned by `POST /v1/tenants/{msTenantId}/users`. `New-InforcerUser` adds `TenantId`, `displayName` and `userPrincipalName` (from the request) so the result can be piped to `Set-InforcerUser`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string (uuid) | The new user's Microsoft Entra object id. |
+
+### UserUpdate
+
+The profile fields of `PATCH /v1/tenants/{msTenantId}/users/{userId}` (and of the create body). All optional and nullable unless noted; `null` clears a field. `displayName`, `mailNickname`, `userPrincipalName`, `mail` and `accountEnabled` cannot be cleared. Unknown properties are rejected.
+
+| Property | Type | Limits / notes |
+|----------|------|----------------|
+| accountEnabled | boolean | `false` blocks sign-in; existing sessions last until their tokens expire. |
+| displayName | string | 1-256 characters. |
+| mailNickname | string | 1-64 characters. The mail alias. |
+| userPrincipalName | string | The sign-in name. |
+| givenName, surname | string | 1-64 characters. |
+| jobTitle | string | 1-128 characters. |
+| department | string | 1-64 characters. |
+| officeLocation, city, state, country | string | 1-128 characters. |
+| streetAddress | string | 1-1024 characters. |
+| postalCode | string | 1-40 characters. |
+| mobilePhone, preferredLanguage, companyName, employeeType | string | 1-64 characters. |
+| usageLocation | string | Two letters (ISO 3166), such as `GB`. |
+| employeeId | string | 1-16 characters. |
+| mail | string (email) | |
+| businessPhones | string[] | At most one number. |
+| otherMails | string[] (email) | |
+| managerId | string (uuid) | The manager's object id; `null` removes the manager. |
 
 ### TenantGroupSummary
 

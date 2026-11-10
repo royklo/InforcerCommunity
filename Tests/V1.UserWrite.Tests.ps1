@@ -92,6 +92,25 @@ Describe 'New-InforcerUser' {
         ($verbose | Out-String) | Should -Not -BeLike '*Example-Passw0rd!*'
     }
 
+    It 'leaves no readable password in the retained request after a transport failure' {
+        Set-UwSession
+        $global:UwSent = $null
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest {
+            # What a failed Invoke-RestMethod leaves: the disposed request as the ErrorRecord's TargetObject.
+            $msg = [System.Net.Http.HttpRequestMessage]::new('POST', [string]$Request.Uri)
+            $msg.Content = [System.Net.Http.StringContent]::new($Request.Body)
+            $msg.Dispose()
+            $global:UwSent = $msg
+            throw [System.Management.Automation.ErrorRecord]::new([System.Net.Http.HttpRequestException]::new('No such host is known.'), 'WebCmdletWebResponseException', 'ConnectionError', $msg)
+        }
+        New-InforcerUser -TenantId $script:Tid -DisplayName 'Jo' -UserPrincipalName 'jo@contoso.com' -Password $script:Pw -ErrorAction SilentlyContinue -ErrorVariable e
+        ($e | Out-String) | Should -Not -BeLike '*Example-Passw0rd!*'
+        $field = [System.Net.Http.ByteArrayContent].GetField('_content', [System.Reflection.BindingFlags]'NonPublic, Instance')
+        $field | Should -Not -BeNullOrEmpty -Because 'the cleanup relies on this field; a runtime without it needs another approach'
+        [System.Text.Encoding]::UTF8.GetString($field.GetValue($global:UwSent.Content)) | Should -Not -BeLike '*Example-Passw0rd!*'
+        Remove-Variable -Name UwSent -Scope Global
+    }
+
     It 'makes no request with -WhatIf' {
         Set-UwSession
         Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"id":"x"}' 201 }

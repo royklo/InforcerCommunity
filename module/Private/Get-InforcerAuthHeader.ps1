@@ -61,6 +61,18 @@ function Clear-InforcerRequestCredential {
     if ($message -is [System.Net.Http.HttpRequestMessage]) {
         $null = $message.Headers.Remove('Authorization')
         $null = $message.Headers.Remove('Inf-Api-Key')
+        # The body (a new user's password, for example) is disposed but its bytes stay in memory;
+        # zero them. ponytail: private .NET field, so a runtime without it keeps the bytes.
+        if ($message.Content -is [System.Net.Http.ByteArrayContent]) {
+            try {
+                $field = [System.Net.Http.ByteArrayContent].GetField('_content', [System.Reflection.BindingFlags]'NonPublic, Instance')
+                # No if-expression around GetValue: it would unroll the byte[] into a copy.
+                if ($field) {
+                    $bytes = $field.GetValue($message.Content)
+                    if ($bytes -is [byte[]]) { [array]::Clear($bytes, 0, $bytes.Length) }
+                }
+            } catch { Write-Debug "Could not clear the request body: $($_.Exception.Message)" }
+        }
     }
 }
 

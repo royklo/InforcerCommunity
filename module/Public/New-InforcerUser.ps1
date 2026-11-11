@@ -15,7 +15,7 @@ function New-InforcerUser {
         -UserPrincipalName before the @. The password must meet the tenant's password policy.
 
         Returns the new user's id with the tenant, display name and user principal name, so the result
-        can be piped to Set-InforcerUser. A new user can take a few seconds to show in Get-InforcerUser.
+        can be piped to Set-InforcerUser. Get-InforcerUser can take up to about five minutes to show the new user, because the API caches users.
 
     .PARAMETER TenantId
         The tenant's Microsoft tenant GUID or tenant name. Supports pipeline input by property name.

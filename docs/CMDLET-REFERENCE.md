@@ -12,7 +12,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ## Personal data
 
-User details (`Get-InforcerUser -UserId`), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
+User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
 
 ---
 
@@ -468,9 +468,9 @@ The default view shows 9 key properties. Use `| Select-Object *` to see all prop
 
 ## Get-InforcerUser
 
-Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information.
+Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`.
 
-> **Personal data:** `-UserId` returns a full personal record. See [Personal data](#personal-data).
+> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses. See [Personal data](#personal-data).
 
 > **v1:** the list view returns `Groups` and `Roles` as counts (`groupCount`/`roleCount` mapped to those names), not arrays; `-UserId` returns the full record.
 
@@ -478,10 +478,10 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/users` (list) or `GET /beta/tenants/{tenantId}/users/{userId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Users.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
-**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`
+**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`)
 **Required API client permission(s) (v1)**: User & Group Management + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail)
+**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`)
 
 | Parameter | Type | Mandatory | ParameterSet | Description |
 |-----------|------|-----------|--------------|-------------|
@@ -490,6 +490,7 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 | **Search** | String | No | List | Server-side search filter for the user list. |
 | **MaxResults** | Int | No | List | Max users to return. 0 = no limit. Default: 0. |
 | **UserId** | String | Yes | ById | The user ID (GUID) to retrieve full details for. |
+| **IncludeAuthenticationMethods** | Switch | No | ById | Adds `authenticationMethods`: the user's registered sign-in methods (password, phone, Microsoft Authenticator, passkey, ...), one extra request. Passwords and Temporary Access Pass codes are never returned. Needs an API client; an API key stops with `RequiresApiClient`. |
 | **OutputType** | String | No | Both | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -499,6 +500,7 @@ Get-InforcerUser -TenantId 'Contoso'
 Get-InforcerUser -TenantId 'Contoso' -Search "Adele"
 Get-InforcerUser -TenantId 'Contoso' -MaxResults 50
 Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005"
+(Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeAuthenticationMethods).authenticationMethods
 Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
 Get-InforcerUser -TenantId 'Contoso' -OutputType JsonObject
 ```
@@ -530,13 +532,28 @@ IsMfaRegistered  : False
 RiskLevel        :
 ```
 
+### Example output — authentication methods
+
+```powershell
+(Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods).authenticationMethods |
+    Format-Table type, displayName, phoneType, deletable, createdDateTime
+```
+
+```
+type                   displayName phoneType deletable createdDateTime
+----                   ----------- --------- --------- ---------------
+password                                         False 01/09/2026 09:00:00
+phone                              mobile         True
+microsoftAuthenticator Contoso Phone              True 02/09/2026 10:15:00
+```
+
 ---
 
 ## New-InforcerUser
 
 Creates a Microsoft Entra user in a tenant. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot create users.
 
-The user can sign in by default and must change the password at the first sign-in. `-MailNickname` defaults to the part of `-UserPrincipalName` before the `@`. The password must meet the tenant's password policy; it is sent only in the request body and never written to verbose output. A new user can take a few seconds to show in `Get-InforcerUser`. Supports `-WhatIf` and `-Confirm`.
+The user can sign in by default and must change the password at the first sign-in. `-MailNickname` defaults to the part of `-UserPrincipalName` before the `@`. The password must meet the tenant's password policy; it is sent only in the request body and never written to verbose output. `Get-InforcerUser` can take up to about five minutes to show the new user, because the API caches users. Supports `-WhatIf` and `-Confirm`.
 
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
@@ -584,20 +601,22 @@ TenantId          : 00000000-0000-0000-0000-000000000001
 
 ## Set-InforcerUser
 
-Updates a Microsoft Entra user's profile, manager or whether they can sign in. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
+Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
 
-Only the parameters you pass are changed; every other field stays as it is. Pass an empty string (`''`) or `$null` to clear a field, such as `-JobTitle ''`, or `-ManagerId ''` to remove the manager. `DisplayName`, `MailNickname`, `UserPrincipalName` and `Mail` cannot be cleared. `-AccountEnabled $false` blocks sign-in, but existing sessions last until their tokens expire. A change can take a few seconds to show in `Get-InforcerUser`. Returns nothing. Supports `-WhatIf` and `-Confirm`.
+Only the parameters you pass are changed; every other field stays as it is. Pass an empty string (`''`) or `$null` to clear a field, such as `-JobTitle ''`, or `-ManagerId ''` to remove the manager. `DisplayName`, `MailNickname`, `UserPrincipalName` and `Mail` cannot be cleared. `-AccountEnabled $false` blocks sign-in, but existing sessions last until their tokens expire. `Get-InforcerUser` can show the old values for up to about five minutes, because the API caches users. Returns nothing. Supports `-WhatIf` and `-Confirm`.
 
 When the manager could not be changed but the other changes were saved (HTTP 502), the error lists each step and whether it was applied, for example `Steps: profile: succeeded; manager: failed (Manager not found)`.
+
+`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. One call runs its steps in this order: profile update, password reset, sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
 
 **Pipeline:** users from `Get-InforcerUser` or `New-InforcerUser` can be piped in; `-UserId` binds from their `id` and `-TenantId` from their `TenantId` when they have one.
 
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
-**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (+ `GET /v1/tenants` for a tenant name)
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
 **Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Request schema**: [UserUpdate](./API-REFERENCE.md#userupdate)
+**Request schemas**: [UserUpdate](./API-REFERENCE.md#userupdate) | [PasswordReset](./API-REFERENCE.md#passwordreset)
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -608,14 +627,19 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **UsageLocation**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType** | String | No | Profile fields; `''` clears the field. |
 | **BusinessPhones**, **OtherMails** | String[] | No | Replace the whole list; `@()` clears it. |
 | **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
+| **Password** | SecureString | No | A new password. It must meet the tenant's password policy. |
+| **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the new password at the next sign-in. Default: `$true`. Only with `-Password`; on its own it stops with `PasswordRequired`. |
+| **RevokeSessions** | Switch | No | Signs the user out of every session. |
 
-At least one field must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
+At least one field, `-Password` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
 
 ### Examples
 
 ```powershell
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Department 'Sales' -JobTitle 'Account Manager'
-Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -RevokeSessions
+$password = Read-Host -AsSecureString -Prompt 'New password'
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Password $password -RevokeSessions
 Get-InforcerUser -TenantId 'Contoso' -Search 'Adele' | Set-InforcerUser -TenantId 'Contoso' -ManagerId ''
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
 ```

@@ -1,7 +1,7 @@
 function Set-InforcerUser {
     <#
     .SYNOPSIS
-        Updates a Microsoft Entra user's profile, manager or sign-in in a tenant.
+        Updates a Microsoft Entra user's profile, manager or sign-in, resets their password or signs them out everywhere.
 
         Required API scope(s): none; the API-key (beta) API cannot update users.
         Required permission: User & Group Management (API client, unconfirmed which grant).
@@ -14,8 +14,16 @@ function Set-InforcerUser {
         ('') or $null to clear a field, such as -JobTitle '' or -ManagerId '' to remove the manager.
         DisplayName, MailNickname, UserPrincipalName and Mail cannot be cleared.
 
-        -AccountEnabled $false blocks sign-in, but existing sessions last until their tokens expire.
-        A change can take a few seconds to show in Get-InforcerUser. Returns nothing.
+        -Password sets a new password (POST /tenants/{msTenantId}/users/{userId}/password); the user must
+        change it when they next sign in unless you pass -ForceChangePasswordNextSignIn $false.
+        -RevokeSessions signs the user out of every session (POST .../users/{userId}/revokeSessions);
+        access tokens already issued stay valid until they expire, typically within 90 minutes.
+        In one call the steps run in this order: profile update, password reset, sign-out. When a step
+        fails, the later steps are skipped and the error says which steps were already done.
+
+        -AccountEnabled $false blocks sign-in, but existing sessions last until their tokens expire;
+        add -RevokeSessions to end them.
+        Get-InforcerUser can show the old values for up to about five minutes, because the API caches users. Returns nothing.
 
         When the manager could not be changed but the other changes were saved, the error lists
         each step and whether it was applied.
@@ -99,6 +107,17 @@ function Set-InforcerUser {
     .PARAMETER ManagerId
         The Microsoft Entra object id of the user's manager. '' removes the manager.
 
+    .PARAMETER Password
+        A new password as a SecureString. It must meet the tenant's password policy.
+        inforcer does not store or log it.
+
+    .PARAMETER ForceChangePasswordNextSignIn
+        Whether the user must change the new password when they next sign in. Default $true.
+        Only together with -Password.
+
+    .PARAMETER RevokeSessions
+        Signs the user out of every session by revoking their refresh tokens and session cookies.
+
     .EXAMPLE
         Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Department 'Sales' -JobTitle 'Account Manager'
 
@@ -113,6 +132,17 @@ function Set-InforcerUser {
         Get-InforcerUser -TenantId 'Contoso' -Search 'Adele' | Set-InforcerUser -TenantId 'Contoso' -ManagerId ''
 
         Removes the manager of every user matching "Adele".
+
+    .EXAMPLE
+        $password = Read-Host -AsSecureString -Prompt 'New password'
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Password $password -RevokeSessions
+
+        Resets the password (the user must change it at the next sign-in) and signs the user out everywhere.
+
+    .EXAMPLE
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -RevokeSessions
+
+        Blocks sign-in and ends the user's existing sessions.
 
     .EXAMPLE
         Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
@@ -182,7 +212,13 @@ function Set-InforcerUser {
         [AllowEmptyCollection()]
         [string[]]$OtherMails,
 
-        [string]$ManagerId
+        [string]$ManagerId,
+
+        [System.Security.SecureString]$Password,
+
+        [bool]$ForceChangePasswordNextSignIn = $true,
+
+        [switch]$RevokeSessions
     )
 
     process {
@@ -195,9 +231,17 @@ function Set-InforcerUser {
             return
         }
 
+        if ($PSBoundParameters.ContainsKey('ForceChangePasswordNextSignIn') -and -not $Password) {
+            Write-Error -Message '-ForceChangePasswordNextSignIn only works together with -Password.' -ErrorId 'PasswordRequired' -Category InvalidArgument
+            return
+        }
         $body = ConvertTo-InforcerUserBody -BoundParameters $PSBoundParameters
-        if ($body.Count -eq 0) {
-            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
+        $steps = [System.Collections.Generic.List[string]]::new()
+        if ($body.Count -gt 0) { $steps.Add("update $(@($body.Keys) -join ', ')") }
+        if ($Password) { $steps.Add('reset password') }
+        if ($RevokeSessions) { $steps.Add('sign out of every session') }
+        if ($steps.Count -eq 0) {
+            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -Password or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
             return
         }
 
@@ -208,9 +252,38 @@ function Set-InforcerUser {
             return
         }
 
-        if (-not $PSCmdlet.ShouldProcess("user $UserId in tenant $resolvedTenantId", "Update $(@($body.Keys) -join ', ')")) { return }
+        if (-not $PSCmdlet.ShouldProcess("user $UserId in tenant $resolvedTenantId", ($steps -join '; '))) { return }
 
-        $json = $body | ConvertTo-Json -Depth 100 -Compress
-        $null = Invoke-InforcerApiRequest -Endpoint "/tenants/$resolvedTenantId/users/$([System.Uri]::EscapeDataString($UserId))" -Method PATCH -Body $json
+        $userEndpoint = "/tenants/$resolvedTenantId/users/$([System.Uri]::EscapeDataString($UserId))"
+        $done = [System.Collections.Generic.List[string]]::new()
+        # One step: its error is the answer. Several: hold it back and report what was and wasn't done.
+        $errorHandling = @{ ErrorVariable = 'stepErr' }
+        if ($steps.Count -gt 1) { $errorHandling['ErrorAction'] = 'SilentlyContinue' }
+        foreach ($step in $steps) {
+            $stepErr = $null
+            if ($step -eq 'reset password') {
+                $json = [ordered]@{
+                    password                      = ConvertFrom-InforcerSecureString -SecureString $Password
+                    forceChangePasswordNextSignIn = $ForceChangePasswordNextSignIn
+                } | ConvertTo-Json -Compress
+                try {
+                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/password" -Method POST -Body $json @errorHandling
+                } finally { $json = $null }
+            } elseif ($step -eq 'sign out of every session') {
+                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/revokeSessions" -Method POST @errorHandling
+            } else {
+                $null = Invoke-InforcerApiRequest -Endpoint $userEndpoint -Method PATCH -Body ($body | ConvertTo-Json -Depth 100 -Compress) @errorHandling
+            }
+            if (-not $stepErr) { $done.Add($step); continue }
+
+            if ($steps.Count -eq 1) { return }
+            $last = $stepErr[-1]
+            $skipped = @($steps | Select-Object -Skip ($done.Count + 1))
+            $message = "Could not $step for user $UserId. $($last.Exception.Message)" +
+                $(if ($done.Count) { " Already done: $($done -join '; ')." } else { '' }) +
+                $(if ($skipped.Count) { " Not done: $($skipped -join '; ')." } else { '' })
+            Write-Error -Message $message -ErrorId 'UserUpdatePartlyApplied' -Category $last.CategoryInfo.Category
+            return
+        }
     }
 }

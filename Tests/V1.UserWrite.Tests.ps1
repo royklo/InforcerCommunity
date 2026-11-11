@@ -1,5 +1,5 @@
 # V1.UserWrite.Tests.ps1
-# New-InforcerUser and Set-InforcerUser (v1 only). Fixtures are anonymised; no network calls.
+# New-InforcerUser, Set-InforcerUser and Get-InforcerUser -IncludeAuthenticationMethods (v1 only). Fixtures are anonymised; no network calls.
 
 BeforeAll {
     Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
@@ -199,5 +199,112 @@ Describe 'Set-InforcerUser' {
         }
         { Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -Department 'Sales' -ManagerId $script:Tid -ErrorAction Stop } |
             Should -Throw '*HTTP 502*Steps: profile: succeeded; manager: failed (Manager not found)*'
+    }
+    It 'resets the password and signs the user out, after the profile update, in that order' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AccountEnabled $false -Password $script:Pw -RevokeSessions -ErrorVariable e
+        $out | Should -BeNullOrEmpty
+        $e | Should -BeNullOrEmpty
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('PATCH ', 'POST /password', 'POST /revokeSessions')
+        $global:UwCalls[1].Body | Should -Be '{"password":"Example-Passw0rd!","forceChangePasswordNextSignIn":true}'
+        $global:UwCalls[2].Body | Should -BeNullOrEmpty
+    }
+
+    It 'sends -ForceChangePasswordNextSignIn $false and no PATCH when only the password changes' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -Password $script:Pw -ForceChangePasswordNextSignIn $false
+        $global:UwCalls.Count | Should -Be 1
+        $global:UwCalls[0].Uri | Should -Be "https://api.example.invalid/v1/tenants/$($script:Tid)/users/$($script:Uid)/password"
+        ($global:UwCalls[0].Body | ConvertFrom-Json).forceChangePasswordNextSignIn | Should -BeFalse
+    }
+
+    It 'refuses -ForceChangePasswordNextSignIn without -Password and makes no request' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ForceChangePasswordNextSignIn $false -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[0].FullyQualifiedErrorId | Should -BeLike 'PasswordRequired*'
+        $global:UwCalls.Count | Should -Be 0
+    }
+
+    It 'keeps the new password out of verbose output and errors' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"The request is invalid","status":400,"errors":{"password":["The password does not meet the tenant policy"]}}' 400 }
+        $all = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -Password $script:Pw -Verbose -ErrorAction SilentlyContinue -ErrorVariable e 4>&1
+        ($all | Out-String) + ($e | Out-String) | Should -Not -BeLike '*Example-Passw0rd!*'
+        @($e).Count | Should -Be 1
+        $e[0].Exception.Message | Should -BeLike '*HTTP 400*'
+    }
+
+    It 'stops at the failing step and says what was already done and what was skipped' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/password') { return New-UwResponse '{"title":"The request is invalid","status":400,"errors":{"password":["The password does not meet the tenant policy"]}}' 400 }
+            New-UwResponse '' 204
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -Department 'Sales' -Password $script:Pw -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e
+        $global:UwCalls.Count | Should -Be 2
+        $e[-1].FullyQualifiedErrorId | Should -BeLike 'UserUpdatePartlyApplied*'
+        $e[-1].Exception.Message | Should -BeLike '*Could not reset password*HTTP 400*Already done: update department.*Not done: sign out of every session.*'
+    }
+
+    It 'makes no request with -WhatIf for a password reset or sign-out' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -Password $script:Pw -RevokeSessions -WhatIf
+        $global:UwCalls.Count | Should -Be 0
+    }
+
+    It 'surfaces a 404 from a sign-out alone with the original error' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"User not found","status":404}' 404 }
+        { Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -RevokeSessions -ErrorAction Stop } | Should -Throw '*HTTP 404*User not found*'
+    }
+}
+
+Describe 'Get-InforcerUser -IncludeAuthenticationMethods' {
+    It 'adds the authentication methods to the user with one extra request' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/authenticationMethods') {
+                return New-UwResponse '{"authenticationMethods":[{"id":"00000000-0000-0000-0000-0000000000a1","type":"password","displayName":null,"createdDateTime":null,"deletable":false,"phoneNumber":null,"phoneType":null,"emailAddress":null},{"id":"00000000-0000-0000-0000-0000000000a2","type":"phone","displayName":null,"createdDateTime":null,"deletable":true,"phoneNumber":"+44 7700 900000","phoneType":"mobile","emailAddress":null}]}'
+            }
+            New-UwResponse ('{"id":"' + $script:Uid + '","displayName":"Jo Bloggs"}')
+        }
+        $u = Get-InforcerUser -TenantId $script:Tid -UserId $script:Uid -IncludeAuthenticationMethods
+        $global:UwCalls.Count | Should -Be 2
+        $global:UwCalls[1].Uri | Should -Be "https://api.example.invalid/v1/tenants/$($script:Tid)/users/$($script:Uid)/authenticationMethods"
+        @($u.authenticationMethods).Count | Should -Be 2
+        $u.authenticationMethods[1].phoneType | Should -Be 'mobile'
+    }
+
+    It 'keeps a single method as an array in JSON output' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/authenticationMethods') { return New-UwResponse '{"authenticationMethods":[{"id":"m1","type":"password"}]}' }
+            New-UwResponse '{"id":"u1"}'
+        }
+        $json = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeAuthenticationMethods -OutputType JsonObject
+        $json | Should -Match '"authenticationMethods":\s*\['
+    }
+
+    It 'makes no extra request without the switch' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"id":"u1"}' }
+        $null = Get-InforcerUser -TenantId $script:Tid -UserId 'u1'
+        $global:UwCalls.Count | Should -Be 1
+    }
+
+    It 'refuses an API-key (beta) login with RequiresApiClient and makes no request' {
+        Set-UwSession -Beta
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"data":{"id":"u1"},"success":true}' }
+        Get-InforcerUser -TenantId 5 -UserId 'u1' -IncludeAuthenticationMethods -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[0].FullyQualifiedErrorId | Should -BeLike 'RequiresApiClient*'
+        $global:UwCalls.Count | Should -Be 0
     }
 }

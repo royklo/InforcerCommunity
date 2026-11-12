@@ -51,6 +51,13 @@ foreach ($name in $exported) {
             'Get-InforcerUser' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }
+            'New-InforcerUser' {
+                $pw = ConvertTo-SecureString -String 'dummy' -AsPlainText -Force
+                $out = & $name -TenantId 1 -DisplayName 'Jo' -UserPrincipalName 'jo@contoso.com' -Password $pw -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Set-InforcerUser' {
+                $out = & $name -TenantId 1 -UserId '00000000-0000-0000-0000-000000000000' -Department 'Sales' -ErrorVariable err -ErrorAction SilentlyContinue
+            }
             'Get-InforcerGroup' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }

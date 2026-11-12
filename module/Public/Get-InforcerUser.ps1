@@ -5,6 +5,7 @@ function Get-InforcerUser {
 
         Required API scope(s): Tenants.Users.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
         (API key); User & Group Management + Tenants (only for a tenant name) permission (API client, unconfirmed).
+        -IncludeAuthenticationMethods needs a login with an API client.
 
     .DESCRIPTION
         Gets a list of users or a single user by ID from the Inforcer API. Works with both login types (API key and client credentials).
@@ -26,6 +27,12 @@ function Get-InforcerUser {
     .PARAMETER UserId
         The user ID (GUID) to retrieve full details for. Only available in the ById parameter set.
 
+    .PARAMETER IncludeAuthenticationMethods
+        Adds authenticationMethods to the user: the sign-in methods they have registered, such as their
+        password, phones, Microsoft Authenticator and passkeys (one extra request). Passwords and Temporary
+        Access Pass codes are never returned. Only with -UserId and a login with an API client
+        (Connect-Inforcer -ClientId -ClientSecret); an API-key login gets the error RequiresApiClient.
+
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'. Depth 100; the v1 list is always a JSON array.
         Piped tenants: each user carries TenantId and JsonObject returns one array for all tenants.
@@ -44,6 +51,11 @@ function Get-InforcerUser {
         Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005"
 
         Gets full detail for a specific user.
+
+    .EXAMPLE
+        (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeAuthenticationMethods).authenticationMethods
+
+        Lists the sign-in methods the user has registered, such as password, phone and passkey.
 
     .EXAMPLE
         Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
@@ -86,6 +98,9 @@ function Get-InforcerUser {
         [Parameter(Mandatory, ParameterSetName = 'ById')]
         [string]$UserId,
 
+        [Parameter(ParameterSetName = 'ById')]
+        [switch]$IncludeAuthenticationMethods,
+
         [Parameter(ParameterSetName = 'List')]
         [Parameter(ParameterSetName = 'ById')]
         [ValidateSet('PowerShellObject', 'JsonObject')]
@@ -97,6 +112,11 @@ function Get-InforcerUser {
     process {
         if (-not (Test-InforcerSession)) {
             Write-Error -Message "Not connected to Inforcer. Use Connect-Inforcer first." -ErrorId 'NotConnected' -Category ConnectionError
+            return
+        }
+
+        if ($IncludeAuthenticationMethods -and $script:InforcerSession.ApiVersion -ne 'v1') {
+            Write-Error -Message 'Authentication methods need a login with an API client (Connect-Inforcer -ClientId -ClientSecret). The API-key (beta) API does not return them.' -ErrorId 'RequiresApiClient' -Category InvalidOperation
             return
         }
 
@@ -131,6 +151,14 @@ function Get-InforcerUser {
                     Write-Error -ErrorRecord $err[-1]
                 }
                 return
+            }
+
+            if ($IncludeAuthenticationMethods) {
+                $methods = Invoke-InforcerApiRequest -Endpoint "$endpoint/authenticationMethods" -Method GET -PreserveStructure
+                if ($null -ne $methods) {
+                    $response.PSObject.Properties.Remove('authenticationMethods')
+                    $response.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('authenticationMethods', @($methods.authenticationMethods)))
+                }
             }
 
             & $addTenantId $response

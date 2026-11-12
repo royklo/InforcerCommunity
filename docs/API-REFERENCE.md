@@ -21,6 +21,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [Rate limits](#rate-limits)
   - [failedPolicyTypes](#failedpolicytypes)
   - [v1 endpoints](#v1-endpoints)
+  - [Managing users (v1 only)](#managing-users-v1-only)
   - [How v1 fields map to the module's names](#how-v1-fields-map-to-the-modules-names)
     - [Alignment details renames](#alignment-details-renames)
 - [Beta endpoints](#beta-endpoints)
@@ -52,6 +53,10 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [UserSummary](#usersummary)
   - [User](#user)
   - [UserLicense](#userlicense)
+  - [CreatedUser](#createduser)
+  - [UserUpdate](#userupdate)
+  - [PasswordReset](#passwordreset)
+  - [UserAuthenticationMethod](#userauthenticationmethod)
   - [TenantGroupSummary](#tenantgroupsummary)
   - [TenantGroup](#tenantgroup)
   - [TenantRole](#tenantrole)
@@ -142,7 +147,9 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Get-InforcerAlignmentDetails` | `GET /beta/baselines`, `GET /beta/alignmentScores`, `GET /beta/tenants`, `GET /beta/tenants/{tenantId}/alignmentDetails` | `Baselines.Read` + `AlignmentScores.Read` + `Tenants.Read` + `tenants.policies.Read` |
 | `Get-InforcerAuditEvent` | `POST /beta/auditEvents/search` (one search; without `-EventType` no event-type filter is sent) | `Audit.Read` *(unmapped — see note above)* |
 | `Get-InforcerSupportedEventType` | `GET /beta/auditEvents/eventTypes` | `Audit.Read` *(unmapped — see note above)* |
-| `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Users.Read` + `Tenants.Read`† |
+| `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)*; `-IncludeAuthenticationMethods` has no beta equivalent (needs an API client) | `Tenants.Users.Read` + `Tenants.Read`† |
+| `New-InforcerUser` | none: the beta API cannot create users (the cmdlet needs an API client) | not available with an API key |
+| `Set-InforcerUser` | none: the beta API cannot update users, reset passwords or revoke sessions (the cmdlet needs an API client) | not available with an API key |
 | `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
 | `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
 | `Get-InforcerSecureScore` | `GET /beta/tenants/{tenantId}/secureScores` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.SecureScores.Read` + `Tenants.Read`† |
@@ -173,7 +180,8 @@ The permission names below are the ones the portal shows (feature and grant). **
 |----------------|-------|-----------|--------|
 | Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}` | unconfirmed |
 | Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
-| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
+| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
+| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` | unconfirmed (which write grant) |
 | Tenants / Entra Dashboard | Read: View | `/v1/tenants/{msTenantId}/secureScores`, `/v1/tenants/{msTenantId}/directoryRoles` | unconfirmed |
 | Align / Baselines | Read: View | `/v1/baselines` | unconfirmed |
 | Align / Align | Read: View | `/v1/alignmentScores`, `/v1/tenants/{msTenantId}/alignmentDetails` | unconfirmed |
@@ -198,7 +206,9 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails` | Baselines + Align + Tenants |
 | `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search` | Activity |
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
-| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]` | User & Group Management, Tenants† |
+| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `.../users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`) | User & Group Management, Tenants† |
+| `New-InforcerUser` | `POST /v1/tenants/{msTenantId}/users` | User & Group Management (write), Tenants† |
+| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
@@ -298,7 +308,14 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tenants/{msTenantId}/alignmentDetails` | GET (`baselineId` required) | `/beta/tenants/{tenantId}/alignmentDetails` (`customBaselineId`) | `Get-InforcerAlignmentDetails`; Export/Compare baseline scoping |
 | `/v1/tenants/{msTenantId}/secureScores` | GET | `/beta/tenants/{tenantId}/secureScores` | `Get-InforcerSecureScore` |
 | `/v1/tenants/{msTenantId}/users` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/users` | `Get-InforcerUser` |
+| `/v1/tenants/{msTenantId}/users` | POST (201 `{ id }`) | none (v1 only) | `New-InforcerUser` |
 | `/v1/tenants/{msTenantId}/users/{userId}` | GET | `/beta/tenants/{tenantId}/users/{userId}` | `Get-InforcerUser -UserId` |
+| `/v1/tenants/{msTenantId}/users/{userId}` | PATCH (JSON Merge Patch, 204) | none (v1 only) | `Set-InforcerUser` |
+| `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` | GET | none (v1 only) | `Get-InforcerUser -UserId -IncludeAuthenticationMethods` |
+| `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` | DELETE (204) | none (v1 only) | `Set-InforcerUser -RemoveAuthenticationMethod` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mfa` | DELETE (204) | none (v1 only) | `Set-InforcerUser -ResetMfa` |
+| `/v1/tenants/{msTenantId}/users/{userId}/password` | POST (204) | none (v1 only) | `Set-InforcerUser -Password` |
+| `/v1/tenants/{msTenantId}/users/{userId}/revokeSessions` | POST (204) | none (v1 only) | `Set-InforcerUser -RevokeSessions` |
 | `/v1/tenants/{msTenantId}/groups` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/groups` | `Get-InforcerGroup` |
 | `/v1/tenants/{msTenantId}/groups/{groupId}` | GET | `/beta/tenants/{tenantId}/groups/{groupId}` | `Get-InforcerGroup -Group` |
 | `/v1/tenants/{msTenantId}/groups/{groupId}/members` | GET (`continuationToken`) | none (v1 only) | `Get-InforcerGroup -Group` (attached as members) |
@@ -314,7 +331,82 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 21 paths and 22 operations (`/v1/reports/runs` has GET and POST). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 26 paths and 29 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+
+### Managing users (v1 only)
+
+The beta API has no equivalent, so `New-InforcerUser`, `Set-InforcerUser` and `Get-InforcerUser -IncludeAuthenticationMethods` need an API client; an API-key login stops with `RequiresApiClient`.
+
+#### `POST /v1/tenants/{msTenantId}/users`
+
+Creates a Microsoft Entra user in the tenant.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: the [UserUpdate](#userupdate) profile fields, of which `accountEnabled`, `displayName`, `mailNickname` and `userPrincipalName` are required, plus `passwordProfile` `{ password, forceChangePasswordNextSignIn }` (both required; the password must meet the tenant's password policy).
+
+**Response**: `201` with [CreatedUser](#createduser) and a `Location` header. Errors: `400` (invalid field, with `errors{}`), `404` (tenant), `409` (for example the user principal name is taken).
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}`
+
+Updates a user's profile, manager and whether they can sign in. JSON Merge Patch (RFC 7396): a property left out is kept, `null` clears it.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [UserUpdate](#userupdate), at least one property. Sent as `application/json` (the API also takes `application/merge-patch+json`).
+
+**Response**: `204` without a body; a `GET` (by id or in the list) can show the old values for up to about five minutes; the two are cached separately. When the manager could not be changed but the other changes were saved, the API answers `502` with problem+json and `results[]`: one `{ step, status, title?, statusCode? }` per step (`profile`, `manager`). The module adds them to the error text as `Steps: profile: succeeded; manager: failed (reason)`.
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/password`
+
+Sets a new password for the user, and can require them to change it when they next sign in. inforcer does not store or log the password.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [PasswordReset](#passwordreset), both fields required.
+
+**Response**: `204` without a body. Errors: `400` (missing field, or the password does not meet the tenant's password policy, in `errors.password`), `404` (tenant or user).
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`
+
+Signs the user out of every session by revoking their refresh tokens and session cookies. Access tokens already issued stay valid until they expire, typically within 90 minutes. No body.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+**Response**: `204` without a body. Errors: `404` (tenant or user, `User not found`).
+
+`Set-InforcerUser` runs the steps of one call in this order: `PATCH` (when a profile field is passed), password, delete authentication methods (one call per id), MFA reset, revoke sessions. When a step fails the later ones are skipped, and the error (`UserUpdatePartlyApplied`) names the steps already done and the steps not done.
+
+#### `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`
+
+Lists the sign-in methods the user has registered, such as their password, phones, Microsoft Authenticator and passkeys. Secrets such as passwords and Temporary Access Pass codes are never returned.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management *(unconfirmed)*
+
+**Response**: `200` with `{ "authenticationMethods": [ ... ] }`, all methods in one response in no fixed order (see [UserAuthenticationMethod](#userauthenticationmethod)). `Get-InforcerUser -UserId -IncludeAuthenticationMethods` adds the array to the user as `authenticationMethods`. Like the other `GET` calls, the answer can be up to about five minutes old.
+
+#### `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`
+
+Deletes one of the user's sign-in methods, such as a phone, Microsoft Authenticator or a passkey, so it can no longer be used to sign in. `methodId` is the method's `id` from the list above; usually a GUID, but not for every type (a passkey's id is not).
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+**Response**: `204` without a body. Errors: `400` when the method is not `deletable` (reason in `errors.methodId`) or Microsoft Entra refuses it, for example the default method while another phone remains (reason in `detail`); `404` (tenant, user or method). Microsoft Entra's reads lag its changes, so the list can still show a deleted method for a short time. `Set-InforcerUser -RemoveAuthenticationMethod` sends one call per id.
+
+#### `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`
+
+Resets the user's MFA: deletes every authentication method that the list above returns with `deletable` true, in the order Microsoft Entra needs (an alternate mobile phone first, the default method last), so the user must register MFA again. The password is kept. A method already gone counts as deleted, so the call is safe to repeat.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+**Response**: `204` without a body, also when there was nothing to delete. When Microsoft Entra refuses a method the API answers `400` with problem+json and `results[]`: one `{ step, id, status, title? }` per method, `step` being the method's type and `title` the reason; `500` and `502` carry `results[]` too when methods were attempted. The module adds them to the error text as `Steps: phone <id>: succeeded; fido2 <id>: failed (reason)`. `404`: tenant or user.
 
 ### How v1 fields map to the module's names
 
@@ -1024,6 +1116,62 @@ License assignment on a user, used in both UserSummary and User schemas.
 | isExpired | boolean | Whether the license is expired. |
 | isCancelled | boolean | Whether the license is cancelled. |
 | state | string | License assignment state. |
+
+### CreatedUser
+
+Returned by `POST /v1/tenants/{msTenantId}/users`. `New-InforcerUser` adds `TenantId`, `displayName` and `userPrincipalName` (from the request) so the result can be piped to `Set-InforcerUser`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string (uuid) | The new user's Microsoft Entra object id. |
+
+### UserUpdate
+
+The profile fields of `PATCH /v1/tenants/{msTenantId}/users/{userId}` (and of the create body). All optional and nullable unless noted; `null` clears a field. `displayName`, `mailNickname`, `userPrincipalName`, `mail` and `accountEnabled` cannot be cleared. Unknown properties are rejected.
+
+| Property | Type | Limits / notes |
+|----------|------|----------------|
+| accountEnabled | boolean | `false` blocks sign-in; existing sessions last until their tokens expire. |
+| displayName | string | 1-256 characters. |
+| mailNickname | string | 1-64 characters. The mail alias. |
+| userPrincipalName | string | The sign-in name. |
+| givenName, surname | string | 1-64 characters. |
+| jobTitle | string | 1-128 characters. |
+| department | string | 1-64 characters. |
+| officeLocation, city, state, country | string | 1-128 characters. |
+| streetAddress | string | 1-1024 characters. |
+| postalCode | string | 1-40 characters. |
+| mobilePhone, preferredLanguage, companyName, employeeType | string | 1-64 characters. |
+| usageLocation | string | Two letters (ISO 3166), such as `GB`. |
+| employeeId | string | 1-16 characters. |
+| mail | string (email) | |
+| businessPhones | string[] | At most one number. |
+| otherMails | string[] (email) | |
+| managerId | string (uuid) | The manager's object id; `null` removes the manager. |
+
+### PasswordReset
+
+The body of `POST /v1/tenants/{msTenantId}/users/{userId}/password`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| password | string | Yes | The new password; it must meet the tenant's password policy. A blank password is a `400`. |
+| forceChangePasswordNextSignIn | boolean | Yes | Whether the user must change the password when they next sign in. `Set-InforcerUser` sends `true` unless you pass `-ForceChangePasswordNextSignIn $false`. |
+
+### UserAuthenticationMethod
+
+One element of `authenticationMethods` from `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`. Every property is always present; the ones that do not apply to the type are `null`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string | The method's Microsoft Entra id. Usually a uuid, but not for every type (a passkey's id is not). The password and each phone type have the same id for every user. |
+| type | string | `password`, `phone`, `email`, `microsoftAuthenticator`, `passkey`, `windowsHelloForBusiness`, `platformCredential`, `temporaryAccessPass`, `softwareOath`, `hardwareOath`, `qrCodePin`, `externalAuthentication` or `other`. More values may be added; treat an unknown value as `other`. |
+| displayName | string \| null | The device or key name, for Microsoft Authenticator, passkeys, Windows Hello for Business, platform credentials and hardware OATH tokens. |
+| createdDateTime | string (date-time) \| null | When the method was registered; for `password`, when it was last set. |
+| deletable | boolean | Whether inforcer can delete the method. `false` for `password`, `externalAuthentication` and `other`. |
+| phoneNumber | string \| null | For a `phone` method. |
+| phoneType | string \| null | `mobile`, `alternateMobile` or `office`, for a `phone` method. |
+| emailAddress | string \| null | For an `email` method. |
 
 ### TenantGroupSummary
 

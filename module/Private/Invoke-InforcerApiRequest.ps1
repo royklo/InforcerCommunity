@@ -152,6 +152,14 @@ function Invoke-InforcerApiRequest {
                               elseif ($problemDetail) { $problemDetail } else { $title }
                 $fieldErrors = Format-InforcerProblemError -Errors $props['errors'].Value
                 if ($fieldErrors) { $apiMessage = "$apiMessage ($fieldErrors)" }
+                # A partly applied operation lists each step, e.g. "profile: succeeded; manager: failed (reason)".
+                $steps = foreach ($r in @($props['results'].Value)) {
+                    if ($r -isnot [System.Management.Automation.PSCustomObject]) { continue }
+                    $step = "$((@($r.PSObject.Properties['step'].Value, $r.PSObject.Properties['id'].Value) -ne $null) -join ' '): $($r.PSObject.Properties['status'].Value)"
+                    $why = $r.PSObject.Properties['title'].Value -as [string]
+                    if ($why) { "$step ($why)" } else { $step }
+                }
+                if ($steps) { $apiMessage = "$apiMessage Steps: $(@($steps) -join '; ')" }
                 $traceId = ($props['traceId'].Value -as [string])
             } elseif ($isAppEnvelope -or $null -ne $props['errors']) {
                 # App-layer envelope { success, message, errors[], errorCode }
@@ -203,6 +211,9 @@ function Invoke-InforcerApiRequest {
         Write-Error -Message $msg -ErrorId "ApiRequestFailed_$statusCode" -Category ConnectionError
         return
     }
+
+    # 204 No Content (an update): success with nothing to return.
+    if ($statusCode -eq 204) { return }
 
     if ($null -eq $rawResponse -or ($rawResponse -is [string] -and [string]::IsNullOrWhiteSpace($rawResponse))) {
         Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData

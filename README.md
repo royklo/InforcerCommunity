@@ -168,7 +168,7 @@ A call Graph refuses leaves those IDs as they are, with a warning that names the
 
 ## Personal data
 
-Some output contains personal data (names, UPNs, email addresses, IP addresses, sign-in details): user details (`Get-InforcerUser -UserId`), audit events, report outputs, and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput`. The module caches no user or audit data. It writes files only where you ask: to `-OutputPath`, or for `Invoke-InforcerReport` and `Save-InforcerReportOutput` to the current directory when `-OutputPath` is omitted (`-NoSave` writes nothing). Handle those files as personal data: keep them access-controlled and delete them when no longer needed.
+Some output contains personal data (names, UPNs, email addresses, IP addresses, sign-in details): user details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses in `-IncludeAuthenticationMethods`), audit events, report outputs, and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput`. The module caches no user or audit data. It writes files only where you ask: to `-OutputPath`, or for `Invoke-InforcerReport` and `Save-InforcerReportOutput` to the current directory when `-OutputPath` is omitted (`-NoSave` writes nothing). Handle those files as personal data: keep them access-controlled and delete them when no longer needed.
 
 ## Cmdlets
 
@@ -184,7 +184,9 @@ Some output contains personal data (names, UPNs, email addresses, IP addresses, 
 | **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 | **Get-InforcerSupportedEventType** | Returns the canonical list of audit event types accepted by `Get-InforcerAuditEvent -EventType`. Drives the tab completer; cached after first call. |
-| **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId). |
+| **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId); `-IncludeAuthenticationMethods` adds their sign-in methods (API client login only). |
+| **New-InforcerUser**           | Creates a Microsoft Entra user in a tenant (API client login only). |
+| **Set-InforcerUser**           | Updates a user's profile, manager or sign-in, resets their password, removes sign-in methods or resets MFA, or signs them out everywhere; only the fields you pass change (API client login only). |
 | **Get-InforcerGroup**          | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
 | **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Get-InforcerSecureScore**    | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |

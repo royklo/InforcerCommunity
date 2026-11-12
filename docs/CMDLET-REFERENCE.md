@@ -4,7 +4,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
-> **Logins**: every cmdlet works with both logins. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
+> **Logins**: every cmdlet works with both logins, except `New-InforcerUser` and `Set-InforcerUser`, which need an API client because the beta API cannot create or change users. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
 
 > **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
 
@@ -12,7 +12,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ## Personal data
 
-User details (`Get-InforcerUser -UserId`), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
+User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
 
 ---
 
@@ -468,9 +468,9 @@ The default view shows 9 key properties. Use `| Select-Object *` to see all prop
 
 ## Get-InforcerUser
 
-Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information.
+Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`.
 
-> **Personal data:** `-UserId` returns a full personal record. See [Personal data](#personal-data).
+> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses. See [Personal data](#personal-data).
 
 > **v1:** the list view returns `Groups` and `Roles` as counts (`groupCount`/`roleCount` mapped to those names), not arrays; `-UserId` returns the full record.
 
@@ -478,10 +478,10 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/users` (list) or `GET /beta/tenants/{tenantId}/users/{userId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Users.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
-**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`
+**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`)
 **Required API client permission(s) (v1)**: User & Group Management + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail)
+**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`)
 
 | Parameter | Type | Mandatory | ParameterSet | Description |
 |-----------|------|-----------|--------------|-------------|
@@ -490,6 +490,7 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 | **Search** | String | No | List | Server-side search filter for the user list. |
 | **MaxResults** | Int | No | List | Max users to return. 0 = no limit. Default: 0. |
 | **UserId** | String | Yes | ById | The user ID (GUID) to retrieve full details for. |
+| **IncludeAuthenticationMethods** | Switch | No | ById | Adds `authenticationMethods`: the user's registered sign-in methods (password, phone, Microsoft Authenticator, passkey, ...), one extra request. Passwords and Temporary Access Pass codes are never returned. Needs an API client; an API key stops with `RequiresApiClient`. |
 | **OutputType** | String | No | Both | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -499,6 +500,7 @@ Get-InforcerUser -TenantId 'Contoso'
 Get-InforcerUser -TenantId 'Contoso' -Search "Adele"
 Get-InforcerUser -TenantId 'Contoso' -MaxResults 50
 Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005"
+(Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeAuthenticationMethods).authenticationMethods
 Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
 Get-InforcerUser -TenantId 'Contoso' -OutputType JsonObject
 ```
@@ -528,6 +530,133 @@ IsGlobalAdmin    : False
 IsCloudOnly      : True
 IsMfaRegistered  : False
 RiskLevel        :
+```
+
+### Example output — authentication methods
+
+```powershell
+(Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods).authenticationMethods |
+    Format-Table type, displayName, phoneType, deletable, createdDateTime
+```
+
+```
+type                   displayName phoneType deletable createdDateTime
+----                   ----------- --------- --------- ---------------
+password                                         False 01/09/2026 09:00:00
+phone                              mobile         True
+microsoftAuthenticator Contoso Phone              True 02/09/2026 10:15:00
+```
+
+---
+
+## New-InforcerUser
+
+Creates a Microsoft Entra user in a tenant. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot create users.
+
+The user can sign in by default and must change the password at the first sign-in. `-MailNickname` defaults to the part of `-UserPrincipalName` before the `@`. The password must meet the tenant's password policy; it is sent only in the request body and never written to verbose output. `Get-InforcerUser` can take up to about five minutes to show the new user, because the API caches users. Supports `-WhatIf` and `-Confirm`.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tenants/{msTenantId}/users` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+**Output schema**: [CreatedUser](./API-REFERENCE.md#createduser), with `TenantId`, `displayName` and `userPrincipalName` added.
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **DisplayName** | String | Yes | The name shown for the user. |
+| **UserPrincipalName** | String | Yes | The sign-in name, such as `jo.bloggs@contoso.com`. The domain must be verified in the tenant. |
+| **Password** | SecureString | Yes | The initial password. |
+| **MailNickname** | String | No | The mail alias. Default: the part of `-UserPrincipalName` before the `@`. |
+| **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the password at the first sign-in. Default: `$true`. |
+| **AccountEnabled** | Bool | No | Whether the user can sign in. Default: `$true`. |
+| **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType**, **Mail** | String | No | Profile fields, sent as given. |
+| **UsageLocation** | String | No | Two-letter country code (ISO 3166) where the user's licences are used, such as `GB`. Needed before licences can be assigned. |
+| **BusinessPhones** | String[] | No | Business phone number. Microsoft Entra allows one. |
+| **OtherMails** | String[] | No | Other email addresses. |
+| **ManagerId** | String | No | The Microsoft Entra object id of the user's manager. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100; piped tenants return one array. |
+
+### Examples
+
+```powershell
+$password = Read-Host -AsSecureString -Prompt 'Initial password'
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -GivenName 'Jo' -Surname 'Bloggs' -Department 'Sales' -UsageLocation 'GB' -AccountEnabled $false
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -WhatIf
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -OutputType JsonObject
+```
+
+### Example output
+
+```
+DisplayName       : Jo Bloggs
+UserPrincipalName : jo.bloggs@contoso.com
+Id                : 00000000-0000-0000-0000-000000000005
+TenantId          : 00000000-0000-0000-0000-000000000001
+```
+
+---
+
+## Set-InforcerUser
+
+Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, removes registered sign-in methods or resets MFA, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
+
+Only the parameters you pass are changed; every other field stays as it is. Pass an empty string (`''`) or `$null` to clear a field, such as `-JobTitle ''`, or `-ManagerId ''` to remove the manager. `DisplayName`, `MailNickname`, `UserPrincipalName` and `Mail` cannot be cleared. `-AccountEnabled $false` blocks sign-in, but existing sessions last until their tokens expire. `Get-InforcerUser` can show the old values for up to about five minutes, because the API caches users. Returns nothing. Supports `-WhatIf` and `-Confirm`.
+
+When the manager could not be changed but the other changes were saved (HTTP 502), the error lists each step and whether it was applied, for example `Steps: profile: succeeded; manager: failed (Manager not found)`.
+
+`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. `-RemoveAuthenticationMethod` deletes sign-in methods by their `id` from `Get-InforcerUser -IncludeAuthenticationMethods`; only methods with `deletable` true can go, and Microsoft Entra can still refuse one, such as the default method while another phone remains. `-ResetMfa` deletes every deletable method in one request, in the order Microsoft Entra needs, so the user must register MFA again; the password is kept. One call runs its steps in this order: profile update, password reset, removing sign-in methods (one request each), MFA reset, sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
+
+**Pipeline:** users from `Get-InforcerUser` or `New-InforcerUser` can be piped in; `-UserId` binds from their `id` and `-TenantId` from their `TenantId` when they have one.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` (`-RemoveAuthenticationMethod`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` (`-ResetMfa`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+**Request schemas**: [UserUpdate](./API-REFERENCE.md#userupdate) | [PasswordReset](./API-REFERENCE.md#passwordreset)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **UserId** | String | Yes | The user's Microsoft Entra object id. Alias: `Id`. Supports pipeline input by property name. |
+| **AccountEnabled** | Bool | No | Whether the user can sign in. |
+| **DisplayName**, **MailNickname**, **UserPrincipalName**, **Mail** | String | No | Cannot be cleared; an empty value is refused. |
+| **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **UsageLocation**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType** | String | No | Profile fields; `''` clears the field. |
+| **BusinessPhones**, **OtherMails** | String[] | No | Replace the whole list; `@()` clears it. |
+| **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
+| **Password** | SecureString | No | A new password. It must meet the tenant's password policy. |
+| **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the new password at the next sign-in. Default: `$true`. Only with `-Password`; on its own it stops with `PasswordRequired`. |
+| **RemoveAuthenticationMethod** | String[] | No | Ids of registered sign-in methods to delete, from `authenticationMethods` of `Get-InforcerUser -IncludeAuthenticationMethods`. Only methods with `deletable` true. |
+| **ResetMfa** | Switch | No | Deletes every deletable sign-in method, so the user must register MFA again. The password is kept. |
+| **RevokeSessions** | Switch | No | Signs the user out of every session. |
+
+At least one field, `-Password`, `-RemoveAuthenticationMethod`, `-ResetMfa` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
+
+### Examples
+
+```powershell
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Department 'Sales' -JobTitle 'Account Manager'
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -RevokeSessions
+$password = Read-Host -AsSecureString -Prompt 'New password'
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Password $password -RevokeSessions
+# Lock out a compromised account: new password, every removable sign-in method deleted, signed out everywhere
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Password $password -ResetMfa -RevokeSessions
+# Remove one lost phone, keep the other sign-in methods
+$user = Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods
+Set-InforcerUser -TenantId 'Contoso' -UserId $user.id -RemoveAuthenticationMethod @($user.authenticationMethods | Where-Object phoneNumber -eq '+44 7700 900000').id
+Get-InforcerUser -TenantId 'Contoso' -Search 'Adele' | Set-InforcerUser -TenantId 'Contoso' -ManagerId ''
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
+```
+
+### Example output
+
+None. With `-WhatIf`:
+
+```
+What if: Performing the operation "Update usageLocation" on target "user 00000000-0000-0000-0000-000000000005 in tenant 00000000-0000-0000-0000-000000000001".
 ```
 
 ---

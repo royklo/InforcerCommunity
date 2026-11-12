@@ -52,7 +52,7 @@ Describe 'Consistency contract' {
             'Get-InforcerSupportedEventType'    = @()
             'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'IncludeAuthenticationMethods', 'OutputType')
             'New-InforcerUser'              = @('TenantId', 'DisplayName', 'UserPrincipalName', 'Password', 'MailNickname', 'AccountEnabled', 'ManagerId', 'OutputType')
-            'Set-InforcerUser'              = @('TenantId', 'UserId', 'AccountEnabled', 'DisplayName', 'ManagerId', 'Password', 'ForceChangePasswordNextSignIn', 'RemoveAuthenticationMethod', 'RevokeSessions')
+            'Set-InforcerUser'              = @('TenantId', 'UserId', 'AccountEnabled', 'DisplayName', 'ManagerId', 'Password', 'ForceChangePasswordNextSignIn', 'RemoveAuthenticationMethod', 'ResetMfa', 'RevokeSessions')
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')

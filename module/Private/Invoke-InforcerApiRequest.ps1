@@ -155,7 +155,7 @@ function Invoke-InforcerApiRequest {
                 # A partly applied operation lists each step, e.g. "profile: succeeded; manager: failed (reason)".
                 $steps = foreach ($r in @($props['results'].Value)) {
                     if ($r -isnot [System.Management.Automation.PSCustomObject]) { continue }
-                    $step = "$($r.PSObject.Properties['step'].Value): $($r.PSObject.Properties['status'].Value)"
+                    $step = "$((@($r.PSObject.Properties['step'].Value, $r.PSObject.Properties['id'].Value) -ne $null) -join ' '): $($r.PSObject.Properties['status'].Value)"
                     $why = $r.PSObject.Properties['title'].Value -as [string]
                     if ($why) { "$step ($why)" } else { $step }
                 }

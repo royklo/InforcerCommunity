@@ -1,7 +1,7 @@
 function Set-InforcerUser {
     <#
     .SYNOPSIS
-        Updates a Microsoft Entra user's profile, manager or sign-in, resets their password, removes sign-in methods or signs them out everywhere.
+        Updates a Microsoft Entra user's profile, manager or sign-in, resets their password, removes sign-in methods (or all of them, to reset MFA) or signs them out everywhere.
 
         Required API scope(s): none; the API-key (beta) API cannot update users.
         Required permission: User & Group Management (API client, unconfirmed which grant).
@@ -19,10 +19,12 @@ function Set-InforcerUser {
         -RemoveAuthenticationMethod deletes registered sign-in methods, such as a phone or Microsoft
         Authenticator (DELETE .../users/{userId}/authenticationMethods/{methodId}); take the ids from
         Get-InforcerUser -IncludeAuthenticationMethods, where only methods with deletable true can be removed.
+        -ResetMfa deletes every method with deletable true in one request (DELETE .../users/{userId}/mfa),
+        in the order Microsoft Entra needs, so the user must register MFA again; the password is kept.
         -RevokeSessions signs the user out of every session (POST .../users/{userId}/revokeSessions);
         access tokens already issued stay valid until they expire, typically within 90 minutes.
         In one call the steps run in this order: profile update, password reset, removing sign-in
-        methods, sign-out. When a step
+        methods, MFA reset, sign-out. When a step
         fails, the later steps are skipped and the error says which steps were already done.
 
         -AccountEnabled $false blocks sign-in, but existing sessions last until their tokens expire;
@@ -124,6 +126,10 @@ function Set-InforcerUser {
         Get-InforcerUser -IncludeAuthenticationMethods returns. Only methods with deletable true can be
         removed; Microsoft Entra can also refuse one, such as the default method while another phone remains.
 
+    .PARAMETER ResetMfa
+        Deletes every sign-in method the user registered that can be deleted (phones, Microsoft
+        Authenticator, passkeys, ...), so they must register MFA again at the next sign-in. The password is kept.
+
     .PARAMETER RevokeSessions
         Signs the user out of every session by revoking their refresh tokens and session cookies.
 
@@ -154,11 +160,16 @@ function Set-InforcerUser {
         Blocks sign-in and ends the user's existing sessions.
 
     .EXAMPLE
-        $user = Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods
-        $ids = @($user.authenticationMethods | Where-Object deletable).id
-        Set-InforcerUser -TenantId 'Contoso' -UserId $user.id -Password $password -RemoveAuthenticationMethod $ids -RevokeSessions
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Password $password -ResetMfa -RevokeSessions
 
         Locks out a compromised account: new password, every removable sign-in method deleted, signed out everywhere.
+
+    .EXAMPLE
+        $user = Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods
+        $lost = @($user.authenticationMethods | Where-Object { $_.phoneNumber -eq '+44 7700 900000' }).id
+        Set-InforcerUser -TenantId 'Contoso' -UserId $user.id -RemoveAuthenticationMethod $lost
+
+        Removes one lost phone and keeps the user's other sign-in methods.
 
     .EXAMPLE
         Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
@@ -237,6 +248,8 @@ function Set-InforcerUser {
         [ValidateNotNullOrEmpty()]
         [string[]]$RemoveAuthenticationMethod,
 
+        [switch]$ResetMfa,
+
         [switch]$RevokeSessions
     )
 
@@ -259,9 +272,10 @@ function Set-InforcerUser {
         if ($body.Count -gt 0) { $steps.Add("update $(@($body.Keys) -join ', ')") }
         if ($Password) { $steps.Add('reset password') }
         foreach ($methodId in $RemoveAuthenticationMethod | Select-Object -Unique) { $steps.Add("remove authentication method $methodId") }
+        if ($ResetMfa) { $steps.Add('reset MFA') }
         if ($RevokeSessions) { $steps.Add('sign out of every session') }
         if ($steps.Count -eq 0) {
-            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -Password, -RemoveAuthenticationMethod or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
+            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -Password, -RemoveAuthenticationMethod, -ResetMfa or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
             return
         }
 
@@ -292,6 +306,8 @@ function Set-InforcerUser {
             } elseif ($step -like 'remove authentication method *') {
                 $methodId = $step.Substring('remove authentication method '.Length)
                 $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/$([System.Uri]::EscapeDataString($methodId))" -Method DELETE @errorHandling
+            } elseif ($step -eq 'reset MFA') {
+                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/mfa" -Method DELETE @errorHandling
             } elseif ($step -eq 'sign out of every session') {
                 $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/revokeSessions" -Method POST @errorHandling
             } else {

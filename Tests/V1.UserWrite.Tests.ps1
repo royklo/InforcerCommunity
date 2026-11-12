@@ -279,6 +279,22 @@ Describe 'Set-InforcerUser' {
         $e[-1].Exception.Message | Should -BeLike '*Could not remove authentication method m1*HTTP 400*default method*Not done: remove authentication method m2; sign out of every session.*'
     }
 
+    It 'resets MFA with one DELETE after the password reset and before the sign-out' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -Password $script:Pw -ResetMfa -RevokeSessions -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('POST /password', 'DELETE /mfa', 'POST /revokeSessions')
+    }
+
+    It 'names each method and its outcome when Microsoft Entra refuses one during an MFA reset' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"Not every method was deleted","status":400,"results":[{"step":"phone","id":"m1","status":"succeeded"},{"step":"fido2","id":"pk/1","status":"failed","title":"Method is in use"}]}' 400 }
+        { Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ResetMfa -ErrorAction Stop } |
+            Should -Throw '*HTTP 400*Steps: phone m1: succeeded; fido2 pk/1: failed (Method is in use)*'
+    }
+
     It 'surfaces a 404 from a sign-out alone with the original error' {
         Set-UwSession
         Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"User not found","status":404}' 404 }

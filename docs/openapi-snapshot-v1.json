@@ -2180,8 +2180,7 @@
         "description": "The outcome of one step or item of an operation that partly succeeded",
         "properties": {
           "id": {
-            "description": "The item's id, when the step acts on one of several items",
-            "format": "uuid",
+            "description": "The item's id, when the step acts on one of several items. Usually a uuid, but not for every item, such as a passkey",
             "type": "string"
           },
           "status": {
@@ -2197,7 +2196,7 @@
             "type": "integer"
           },
           "step": {
-            "description": "The step or item, such as `profile` or `manager`",
+            "description": "The step or item, such as `profile`, `manager` or an authentication method's type",
             "type": "string"
           },
           "title": {

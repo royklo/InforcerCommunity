@@ -258,6 +258,27 @@ Describe 'Set-InforcerUser' {
         $global:UwCalls.Count | Should -Be 0
     }
 
+    It 'removes sign-in methods after the password reset and before the sign-out, one DELETE per id' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -Password $script:Pw -RemoveAuthenticationMethod 'm1', 'pass/key+1', 'm1' -RevokeSessions -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('POST /password', 'DELETE /authenticationMethods/m1', 'DELETE /authenticationMethods/pass%2Fkey%2B1', 'POST /revokeSessions')
+    }
+
+    It 'stops at a refused sign-in method and names the methods not removed' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/m1') { return New-UwResponse '{"title":"The request is invalid","status":400,"detail":"The default method cannot be deleted while another phone remains"}' 400 }
+            New-UwResponse '' 204
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -RemoveAuthenticationMethod 'm1', 'm2' -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e
+        $global:UwCalls.Count | Should -Be 1
+        $e[-1].Exception.Message | Should -BeLike '*Could not remove authentication method m1*HTTP 400*default method*Not done: remove authentication method m2; sign out of every session.*'
+    }
+
     It 'surfaces a 404 from a sign-out alone with the original error' {
         Set-UwSession
         Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"User not found","status":404}' 404 }

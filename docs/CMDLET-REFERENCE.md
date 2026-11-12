@@ -601,19 +601,19 @@ TenantId          : 00000000-0000-0000-0000-000000000001
 
 ## Set-InforcerUser
 
-Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
+Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, removes registered sign-in methods, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
 
 Only the parameters you pass are changed; every other field stays as it is. Pass an empty string (`''`) or `$null` to clear a field, such as `-JobTitle ''`, or `-ManagerId ''` to remove the manager. `DisplayName`, `MailNickname`, `UserPrincipalName` and `Mail` cannot be cleared. `-AccountEnabled $false` blocks sign-in, but existing sessions last until their tokens expire. `Get-InforcerUser` can show the old values for up to about five minutes, because the API caches users. Returns nothing. Supports `-WhatIf` and `-Confirm`.
 
 When the manager could not be changed but the other changes were saved (HTTP 502), the error lists each step and whether it was applied, for example `Steps: profile: succeeded; manager: failed (Manager not found)`.
 
-`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. One call runs its steps in this order: profile update, password reset, sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
+`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. `-RemoveAuthenticationMethod` deletes sign-in methods by their `id` from `Get-InforcerUser -IncludeAuthenticationMethods`; only methods with `deletable` true can go, and Microsoft Entra can still refuse one, such as the default method while another phone remains. One call runs its steps in this order: profile update, password reset, removing sign-in methods (one request each), sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
 
 **Pipeline:** users from `Get-InforcerUser` or `New-InforcerUser` can be piped in; `-UserId` binds from their `id` and `-TenantId` from their `TenantId` when they have one.
 
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
-**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` (`-RemoveAuthenticationMethod`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
 **Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Request schemas**: [UserUpdate](./API-REFERENCE.md#userupdate) | [PasswordReset](./API-REFERENCE.md#passwordreset)
@@ -629,9 +629,10 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
 | **Password** | SecureString | No | A new password. It must meet the tenant's password policy. |
 | **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the new password at the next sign-in. Default: `$true`. Only with `-Password`; on its own it stops with `PasswordRequired`. |
+| **RemoveAuthenticationMethod** | String[] | No | Ids of registered sign-in methods to delete, from `authenticationMethods` of `Get-InforcerUser -IncludeAuthenticationMethods`. Only methods with `deletable` true. |
 | **RevokeSessions** | Switch | No | Signs the user out of every session. |
 
-At least one field, `-Password` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
+At least one field, `-Password`, `-RemoveAuthenticationMethod` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
 
 ### Examples
 
@@ -640,6 +641,9 @@ Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-0000000000
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -RevokeSessions
 $password = Read-Host -AsSecureString -Prompt 'New password'
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Password $password -RevokeSessions
+# Lock out a compromised account: new password, every removable sign-in method deleted, signed out everywhere
+$user = Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods
+Set-InforcerUser -TenantId 'Contoso' -UserId $user.id -Password $password -RemoveAuthenticationMethod @($user.authenticationMethods | Where-Object deletable).id -RevokeSessions
 Get-InforcerUser -TenantId 'Contoso' -Search 'Adele' | Set-InforcerUser -TenantId 'Contoso' -ManagerId ''
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
 ```

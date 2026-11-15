@@ -1,7 +1,7 @@
 function Set-InforcerUser {
     <#
     .SYNOPSIS
-        Updates a Microsoft Entra user's profile, manager or sign-in, resets their password, removes sign-in methods (or all of them, to reset MFA) or signs them out everywhere.
+        Updates a Microsoft Entra user's profile, manager, sign-in or licences, resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
 
         Required API scope(s): none; the API-key (beta) API cannot update users.
         Required permission: User & Group Management (API client, unconfirmed which grant).
@@ -14,6 +14,8 @@ function Set-InforcerUser {
         ('') or $null to clear a field, such as -JobTitle '' or -ManagerId '' to remove the manager.
         DisplayName, MailNickname, UserPrincipalName and Mail cannot be cleared.
 
+        -AddLicense and -RemoveLicense change the user's licences in one request
+        (POST .../users/{userId}/assignLicenses); if one licence is refused, nothing changes.
         -Password sets a new password (POST /tenants/{msTenantId}/users/{userId}/password); the user must
         change it when they next sign in unless you pass -ForceChangePasswordNextSignIn $false.
         -RemoveAuthenticationMethod deletes registered sign-in methods, such as a phone or Microsoft
@@ -21,15 +23,17 @@ function Set-InforcerUser {
         Get-InforcerUser -IncludeAuthenticationMethods, where only methods with deletable true can be removed.
         -ResetMfa deletes every method with deletable true in one request (DELETE .../users/{userId}/mfa),
         in the order Microsoft Entra needs, so the user must register MFA again; the password is kept.
+        -TemporaryAccessPass creates a Temporary Access Pass (POST .../authenticationMethods/temporaryAccessPasses)
+        and returns it; the pass cannot be read again, and it replaces a pass the user already has.
         -RevokeSessions signs the user out of every session (POST .../users/{userId}/revokeSessions);
         access tokens already issued stay valid until they expire, typically within 90 minutes.
-        In one call the steps run in this order: profile update, password reset, removing sign-in
-        methods, MFA reset, sign-out. When a step
-        fails, the later steps are skipped and the error says which steps were already done.
+        In one call the steps run in this order: profile update, licences, password reset, removing
+        sign-in methods, MFA reset, Temporary Access Pass, sign-out. When a step fails, the later steps
+        are skipped and the error says which steps were already done.
 
         -AccountEnabled $false blocks sign-in, but existing sessions last until their tokens expire;
         add -RevokeSessions to end them.
-        Get-InforcerUser can show the old values for up to about five minutes, because the API caches users. Returns nothing.
+        Get-InforcerUser can show the old values for up to about five minutes, because the API caches users. Returns nothing, except the pass with -TemporaryAccessPass.
 
         When the manager could not be changed but the other changes were saved, the error lists
         each step and whether it was applied.
@@ -113,6 +117,15 @@ function Set-InforcerUser {
     .PARAMETER ManagerId
         The Microsoft Entra object id of the user's manager. '' removes the manager.
 
+    .PARAMETER AddLicense
+        The skuId of one or more licences to give the user, as in assignedLicenses of Get-InforcerUser -UserId.
+        A licence with no free seat, not subscribed to, or conflicting with the user's other licences is
+        refused. The user needs a usage location (-UsageLocation, set in the same call if needed).
+
+    .PARAMETER RemoveLicense
+        The skuId of one or more licences to take from the user. A licence the user gets through a group
+        is refused; one the user does not have is ignored.
+
     .PARAMETER Password
         A new password as a SecureString. It must meet the tenant's password policy.
         inforcer does not store or log it.
@@ -129,6 +142,19 @@ function Set-InforcerUser {
     .PARAMETER ResetMfa
         Deletes every sign-in method the user registered that can be deleted (phones, Microsoft
         Authenticator, passkeys, ...), so they must register MFA again at the next sign-in. The password is kept.
+
+    .PARAMETER TemporaryAccessPass
+        Creates a Temporary Access Pass and returns it as an object with temporaryAccessPass, id,
+        startDateTime, lifetimeInMinutes, usableOnce and userId. The pass is shown only this once.
+        It runs after -ResetMfa, which would otherwise delete it.
+
+    .PARAMETER TemporaryAccessPassLifetime
+        How long the pass lasts, in minutes (10 to 43200, and within the tenant's policy). Without it the
+        tenant's default applies. Only with -TemporaryAccessPass.
+
+    .PARAMETER TemporaryAccessPassUsableOnce
+        Whether the pass can be used only once. Without it the tenant's policy decides. Only with
+        -TemporaryAccessPass.
 
     .PARAMETER RevokeSessions
         Signs the user out of every session by revoking their refresh tokens and session cookies.
@@ -165,6 +191,16 @@ function Set-InforcerUser {
         Locks out a compromised account: new password, every removable sign-in method deleted, signed out everywhere.
 
     .EXAMPLE
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -ResetMfa -TemporaryAccessPass -TemporaryAccessPassLifetime 60 -TemporaryAccessPassUsableOnce $true
+
+        Resets MFA and returns a one-time pass, valid for an hour, so the user can register new sign-in methods.
+
+    .EXAMPLE
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -AddLicense '00000000-0000-0000-0000-0000000000b1'
+
+        Sets the usage location, then gives the user a licence.
+
+    .EXAMPLE
         $user = Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods
         $lost = @($user.authenticationMethods | Where-Object { $_.phoneNumber -eq '+44 7700 900000' }).id
         Set-InforcerUser -TenantId 'Contoso' -UserId $user.id -RemoveAuthenticationMethod $lost
@@ -177,7 +213,7 @@ function Set-InforcerUser {
         Shows what would change without changing it.
 
     .OUTPUTS
-        None
+        None, or with -TemporaryAccessPass the created pass (PSCustomObject).
 
     .LINK
         https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#set-inforceruser
@@ -189,7 +225,7 @@ function Set-InforcerUser {
         Get-InforcerUser
     #>
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
-    [OutputType([void])]
+    [OutputType([void], [pscustomobject])]
     param(
         [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [Alias('ClientTenantId', 'MsTenantId')]
@@ -241,6 +277,12 @@ function Set-InforcerUser {
 
         [string]$ManagerId,
 
+        [ValidateNotNullOrEmpty()]
+        [guid[]]$AddLicense,
+
+        [ValidateNotNullOrEmpty()]
+        [guid[]]$RemoveLicense,
+
         [System.Security.SecureString]$Password,
 
         [bool]$ForceChangePasswordNextSignIn = $true,
@@ -249,6 +291,13 @@ function Set-InforcerUser {
         [string[]]$RemoveAuthenticationMethod,
 
         [switch]$ResetMfa,
+
+        [switch]$TemporaryAccessPass,
+
+        [ValidateRange(10, 43200)]
+        [int]$TemporaryAccessPassLifetime,
+
+        [bool]$TemporaryAccessPassUsableOnce,
 
         [switch]$RevokeSessions
     )
@@ -267,15 +316,21 @@ function Set-InforcerUser {
             Write-Error -Message '-ForceChangePasswordNextSignIn only works together with -Password.' -ErrorId 'PasswordRequired' -Category InvalidArgument
             return
         }
+        if (-not $TemporaryAccessPass -and ($PSBoundParameters.ContainsKey('TemporaryAccessPassLifetime') -or $PSBoundParameters.ContainsKey('TemporaryAccessPassUsableOnce'))) {
+            Write-Error -Message '-TemporaryAccessPassLifetime and -TemporaryAccessPassUsableOnce only work together with -TemporaryAccessPass.' -ErrorId 'TemporaryAccessPassRequired' -Category InvalidArgument
+            return
+        }
         $body = ConvertTo-InforcerUserBody -BoundParameters $PSBoundParameters
         $steps = [System.Collections.Generic.List[string]]::new()
         if ($body.Count -gt 0) { $steps.Add("update $(@($body.Keys) -join ', ')") }
+        if ($AddLicense -or $RemoveLicense) { $steps.Add('change licences') }
         if ($Password) { $steps.Add('reset password') }
         foreach ($methodId in $RemoveAuthenticationMethod | Select-Object -Unique) { $steps.Add("remove authentication method $methodId") }
         if ($ResetMfa) { $steps.Add('reset MFA') }
+        if ($TemporaryAccessPass) { $steps.Add('create Temporary Access Pass') }
         if ($RevokeSessions) { $steps.Add('sign out of every session') }
         if ($steps.Count -eq 0) {
-            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -Password, -RemoveAuthenticationMethod, -ResetMfa or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
+            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
             return
         }
 
@@ -306,6 +361,22 @@ function Set-InforcerUser {
             } elseif ($step -like 'remove authentication method *') {
                 $methodId = $step.Substring('remove authentication method '.Length)
                 $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/$([System.Uri]::EscapeDataString($methodId))" -Method DELETE @errorHandling
+            } elseif ($step -eq 'change licences') {
+                $json = [ordered]@{}
+                if ($AddLicense) { $json['addSkuIds'] = @($AddLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
+                if ($RemoveLicense) { $json['removeSkuIds'] = @($RemoveLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
+                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/assignLicenses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
+            } elseif ($step -eq 'create Temporary Access Pass') {
+                $json = [ordered]@{}
+                if ($PSBoundParameters.ContainsKey('TemporaryAccessPassLifetime')) { $json['lifetimeInMinutes'] = $TemporaryAccessPassLifetime }
+                if ($PSBoundParameters.ContainsKey('TemporaryAccessPassUsableOnce')) { $json['usableOnce'] = $TemporaryAccessPassUsableOnce }
+                $pass = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/temporaryAccessPasses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
+                # Emitted at once: the pass cannot be read again, so a later failing step must not lose it.
+                if (-not $stepErr -and $pass) {
+                    $pass | Add-Member -NotePropertyName userId -NotePropertyValue $UserId -Force
+                    $pass
+                }
+                $pass = $null
             } elseif ($step -eq 'reset MFA') {
                 $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/mfa" -Method DELETE @errorHandling
             } elseif ($step -eq 'sign out of every session') {

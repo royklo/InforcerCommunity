@@ -56,6 +56,8 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [CreatedUser](#createduser)
   - [UserUpdate](#userupdate)
   - [PasswordReset](#passwordreset)
+  - [UserLicenseAssignment](#userlicenseassignment)
+  - [TemporaryAccessPass](#temporaryaccesspass)
   - [UserAuthenticationMethod](#userauthenticationmethod)
   - [TenantGroupSummary](#tenantgroupsummary)
   - [TenantGroup](#tenantgroup)
@@ -181,7 +183,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}` | unconfirmed |
 | Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
 | Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
-| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` | unconfirmed (which write grant) |
+| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`, `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`, `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` | unconfirmed (which write grant) |
 | Tenants / Entra Dashboard | Read: View | `/v1/tenants/{msTenantId}/secureScores`, `/v1/tenants/{msTenantId}/directoryRoles` | unconfirmed |
 | Align / Baselines | Read: View | `/v1/baselines` | unconfirmed |
 | Align / Align | Read: View | `/v1/alignmentScores`, `/v1/tenants/{msTenantId}/alignmentDetails` | unconfirmed |
@@ -208,7 +210,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
 | `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `.../users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`) | User & Group Management, Tenants† |
 | `New-InforcerUser` | `POST /v1/tenants/{msTenantId}/users` | User & Group Management (write), Tenants† |
-| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
+| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/assignLicenses` (with `-AddLicense`/`-RemoveLicense`), `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/authenticationMethods/temporaryAccessPasses` (with `-TemporaryAccessPass`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
@@ -314,6 +316,8 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` | GET | none (v1 only) | `Get-InforcerUser -UserId -IncludeAuthenticationMethods` |
 | `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` | DELETE (204) | none (v1 only) | `Set-InforcerUser -RemoveAuthenticationMethod` |
 | `/v1/tenants/{msTenantId}/users/{userId}/mfa` | DELETE (204) | none (v1 only) | `Set-InforcerUser -ResetMfa` |
+| `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` | POST (201, pass) | none (v1 only) | `Set-InforcerUser -TemporaryAccessPass` |
+| `/v1/tenants/{msTenantId}/users/{userId}/assignLicenses` | POST (204) | none (v1 only) | `Set-InforcerUser -AddLicense`/`-RemoveLicense` |
 | `/v1/tenants/{msTenantId}/users/{userId}/password` | POST (204) | none (v1 only) | `Set-InforcerUser -Password` |
 | `/v1/tenants/{msTenantId}/users/{userId}/revokeSessions` | POST (204) | none (v1 only) | `Set-InforcerUser -RevokeSessions` |
 | `/v1/tenants/{msTenantId}/groups` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/groups` | `Get-InforcerGroup` |
@@ -331,7 +335,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 26 paths and 29 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 28 paths and 31 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
 
 ### Managing users (v1 only)
 
@@ -379,7 +383,7 @@ Signs the user out of every session by revoking their refresh tokens and session
 
 **Response**: `204` without a body. Errors: `404` (tenant or user, `User not found`).
 
-`Set-InforcerUser` runs the steps of one call in this order: `PATCH` (when a profile field is passed), password, delete authentication methods (one call per id), MFA reset, revoke sessions. When a step fails the later ones are skipped, and the error (`UserUpdatePartlyApplied`) names the steps already done and the steps not done.
+`Set-InforcerUser` runs the steps of one call in this order: `PATCH` (when a profile field is passed), licences, password, delete authentication methods (one call per id), MFA reset, Temporary Access Pass, revoke sessions. When a step fails the later ones are skipped, and the error (`UserUpdatePartlyApplied`) names the steps already done and the steps not done.
 
 #### `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`
 
@@ -407,6 +411,30 @@ Resets the user's MFA: deletes every authentication method that the list above r
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
 
 **Response**: `204` without a body, also when there was nothing to delete. When Microsoft Entra refuses a method the API answers `400` with problem+json and `results[]`: one `{ step, id, status, title? }` per method, `step` being the method's type and `title` the reason; `500` and `502` carry `results[]` too when methods were attempted. The module adds them to the error text as `Steps: phone <id>: succeeded; fido2 <id>: failed (reason)`. `404`: tenant or user.
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`
+
+Adds and removes the user's licences in one call. If any licence is refused, nothing changes. Removing a licence the user does not have succeeds. Adding a licence enables all its service plans, including any disabled on a licence the user already has.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [UserLicenseAssignment](#userlicenseassignment), at least one licence.
+
+**Response**: `204` without a body. Errors: `400` (a licence with no free seat, not subscribed to, conflicting with the user's other licences, or given through a group; a refused request that both adds and removes is a `400` on `body`), `404` (tenant or user).
+
+The `skuId` of a licence comes from a user's `assignedLicenses` ([UserLicense](#userlicense)); the tenant record lists its licences by part number only (`sku`), without `skuId` or free seats.
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`
+
+Creates a Temporary Access Pass for the user and returns it. The pass is returned only in this response (sent with `Cache-Control: no-store`) and cannot be read again. A user has at most one pass, so a new one replaces any existing pass. The pass then appears in the authentication methods list and can be deleted like any other method.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body (optional): `{ lifetimeInMinutes (10 to 43200), usableOnce, startDateTime }`; a property left out takes the tenant's authentication methods policy default.
+
+**Response**: `201` with [TemporaryAccessPass](#temporaryaccesspass). Errors: `400` on the property the policy does not allow (lifetime, start in the past, one-time use), or with the reason as `detail` when the policy does not allow a pass for the user at all (for example Temporary Access Pass is off in the tenant); `404` (tenant or user). Policy changes in Microsoft Entra take effect after a short delay.
 
 ### How v1 fields map to the module's names
 
@@ -1157,6 +1185,27 @@ The body of `POST /v1/tenants/{msTenantId}/users/{userId}/password`.
 |----------|------|----------|-------------|
 | password | string | Yes | The new password; it must meet the tenant's password policy. A blank password is a `400`. |
 | forceChangePasswordNextSignIn | boolean | Yes | Whether the user must change the password when they next sign in. `Set-InforcerUser` sends `true` unless you pass `-ForceChangePasswordNextSignIn $false`. |
+
+### UserLicenseAssignment
+
+The body of `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`. Send at least one licence.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| addSkuIds | string[] (uuid) | No | The `skuId`s to give the user, as in `assignedLicenses`. |
+| removeSkuIds | string[] (uuid) | No | The `skuId`s to take from the user. |
+
+### TemporaryAccessPass
+
+The answer of `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`. `Set-InforcerUser -TemporaryAccessPass` returns it with `userId` added.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string | The pass's authentication method id, as the authentication methods list returns it. |
+| temporaryAccessPass | string | The pass the user signs in with. Returned only here; it cannot be read again. |
+| startDateTime | string (date-time), nullable | When the pass becomes usable. |
+| lifetimeInMinutes | integer, nullable | How long the pass lasts from `startDateTime`. |
+| usableOnce | boolean, nullable | Whether the pass can be used only once. |
 
 ### UserAuthenticationMethod
 

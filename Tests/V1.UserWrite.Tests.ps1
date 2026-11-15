@@ -295,6 +295,50 @@ Describe 'Set-InforcerUser' {
             Should -Throw '*HTTP 400*Steps: phone m1: succeeded; fido2 pk/1: failed (Method is in use)*'
     }
 
+    It 'changes licences after the profile and before the password, in one request' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        $b1 = '00000000-0000-0000-0000-0000000000b1'; $b2 = '00000000-0000-0000-0000-0000000000b2'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -UsageLocation 'GB' -AddLicense $b1, $b1 -RemoveLicense $b2 -Password $script:Pw -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('PATCH ', 'POST /assignLicenses', 'POST /password')
+        $global:UwCalls[1].Body | Should -Be ('{"addSkuIds":["' + $b1 + '"],"removeSkuIds":["' + $b2 + '"]}')
+    }
+
+    It 'returns the Temporary Access Pass after the MFA reset, even when the sign-out then fails' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/temporaryAccessPasses') { return New-UwResponse '{"id":"tap-1","temporaryAccessPass":"Example-Tap1","startDateTime":"2026-11-15T10:00:00+00:00","lifetimeInMinutes":60,"usableOnce":true}' 201 }
+            if ($Uri -like '*/revokeSessions') { return New-UwResponse '{"title":"Bad gateway","status":502}' 502 }
+            New-UwResponse '' 204
+        }
+        $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ResetMfa -TemporaryAccessPass -TemporaryAccessPassLifetime 60 -TemporaryAccessPassUsableOnce $true -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('DELETE /mfa', 'POST /authenticationMethods/temporaryAccessPasses', 'POST /revokeSessions')
+        $global:UwCalls[1].Body | Should -Be '{"lifetimeInMinutes":60,"usableOnce":true}'
+        $out.temporaryAccessPass | Should -Be 'Example-Tap1'
+        $out.userId | Should -Be $script:Uid
+        $e[-1].Exception.Message | Should -BeLike '*Could not sign out of every session*Already done: reset MFA; create Temporary Access Pass.*'
+    }
+
+    It 'sends an empty body for a Temporary Access Pass without options' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"id":"tap-1","temporaryAccessPass":"Example-Tap1"}' 201 }
+        $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -TemporaryAccessPass
+        $global:UwCalls[0].Body | Should -Be '{}'
+        $out.id | Should -Be 'tap-1'
+    }
+
+    It 'refuses Temporary Access Pass options without -TemporaryAccessPass, without a request' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -RevokeSessions -TemporaryAccessPassLifetime 60 -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[-1].FullyQualifiedErrorId | Should -BeLike 'TemporaryAccessPassRequired*'
+        $global:UwCalls.Count | Should -Be 0
+    }
+
     It 'surfaces a 404 from a sign-out alone with the original error' {
         Set-UwSession
         Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"User not found","status":404}' 404 }

@@ -298,11 +298,13 @@ function ConvertTo-FlatSettingRows {
                     }
                 }
             } else {
+                # A header (IsConfigured $false): the items below it are the settings, and a
+                # comparison needs the list in their path to tell two lists' items apart.
                 [void]$rows.Add([PSCustomObject]@{
                     Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
                     Value       = "$($val.Count) items"
                     Indent      = $Depth
-                    IsConfigured = $true
+                    IsConfigured = $false
                 })
                 $itemNumber = 0
                 foreach ($item in $val) {
@@ -332,22 +334,28 @@ function ConvertTo-FlatSettingRows {
                         [void]$rows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $itemName); Value = $vp.Value.ToString(); Indent = $Depth + 1; IsConfigured = $true })
                         continue
                     }
-                    # Every other scalar field of the item. They used to be dropped, so a list such
-                    # as an authentication method's Include Targets showed "1 items" and nothing else.
-                    $fields = @(foreach ($ip in $item.PSObject.Properties) {
+                    # Every other field of the item: scalars as rows, objects and lists through the same
+                    # rendering as any setting. They used to be dropped, so an authentication method's
+                    # Include Targets showed "1 items" and nothing else.
+                    $fieldRows = [System.Collections.Generic.List[object]]::new()
+                    foreach ($ip in $item.PSObject.Properties) {
                         if ($ip.Name -match '@odata' -or $ip.Name -eq $labelField -or ($itemName -and $ip.Name -eq 'id')) { continue }
                         $iv = $ip.Value
-                        if (($iv -is [string] -or $iv -is [ValueType]) -and "$iv" -ne '') { $ip }
-                    })
-                    if (-not $itemName -and $fields.Count -eq 1) {
-                        [void]$rows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $fields[0].Name); Value = $fields[0].Value.ToString(); Indent = $Depth + 1; IsConfigured = $true })
+                        if ($iv -is [string] -or $iv -is [ValueType]) {
+                            if ("$iv" -ne '') { $fieldRows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $ip.Name); Value = "$iv"; Indent = $Depth + 2; IsConfigured = $true }) }
+                        } elseif ($null -ne $iv) {
+                            foreach ($r in (ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]@{ $ip.Name = $iv }) -Depth ($Depth + 2))) { $fieldRows.Add($r) }
+                        }
+                    }
+                    if (-not $itemName -and $fieldRows.Count -eq 1 -and $fieldRows[0].IsConfigured) {
+                        $fieldRows[0].Indent = $Depth + 1
+                        [void]$rows.Add($fieldRows[0])
                         continue
                     }
-                    if (-not $itemName -and $fields.Count -eq 0) { continue }
-                    [void]$rows.Add([PSCustomObject]@{ Name = $(if ($itemName) { $itemName } else { "Item $itemNumber" }); Value = ''; Indent = $Depth + 1; IsConfigured = $true })
-                    foreach ($f in $fields) {
-                        [void]$rows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $f.Name); Value = $f.Value.ToString(); Indent = $Depth + 2; IsConfigured = $true })
-                    }
+                    if (-not $itemName -and $fieldRows.Count -eq 0) { continue }
+                    # The label is a header over its fields; a name-only item is itself the setting.
+                    [void]$rows.Add([PSCustomObject]@{ Name = $(if ($itemName) { $itemName } else { "Item $itemNumber" }); Value = ''; Indent = $Depth + 1; IsConfigured = ($fieldRows.Count -eq 0) })
+                    foreach ($r in $fieldRows) { [void]$rows.Add($r) }
                 }
             }
         } else {

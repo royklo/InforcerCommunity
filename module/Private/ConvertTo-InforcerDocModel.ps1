@@ -419,7 +419,8 @@ function ConvertTo-InforcerDocModel {
                 $val  = $row.Value
                 # Resolve camelCase values (e.g. allowedCombinations like "password,softwareOath")
                 $val = $row.Value
-                if (-not [string]::IsNullOrWhiteSpace($val) -and $val -is [string] -and $val.Contains(';')) {
+                if ($name -eq 'Allowed Combinations' -and $val -is [string] -and $val.Contains(';')) {
+                    # Only this setting: other values hold semicolons too (scripts, extension lists).
                     # A list whose items hold commas is joined with '; ' (ConvertTo-FlatSettingRows), so
                     # each item is one combination: "password,softwareOath" -> "Password + Software OATH Token".
                     $row.Value = @(foreach ($item in $val -split ';') {

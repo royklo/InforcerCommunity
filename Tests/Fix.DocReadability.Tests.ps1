@@ -71,6 +71,27 @@ Describe 'ConvertTo-FlatSettingRows shows what the policy configures' {
         $rows[1].Value | Should -Be '00000000-0000-0000-0000-0000000000a1' -Because 'as a value, GUID resolution and masking can reach it'
     }
 
+    It 'marks a list and its item labels as headers, so comparisons keep their context' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ includeTargets = @([pscustomobject]@{ targetType = 'group'; id = 'all_users' }) }))
+        $rows[0].IsConfigured | Should -BeFalse -Because 'the list is a parent in the setting path'
+        $rows[1].IsConfigured | Should -BeFalse -Because 'Item 1 is a parent of its fields'
+        @($rows | Where-Object { $_.Value -eq 'all_users' })[0].IsConfigured | Should -BeTrue
+    }
+
+    It 'keeps a name-only list item a setting' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ apps = @([pscustomobject]@{ bundleId = 'com.example.app' }) }))
+        @($rows | Where-Object { $_.Name -eq 'com.example.app' })[0].IsConfigured | Should -BeTrue
+    }
+
+    It 'renders objects and lists nested inside a list item' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ profiles = @([pscustomobject]@{ name = 'P1'
+            options = [pscustomobject]@{ enabled = $true }; types = @('a', 'b') }) }))
+        $enabled = @($rows | Where-Object { $_.Name -match 'Enabled' -and $_.Value -eq 'True' })
+        $enabled.Count | Should -Be 1
+        $enabled[0].Indent | Should -Be 3
+        @($rows | Where-Object { $_.Value -eq 'a, b' }).Count | Should -Be 1
+    }
+
     It 'keeps list entries that hold a comma apart' {
         $rows = Get-ReadabilityRows ([pscustomobject]@{ allowedCombinations = @('fido2', 'password,softwareOath') })
         $rows[0].Value | Should -Be 'fido2; password,softwareOath'
@@ -92,6 +113,24 @@ Describe 'Authentication strength combinations read as combinations' {
         }
         $row = foreach ($p in $model.Products.Values) { foreach ($c in $p.Categories.Values) { foreach ($pol in $c) { $pol.Settings | Where-Object { $_.Name -eq 'Allowed Combinations' } } } }
         $row.Value | Should -Be 'FIDO2 Security Key; Password + Software OATH Token; Password + Microsoft Authenticator'
+    }
+}
+
+Describe 'Only Allowed Combinations is read as authentication combinations' {
+    It 'leaves other values with semicolons and commas exactly as configured' {
+        $model = & $script:M {
+            ConvertTo-InforcerDocModel -DocData @{
+                Tenant = [pscustomobject]@{ tenantFriendlyName = 'T'; msTenantId = '00000000-0000-0000-0000-000000000001' }
+                TenantId = 1; CollectedAt = [datetime]::UtcNow; Baselines = @()
+                Policies = @([pscustomobject]@{ id = 'p1'; displayName = 'Chrome'; policyTypeId = 3; product = 'Intune'
+                    primaryGroup = 'Windows'; secondaryGroup = 'Configuration'
+                    policyData = [pscustomobject]@{ extensionList = 'abc;https://clients2.google.com/crx, def;sms'
+                        scriptContent = 'Write-Output sms,voice; Write-Output fido2' } })
+            }
+        }
+        $rows = foreach ($p in $model.Products.Values) { foreach ($c in $p.Categories.Values) { foreach ($pol in $c) { $pol.Settings } } }
+        @($rows | Where-Object { $_.Value -eq 'abc;https://clients2.google.com/crx, def;sms' }).Count | Should -Be 1
+        @($rows | Where-Object { "$($_.Value)" -match '\+' }).Count | Should -Be 0
     }
 }
 
@@ -138,6 +177,13 @@ Describe 'Export-InforcerTenantDocumentation with several baselines' {
         $dir = Join-Path $TestDrive 'out'
         $files = @(Export-InforcerTenantDocumentation -TenantId 1 -Baseline 'Baseline A', 'Baseline B' -Format Markdown -OutputPath $dir -Show:$false)
         @($files.Name | Sort-Object) | Should -Be @('Contoso-Baseline-A-Documentation.md', 'Contoso-Baseline-B-Documentation.md')
+    }
+
+    It 'gives baselines whose names make the same file name their own file' {
+        $dir = Join-Path $TestDrive 'collide'
+        $files = @(Export-InforcerTenantDocumentation -TenantId 1 -Baseline 'Tier A', 'Tier-A' -Format Markdown -OutputPath $dir -Show:$false)
+        @($files.FullName | Sort-Object -Unique).Count | Should -Be 2
+        @(Get-ChildItem $dir).Count | Should -Be 2
     }
 
     It 'refuses a file -OutputPath for several baselines' {

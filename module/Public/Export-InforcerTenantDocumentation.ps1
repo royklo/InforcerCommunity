@@ -208,6 +208,8 @@ if ($FetchGraphData) {
 # tenant), a baseline's membership is a fraction of a second. Each pass starts from the full list.
 $allPolicies = @($docData.Policies)
 $baselineTargets = @(if ($Baseline) { $Baseline } else { $null })
+# 'Tier 1' and 'Tier-1' make the same file name; the second would overwrite the first.
+$usedFileStems = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($baselineTarget in $baselineTargets) {
     $docData.Policies = $allPolicies
 
@@ -300,6 +302,8 @@ foreach ($baselineTarget in $baselineTargets) {
     $safeName = $docModel.TenantName -replace '[^\w\-]', '-'
     # Several baselines in one call each get their own file.
     if ($baselineTargets.Count -gt 1) { $safeName += '-' + ($baselineFilterName -replace '[^\w\-]', '-') }
+    $stem = $safeName; $n = 2
+    while (-not $usedFileStems.Add($safeName)) { $safeName = "$stem-$n"; $n++ }
 
     foreach ($fmt in $Format) {
         $formatIndex++

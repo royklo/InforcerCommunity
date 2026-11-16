@@ -1,7 +1,7 @@
 function Set-InforcerUser {
     <#
     .SYNOPSIS
-        Updates a Microsoft Entra user's profile, manager, sign-in or licences, resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
+        Updates a Microsoft Entra user's profile, manager, sign-in or licences, hides their mailbox from the address lists, resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
 
         Required API scope(s): none; the API-key (beta) API cannot update users.
         Required permission: User & Group Management (API client, unconfirmed which grant).
@@ -16,6 +16,10 @@ function Set-InforcerUser {
 
         -AddLicense and -RemoveLicense change the user's licences in one request
         (POST .../users/{userId}/assignLicenses); if one licence is refused, nothing changes.
+        -HiddenFromAddressLists hides the user's mailbox from the address lists, or shows it again
+        (PATCH .../users/{userId}/mailbox/addressListVisibility). Exchange Online applies it in the
+        background; the cmdlet waits until it has succeeded or failed, at most 5 minutes, and then warns
+        that it carries on. Outlook's address book can take up to 48 hours to show it.
         -Password sets a new password (POST /tenants/{msTenantId}/users/{userId}/password); the user must
         change it when they next sign in unless you pass -ForceChangePasswordNextSignIn $false.
         -RemoveAuthenticationMethod deletes registered sign-in methods, such as a phone or Microsoft
@@ -27,7 +31,7 @@ function Set-InforcerUser {
         and returns it; the pass cannot be read again, and it replaces a pass the user already has.
         -RevokeSessions signs the user out of every session (POST .../users/{userId}/revokeSessions);
         access tokens already issued stay valid until they expire, typically within 90 minutes.
-        In one call the steps run in this order: profile update, licences, password reset, removing
+        In one call the steps run in this order: profile update, licences, address lists, password reset, removing
         sign-in methods, MFA reset, Temporary Access Pass, sign-out. When a step fails, the later steps
         are skipped and the error says which steps were already done.
 
@@ -126,6 +130,10 @@ function Set-InforcerUser {
         The skuId of one or more licences to take from the user. A licence the user gets through a group
         is refused; one the user does not have is ignored.
 
+    .PARAMETER HiddenFromAddressLists
+        $true hides the user's mailbox from the address lists (the global address list in Outlook), $false
+        shows it again. The user needs a mailbox; a Global Administrator's mailbox is refused.
+
     .PARAMETER Password
         A new password as a SecureString. It must meet the tenant's password policy.
         inforcer does not store or log it.
@@ -208,6 +216,11 @@ function Set-InforcerUser {
         Removes one lost phone and keeps the user's other sign-in methods.
 
     .EXAMPLE
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -HiddenFromAddressLists $true -RevokeSessions
+
+        Offboards a leaver: blocks sign-in, hides the mailbox from the address book and ends every session.
+
+    .EXAMPLE
         Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
 
         Shows what would change without changing it.
@@ -283,6 +296,8 @@ function Set-InforcerUser {
         [ValidateNotNullOrEmpty()]
         [guid[]]$RemoveLicense,
 
+        [bool]$HiddenFromAddressLists,
+
         [System.Security.SecureString]$Password,
 
         [bool]$ForceChangePasswordNextSignIn = $true,
@@ -324,13 +339,14 @@ function Set-InforcerUser {
         $steps = [System.Collections.Generic.List[string]]::new()
         if ($body.Count -gt 0) { $steps.Add("update $(@($body.Keys) -join ', ')") }
         if ($AddLicense -or $RemoveLicense) { $steps.Add('change licences') }
+        if ($PSBoundParameters.ContainsKey('HiddenFromAddressLists')) { $steps.Add($(if ($HiddenFromAddressLists) { 'hide mailbox from address lists' } else { 'show mailbox in address lists' })) }
         if ($Password) { $steps.Add('reset password') }
         foreach ($methodId in $RemoveAuthenticationMethod | Select-Object -Unique) { $steps.Add("remove authentication method $methodId") }
         if ($ResetMfa) { $steps.Add('reset MFA') }
         if ($TemporaryAccessPass) { $steps.Add('create Temporary Access Pass') }
         if ($RevokeSessions) { $steps.Add('sign out of every session') }
         if ($steps.Count -eq 0) {
-            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
+            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, -HiddenFromAddressLists, -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
             return
         }
 
@@ -366,6 +382,9 @@ function Set-InforcerUser {
                 if ($AddLicense) { $json['addSkuIds'] = @($AddLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
                 if ($RemoveLicense) { $json['removeSkuIds'] = @($RemoveLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
                 $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/assignLicenses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
+            } elseif ($step -like '* address lists') {
+                $action = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/mailbox/addressListVisibility" -Method PATCH -Body (@{ hidden = $HiddenFromAddressLists } | ConvertTo-Json -Compress) @errorHandling
+                if (-not $stepErr) { $action = Wait-InforcerMailboxAction -UserEndpoint $userEndpoint -ActionId $action.actionId -Step $step -UserId $UserId @errorHandling }
             } elseif ($step -eq 'create Temporary Access Pass') {
                 $json = [ordered]@{}
                 if ($PSBoundParameters.ContainsKey('TemporaryAccessPassLifetime')) { $json['lifetimeInMinutes'] = $TemporaryAccessPassLifetime }

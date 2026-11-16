@@ -601,22 +601,23 @@ TenantId          : 00000000-0000-0000-0000-000000000001
 
 ## Set-InforcerUser
 
-Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, changes their licences, removes registered sign-in methods or resets MFA, issues a Temporary Access Pass, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
+Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, changes their licences, hides their mailbox from the address lists, removes registered sign-in methods or resets MFA, issues a Temporary Access Pass, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
 
 Only the parameters you pass are changed; every other field stays as it is. Pass an empty string (`''`) or `$null` to clear a field, such as `-JobTitle ''`, or `-ManagerId ''` to remove the manager. `DisplayName`, `MailNickname`, `UserPrincipalName` and `Mail` cannot be cleared. `-AccountEnabled $false` blocks sign-in, but existing sessions last until their tokens expire. `Get-InforcerUser` can show the old values for up to about five minutes, because the API caches users. Returns nothing, except the pass with `-TemporaryAccessPass`. Supports `-WhatIf` and `-Confirm`.
 
 When the manager could not be changed but the other changes were saved (HTTP 502), the error lists each step and whether it was applied, for example `Steps: profile: succeeded; manager: failed (Manager not found)`.
 
-`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. `-RemoveAuthenticationMethod` deletes sign-in methods by their `id` from `Get-InforcerUser -IncludeAuthenticationMethods`; only methods with `deletable` true can go, and Microsoft Entra can still refuse one, such as the default method while another phone remains. `-ResetMfa` deletes every deletable method in one request, in the order Microsoft Entra needs, so the user must register MFA again; the password is kept. `-AddLicense`/`-RemoveLicense` change licences by `skuId` in one request; if one is refused, nothing changes. `-TemporaryAccessPass` creates a Temporary Access Pass and returns it (shown only once; it replaces an existing pass). One call runs its steps in this order: profile update, licences, password reset, removing sign-in methods (one request each), MFA reset, Temporary Access Pass, sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
+`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. `-RemoveAuthenticationMethod` deletes sign-in methods by their `id` from `Get-InforcerUser -IncludeAuthenticationMethods`; only methods with `deletable` true can go, and Microsoft Entra can still refuse one, such as the default method while another phone remains. `-ResetMfa` deletes every deletable method in one request, in the order Microsoft Entra needs, so the user must register MFA again; the password is kept. `-AddLicense`/`-RemoveLicense` change licences by `skuId` in one request; if one is refused, nothing changes. `-TemporaryAccessPass` creates a Temporary Access Pass and returns it (shown only once; it replaces an existing pass). `-HiddenFromAddressLists $true` hides the mailbox from the address lists (`$false` shows it again); Exchange Online applies it in the background, so the cmdlet waits with a progress bar until it has succeeded or failed, at most 5 minutes, and then warns with the action id that it carries on. Outlook's address book can take up to 48 hours to show it. One call runs its steps in this order: profile update, licences, address lists, password reset, removing sign-in methods (one request each), MFA reset, Temporary Access Pass, sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
 
 **Pipeline:** users from `Get-InforcerUser` or `New-InforcerUser` can be piped in; `-UserId` binds from their `id` and `-TenantId` from their `TenantId` when they have one.
 
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
-**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses` (`-AddLicense`/`-RemoveLicense`), `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` (`-RemoveAuthenticationMethod`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` (`-ResetMfa`), `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` (`-TemporaryAccessPass`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses` (`-AddLicense`/`-RemoveLicense`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility` and `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` (`-HiddenFromAddressLists`), `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` (`-RemoveAuthenticationMethod`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` (`-ResetMfa`), `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` (`-TemporaryAccessPass`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
 **Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Request schemas**: [UserUpdate](./API-REFERENCE.md#userupdate) | [PasswordReset](./API-REFERENCE.md#passwordreset) | [UserLicenseAssignment](./API-REFERENCE.md#userlicenseassignment)
+**Polled schema** (with `-HiddenFromAddressLists`): [MailboxAction](./API-REFERENCE.md#mailboxaction)
 **Output schema** (with `-TemporaryAccessPass`): [TemporaryAccessPass](./API-REFERENCE.md#temporaryaccesspass)
 
 | Parameter | Type | Mandatory | Description |
@@ -630,6 +631,7 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
 | **AddLicense** | Guid[] | No | `skuId`s of licences to give the user (from `assignedLicenses` of `Get-InforcerUser -UserId`). The user needs a usage location. |
 | **RemoveLicense** | Guid[] | No | `skuId`s of licences to take from the user. A licence given through a group is refused. |
+| **HiddenFromAddressLists** | Bool | No | `$true` hides the mailbox from the address lists, `$false` shows it again. Waits until Exchange Online has applied it (at most 5 minutes). A Global Administrator's mailbox is refused. |
 | **Password** | SecureString | No | A new password. It must meet the tenant's password policy. |
 | **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the new password at the next sign-in. Default: `$true`. Only with `-Password`; on its own it stops with `PasswordRequired`. |
 | **RemoveAuthenticationMethod** | String[] | No | Ids of registered sign-in methods to delete, from `authenticationMethods` of `Get-InforcerUser -IncludeAuthenticationMethods`. Only methods with `deletable` true. |
@@ -639,7 +641,7 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **TemporaryAccessPassUsableOnce** | Bool | No | Whether the pass works only once. Only with `-TemporaryAccessPass`. |
 | **RevokeSessions** | Switch | No | Signs the user out of every session. |
 
-At least one field, `-AddLicense`, `-RemoveLicense`, `-Password`, `-RemoveAuthenticationMethod`, `-ResetMfa`, `-TemporaryAccessPass` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
+At least one field, `-AddLicense`, `-RemoveLicense`, `-HiddenFromAddressLists`, `-Password`, `-RemoveAuthenticationMethod`, `-ResetMfa`, `-TemporaryAccessPass` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
 
 ### Examples
 
@@ -654,6 +656,8 @@ Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-0000000000
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -ResetMfa -TemporaryAccessPass -TemporaryAccessPassLifetime 60 -TemporaryAccessPassUsableOnce $true
 # Licence: set the usage location, then give the licence
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -AddLicense '00000000-0000-0000-0000-0000000000b1'
+# Offboard a leaver: block sign-in, hide the mailbox from the address book, end every session
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -HiddenFromAddressLists $true -RevokeSessions
 # Remove one lost phone, keep the other sign-in methods
 $user = Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods
 Set-InforcerUser -TenantId 'Contoso' -UserId $user.id -RemoveAuthenticationMethod @($user.authenticationMethods | Where-Object phoneNumber -eq '+44 7700 900000').id

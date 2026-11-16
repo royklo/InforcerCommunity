@@ -45,7 +45,7 @@ BeforeAll {
 
 AfterAll {
     foreach ($f in 'New-UwResponse', 'Set-UwSession', 'Set-UwRoute') { Remove-Item "function:global:$f" -ErrorAction SilentlyContinue }
-    Remove-Variable -Name UwCalls, UwRoute -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name UwCalls, UwRoute, UwPolls, UwClock -Scope Global -ErrorAction SilentlyContinue
     & (Get-Module InforcerCommunity) { $script:InforcerSession = $null; $script:InforcerTenantListCache = $null }
 }
 
@@ -337,6 +337,86 @@ Describe 'Set-InforcerUser' {
         Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -RevokeSessions -TemporaryAccessPassLifetime 60 -ErrorAction SilentlyContinue -ErrorVariable e
         $e[-1].FullyQualifiedErrorId | Should -BeLike 'TemporaryAccessPassRequired*'
         $global:UwCalls.Count | Should -Be 0
+    }
+
+    It 'hides the mailbox after the licences and waits until Exchange Online reports it done' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        $global:UwPolls = 0
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/addressListVisibility') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            if ($Uri -like '*/mailbox/actions/*') {
+                $global:UwPolls++
+                $status = if ($global:UwPolls -lt 2) { 'running' } else { 'succeeded' }
+                return New-UwResponse ('{"actionId":"00000000-0000-0000-0000-0000000000a1","action":"setAddressListVisibility","status":"' + $status + '","queuedBehind":null,"requestedAt":"2026-11-16T10:00:00Z","completedAt":null,"error":null}')
+            }
+            New-UwResponse '' 204
+        }
+        $b1 = '00000000-0000-0000-0000-0000000000b1'
+        $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -RemoveLicense $b1 -HiddenFromAddressLists $true -RevokeSessions -ErrorVariable e -WarningVariable w
+        $e | Should -BeNullOrEmpty
+        $w | Should -BeNullOrEmpty
+        $out | Should -BeNullOrEmpty
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('POST /assignLicenses', 'PATCH /mailbox/addressListVisibility', 'GET /mailbox/actions/00000000-0000-0000-0000-0000000000a1', 'GET /mailbox/actions/00000000-0000-0000-0000-0000000000a1', 'POST /revokeSessions')
+        $global:UwCalls[1].Body | Should -Be '{"hidden":true}'
+    }
+
+    It 'sends hidden false to show the mailbox again' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'PATCH') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1","status":"succeeded","error":null}'
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -HiddenFromAddressLists $false -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $global:UwCalls[0].Body | Should -Be '{"hidden":false}'
+    }
+
+    It 'stops the later steps when Exchange Online fails the address list change, with its reason' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'PATCH' -and $Uri -like '*/addressListVisibility') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            if ($Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1","status":"failed","error":{"code":"WriteNotApplied","message":"The mailbox was not found"}}' }
+            New-UwResponse '' 204
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AccountEnabled $false -HiddenFromAddressLists $true -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[-1].FullyQualifiedErrorId | Should -BeLike 'UserUpdatePartlyApplied*'
+        $e[-1].Exception.Message | Should -BeLike '*Could not hide mailbox from address lists*The mailbox was not found (WriteNotApplied)*Already done: update accountEnabled.*Not done: sign out of every session.*'
+        @($global:UwCalls | Where-Object Uri -like '*/revokeSessions').Count | Should -Be 0
+    }
+
+    It 'gives the failure itself when the address list change is the only step' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'PATCH') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1","status":"failed","error":{"code":"NotStarted","message":"Exchange Online could not be reached"}}'
+        }
+        { Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -HiddenFromAddressLists $true -ErrorAction Stop } |
+            Should -Throw '*Exchange Online could not be reached (NotStarted)*'
+    }
+
+    It 'warns and carries on when the change is still queued at the deadline' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        $global:UwClock = [datetime]'2026-11-16T10:00:00'
+        Mock -ModuleName InforcerCommunity Get-Date { $global:UwClock; $global:UwClock = $global:UwClock.AddMinutes(10) }
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'PATCH') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            New-UwResponse '' 204
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -HiddenFromAddressLists $true -RevokeSessions -ErrorVariable e -WarningVariable w -WarningAction SilentlyContinue
+        $e | Should -BeNullOrEmpty
+        "$w" | Should -BeLike '*still queued*action id 00000000-0000-0000-0000-0000000000a1*'
+        @($global:UwCalls | ForEach-Object { $_.Method }) | Should -Be @('PATCH', 'POST')
     }
 
     It 'surfaces a 404 from a sign-out alone with the original error' {

@@ -239,10 +239,9 @@ function ConvertTo-FlatSettingRows {
     $rows = [System.Collections.Generic.List[object]]::new()
     if ($null -eq $PolicyData) { return $rows }
 
-    # Track emitted dotted-path parent rows to avoid duplicates (only init at top level)
-    if ($Depth -eq 0) {
-        $script:_emittedDotParents = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    }
+    # Dotted-path parent rows already emitted for this object. Per object, not per policy: two list
+    # items with the same dotted keys each need the parent row in their own path.
+    $emittedDotParents = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $skip = @(
         '@odata.type', '@odata.context', 'id', 'createdDateTime', 'lastModifiedDateTime',
@@ -334,18 +333,25 @@ function ConvertTo-FlatSettingRows {
                         [void]$rows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $itemName); Value = $vp.Value.ToString(); Indent = $Depth + 1; IsConfigured = $true })
                         continue
                     }
-                    # Every other field of the item: scalars as rows, objects and lists through the same
-                    # rendering as any setting. They used to be dropped, so an authentication method's
+                    # Every other field of the item, through the same rendering as any setting (decoding,
+                    # dotted paths, nesting). They used to be dropped, so an authentication method's
                     # Include Targets showed "1 items" and nothing else.
-                    $fieldRows = [System.Collections.Generic.List[object]]::new()
+                    $fields = [ordered]@{}
                     foreach ($ip in $item.PSObject.Properties) {
                         if ($ip.Name -match '@odata' -or $ip.Name -eq $labelField -or ($itemName -and $ip.Name -eq 'id')) { continue }
-                        $iv = $ip.Value
-                        if ($iv -is [string] -or $iv -is [ValueType]) {
-                            if ("$iv" -ne '') { $fieldRows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $ip.Name); Value = "$iv"; Indent = $Depth + 2; IsConfigured = $true }) }
-                        } elseif ($null -ne $iv) {
-                            foreach ($r in (ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]@{ $ip.Name = $iv }) -Depth ($Depth + 2))) { $fieldRows.Add($r) }
+                        $fields[$ip.Name] = $ip.Value
+                    }
+                    $fieldRows = [System.Collections.Generic.List[object]]::new()
+                    # The renderer skips 'id' and 'description' as policy metadata. On an item they are
+                    # content: the id is an unlabelled item's identity, the description says what it is.
+                    foreach ($own in @(@{ Key = 'id'; Name = 'ID'; Use = (-not $itemName) }, @{ Key = 'description'; Name = 'Description'; Use = $true })) {
+                        if ($own.Use -and $fields.Contains($own.Key) -and "$($fields[$own.Key])" -ne '') {
+                            $fieldRows.Add([PSCustomObject]@{ Name = $own.Name; Value = "$($fields[$own.Key])"; Indent = $Depth + 2; IsConfigured = $true })
                         }
+                    }
+                    foreach ($r in (ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]$fields) -Depth ($Depth + 2))) {
+                        if ($r.IsConfigured -and [string]::IsNullOrEmpty("$($r.Value)")) { continue }
+                        $fieldRows.Add($r)
                     }
                     if (-not $itemName -and $fieldRows.Count -eq 1 -and $fieldRows[0].IsConfigured) {
                         $fieldRows[0].Indent = $Depth + 1
@@ -379,8 +385,8 @@ function ConvertTo-FlatSettingRows {
                     $parentName = ConvertTo-FriendlySettingName -Name $segments[$i]
                     # Only emit parent row if it hasn't been emitted yet (track via a script-scoped set)
                     $parentKey = ($segments[0..$i] -join '.').ToLowerInvariant()
-                    if (-not $script:_emittedDotParents.Contains($parentKey)) {
-                        [void]$script:_emittedDotParents.Add($parentKey)
+                    if (-not $emittedDotParents.Contains($parentKey)) {
+                        [void]$emittedDotParents.Add($parentKey)
                         [void]$rows.Add([PSCustomObject]@{
                             Name        = $parentName
                             Value       = ''

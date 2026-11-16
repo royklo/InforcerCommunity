@@ -92,6 +92,24 @@ Describe 'ConvertTo-FlatSettingRows shows what the policy configures' {
         @($rows | Where-Object { $_.Value -eq 'a, b' }).Count | Should -Be 1
     }
 
+    It 'decodes an encoded payload inside a list item like any other payload' {
+        $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('<?xml version="1.0"?><plist><dict/></plist>'))
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ profiles = @([pscustomobject]@{ name = 'P1'; payload = $b64 }) }))
+        @($rows | Where-Object { "$($_.Value)" -like '__SCRIPT_CODE__<?xml*' }).Count | Should -Be 1
+    }
+
+    It 'keeps a list item''s description, which the renderer skips at policy level' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ indicators = @([pscustomobject]@{ indicatorValue = 'example.com'; description = 'Shadow AI'; action = 'Block' }) }))
+        @($rows | Where-Object { $_.Name -eq 'Description' -and $_.Value -eq 'Shadow AI' }).Count | Should -Be 1
+    }
+
+    It 'gives every list item its own dotted headers' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ profiles = @(
+            [pscustomobject]@{ name = 'P1'; options = [pscustomobject]@{ 'mode.level' = 1 } }
+            [pscustomobject]@{ name = 'P2'; options = [pscustomobject]@{ 'mode.level' = 2 } }) }))
+        @($rows | Where-Object { $_.Name -eq 'Mode' }).Count | Should -Be 2 -Because 'each item''s Level needs Mode in its path'
+    }
+
     It 'keeps list entries that hold a comma apart' {
         $rows = Get-ReadabilityRows ([pscustomobject]@{ allowedCombinations = @('fido2', 'password,softwareOath') })
         $rows[0].Value | Should -Be 'fido2; password,softwareOath'

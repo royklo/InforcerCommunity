@@ -50,9 +50,10 @@ Describe 'ConvertTo-FlatSettingRows shows what the policy configures' {
     }
 
     It 'lists every field of a list item that has no name' {
-        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ includeTargets = @([pscustomobject]@{ targetType = 'group'; id = 'all_users' }) }))
-        $rows[0].Value | Should -Be '1 items'
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ includeTargets = @([pscustomobject]@{ targetType = 'group'; id = 'all_users' }; [pscustomobject]@{ id = $null }) }))
+        $rows[0].Value | Should -Be '2 items'
         $rows[1].Name | Should -Be 'Item 1'
+        @($rows | Where-Object { $_.Name -eq 'Item 2' }).Count | Should -Be 0 -Because 'an item with nothing set has nothing to show'
         @($rows | Where-Object { $_.Value -eq 'group' -and $_.Indent -eq 2 }).Count | Should -Be 1
         @($rows | Where-Object { $_.Value -eq 'all_users' -and $_.Indent -eq 2 }).Count | Should -Be 1
     }
@@ -122,6 +123,46 @@ Describe 'ConvertTo-FlatSettingRows shows what the policy configures' {
         $rows[0].Value | Should -Be 'fido2; password,softwareOath'
         (Get-ReadabilityRows ([pscustomobject]@{ x = @('a', 'b') }))[0].Value | Should -Be 'a, b'
     }
+
+    It 'does not repeat a MAM app''s package id under its own label' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ apps = @([pscustomobject]@{ id = 'com.example.app.android'
+            mobileAppIdentifier = [pscustomobject]@{ '@odata.type' = '#microsoft.graph.androidMobileAppIdentifier'; packageId = 'com.example.app' } }) }))
+        $rows.Count | Should -Be 2
+        $rows[1].Name | Should -Be 'com.example.app'
+        $rows[1].IsConfigured | Should -BeTrue
+    }
+
+    It 'shows a field every item shares once, and only what differs per item' {
+        # Shape of Defender's custom indicators: 492 domains that differ only in name, type and timestamps.
+        $items = @(foreach ($d in 'a.example', 'b.example', 'c.example') {
+            [pscustomobject]@{ displayName = $d; title = $d; indicatorValue = $d; action = 'Block'; severity = 'Informational'; application = $null; educateUrl = ''
+                indicatorType = $(if ($d -eq 'c.example') { 'Url' } else { 'DomainName' }) } })
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ indicators = $items }))
+        $all = @($rows | Where-Object { $_.Name -eq 'All items' })
+        $all.Count | Should -Be 1
+        $all[0].Indent | Should -Be 1
+        $all[0].IsConfigured | Should -BeFalse
+        @($rows | Where-Object { $_.Name -eq 'Action' }).Count | Should -Be 1
+        @($rows | Where-Object { $_.Name -eq 'Severity' }).Count | Should -Be 1
+        @($rows | Where-Object { $_.Name -eq 'Indicator Type' }).Count | Should -Be 3 -Because 'it differs, so it stays per item'
+        @($rows | Where-Object { $_.Value -in 'a.example', 'b.example', 'c.example' }).Count | Should -Be 0 -Because 'title and value repeat the label'
+        @($rows | Where-Object { $_.Name -eq 'b.example' })[0].IsConfigured | Should -BeFalse
+        @($rows | Where-Object { $_.IsConfigured -and "$($_.Value)" -eq '' }).Count | Should -Be 0 -Because 'a field left empty is not a setting'
+    }
+
+    It 'keeps a nested setting under its own item even when every item has it' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ profiles = @(
+            [pscustomobject]@{ name = 'P1'; options = [pscustomobject]@{ enabled = $true } }
+            [pscustomobject]@{ name = 'P2'; options = [pscustomobject]@{ enabled = $true } }) }))
+        @($rows | Where-Object { $_.Name -eq 'All items' }).Count | Should -Be 0 -Because 'a nested row has no place there without its parent'
+        @($rows | Where-Object { $_.Name -match 'Enabled' }).Count | Should -Be 2
+    }
+
+    It 'keeps a single item''s fields with the item' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ includeTargets = @([pscustomobject]@{ displayName = 'G'; targetType = 'group' }) }))
+        @($rows | Where-Object { $_.Name -eq 'All items' }).Count | Should -Be 0
+        @($rows | Where-Object { $_.Value -eq 'group' })[0].Indent | Should -Be 2
+    }
 }
 
 Describe 'Authentication strength combinations read as combinations' {
@@ -133,11 +174,11 @@ Describe 'Authentication strength combinations read as combinations' {
                 Policies = @([pscustomobject]@{ id = 'p1'; displayName = 'CA'; policyTypeId = 1; product = 'Entra'
                     primaryGroup = 'Conditional Access'; secondaryGroup = 'Policies'
                     policyData = [pscustomobject]@{ grantControls = [pscustomobject]@{ authenticationStrength = [pscustomobject]@{
-                        allowedCombinations = @('fido2', 'password,softwareOath', 'password,microsoftAuthenticatorPush') } } } })
+                        allowedCombinations = @('fido2', 'password,softwareOath', 'password,microsoftAuthenticatorPush', 'password,futureMethod') } } } })
             }
         }
         $row = foreach ($p in $model.Products.Values) { foreach ($c in $p.Categories.Values) { foreach ($pol in $c) { $pol.Settings | Where-Object { $_.Name -eq 'Allowed Combinations' } } } }
-        $row.Value | Should -Be 'FIDO2 Security Key; Password + Software OATH Token; Password + Microsoft Authenticator'
+        $row.Value | Should -Be 'FIDO2 Security Key; Password + Software OATH Token; Password + Microsoft Authenticator; Password + futureMethod'
     }
 }
 
@@ -225,5 +266,18 @@ Describe 'Export-InforcerTenantDocumentation with several baselines' {
     It 'keeps the single-baseline file name as it was' {
         $files = @(Export-InforcerTenantDocumentation -TenantId 1 -Baseline 'Baseline A' -Format Markdown -OutputPath (Join-Path $TestDrive 'single') -Show:$false)
         $files[0].Name | Should -Be 'Contoso-Documentation.md'
+    }
+}
+
+Describe 'The HTML keeps section headers visible' {
+    It 'leaves a header''s value blank instead of marking it empty, so hide-empty keeps it' {
+        $html = & $script:M {
+            $settings = @([pscustomobject]@{ Name = 'Include Targets'; Value = ''; Indent = 0; IsConfigured = $false }
+                [pscustomobject]@{ Name = 'Target Type'; Value = 'group'; Indent = 1; IsConfigured = $true })
+            ConvertTo-InforcerHtml -DocModel @{ TenantName = 'T'; TenantId = 't'; GeneratedAt = [datetime]::UtcNow
+                Products = [ordered]@{ Entra = @{ Categories = [ordered]@{ C = @(@{ Basics = @{ Name = 'P'; Description = '' }; Settings = $settings; Assignments = @() }) } } } }
+        }
+        $html | Should -Match 'Include Targets'
+        ([regex]::Matches($html, '<span class="muted empty-val">')).Count | Should -Be 0
     }
 }

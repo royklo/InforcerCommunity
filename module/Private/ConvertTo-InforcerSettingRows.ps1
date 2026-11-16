@@ -306,6 +306,7 @@ function ConvertTo-FlatSettingRows {
                     IsConfigured = $false
                 })
                 $itemNumber = 0
+                $entries = [System.Collections.Generic.List[object]]::new()
                 foreach ($item in $val) {
                     if ($item -isnot [PSObject]) { continue }
                     $itemNumber++
@@ -322,7 +323,7 @@ function ConvertTo-FlatSettingRows {
                         if ($mai -and $mai.Value -is [PSObject]) {
                             foreach ($nameField in @('bundleId', 'packageId')) {
                                 $nv2 = $mai.Value.PSObject.Properties[$nameField]
-                                if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); break }
+                                if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); $labelField = 'mobileAppIdentifier'; break }
                             }
                         }
                     }
@@ -330,7 +331,7 @@ function ConvertTo-FlatSettingRows {
                     # Protection) carries its setting in 'value'.
                     $vp = $item.PSObject.Properties['value']
                     if ($itemName -and $vp -and ($vp.Value -is [string] -or $vp.Value -is [ValueType])) {
-                        [void]$rows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $itemName); Value = $vp.Value.ToString(); Indent = $Depth + 1; IsConfigured = $true })
+                        $entries.Add(@{ Row = [PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $itemName); Value = $vp.Value.ToString(); Indent = $Depth + 1; IsConfigured = $true } })
                         continue
                     }
                     # Every other field of the item, through the same rendering as any setting (decoding,
@@ -352,16 +353,38 @@ function ConvertTo-FlatSettingRows {
                     }
                     foreach ($r in (ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]$fields) -Depth ($Depth + 2))) {
                         if ($r.IsConfigured -and [string]::IsNullOrEmpty("$($r.Value)")) { continue }
+                        # A field that repeats the label (an indicator's title and value) says nothing new.
+                        if ($itemName -and $r.Indent -eq $Depth + 2 -and $r.IsConfigured -and "$($r.Value)" -eq $itemName) { continue }
                         $fieldRows.Add($r)
                     }
-                    if (-not $itemName -and $fieldRows.Count -eq 1 -and $fieldRows[0].IsConfigured) {
+                    $keys = [System.Collections.Generic.HashSet[string]]::new()
+                    foreach ($r in $fieldRows) { if ($r.IsConfigured -and $r.Indent -eq $Depth + 2) { [void]$keys.Add("$($r.Name)`0$($r.Value)") } }
+                    $entries.Add(@{ Name = $itemName; Number = $itemNumber; Fields = $fieldRows; Keys = $keys })
+                }
+                # A top-level field with the same value on every item is shown once, under "All items":
+                # Defender's 492 Shadow AI indicators differ only in domain, type and timestamps, and
+                # repeating the other twelve fields per domain made one policy 8,000 rows.
+                $itemEntries = @($entries | Where-Object { $_.Fields })
+                $shared = [System.Collections.Generic.HashSet[string]]::new()
+                if ($itemEntries.Count -gt 1) {
+                    $shared.UnionWith($itemEntries[0].Keys)
+                    foreach ($e in $itemEntries) { $shared.IntersectWith($e.Keys) }
+                }
+                if ($shared.Count) {
+                    [void]$rows.Add([PSCustomObject]@{ Name = 'All items'; Value = ''; Indent = $Depth + 1; IsConfigured = $false })
+                    foreach ($r in $itemEntries[0].Fields) { if ($r.IsConfigured -and $r.Indent -eq $Depth + 2 -and $shared.Contains("$($r.Name)`0$($r.Value)")) { [void]$rows.Add($r) } }
+                }
+                foreach ($e in $entries) {
+                    if ($e.Row) { [void]$rows.Add($e.Row); continue }
+                    $fieldRows = @($e.Fields | Where-Object { -not ($_.IsConfigured -and $_.Indent -eq $Depth + 2 -and $shared.Contains("$($_.Name)`0$($_.Value)")) })
+                    if (-not $e.Name -and $fieldRows.Count -eq 1 -and $fieldRows[0].IsConfigured) {
                         $fieldRows[0].Indent = $Depth + 1
                         [void]$rows.Add($fieldRows[0])
                         continue
                     }
-                    if (-not $itemName -and $fieldRows.Count -eq 0) { continue }
+                    if (-not $e.Name -and $fieldRows.Count -eq 0) { continue }
                     # The label is a header over its fields; a name-only item is itself the setting.
-                    [void]$rows.Add([PSCustomObject]@{ Name = $(if ($itemName) { $itemName } else { "Item $itemNumber" }); Value = ''; Indent = $Depth + 1; IsConfigured = ($fieldRows.Count -eq 0) })
+                    [void]$rows.Add([PSCustomObject]@{ Name = $(if ($e.Name) { $e.Name } else { "Item $($e.Number)" }); Value = ''; Indent = $Depth + 1; IsConfigured = ($fieldRows.Count -eq 0) })
                     foreach ($r in $fieldRows) { [void]$rows.Add($r) }
                 }
             }

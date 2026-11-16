@@ -251,14 +251,24 @@ function ConvertTo-FlatSettingRows {
         'policyGuid'
     )
 
+    # Only a guard against runaway recursion. It was 2, and below that an object fell through to
+    # ToString(), which is empty for a PSCustomObject: a Conditional Access device filter rule, the
+    # guest user types and Entra's passkey migration opt-out rendered as empty rows.
+    $maxDepth = 10
+
     foreach ($prop in $PolicyData.PSObject.Properties) {
         if ($prop.Name -in $skip) { continue }
-        if ($prop.Name -match '@odata') { continue }
+        # A dotted path ending in @odata.type is the setting itself, e.g. Entra's
+        # azureADRegistration.allowedToRegister.@odata.type = #microsoft.graph.allDeviceRegistrationMembership
+        # ("all users may register"). Every other @odata key is serialisation metadata.
+        if ($prop.Name -match '^(?<path>.+)\.@odata\.type$' -and $prop.Value -is [string]) {
+            $prop = [PSCustomObject]@{ Name = $Matches.path; Value = (ConvertTo-FriendlySettingName -Name ($prop.Value -replace '^#?microsoft\.graph\.', '')) }
+        } elseif ($prop.Name -match '@odata') { continue }
         # Skip internal flags (but keep linkedComplianceScript — it's rendered by MR card)
         if ($prop.Name -eq '_claimedByCompliancePolicy') { continue }
         if ($prop.Name -eq 'Length' -and $prop.Value -is [int]) { continue }
         $val = $prop.Value
-        if ($val -is [PSObject] -and $val.PSObject.Properties.Count -gt 0 -and $Depth -lt 2) {
+        if ($val -is [PSObject] -and $val.PSObject.Properties.Count -gt 0 -and $Depth -lt $maxDepth) {
             [void]$rows.Add([PSCustomObject]@{
                 Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
                 Value       = ''
@@ -268,7 +278,7 @@ function ConvertTo-FlatSettingRows {
             foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $val -Depth ($Depth + 1))) {
                 [void]$rows.Add($r)
             }
-        } elseif ($val -is [array] -and $val.Count -gt 0 -and $val[0] -is [PSObject] -and $Depth -lt 2) {
+        } elseif ($val -is [array] -and $val.Count -gt 0 -and $val[0] -is [PSObject] -and $Depth -lt $maxDepth) {
             # Array of objects — show count + extract display names (original behavior)
             # Special handling: recurse into scheduledActionConfigurations for compliance rules
             $propLower = $prop.Name.ToLowerInvariant()
@@ -294,47 +304,59 @@ function ConvertTo-FlatSettingRows {
                     Indent      = $Depth
                     IsConfigured = $true
                 })
+                $itemNumber = 0
                 foreach ($item in $val) {
-                    if ($item -is [PSObject]) {
-                        $itemName = $null
-                        foreach ($nameField in @('displayName', 'name', 'id', 'bundleId', 'packageId')) {
-                            $nv = $item.PSObject.Properties[$nameField]
-                            if ($nv -and $nv.Value) { $itemName = $nv.Value.ToString(); break }
-                        }
-                        # Fallback: check nested mobileAppIdentifier (MAM app protection policies)
-                        if (-not $itemName) {
-                            $mai = $item.PSObject.Properties['mobileAppIdentifier']
-                            if ($mai -and $mai.Value -is [PSObject]) {
-                                foreach ($nameField in @('bundleId', 'packageId')) {
-                                    $nv2 = $mai.Value.PSObject.Properties[$nameField]
-                                    if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); break }
-                                }
+                    if ($item -isnot [PSObject]) { continue }
+                    $itemNumber++
+                    # The label is a human-readable field. An id is not: it stays a value row,
+                    # where GUID resolution and masking can reach it.
+                    $itemName = $null; $labelField = $null
+                    foreach ($nameField in @('displayName', 'name', 'bundleId', 'packageId')) {
+                        $nv = $item.PSObject.Properties[$nameField]
+                        if ($nv -and $nv.Value) { $itemName = $nv.Value.ToString(); $labelField = $nameField; break }
+                    }
+                    # Fallback: check nested mobileAppIdentifier (MAM app protection policies)
+                    if (-not $itemName) {
+                        $mai = $item.PSObject.Properties['mobileAppIdentifier']
+                        if ($mai -and $mai.Value -is [PSObject]) {
+                            foreach ($nameField in @('bundleId', 'packageId')) {
+                                $nv2 = $mai.Value.PSObject.Properties[$nameField]
+                                if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); break }
                             }
                         }
-                        # A name/value pair (Entra directory setting templates such as Password
-                        # Protection) carries its setting in 'value'. It used to be dropped, so
-                        # "Lockout Threshold" rendered empty while the policy set it to 10.
-                        $itemValue = ''
-                        $vp = $item.PSObject.Properties['value']
-                        if ($itemName -and $vp -and ($vp.Value -is [string] -or $vp.Value -is [ValueType])) {
-                            $itemValue = $vp.Value.ToString()
-                            $itemName = ConvertTo-FriendlySettingName -Name $itemName
-                        }
-                        if ($itemName) {
-                            [void]$rows.Add([PSCustomObject]@{
-                                Name        = $itemName
-                                Value       = $itemValue
-                                Indent      = $Depth + 1
-                                IsConfigured = $true
-                            })
-                        }
+                    }
+                    # A name/value pair (Entra directory setting templates such as Password
+                    # Protection) carries its setting in 'value'.
+                    $vp = $item.PSObject.Properties['value']
+                    if ($itemName -and $vp -and ($vp.Value -is [string] -or $vp.Value -is [ValueType])) {
+                        [void]$rows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $itemName); Value = $vp.Value.ToString(); Indent = $Depth + 1; IsConfigured = $true })
+                        continue
+                    }
+                    # Every other scalar field of the item. They used to be dropped, so a list such
+                    # as an authentication method's Include Targets showed "1 items" and nothing else.
+                    $fields = @(foreach ($ip in $item.PSObject.Properties) {
+                        if ($ip.Name -match '@odata' -or $ip.Name -eq $labelField -or ($itemName -and $ip.Name -eq 'id')) { continue }
+                        $iv = $ip.Value
+                        if (($iv -is [string] -or $iv -is [ValueType]) -and "$iv" -ne '') { $ip }
+                    })
+                    if (-not $itemName -and $fields.Count -eq 1) {
+                        [void]$rows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $fields[0].Name); Value = $fields[0].Value.ToString(); Indent = $Depth + 1; IsConfigured = $true })
+                        continue
+                    }
+                    if (-not $itemName -and $fields.Count -eq 0) { continue }
+                    [void]$rows.Add([PSCustomObject]@{ Name = $(if ($itemName) { $itemName } else { "Item $itemNumber" }); Value = ''; Indent = $Depth + 1; IsConfigured = $true })
+                    foreach ($f in $fields) {
+                        [void]$rows.Add([PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $f.Name); Value = $f.Value.ToString(); Indent = $Depth + 2; IsConfigured = $true })
                     }
                 }
             }
         } else {
             $strVal = if ($null -eq $val) { '' }
                       elseif ($val -is [array]) {
-                          $joined = @($val | ForEach-Object { if ($_ -is [string] -or $_ -is [ValueType]) { $_.ToString() } }) -join ', '
+                          $items = @($val | ForEach-Object { if ($_ -is [string] -or $_ -is [ValueType]) { $_.ToString() } })
+                          # An item that holds a comma itself (authentication strength combinations
+                          # such as "password,softwareOath") would merge into its neighbours.
+                          $joined = $items -join $(if (@($items | Where-Object { $_.Contains(',') }).Count) { '; ' } else { ', ' })
                           if ([string]::IsNullOrWhiteSpace($joined) -and $val.Count -gt 0) { "$($val.Count) items" } else { $joined }
                       } else { $val.ToString() }
             # hashedScriptContent matches this pattern too, but the helper rejects digests.

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
+## [1.1.0] - 2026-11-16
+
+### Features
+
+- **`Export-InforcerTenantDocumentation -Baseline` takes several baselines** and reads the tenant once. The policy list is the slow call (20 to 40 s on a large tenant) and every `-Baseline` call used to repeat it; a baseline's membership takes a fraction of a second. Without `-OutputPath` it returns one DocModel per baseline; with a directory it writes one `{TenantName}-{Baseline}-Documentation` file per baseline (a single baseline keeps the old `{TenantName}-Documentation` name). A baseline that does not resolve is a `BaselineFilterFailed` error and the others are still exported. A file `-OutputPath` with several baselines is refused (`OutputPathIsFileForSeveralBaselines`). Measured on the inforcer Blueprint Library: 22 baselines in 48 s, previously about 34 minutes. Graph names (`-FetchGraphData`) and the Settings Catalog are resolved once for all of them.
+
+### Bug Fixes
+
+Found by reading every per-baseline document of the inforcer Blueprint Library.
+
+- **Settings nested more than two objects deep rendered as empty rows.** Below two levels an object fell through to `ToString()`, which is empty for a `PSCustomObject`. Conditional Access device filter rules, guest and external user types and Entra's passkey migration opt-out showed nothing. The limit is now 10 and exists only to stop runaway recursion.
+- **A setting stored as a dotted `@odata.type` was dropped.** Entra's device registration setting is `azureADRegistration.allowedToRegister.@odata.type = #microsoft.graph.allDeviceRegistrationMembership`, so "Users may register their devices" showed no setting. A dotted path ending in `@odata.type` is now rendered as that setting ("All Device Registration Membership"). Every other `@odata` key is still skipped.
+- **List items showed only "N items".** An item without a display name or name was dropped, and the fields of named items were never shown, so an authentication method's Include Targets read "1 items" and nothing else. Each item now lists its fields ("Item 1", Target Type group, ID all_users). A single-field item is one row, and an id is never used as a label, so it stays a value that Graph resolution can reach.
+- **Authentication strength combinations fell apart.** `allowedCombinations` items such as `password,softwareOath` were joined with commas and split again, giving "…, password, Software OATH Token, password, …". A list whose items contain a comma is now joined with `; `, and each combination reads "Password + Software OATH Token".
+
 ## [1.0.1] - 2026-11-16
 
 ### Bug Fixes

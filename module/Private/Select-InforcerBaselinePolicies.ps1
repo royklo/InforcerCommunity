@@ -136,17 +136,22 @@ function Select-InforcerBaselinePolicies {
     $keep = [System.Collections.Generic.SortedSet[int]]::new()
     $notFound = [System.Collections.Generic.List[string]]::new()
     $ambiguous = [System.Collections.Generic.List[string]]::new()
+    $conflicting = [System.Collections.Generic.List[string]]::new()
     foreach ($e in $baselineEntries) {
         $hits = @($e.Ids | ForEach-Object { $byId[([string]$_).ToLowerInvariant()] } | Where-Object { $null -ne $_ } | ForEach-Object { $_ } | Select-Object -Unique)
         if ($hits.Count -eq 0 -and $e.Name) {
-            $hits = @($byName[$e.Name.ToLowerInvariant()] | Where-Object { $null -ne $_ })
-            # Narrow on each tie-breaker the entry carries, but never down to nothing: a field the
-            # tenant policy lacks or spells differently must not lose a policy that is otherwise right.
+            $sameName = @($byName[$e.Name.ToLowerInvariant()] | Where-Object { $null -ne $_ })
+            # A same-named policy is a different one when a field both sides carry disagrees: that is
+            # how a tenant holding only MAM Level 3 is kept from standing in for a missing Level 1.
+            # A field the tenant policy lacks is no evidence either way, so it keeps the candidate.
+            $hits = $sameName
             foreach ($f in $tieBreakers) {
-                if ($hits.Count -le 1) { break }
                 if (-not $e.$f) { continue }
-                $narrowed = @($hits | Where-Object { $v = $policies[$_].$f; $v -and ([string]$v).Trim() -eq $e.$f })
-                if ($narrowed.Count -gt 0) { $hits = $narrowed }
+                $hits = @($hits | Where-Object { $v = [string]$policies[$_].$f; [string]::IsNullOrWhiteSpace($v) -or $v.Trim() -eq $e.$f })
+            }
+            if ($hits.Count -eq 0 -and $sameName.Count -gt 0) {
+                $conflicting.Add("$($e.Name) ($($sameName.Count) tenant $(if ($sameName.Count -eq 1) { 'policy' } else { 'policies' }))")
+                continue
             }
             if ($hits.Count -gt 1) {
                 $ambiguous.Add("$($e.Name) ($($hits.Count) tenant policies)")
@@ -170,6 +175,10 @@ function Select-InforcerBaselinePolicies {
     if ($ambiguous.Count -gt 0) {
         Write-Warning "$($ambiguous.Count) baseline policies match several tenant policies by name, with nothing to tell them apart, and were left out:"
         foreach ($u in $ambiguous | Sort-Object -Unique) { Write-Warning "  - $u" }
+    }
+    if ($conflicting.Count -gt 0) {
+        Write-Warning "$($conflicting.Count) baseline policies are not in the tenant; a same-named tenant policy differs in product, category or description, so it was not used in their place:"
+        foreach ($u in $conflicting | Sort-Object -Unique) { Write-Warning "  - $u" }
     }
 
     return $baselineFilterName

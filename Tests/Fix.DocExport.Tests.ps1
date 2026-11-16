@@ -84,6 +84,35 @@ Describe 'Select-InforcerBaselinePolicies: one baseline entry resolves to its ow
         $warnings | Should -BeNullOrEmpty
     }
 
+    It 'keeps a candidate that lacks a field, so a later field can still pick it over one that has it' {
+        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
+            New-DocExportAlignment @([pscustomobject]@{ policyName = 'IOS - Security - U - MAM'; policyGuid = $null; product = 'Intune'; description = 'Level 1 is the minimum.' })
+        }
+        $doc = @{ TenantId = 1; Policies = @(
+            [pscustomobject]@{ id = 'L1'; displayName = 'IOS - Security - U - MAM'; description = 'Level 1 is the minimum.' }
+            [pscustomobject]@{ id = 'L2'; displayName = 'IOS - Security - U - MAM'; product = 'Intune'; description = 'Level 2 is the standard.' }
+        ) }
+        $warnings = Invoke-DocExportSelect $doc
+        @($doc.Policies).id | Should -Be @('L1')
+        $warnings | Should -BeNullOrEmpty
+    }
+
+    It 'reports a missing MAM level instead of replacing it with the same-named level the tenant has' {
+        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
+            [pscustomobject]@{ alignment = [pscustomobject]@{
+                matchedPolicies = @(); matchedWithAcceptedDeviations = @(); deviatedUnaccepted = @()
+                missingFromSubjectUnaccepted = @([pscustomobject]@{ policyName = 'IOS - Security - U - MAM'; policyGuid = $null; product = 'Intune'; primaryGroup = 'iOS/iPadOS'; secondaryGroup = 'App Protection Policies'; description = 'Level 1 is the minimum.' })
+            } }
+        }
+        $doc = @{ TenantId = 1; Policies = @(
+            [pscustomobject]@{ id = 'L3'; displayName = 'IOS - Security - U - MAM'; product = 'Intune'; primaryGroup = 'iOS/iPadOS'; secondaryGroup = 'App Protection Policies'; description = 'Level 3 is high.' }
+        ) }
+        $warnings = Invoke-DocExportSelect $doc
+        @($doc.Policies).Count | Should -Be 0 -Because 'Level 3 is not the policy the baseline holds'
+        $warnings | Should -Match 'differ'
+        $warnings | Should -Match 'IOS - Security - U - MAM'
+    }
+
     It 'leaves out and names a policy it cannot tell apart, instead of including every candidate' {
         Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
             New-DocExportAlignment @([pscustomobject]@{ policyName = 'IOS - Security - U - MAM'; policyGuid = $null; product = 'Intune'; primaryGroup = 'iOS/iPadOS'; secondaryGroup = 'App Protection Policies' })

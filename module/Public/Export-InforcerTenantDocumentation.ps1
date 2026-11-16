@@ -69,9 +69,9 @@
     friendly name (e.g., "Inforcer Blueprint Baseline - Tier 1 - Foundations"). Uses the
     Inforcer alignment details API to retrieve the list of policies in the baseline, then
     filters the documentation to only those policies. The baseline name is shown in the header.
-    Each baseline policy is matched by id; by name only when it has no id the tenant knows, and
-    same-named policies are then told apart by product, category and description. One that still
-    matches several is left out with a warning. A baseline that cannot be resolved, or holds no
+    Each baseline policy is matched by id; by name only when it has no id the tenant knows. A
+    same-named policy whose product, category or description differs is a different policy and is
+    not used in its place; one that still matches several is left out. Both are named in a warning. A baseline that cannot be resolved, or holds no
     policies, is an error (BaselineFilterFailed) and nothing is exported.
 .PARAMETER Tag
     Filter to only policies that have a specific Inforcer tag (e.g., "IAM - Core", "Tier 1").

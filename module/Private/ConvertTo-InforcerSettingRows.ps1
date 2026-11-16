@@ -311,10 +311,19 @@ function ConvertTo-FlatSettingRows {
                                 }
                             }
                         }
+                        # A name/value pair (Entra directory setting templates such as Password
+                        # Protection) carries its setting in 'value'. It used to be dropped, so
+                        # "Lockout Threshold" rendered empty while the policy set it to 10.
+                        $itemValue = ''
+                        $vp = $item.PSObject.Properties['value']
+                        if ($itemName -and $vp -and ($vp.Value -is [string] -or $vp.Value -is [ValueType])) {
+                            $itemValue = $vp.Value.ToString()
+                            $itemName = ConvertTo-FriendlySettingName -Name $itemName
+                        }
                         if ($itemName) {
                             [void]$rows.Add([PSCustomObject]@{
                                 Name        = $itemName
-                                Value       = ''
+                                Value       = $itemValue
                                 Indent      = $Depth + 1
                                 IsConfigured = $true
                             })

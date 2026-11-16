@@ -69,6 +69,10 @@
     friendly name (e.g., "Inforcer Blueprint Baseline - Tier 1 - Foundations"). Uses the
     Inforcer alignment details API to retrieve the list of policies in the baseline, then
     filters the documentation to only those policies. The baseline name is shown in the header.
+    Each baseline policy is matched by id; by name only when it has no id the tenant knows, and
+    same-named policies are then told apart by product, category and description. One that still
+    matches several is left out with a warning. A baseline that cannot be resolved, or holds no
+    policies, is an error (BaselineFilterFailed) and nothing is exported.
 .PARAMETER Tag
     Filter to only policies that have a specific Inforcer tag (e.g., "IAM - Core", "Tier 1").
     Matches against the tag name property on each policy (case-insensitive, contains match).
@@ -176,9 +180,13 @@ $baselineFilterName = $null
 if (-not [string]::IsNullOrWhiteSpace($Baseline)) {
     Write-Host "Filtering to baseline: $Baseline" -ForegroundColor Cyan
     $baselineFilterName = Select-InforcerBaselinePolicies -DocData $docData -BaselineId $Baseline
+    # This used to warn and export every policy in the tenant, under the baseline's name: a
+    # document that claims to be one baseline and is the whole estate. Compare treats the same
+    # failure as an error (SourceBaselineFilterFailed); so does Export now.
     if ($null -eq $baselineFilterName) {
-        Write-Warning 'Exporting all policies.'
-        $baselineFilterName = $Baseline
+        Write-Error -Message "Could not filter to baseline '$Baseline' (see the warning above), so nothing was exported." `
+            -ErrorId 'BaselineFilterFailed' -Category InvalidResult
+        return
     }
 }
 

@@ -53,10 +53,10 @@ function Select-InforcerBaselinePolicies {
         return $null
     }
 
-    # Collect policy names AND GUIDs from baseline alignment status arrays
-    $baselinePolicyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    $baselinePolicyGuids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    # One entry per baseline policy (its name and every id that identifies it), for counting and the not-found list.
+    # One entry per baseline policy: its name, every id that identifies it, and the fields that
+    # tell same-named policies apart when there is no id to go on. Description is last and decisive
+    # for the Microsoft MAM data protection levels, which share everything else.
+    $tieBreakers = @('product', 'primaryGroup', 'secondaryGroup', 'description')
     $baselineEntries = [System.Collections.Generic.List[object]]::new()
     $alignment = $alignResponse.alignment
     if ($null -ne $alignment) {
@@ -68,7 +68,6 @@ function Select-InforcerBaselinePolicies {
                     if ($p -is [PSObject]) {
                         $entryName = if ($p.PSObject.Properties['policyName'] -and $p.policyName) { [string]$p.policyName }
                         $entryIds = [System.Collections.Generic.List[string]]::new()
-                        if ($entryName) { [void]$baselinePolicyNames.Add($entryName) }
                         if ($p.PSObject.Properties['policyGuid']) {
                             if ($p.policyGuid) { $entryIds.Add([string]$p.policyGuid) }
                         } else {
@@ -78,8 +77,14 @@ function Select-InforcerBaselinePolicies {
                                 if ($m.id) { $entryIds.Add([string]$m.id) }
                             }
                         }
-                        foreach ($g in $entryIds) { [void]$baselinePolicyGuids.Add($g) }
-                        if ($entryName -or $entryIds.Count) { $baselineEntries.Add([PSCustomObject]@{ Name = $entryName; Ids = $entryIds }) }
+                        if ($entryName -or $entryIds.Count) {
+                            $entry = [ordered]@{ Name = $entryName; Ids = $entryIds }
+                            foreach ($f in $tieBreakers) {
+                                $fp = $p.PSObject.Properties[$f]
+                                $entry[$f] = if ($fp -and -not [string]::IsNullOrWhiteSpace([string]$fp.Value)) { ([string]$fp.Value).Trim() }
+                            }
+                            $baselineEntries.Add([PSCustomObject]$entry)
+                        }
                     }
                 }
             }
@@ -93,55 +98,65 @@ function Select-InforcerBaselinePolicies {
         return $null
     }
 
-    # Filter DocData.Policies in place using multi-field matching chain
-    $originalCount = @($DocData.Policies).Count
-    $DocData.Policies = @($DocData.Policies | Where-Object {
-        foreach ($n in @($_.displayName, $_.friendlyName, $_.name, $_.inforcerPolicyTypeName)) {
-            if (-not [string]::IsNullOrWhiteSpace($n) -and $baselinePolicyNames.Contains($n)) { return $true }
+    # Index the tenant's policies by id and by every name field once, then resolve each baseline
+    # entry on its own: by id when it has one that matches, by name only when it does not.
+    # Pooling every entry's names into one set and matching any policy carrying one of them (the
+    # old way) pulled same-named policies into the baseline: the three Microsoft MAM data
+    # protection levels share one name, so a baseline holding Level 1 exported all three.
+    $policies = @($DocData.Policies)
+    $byId = @{}; $byName = @{}
+    for ($i = 0; $i -lt $policies.Count; $i++) {
+        $pol = $policies[$i]
+        $ids = @($pol.policyGuid, $pol.id)
+        $names = @($pol.displayName, $pol.friendlyName, $pol.name, $pol.inforcerPolicyTypeName)
+        if ($pol.policyData) { $ids += $pol.policyData.id; $names += @($pol.policyData.displayName, $pol.policyData.name) }
+        foreach ($k in @($ids | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { ([string]$_).ToLowerInvariant() } | Select-Object -Unique)) {
+            if (-not $byId.ContainsKey($k)) { $byId[$k] = [System.Collections.Generic.List[int]]::new() }
+            $byId[$k].Add($i)
         }
-        if ($_.policyData) {
-            foreach ($n in @($_.policyData.displayName, $_.policyData.name)) {
-                if (-not [string]::IsNullOrWhiteSpace($n) -and $baselinePolicyNames.Contains($n)) { return $true }
+        foreach ($k in @($names | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { ([string]$_).ToLowerInvariant() } | Select-Object -Unique)) {
+            if (-not $byName.ContainsKey($k)) { $byName[$k] = [System.Collections.Generic.List[int]]::new() }
+            $byName[$k].Add($i)
+        }
+    }
+
+    $keep = [System.Collections.Generic.SortedSet[int]]::new()
+    $notFound = [System.Collections.Generic.List[string]]::new()
+    $ambiguous = [System.Collections.Generic.List[string]]::new()
+    foreach ($e in $baselineEntries) {
+        $hits = @($e.Ids | ForEach-Object { $byId[([string]$_).ToLowerInvariant()] } | Where-Object { $null -ne $_ } | ForEach-Object { $_ } | Select-Object -Unique)
+        if ($hits.Count -eq 0 -and $e.Name) {
+            $hits = @($byName[$e.Name.ToLowerInvariant()] | Where-Object { $null -ne $_ })
+            # Narrow on each tie-breaker the entry carries, but never down to nothing: a field the
+            # tenant policy lacks or spells differently must not lose a policy that is otherwise right.
+            foreach ($f in $tieBreakers) {
+                if ($hits.Count -le 1) { break }
+                if (-not $e.$f) { continue }
+                $narrowed = @($hits | Where-Object { $v = $policies[$_].$f; $v -and ([string]$v).Trim() -eq $e.$f })
+                if ($narrowed.Count -gt 0) { $hits = $narrowed }
+            }
+            if ($hits.Count -gt 1) {
+                $ambiguous.Add("$($e.Name) ($($hits.Count) tenant policies)")
+                continue
             }
         }
-        foreach ($g in @($_.policyGuid, $_.id)) {
-            if (-not [string]::IsNullOrWhiteSpace($g) -and $baselinePolicyGuids.Contains($g)) { return $true }
-        }
-        if ($_.policyData -and $_.policyData.id) {
-            if ($baselinePolicyGuids.Contains($_.policyData.id)) { return $true }
-        }
-        return $false
-    })
+        if ($hits.Count -eq 0) { $notFound.Add($(if ($e.Name) { $e.Name } else { $e.Ids[0] })); continue }
+        foreach ($h in $hits) { [void]$keep.Add([int]$h) }
+    }
+
+    $originalCount = $policies.Count
+    $DocData.Policies = @(foreach ($i in $keep) { $policies[$i] })
     $matchedCount = @($DocData.Policies).Count
     Write-Host "  Filtered to $matchedCount of $originalCount policies in baseline '$baselineFilterName'" -ForegroundColor Gray
 
-    # Warn about baseline policies the tenant has under neither their name nor any of their ids
-    if ($matchedCount -lt $baselineTotal) {
-        $matchedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $matchedIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($pol in @($DocData.Policies)) {
-            foreach ($n in @($pol.displayName, $pol.friendlyName, $pol.name, $pol.inforcerPolicyTypeName)) {
-                if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$matchedNames.Add($n) }
-            }
-            foreach ($g in @($pol.policyGuid, $pol.id)) {
-                if (-not [string]::IsNullOrWhiteSpace($g)) { [void]$matchedIds.Add($g) }
-            }
-            if ($pol.policyData) {
-                foreach ($n in @($pol.policyData.displayName, $pol.policyData.name)) {
-                    if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$matchedNames.Add($n) }
-                }
-                if ($pol.policyData.id) { [void]$matchedIds.Add($pol.policyData.id) }
-            }
-        }
-        $unmatched = @(foreach ($e in $baselineEntries) {
-            if ($e.Name -and $matchedNames.Contains($e.Name)) { continue }
-            if (@($e.Ids | Where-Object { $matchedIds.Contains($_) }).Count) { continue }
-            if ($e.Name) { $e.Name } else { $e.Ids[0] }
-        })
-        if ($unmatched.Count -gt 0) {
-            Write-Warning "$($unmatched.Count) baseline policies not found in tenant:"
-            foreach ($u in $unmatched | Sort-Object -Unique) { Write-Warning "  - $u" }
-        }
+    if ($notFound.Count -gt 0) {
+        Write-Warning "$($notFound.Count) baseline policies not found in tenant:"
+        foreach ($u in $notFound | Sort-Object -Unique) { Write-Warning "  - $u" }
+    }
+    # Left out rather than all included: guessing would document settings the baseline does not hold.
+    if ($ambiguous.Count -gt 0) {
+        Write-Warning "$($ambiguous.Count) baseline policies match several tenant policies by name, with nothing to tell them apart, and were left out:"
+        foreach ($u in $ambiguous | Sort-Object -Unique) { Write-Warning "  - $u" }
     }
 
     return $baselineFilterName

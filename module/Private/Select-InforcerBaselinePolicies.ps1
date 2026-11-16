@@ -36,7 +36,15 @@ function Select-InforcerBaselinePolicies {
         # DocData already holds this session's baselines; the cached list covers callers without them.
         $allBaselines = @($DocData.Baselines | Where-Object { $null -ne $_ })
         if ($allBaselines.Count -eq 0) { $allBaselines = @(Get-InforcerBaselineList) }
-        $baselineGuid = Resolve-InforcerBaselineId -BaselineId $BaselineId -BaselineData $allBaselines
+        # An unknown name throws. Every caller handles $null (Export errors, Compare errors or
+        # falls back for an inherited baseline), so turn it into that instead of an exception
+        # that skips their handling.
+        try {
+            $baselineGuid = Resolve-InforcerBaselineId -BaselineId $BaselineId -BaselineData $allBaselines
+        } catch {
+            Write-Warning $_.Exception.Message
+            return $null
+        }
         foreach ($bl in $allBaselines) {
             if ($bl.id -eq $baselineGuid) { $baselineFilterName = $bl.name; break }
         }
@@ -69,7 +77,12 @@ function Select-InforcerBaselinePolicies {
                         $entryName = if ($p.PSObject.Properties['policyName'] -and $p.policyName) { [string]$p.policyName }
                         $entryIds = [System.Collections.Generic.List[string]]::new()
                         if ($p.PSObject.Properties['policyGuid']) {
+                            # beta: policyGuid is the baseline's own policy; in any other tenant only
+                            # subjectPolicyGuid points at that tenant's copy.
                             if ($p.policyGuid) { $entryIds.Add([string]$p.policyGuid) }
+                            foreach ($m in @($p.matchingSubjectPolicies)) {
+                                if ($m -and $m.PSObject.Properties['subjectPolicyGuid'] -and $m.subjectPolicyGuid) { $entryIds.Add([string]$m.subjectPolicyGuid) }
+                            }
                         } else {
                             # v1: ids are Microsoft 365 ids; matchingSubjectPolicies[].id is the subject tenant's own policy.
                             if ($p.id) { $entryIds.Add([string]$p.id) }

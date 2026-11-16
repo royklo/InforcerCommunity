@@ -179,12 +179,13 @@ if ($null -eq $docData) { return }
 $baselineFilterName = $null
 if (-not [string]::IsNullOrWhiteSpace($Baseline)) {
     Write-Host "Filtering to baseline: $Baseline" -ForegroundColor Cyan
-    $baselineFilterName = Select-InforcerBaselinePolicies -DocData $docData -BaselineId $Baseline
+    $baselineFilterName = Select-InforcerBaselinePolicies -DocData $docData -BaselineId $Baseline -WarningVariable selectWarnings
     # This used to warn and export every policy in the tenant, under the baseline's name: a
     # document that claims to be one baseline and is the whole estate. Compare treats the same
     # failure as an error (SourceBaselineFilterFailed); so does Export now.
     if ($null -eq $baselineFilterName) {
-        Write-Error -Message "Could not filter to baseline '$Baseline' (see the warning above), so nothing was exported." `
+        $why = if ($selectWarnings) { " $(@($selectWarnings)[-1])" } else { '' }
+        Write-Error -Message "Could not filter to baseline '$Baseline', so nothing was exported.$why" `
             -ErrorId 'BaselineFilterFailed' -Category InvalidResult
         return
     }

@@ -68,6 +68,22 @@ Describe 'Select-InforcerBaselinePolicies: one baseline entry resolves to its ow
         @($doc.Policies).id | Should -Be @('x')
     }
 
+    It 'matches the tenant copy by matchingSubjectPolicies[].subjectPolicyGuid when the baseline id is the baseline''s own (beta)' {
+        # Beta policyGuid is the baseline-side id, so in another tenant only the subject GUID points at
+        # the copy; without it the two same-named copies are ambiguous and the policy is lost.
+        Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
+            New-DocExportAlignment @([pscustomobject]@{ policyName = 'CA - Require MFA'; policyGuid = '00000000-0000-0000-0000-0000000000f0'
+                matchingSubjectPolicies = @([pscustomobject]@{ subjectPolicyGuid = '00000000-0000-0000-0000-0000000000f2' }) })
+        }
+        $doc = @{ TenantId = 1; Policies = @(
+            [pscustomobject]@{ id = 'c1'; policyGuid = '00000000-0000-0000-0000-0000000000f1'; displayName = 'CA - Require MFA' }
+            [pscustomobject]@{ id = 'c2'; policyGuid = '00000000-0000-0000-0000-0000000000f2'; displayName = 'CA - Require MFA' }
+        ) }
+        $warnings = Invoke-DocExportSelect $doc
+        @($doc.Policies).id | Should -Be @('c2')
+        $warnings | Should -BeNullOrEmpty
+    }
+
     It 'leaves out and names a policy it cannot tell apart, instead of including every candidate' {
         Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
             New-DocExportAlignment @([pscustomobject]@{ policyName = 'IOS - Security - U - MAM'; policyGuid = $null; product = 'Intune'; primaryGroup = 'iOS/iPadOS'; secondaryGroup = 'App Protection Policies' })
@@ -108,6 +124,21 @@ Describe 'Export-InforcerTenantDocumentation -Baseline that does not resolve' {
         $out | Should -BeNullOrEmpty
         "$($e[0].FullyQualifiedErrorId)" | Should -Match '^BaselineFilterFailed'
         Should -Invoke -ModuleName InforcerCommunity ConvertTo-InforcerDocModel -Times 0 -Exactly
+    }
+
+    It 'turns an unknown baseline name into BaselineFilterFailed, naming why, instead of a terminating exception' {
+        Mock -ModuleName InforcerCommunity Test-InforcerSession { $true }
+        Mock -ModuleName InforcerCommunity Resolve-InforcerTenantId { 1 }
+        Mock -ModuleName InforcerCommunity Write-Host { }
+        Mock -ModuleName InforcerCommunity Get-InforcerDocData { @{ TenantId = 1; TenantName = 'T'; Baselines = @([pscustomobject]@{ id = '00000000-0000-0000-0000-0000000000b1'; name = 'Known' }); Policies = @([pscustomobject]@{ id = 'p1' }) } }
+        Mock -ModuleName InforcerCommunity ConvertTo-InforcerDocModel { throw 'must not build a document' }
+
+        $out = Export-InforcerTenantDocumentation -TenantId 1 -Baseline 'Unknown' -ErrorVariable e -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+        $out | Should -BeNullOrEmpty
+        # -ErrorVariable also records the exception Select caught internally, so find ours by id.
+        $failed = @($e | Where-Object { "$($_.FullyQualifiedErrorId)" -match '^BaselineFilterFailed' })
+        $failed.Count | Should -Be 1
+        "$($failed[0])" | Should -Match 'No baseline found with name: Unknown'
     }
 }
 

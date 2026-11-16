@@ -65,14 +65,17 @@
     Microsoft.Graph.Authentication module. If Graph cannot be reached, or refuses a call for a
     missing permission, the affected names stay as raw IDs with a warning.
 .PARAMETER Baseline
-    Filter to only policies that belong to a specific baseline. Accepts a baseline GUID or
-    friendly name (e.g., "Inforcer Blueprint Baseline - Tier 1 - Foundations"). Uses the
+    Filter to only policies that belong to a baseline. Accepts one or more baseline GUIDs or
+    friendly names (e.g., "Inforcer Blueprint Baseline - Tier 1 - Foundations"). Uses the
     Inforcer alignment details API to retrieve the list of policies in the baseline, then
     filters the documentation to only those policies. The baseline name is shown in the header.
+    Several baselines read the tenant once and produce one DocModel, or with -OutputPath one
+    {TenantName}-{Baseline}-Documentation file, per baseline.
     Each baseline policy is matched by id; by name only when it has no id the tenant knows. A
     same-named policy whose product, category or description differs is a different policy and is
-    not used in its place; one that still matches several is left out. Both are named in a warning. A baseline that cannot be resolved, or holds no
-    policies, is an error (BaselineFilterFailed) and nothing is exported.
+    not used in its place; one that still matches several is left out. Both are named in a
+    warning. A baseline that cannot be resolved, or holds no policies, is an error
+    (BaselineFilterFailed); nothing is exported for it and the other baselines still are.
 .PARAMETER Tag
     Filter to only policies that have a specific Inforcer tag (e.g., "IAM - Core", "Tier 1").
     Matches against the tag name property on each policy (case-insensitive, contains match).
@@ -130,7 +133,7 @@ param(
     [switch]$FetchGraphData,
 
     [Parameter(Mandatory = $false)]
-    [string]$Baseline,
+    [string[]]$Baseline,
 
     [Parameter(Mandatory = $false)]
     [string]$Tag
@@ -144,6 +147,11 @@ begin {
 process {
 
 $tenantCount++
+if (@($Baseline).Count -gt 1 -and $Format.Count -eq 1 -and $OutputPath -and [System.IO.Path]::HasExtension($OutputPath)) {
+    throw [System.Management.Automation.ErrorRecord]::new(
+        [System.ArgumentException]::new("-OutputPath '$OutputPath' is a file, so each baseline would overwrite the last. Pass a directory; each baseline gets its own {TenantName}-{Baseline}-Documentation file."),
+        'OutputPathIsFileForSeveralBaselines', [System.Management.Automation.ErrorCategory]::InvalidArgument, $OutputPath)
+}
 if ($tenantCount -gt 1 -and $Format.Count -eq 1 -and $OutputPath -and [System.IO.Path]::HasExtension($OutputPath)) {
     throw [System.Management.Automation.ErrorRecord]::new(
         [System.ArgumentException]::new("-OutputPath '$OutputPath' is a file, so a second tenant would overwrite the first. Pass a directory when piping several tenants; each gets its own {TenantName}-Documentation file."),
@@ -175,61 +183,7 @@ if (-not [string]::IsNullOrEmpty($resolvedCatalogPath)) {
 $docData = Get-InforcerDocData @docDataParams
 if ($null -eq $docData) { return }
 
-# Filter to baseline policies if -Baseline specified
-$baselineFilterName = $null
-if (-not [string]::IsNullOrWhiteSpace($Baseline)) {
-    Write-Host "Filtering to baseline: $Baseline" -ForegroundColor Cyan
-    $baselineFilterName = Select-InforcerBaselinePolicies -DocData $docData -BaselineId $Baseline -WarningVariable selectWarnings
-    # This used to warn and export every policy in the tenant, under the baseline's name: a
-    # document that claims to be one baseline and is the whole estate. Compare treats the same
-    # failure as an error (SourceBaselineFilterFailed); so does Export now.
-    if ($null -eq $baselineFilterName) {
-        $why = if ($selectWarnings) { " $(@($selectWarnings)[-1])" } else { '' }
-        Write-Error -Message "Could not filter to baseline '$Baseline', so nothing was exported.$why" `
-            -ErrorId 'BaselineFilterFailed' -Category InvalidResult
-        return
-    }
-}
-
-# Filter by tag if -Tag specified
-if (-not [string]::IsNullOrWhiteSpace($Tag)) {
-    Write-Host "Filtering to tag: $Tag" -ForegroundColor Cyan
-    $originalCount = @($docData.Policies).Count
-
-    # Collected before the filter so a no-match can name the tags that do exist.
-    $availableTags = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($pol in @($docData.Policies)) {
-        foreach ($t in @($pol.tags)) {
-            if ($null -eq $t) { continue }
-            $n = if ($t -is [PSObject] -and $t.PSObject.Properties['name']) { $t.name } else { $t.ToString() }
-            if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$availableTags.Add($n) }
-        }
-    }
-
-    $docData.Policies = @($docData.Policies | Where-Object {
-        $policyTags = $_.tags
-        if ($null -eq $policyTags -or @($policyTags).Count -eq 0) { return $false }
-        foreach ($t in @($policyTags)) {
-            $tagName = if ($t -is [PSObject] -and $t.PSObject.Properties['name']) { $t.name } else { $t.ToString() }
-            if ($tagName -and $tagName.IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
-        }
-        return $false
-    })
-    Write-Host "  Filtered to $(@($docData.Policies).Count) of $originalCount policies with tag '$Tag'" -ForegroundColor Gray
-
-    # No match used to render anyway: a 0.1 KB document and exit 0, which reads as "nothing in
-    # this tenant is tagged that way" when the likelier cause is a tag name that does not exist.
-    # Naming the real tags is the difference between a dead end and a correctable mistake.
-    if (@($docData.Policies).Count -eq 0) {
-        $known = if ($availableTags.Count -gt 0) { $availableTags -join "', '" } else { $null }
-        $detail = if ($known) { "Tags present in this tenant: '$known'." } else { 'No policy in this tenant carries any tag.' }
-        Write-Error -Message "No policy matched tag '$Tag', so there is nothing to document. $detail" `
-            -ErrorId 'TagMatchedNothing' -Category ObjectNotFound
-        return
-    }
-}
-
-# Load Settings Catalog only if there are Settings Catalog policies (policyTypeId 10)
+# Load Settings Catalog only if the tenant has Settings Catalog policies (policyTypeId 10)
 $hasCatalogPolicies = @($docData.Policies | Where-Object { $_.policyTypeId -eq 10 }).Count -gt 0
 if ($hasCatalogPolicies) {
     $catalogParams = @{}
@@ -241,7 +195,8 @@ if ($hasCatalogPolicies) {
     Write-Host '  No Intune/Defender policies found, skipping Settings Catalog load' -ForegroundColor Gray
 }
 
-# Graph maps are built fresh for this tenant only; nothing carries over between piped tenants or calls.
+# Graph maps are built fresh for this tenant only, once for all its baselines; nothing carries over
+# between piped tenants or calls.
 $graphMaps = @{}
 if ($FetchGraphData) {
     $tenantLabel = if ($docData.Tenant -and $docData.Tenant.tenantFriendlyName) { " for $($docData.Tenant.tenantFriendlyName)" } else { '' }
@@ -249,86 +204,158 @@ if ($FetchGraphData) {
     $graphMaps = Resolve-InforcerGraphEnrichment -DocData $docData -ConditionalAccess
 }
 
-Write-Host 'Building documentation model...' -ForegroundColor Cyan
-$docModelParams = @{ DocData = $docData }
-foreach ($key in 'GroupNameMap', 'FilterMap', 'RoleNameMap', 'LocationNameMap', 'AppNameMap', 'ScopeTagMap') {
-    if ($graphMaps[$key]) { $docModelParams[$key] = $graphMaps[$key] }
-}
-$docModel = ConvertTo-InforcerDocModel @docModelParams
-if ($null -eq $docModel) { return }
+# One tenant read serves every -Baseline: the policy list is the slow call (20-40 s on a large
+# tenant), a baseline's membership is a fraction of a second. Each pass starts from the full list.
+$allPolicies = @($docData.Policies)
+# A blank entry is skipped, never read as "no filter": that would put the whole tenant in a
+# document beside the baselines asked for. Only an omitted or all-blank -Baseline means everything.
+$named = @($Baseline | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$baselineTargets = @(if ($named.Count) { $named } else { $null })
+# 'Tier 1' and 'Tier-1' make the same file name; the second would overwrite the first.
+$usedFileStems = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($baselineTarget in $baselineTargets) {
+    $docData.Policies = $allPolicies
 
-# Add filter metadata so renderers can show what's active
-if ($baselineFilterName) { $docModel['FilterBaseline'] = $baselineFilterName }
-if (-not [string]::IsNullOrWhiteSpace($Tag)) { $docModel['FilterTag'] = $Tag }
-
-$policyCount = 0
-foreach ($product in $docModel.Products.Values) {
-    foreach ($policies in $product.Categories.Values) { $policyCount += @($policies).Count }
-}
-Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
-
-# ── No -OutputPath: hand back the DocModel and touch nothing ───────────────────
-# Writing is opt-in even here, where the verb promises a file. The old default put documents in
-# whatever directory you happened to be standing in and opened a browser for them, which is
-# wrong in a pipeline and wrong for a caller that only wants the model to read.
-if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    Write-Host 'Done. Pass -OutputPath to write files.' -ForegroundColor Cyan
-    return $docModel
-}
-
-# Render each requested format and write to disk
-$extensionMap = @{ Html = 'html'; Markdown = 'md'; Excel = 'xlsx' }
-$formatIndex = 0
-$htmlFile = $null
-$safeName = $docModel.TenantName -replace '[^\w\-]', '-'
-
-foreach ($fmt in $Format) {
-    $formatIndex++
-    $ext = $extensionMap[$fmt]
-
-    if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) {
-        $filePath = $OutputPath
-    } else {
-        $filePath = Join-Path $OutputPath "$safeName-Documentation.$ext"
-    }
-
-    $parentDir = Split-Path -Parent $filePath
-    if (-not [string]::IsNullOrEmpty($parentDir) -and -not (Test-Path -LiteralPath $parentDir)) {
-        [void](New-Item -ItemType Directory -Force -Path $parentDir)
-    }
-
-    Write-Host "Rendering $fmt ($formatIndex/$($Format.Count))..." -ForegroundColor Cyan
-
-    if ($fmt -eq 'Excel') {
-        # Excel writes directly to disk via ImportExcel
-        Export-InforcerDocExcel -DocModel $docModel -FilePath $filePath
-        if (-not (Test-Path -LiteralPath $filePath)) { continue }
-    } else {
-        $content = switch ($fmt) {
-            'Html'     { ConvertTo-InforcerHtml     -DocModel $docModel }
-            'Markdown' { ConvertTo-InforcerMarkdown -DocModel $docModel }
+    # Filter to baseline policies if -Baseline specified
+    $baselineFilterName = $null
+    if ($baselineTarget) {
+        Write-Host "Filtering to baseline: $baselineTarget" -ForegroundColor Cyan
+        $baselineFilterName = Select-InforcerBaselinePolicies -DocData $docData -BaselineId $baselineTarget -WarningVariable selectWarnings
+        # This used to warn and export every policy in the tenant, under the baseline's name: a
+        # document that claims to be one baseline and is the whole estate. Compare treats the same
+        # failure as an error (SourceBaselineFilterFailed); so does Export now.
+        if ($null -eq $baselineFilterName) {
+            $why = if ($selectWarnings) { " $(@($selectWarnings)[-1])" } else { '' }
+            Write-Error -Message "Could not filter to baseline '$baselineTarget', so nothing was exported.$why" `
+                -ErrorId 'BaselineFilterFailed' -Category InvalidResult
+            continue
         }
-        Set-Content -Path $filePath -Value $content -Encoding UTF8
-        if ($fmt -eq 'Html') { $htmlFile = $filePath }
     }
 
-    $fileInfo = Get-Item -LiteralPath $filePath
-    $sizeKb = [math]::Round($fileInfo.Length / 1KB, 1)
-    Write-Host "  Exported: $filePath ($sizeKb KB)" -ForegroundColor Green
-    $fileInfo
-}
+    # Filter by tag if -Tag specified
+    if (-not [string]::IsNullOrWhiteSpace($Tag)) {
+        Write-Host "Filtering to tag: $Tag" -ForegroundColor Cyan
+        $originalCount = @($docData.Policies).Count
 
-# -Show defaults to on interactively and off in CI (Test-InforcerInteractiveHost), so a human
-# who asked for a report sees it while a build agent is never handed a browser to open.
-if ($Show -and $htmlFile -and (Test-Path -LiteralPath $htmlFile)) {
-    $fullHtmlPath = (Resolve-Path -LiteralPath $htmlFile).Path
-    if ($openedHtml.Add($fullHtmlPath)) {
-        if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullHtmlPath }
-        elseif ($IsWindows) { Start-Process $fullHtmlPath }
-        elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullHtmlPath }
+        # Collected before the filter so a no-match can name the tags that do exist.
+        $availableTags = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($pol in @($docData.Policies)) {
+            foreach ($t in @($pol.tags)) {
+                if ($null -eq $t) { continue }
+                $n = if ($t -is [PSObject] -and $t.PSObject.Properties['name']) { $t.name } else { $t.ToString() }
+                if (-not [string]::IsNullOrWhiteSpace($n)) { [void]$availableTags.Add($n) }
+            }
+        }
+
+        $docData.Policies = @($docData.Policies | Where-Object {
+            $policyTags = $_.tags
+            if ($null -eq $policyTags -or @($policyTags).Count -eq 0) { return $false }
+            foreach ($t in @($policyTags)) {
+                $tagName = if ($t -is [PSObject] -and $t.PSObject.Properties['name']) { $t.name } else { $t.ToString() }
+                if ($tagName -and $tagName.IndexOf($Tag, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+            }
+            return $false
+        })
+        Write-Host "  Filtered to $(@($docData.Policies).Count) of $originalCount policies with tag '$Tag'" -ForegroundColor Gray
+
+        # No match used to render anyway: a 0.1 KB document and exit 0, which reads as "nothing in
+        # this tenant is tagged that way" when the likelier cause is a tag name that does not exist.
+        # Naming the real tags is the difference between a dead end and a correctable mistake.
+        if (@($docData.Policies).Count -eq 0) {
+            $known = if ($availableTags.Count -gt 0) { $availableTags -join "', '" } else { $null }
+            $detail = if ($known) { "Tags present in this tenant: '$known'." } else { 'No policy in this tenant carries any tag.' }
+            Write-Error -Message "No policy matched tag '$Tag', so there is nothing to document. $detail" `
+                -ErrorId 'TagMatchedNothing' -Category ObjectNotFound
+            continue
+        }
     }
-}
 
-Write-Host "Done. $($Format.Count) file(s) exported for tenant '$($docModel.TenantName)'." -ForegroundColor Cyan
+    Write-Host 'Building documentation model...' -ForegroundColor Cyan
+    $docModelParams = @{ DocData = $docData }
+    foreach ($key in 'GroupNameMap', 'FilterMap', 'RoleNameMap', 'LocationNameMap', 'AppNameMap', 'ScopeTagMap') {
+        if ($graphMaps[$key]) { $docModelParams[$key] = $graphMaps[$key] }
+    }
+    $docModel = ConvertTo-InforcerDocModel @docModelParams
+    if ($null -eq $docModel) { continue }
+
+    # Add filter metadata so renderers can show what's active
+    if ($baselineFilterName) { $docModel['FilterBaseline'] = $baselineFilterName }
+    if (-not [string]::IsNullOrWhiteSpace($Tag)) { $docModel['FilterTag'] = $Tag }
+
+    $policyCount = 0
+    foreach ($product in $docModel.Products.Values) {
+        foreach ($policies in $product.Categories.Values) { $policyCount += @($policies).Count }
+    }
+    Write-Host "  Found $policyCount policies across $($docModel.Products.Count) products" -ForegroundColor Gray
+
+    # ── No -OutputPath: hand back the DocModel and touch nothing ───────────────────
+    # Writing is opt-in even here, where the verb promises a file. The old default put documents in
+    # whatever directory you happened to be standing in and opened a browser for them, which is
+    # wrong in a pipeline and wrong for a caller that only wants the model to read.
+    if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+        Write-Host 'Done. Pass -OutputPath to write files.' -ForegroundColor Cyan
+        $docModel
+        continue
+    }
+
+    # Render each requested format and write to disk
+    $extensionMap = @{ Html = 'html'; Markdown = 'md'; Excel = 'xlsx' }
+    $formatIndex = 0
+    $htmlFile = $null
+    $safeName = $docModel.TenantName -replace '[^\w\-]', '-'
+    # Several baselines in one call each get their own file.
+    if ($baselineTargets.Count -gt 1) { $safeName += '-' + ($baselineFilterName -replace '[^\w\-]', '-') }
+    $stem = $safeName; $n = 2
+    while (-not $usedFileStems.Add($safeName)) { $safeName = "$stem-$n"; $n++ }
+
+    foreach ($fmt in $Format) {
+        $formatIndex++
+        $ext = $extensionMap[$fmt]
+
+        if ($Format.Count -eq 1 -and [System.IO.Path]::HasExtension($OutputPath)) {
+            $filePath = $OutputPath
+        } else {
+            $filePath = Join-Path $OutputPath "$safeName-Documentation.$ext"
+        }
+
+        $parentDir = Split-Path -Parent $filePath
+        if (-not [string]::IsNullOrEmpty($parentDir) -and -not (Test-Path -LiteralPath $parentDir)) {
+            [void](New-Item -ItemType Directory -Force -Path $parentDir)
+        }
+
+        Write-Host "Rendering $fmt ($formatIndex/$($Format.Count))..." -ForegroundColor Cyan
+
+        if ($fmt -eq 'Excel') {
+            # Excel writes directly to disk via ImportExcel
+            Export-InforcerDocExcel -DocModel $docModel -FilePath $filePath
+            if (-not (Test-Path -LiteralPath $filePath)) { continue }
+        } else {
+            $content = switch ($fmt) {
+                'Html'     { ConvertTo-InforcerHtml     -DocModel $docModel }
+                'Markdown' { ConvertTo-InforcerMarkdown -DocModel $docModel }
+            }
+            Set-Content -Path $filePath -Value $content -Encoding UTF8
+            if ($fmt -eq 'Html') { $htmlFile = $filePath }
+        }
+
+        $fileInfo = Get-Item -LiteralPath $filePath
+        $sizeKb = [math]::Round($fileInfo.Length / 1KB, 1)
+        Write-Host "  Exported: $filePath ($sizeKb KB)" -ForegroundColor Green
+        $fileInfo
+    }
+
+    # -Show defaults to on interactively and off in CI (Test-InforcerInteractiveHost), so a human
+    # who asked for a report sees it while a build agent is never handed a browser to open.
+    if ($Show -and $htmlFile -and (Test-Path -LiteralPath $htmlFile)) {
+        $fullHtmlPath = (Resolve-Path -LiteralPath $htmlFile).Path
+        if ($openedHtml.Add($fullHtmlPath)) {
+            if ($IsMacOS) { Start-Process 'open' -ArgumentList $fullHtmlPath }
+            elseif ($IsWindows) { Start-Process $fullHtmlPath }
+            elseif ($IsLinux) { Start-Process 'xdg-open' -ArgumentList $fullHtmlPath }
+        }
+    }
+
+    Write-Host "Done. $($Format.Count) file(s) exported for tenant '$($docModel.TenantName)'." -ForegroundColor Cyan
+}
 }
 }

@@ -374,7 +374,7 @@ function ConvertTo-InforcerDocModel {
             }
         } elseif ($null -ne $policy.policyData) {
             # Non-catalog -- use ConvertTo-FlatSettingRows (per D-07)
-            foreach ($row in (ConvertTo-FlatSettingRows -PolicyData $policy.policyData)) {
+            foreach ($row in (ConvertTo-FlatSettingRows -PolicyData $policy.policyData -ComparisonMode:$ComparisonMode)) {
                 [void]$settings.Add($row)
             }
         }
@@ -419,7 +419,16 @@ function ConvertTo-InforcerDocModel {
                 $val  = $row.Value
                 # Resolve camelCase values (e.g. allowedCombinations like "password,softwareOath")
                 $val = $row.Value
-                if (-not [string]::IsNullOrWhiteSpace($val) -and $val -is [string]) {
+                if ($name -eq 'Allowed Combinations' -and $val -is [string] -and $val.Contains(';')) {
+                    # Only this setting: other values hold semicolons too (scripts, extension lists).
+                    # A list whose items hold commas is joined with '; ' (ConvertTo-FlatSettingRows), so
+                    # each item is one combination: "password,softwareOath" -> "Password + Software OATH Token".
+                    $row.Value = @(foreach ($item in $val -split ';') {
+                        $it = (($item -split ',') | ForEach-Object { $_.Trim() }) -join ','
+                        if ($caFriendlyValues.ContainsKey($it)) { $caFriendlyValues[$it] }
+                        else { @(foreach ($p in $it -split ',') { if ($caFriendlyValues.ContainsKey($p)) { $caFriendlyValues[$p] } else { $p } }) -join ' + ' }
+                    }) -join '; '
+                } elseif (-not [string]::IsNullOrWhiteSpace($val) -and $val -is [string]) {
                     # Try full value first (handles combo keys like "password,microsoftAuthenticatorPush")
                     $trimmedVal = $val.Trim()
                     $normalizedVal = (($trimmedVal -split ',') | ForEach-Object { $_.Trim() }) -join ','

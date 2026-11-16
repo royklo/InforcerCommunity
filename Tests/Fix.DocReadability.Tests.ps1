@@ -103,6 +103,13 @@ Describe 'ConvertTo-FlatSettingRows shows what the policy configures' {
         @($rows | Where-Object { $_.Name -eq 'Description' -and $_.Value -eq 'Shadow AI' }).Count | Should -Be 1
     }
 
+    It 'keeps a dotted @odata.type setting inside a list item' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ items = @([pscustomobject]@{ name = 'P1'
+            '@odata.type' = '#microsoft.graph.x'; 'registration.allowed.@odata.type' = '#microsoft.graph.allDeviceRegistrationMembership' }) }))
+        @($rows | Where-Object { $_.Value -eq 'All Device Registration Membership' }).Count | Should -Be 1
+        @($rows | Where-Object { "$($_.Value)" -match 'microsoft\.graph' }).Count | Should -Be 0
+    }
+
     It 'gives every list item its own dotted headers' {
         $rows = @(Get-ReadabilityRows ([pscustomobject]@{ profiles = @(
             [pscustomobject]@{ name = 'P1'; options = [pscustomobject]@{ 'mode.level' = 1 } }

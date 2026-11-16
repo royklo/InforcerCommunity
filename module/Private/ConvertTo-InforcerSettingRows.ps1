@@ -338,7 +338,8 @@ function ConvertTo-FlatSettingRows {
                     # Include Targets showed "1 items" and nothing else.
                     $fields = [ordered]@{}
                     foreach ($ip in $item.PSObject.Properties) {
-                        if ($ip.Name -match '@odata' -or $ip.Name -eq $labelField -or ($itemName -and $ip.Name -eq 'id')) { continue }
+                        # @odata keys are left to the renderer, which keeps a dotted @odata.type setting.
+                        if ($ip.Name -eq $labelField -or ($itemName -and $ip.Name -eq 'id')) { continue }
                         $fields[$ip.Name] = $ip.Value
                     }
                     $fieldRows = [System.Collections.Generic.List[object]]::new()

@@ -46,15 +46,28 @@ function Connect-InforcerGraph {
         Import-Module -Name 'Microsoft.Graph.Authentication' -Force -ErrorAction Stop
     }
 
-    # Check if already connected to the correct tenant with sufficient scopes
+    # Check if already connected to the correct tenant with sufficient scopes.
+    # App-only and access-token sessions (a CI job signing in with a workload identity) have no
+    # Account, and their Scopes hold the app's roles. They used to be skipped here, so the cmdlet
+    # opened a browser sign-in on a host that has no browser and hung.
     $existingCtx = Get-MgContext -ErrorAction SilentlyContinue
-    if ($existingCtx -and $existingCtx.Account) {
+    if ($existingCtx) {
         $tenantMatch = [string]::IsNullOrWhiteSpace($TenantId) -or $existingCtx.TenantId -eq $TenantId
         $scopesMissing = @($RequiredScopes | Where-Object { $existingCtx.Scopes -notcontains $_ })
+        $who = if ($existingCtx.Account) { $existingCtx.Account } else { "app $($existingCtx.ClientId)" }
         if ($tenantMatch -and $scopesMissing.Count -eq 0) {
-            Write-Host "  Reusing existing Graph session: $($existingCtx.Account) (tenant: $($existingCtx.TenantId))" -ForegroundColor Green
+            Write-Host "  Reusing existing Graph session: $who (tenant: $($existingCtx.TenantId))" -ForegroundColor Green
             $script:InforcerGraphConnected = $true
             return $existingCtx
+        }
+        # Never trade a non-interactive session for a browser prompt: whoever opened it chose not
+        # to have one. Say what is wrong and fall back to raw ObjectIDs like every other failure.
+        if ($existingCtx.AuthType -ne 'Delegated') {
+            $why = if (-not $tenantMatch) { "is for tenant $($existingCtx.TenantId), not $TenantId" }
+                   else { "lacks $($scopesMissing -join ', ')" }
+            Write-Warning "The existing Graph session ($who, $($existingCtx.AuthType)) $why. Not replacing it with an interactive sign-in."
+            $script:InforcerGraphConnected = $false
+            return $null
         }
     }
 

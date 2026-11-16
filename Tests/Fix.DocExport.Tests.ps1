@@ -54,9 +54,11 @@ Describe 'Select-InforcerBaselinePolicies: one baseline entry resolves to its ow
         $warnings | Should -BeNullOrEmpty
     }
 
-    It 'does not add a same-named policy from another category when the entry matched by id' {
+    It 'does not add a same-named policy when the entry matched by id' {
+        # The entry carries no category, so only the id can tell the two apart: a name lookup here
+        # would find both and leave the policy out as ambiguous.
         Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
-            New-DocExportAlignment @([pscustomobject]@{ policyName = 'macOS - Hardening'; policyGuid = '00000000-0000-0000-0000-0000000000d1'; product = 'Intune'; primaryGroup = 'macOS'; secondaryGroup = 'Configuration' })
+            New-DocExportAlignment @([pscustomobject]@{ policyName = 'macOS - Hardening'; policyGuid = '00000000-0000-0000-0000-0000000000d1' })
         }
         $doc = @{ TenantId = 1; Policies = @(
             [pscustomobject]@{ id = 'x'; policyGuid = '00000000-0000-0000-0000-0000000000d1'; displayName = 'macOS - Hardening'; product = 'Intune'; primaryGroup = 'macOS'; secondaryGroup = 'Configuration' }
@@ -77,11 +79,16 @@ Describe 'Select-InforcerBaselinePolicies: one baseline entry resolves to its ow
         $warnings | Should -Match ([regex]::Escape('IOS - Security - U - MAM (3 tenant policies)'))
     }
 
-    It 'falls back to the name when no id matches, and never narrows a policy away on a field the tenant lacks' {
+    It 'falls back to the name when no id matches, and never narrows candidates away on a field the tenant lacks' {
+        # The tenant copies carry no product or category; narrowing on those must keep both, so the
+        # description can still pick the right one.
         Mock -ModuleName InforcerCommunity Invoke-InforcerApiRequest {
-            New-DocExportAlignment @([pscustomobject]@{ policyName = 'Password Protection'; policyGuid = '00000000-0000-0000-0000-0000000000e1'; product = 'Entra'; primaryGroup = 'Settings'; secondaryGroup = 'All'; description = 'baseline text' })
+            New-DocExportAlignment @([pscustomobject]@{ policyName = 'Password Protection'; policyGuid = '00000000-0000-0000-0000-0000000000e1'; product = 'Entra'; primaryGroup = 'Settings'; secondaryGroup = 'All'; description = 'Strict' })
         }
-        $doc = @{ TenantId = 1; Policies = @([pscustomobject]@{ id = 'p'; displayName = 'Password Protection' }) }
+        $doc = @{ TenantId = 1; Policies = @(
+            [pscustomobject]@{ id = 'p'; displayName = 'Password Protection'; description = 'Strict' }
+            [pscustomobject]@{ id = 'q'; displayName = 'Password Protection'; description = 'Relaxed' }
+        ) }
         $warnings = Invoke-DocExportSelect $doc
         @($doc.Policies).id | Should -Be @('p')
         $warnings | Should -BeNullOrEmpty
@@ -142,6 +149,17 @@ Describe 'Connect-InforcerGraph reuses a non-interactive session' {
         }
         $ctx = & $script:M { Connect-InforcerGraph -TenantId '00000000-0000-0000-0000-000000000001' }
         $ctx.ClientId | Should -Be 'app-1'
+        Should -Invoke -ModuleName InforcerCommunity Connect-MgGraph -Times 0 -Exactly
+    }
+
+    It 'does not reuse an app-only session signed in to another tenant' {
+        Mock -ModuleName InforcerCommunity Get-MgContext {
+            [pscustomobject]@{ Account = $null; AuthType = 'AppOnly'; ClientId = 'app-1'; TenantId = '00000000-0000-0000-0000-000000000009'
+                Scopes = @('Directory.Read.All', 'Policy.Read.All', 'DeviceManagementConfiguration.Read.All') }
+        }
+        $ctx = & $script:M { Connect-InforcerGraph -TenantId '00000000-0000-0000-0000-000000000001' -WarningVariable w -WarningAction SilentlyContinue; $script:graphWarn = $w }
+        $ctx | Should -BeNullOrEmpty -Because 'names from another tenant would be wrong, and silently so'
+        (& $script:M { $script:graphWarn }) -join ' ' | Should -Match '000000000009'
         Should -Invoke -ModuleName InforcerCommunity Connect-MgGraph -Times 0 -Exactly
     }
 

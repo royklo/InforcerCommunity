@@ -207,7 +207,10 @@ if ($FetchGraphData) {
 # One tenant read serves every -Baseline: the policy list is the slow call (20-40 s on a large
 # tenant), a baseline's membership is a fraction of a second. Each pass starts from the full list.
 $allPolicies = @($docData.Policies)
-$baselineTargets = @(if ($Baseline) { $Baseline } else { $null })
+# A blank entry is skipped, never read as "no filter": that would put the whole tenant in a
+# document beside the baselines asked for. Only an omitted or all-blank -Baseline means everything.
+$named = @($Baseline | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$baselineTargets = @(if ($named.Count) { $named } else { $null })
 # 'Tier 1' and 'Tier-1' make the same file name; the second would overwrite the first.
 $usedFileStems = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($baselineTarget in $baselineTargets) {

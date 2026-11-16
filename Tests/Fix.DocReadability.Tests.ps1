@@ -211,6 +211,12 @@ Describe 'Export-InforcerTenantDocumentation with several baselines' {
         @(Get-ChildItem $dir).Count | Should -Be 2
     }
 
+    It 'never turns a blank entry in the list into a whole-tenant document' {
+        $models = @(Export-InforcerTenantDocumentation -TenantId 1 -Baseline 'Baseline A', '', '  ')
+        $models.Count | Should -Be 1
+        $models[0].FilterBaseline | Should -Be 'Baseline A'
+    }
+
     It 'refuses a file -OutputPath for several baselines' {
         { Export-InforcerTenantDocumentation -TenantId 1 -Baseline 'Baseline A', 'Baseline B' -Format Html -OutputPath (Join-Path $TestDrive 'one.html') -Show:$false } |
             Should -Throw -ErrorId 'OutputPathIsFileForSeveralBaselines*'

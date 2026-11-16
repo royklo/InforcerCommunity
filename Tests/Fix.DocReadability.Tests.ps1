@@ -158,6 +158,23 @@ Describe 'ConvertTo-FlatSettingRows shows what the policy configures' {
         @($rows | Where-Object { $_.Name -match 'Enabled' }).Count | Should -Be 2
     }
 
+    It 'never puts a field under All items when one item lacks it' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ profiles = @(
+            [pscustomobject]@{ name = 'P1'; action = 'Block' }
+            [pscustomobject]@{ name = 'P2'; action = 'Block' }
+            [pscustomobject]@{ name = 'P3' }) }))
+        @($rows | Where-Object { $_.Name -eq 'All items' }).Count | Should -Be 0 -Because 'P3 does not block'
+        @($rows | Where-Object { $_.Name -eq 'Action' }).Count | Should -Be 2
+    }
+
+    It 'never puts a field under All items beside a name/value item' {
+        $rows = @(Get-ReadabilityRows ([pscustomobject]@{ values = @(
+            [pscustomobject]@{ name = 'A'; value = 'x' }
+            [pscustomobject]@{ name = 'B'; mode = 'on' }
+            [pscustomobject]@{ name = 'C'; mode = 'on' }) }))
+        @($rows | Where-Object { $_.Name -eq 'All items' }).Count | Should -Be 0
+    }
+
     It 'keeps a single item''s fields with the item' {
         $rows = @(Get-ReadabilityRows ([pscustomobject]@{ includeTargets = @([pscustomobject]@{ displayName = 'G'; targetType = 'group' }) }))
         @($rows | Where-Object { $_.Name -eq 'All items' }).Count | Should -Be 0
@@ -279,5 +296,38 @@ Describe 'The HTML keeps section headers visible' {
         }
         $html | Should -Match 'Include Targets'
         ([regex]::Matches($html, '<span class="muted empty-val">')).Count | Should -Be 0
+    }
+}
+
+Describe 'A comparison sees every list item''s own fields' {
+    It 'reports only the item that changed when the others share its old value' {
+        $result = & $script:M {
+            $model = {
+                param($p2Action)
+                ConvertTo-InforcerDocModel -ComparisonMode -DocData @{
+                    Tenant = [pscustomobject]@{ tenantFriendlyName = 'T'; msTenantId = '00000000-0000-0000-0000-000000000001' }
+                    TenantId = 1; CollectedAt = [datetime]::UtcNow; Baselines = @()
+                    Policies = @([pscustomobject]@{ id = 'p1'; displayName = 'Indicators'; policyTypeId = 3; product = 'Defender'
+                        primaryGroup = 'Endpoint'; secondaryGroup = 'Indicators'
+                        policyData = [pscustomobject]@{ indicators = @(
+                            [pscustomobject]@{ displayName = 'a.example'; action = 'Block' }
+                            [pscustomobject]@{ displayName = 'b.example'; action = $p2Action }) } })
+                }
+            }
+            Compare-InforcerDocModels -SourceModel (& $model 'Block') -DestinationModel (& $model 'Allow')
+        }
+        $result.Counters.Conflicting | Should -Be 1 -Because 'only b.example changed'
+        $result.Counters.SourceOnly | Should -Be 0
+        $result.Counters.DestOnly | Should -Be 0
+    }
+
+    It 'keeps item fields per item in lists nested inside objects and items too' {
+        $pd = [pscustomobject]@{ outer = [pscustomobject]@{ profiles = @([pscustomobject]@{ name = 'P1'; targets = @(
+            [pscustomobject]@{ displayName = 'a'; mode = 'on' }
+            [pscustomobject]@{ displayName = 'b'; mode = 'on' }) }) } }
+        $rows = @(& $script:M { param($pd) ConvertTo-FlatSettingRows -PolicyData $pd -ComparisonMode } $pd)
+        @($rows | Where-Object { $_.Name -eq 'All items' }).Count | Should -Be 0
+        @($rows | Where-Object { $_.Name -eq 'Mode' }).Count | Should -Be 2
+        @(Get-ReadabilityRows $pd | Where-Object { $_.Name -eq 'All items' }).Count | Should -Be 1 -Because 'a document still shows it once'
     }
 }

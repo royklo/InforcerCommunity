@@ -224,6 +224,9 @@ function ConvertTo-FlatSettingRows {
         The policyData object from a non-catalog policy. May be $null (returns empty list).
     .PARAMETER Depth
         Current nesting depth (recursion accumulator). Default 0.
+    .PARAMETER ComparisonMode
+        Keep every list item's fields under that item. A document shows a field shared by every
+        item once; a comparison needs each item's own path, or one changed item moves the rest.
     .EXAMPLE
         ConvertTo-FlatSettingRows -PolicyData $policy.policyData
     #>
@@ -233,7 +236,10 @@ function ConvertTo-FlatSettingRows {
         $PolicyData,
 
         [Parameter()]
-        [int]$Depth = 0
+        [int]$Depth = 0,
+
+        [Parameter()]
+        [switch]$ComparisonMode
     )
 
     $rows = [System.Collections.Generic.List[object]]::new()
@@ -274,7 +280,7 @@ function ConvertTo-FlatSettingRows {
                 Indent      = $Depth
                 IsConfigured = $false
             })
-            foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $val -Depth ($Depth + 1))) {
+            foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $val -Depth ($Depth + 1) -ComparisonMode:$ComparisonMode)) {
                 [void]$rows.Add($r)
             }
         } elseif ($val -is [array] -and $val.Count -gt 0 -and $val[0] -is [PSObject] -and $Depth -lt $maxDepth) {
@@ -291,7 +297,7 @@ function ConvertTo-FlatSettingRows {
                 })
                 foreach ($item in $val) {
                     if ($item -is [PSObject]) {
-                        foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $item -Depth ($Depth + 1))) {
+                        foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $item -Depth ($Depth + 1) -ComparisonMode:$ComparisonMode)) {
                             [void]$rows.Add($r)
                         }
                     }
@@ -351,10 +357,10 @@ function ConvertTo-FlatSettingRows {
                             $fieldRows.Add([PSCustomObject]@{ Name = $own.Name; Value = "$($fields[$own.Key])"; Indent = $Depth + 2; IsConfigured = $true })
                         }
                     }
-                    foreach ($r in (ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]$fields) -Depth ($Depth + 2))) {
+                    foreach ($r in (ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]$fields) -Depth ($Depth + 2) -ComparisonMode:$ComparisonMode)) {
                         if ($r.IsConfigured -and [string]::IsNullOrEmpty("$($r.Value)")) { continue }
                         # A field that repeats the label (an indicator's title and value) says nothing new.
-                        if ($itemName -and $r.Indent -eq $Depth + 2 -and $r.IsConfigured -and "$($r.Value)" -eq $itemName) { continue }
+                        if (-not $ComparisonMode -and $itemName -and $r.Indent -eq $Depth + 2 -and $r.IsConfigured -and "$($r.Value)" -eq $itemName) { continue }
                         $fieldRows.Add($r)
                     }
                     $keys = [System.Collections.Generic.HashSet[string]]::new()
@@ -364,15 +370,15 @@ function ConvertTo-FlatSettingRows {
                 # A top-level field with the same value on every item is shown once, under "All items":
                 # Defender's 492 Shadow AI indicators differ only in domain, type and timestamps, and
                 # repeating the other twelve fields per domain made one policy 8,000 rows.
-                $itemEntries = @($entries | Where-Object { $_.Fields })
+                # Every entry takes part, so "All items" never claims a field one of them lacks.
                 $shared = [System.Collections.Generic.HashSet[string]]::new()
-                if ($itemEntries.Count -gt 1) {
-                    $shared.UnionWith($itemEntries[0].Keys)
-                    foreach ($e in $itemEntries) { $shared.IntersectWith($e.Keys) }
+                if (-not $ComparisonMode -and $entries.Count -gt 1 -and -not @($entries | Where-Object { $_.Row })) {
+                    $shared.UnionWith($entries[0].Keys)
+                    foreach ($e in $entries) { $shared.IntersectWith($e.Keys) }
                 }
                 if ($shared.Count) {
                     [void]$rows.Add([PSCustomObject]@{ Name = 'All items'; Value = ''; Indent = $Depth + 1; IsConfigured = $false })
-                    foreach ($r in $itemEntries[0].Fields) { if ($r.IsConfigured -and $r.Indent -eq $Depth + 2 -and $shared.Contains("$($r.Name)`0$($r.Value)")) { [void]$rows.Add($r) } }
+                    foreach ($r in $entries[0].Fields) { if ($r.IsConfigured -and $r.Indent -eq $Depth + 2 -and $shared.Contains("$($r.Name)`0$($r.Value)")) { [void]$rows.Add($r) } }
                 }
                 foreach ($e in $entries) {
                     if ($e.Row) { [void]$rows.Add($e.Row); continue }

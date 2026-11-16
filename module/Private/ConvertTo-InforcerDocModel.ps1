@@ -374,7 +374,7 @@ function ConvertTo-InforcerDocModel {
             }
         } elseif ($null -ne $policy.policyData) {
             # Non-catalog -- use ConvertTo-FlatSettingRows (per D-07)
-            foreach ($row in (ConvertTo-FlatSettingRows -PolicyData $policy.policyData)) {
+            foreach ($row in (ConvertTo-FlatSettingRows -PolicyData $policy.policyData -ComparisonMode:$ComparisonMode)) {
                 [void]$settings.Add($row)
             }
         }

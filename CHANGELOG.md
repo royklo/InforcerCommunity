@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
+## [1.0.1] - 2026-11-16
+
+### Bug Fixes
+
+- **`Export-InforcerTenantDocumentation -Baseline` documents exactly the baseline's policies.** Membership was matched by pooling every baseline policy's name, so any tenant policy sharing a name came along: on the inforcer Blueprint Library, MAM Core exported all three Microsoft MAM data protection levels (7 policies for 3), MacOS Core 53 for 45 and Windows Core 60 for 57. Each baseline policy is now resolved on its own: by id first (on the beta API also `matchingSubjectPolicies[].subjectPolicyGuid`, the tenant's own copy), by name only when no id matches. A same-named policy whose product, category or description differs is a different policy and is not used in its place, and one that still matches several is left out. Both cases are named in a warning. `Compare-InforcerEnvironments -SourceBaselineId` uses the same matching.
+- **A `-Baseline` that does not resolve is an error, not the whole tenant.** A baseline with no policies in its alignment data, or one whose alignment could not be read, used to print "Exporting all policies." and document every policy in the tenant under the baseline's name. An unknown baseline name threw a raw exception. All three are now a `BaselineFilterFailed` error naming the reason, and nothing is exported.
+  - **Migration.** A script that relied on the fallback to export the whole tenant should drop `-Baseline`. With `-ErrorAction Stop` the call now stops instead of writing a file.
+- **Name/value settings keep their value.** Entra directory setting templates such as Password Protection store `{ name, value }` pairs; the value was dropped, so `Lockout Threshold` rendered empty while the policy set it to 10.
+- **`-FetchGraphData` reuses an app-only Graph session.** A session opened with `Connect-MgGraph -AccessToken`, a certificate or a managed identity has no `Account`, so it was ignored and the cmdlet opened a browser sign-in, which hangs a CI job. It is now reused when its tenant and roles match. A non-interactive session for another tenant or without a needed role falls back to raw IDs with a warning and never opens a browser. Interactive sessions behave as before.
+
 ## [1.0.0] - 2026-11-09
 
 inforcer now has a versioned API (v1) with API clients that log in with a client ID and secret. API keys keep working, but they only reach inforcer's legacy beta API, which inforcer says is due to be retired (no date announced). 1.0.0 supports both. The login decides which API is used, and every cmdlet works with either.

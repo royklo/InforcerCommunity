@@ -15,11 +15,19 @@
     for one tenant.
 
     ClientTenantId does not exist with client credentials; use MsTenantId or the tenant name.
+
+    -IncludeSubscriptions adds subscriptions: the Microsoft products each tenant subscribes to, with
+    skuId, sku, name, capabilityStatus, appliesTo and units (enabled, consumed, available, suspended,
+    warning, lockedOut). One extra request per tenant (GET /tenants/{msTenantId}/subscriptions);
+    needs a login with an API client.
 .PARAMETER Format
     Output format. Raw = raw API response (default).
 .PARAMETER TenantId
     Optional. Return this tenant only. Accepts the Microsoft Tenant ID (GUID), the tenant name or
     DNS name, or (API-key login only) the numeric Client Tenant ID.
+.PARAMETER IncludeSubscriptions
+    Adds the tenant's subscriptions (licences with their skuId and free seats). Pass a skuId to
+    Set-InforcerUser -AddLicense. API client login only.
 .PARAMETER OutputType
     PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 .EXAMPLE
@@ -33,6 +41,9 @@
 .EXAMPLE
     Get-InforcerTenant | Where-Object IsBaseline
     Lists baseline tenants.
+.EXAMPLE
+    (Get-InforcerTenant -TenantId 'Contoso' -IncludeSubscriptions).subscriptions | Where-Object { $_.units.available -gt 0 }
+    Lists the licences of Contoso that still have a free seat.
 .EXAMPLE
     Get-InforcerTenant -Format Raw -OutputType JsonObject
 .OUTPUTS
@@ -55,6 +66,9 @@ param(
     [object]$TenantId,
 
     [Parameter(Mandatory = $false)]
+    [switch]$IncludeSubscriptions,
+
+    [Parameter(Mandatory = $false)]
     [ValidateSet('PowerShellObject', 'JsonObject')]
     [string]$OutputType = 'PowerShellObject'
 )
@@ -71,6 +85,10 @@ process {
 
     Write-Verbose 'Retrieving tenant information...'
     $isV1 = $script:InforcerSession.ApiVersion -eq 'v1'
+    if ($IncludeSubscriptions -and -not $isV1) {
+        Write-Error -Message 'Subscriptions need a login with an API client (Connect-Inforcer -ClientId -ClientSecret). The API-key (beta) API does not return them.' -ErrorId 'RequiresApiClient' -Category InvalidOperation
+        return
+    }
 
     # Get-InforcerTenantList objects are a shared cache: filter and copy them, never modify them.
     if ($null -ne $TenantId) {
@@ -115,6 +133,16 @@ process {
         $listRefreshed = $true
         # A failed request returns nothing; an empty v1 list is still `[]` in JSON.
         if ($listErr -or ($tenantData.Count -eq 0 -and -not ($isV1 -and $OutputType -eq 'JsonObject'))) { return }
+    }
+
+    if ($IncludeSubscriptions) {
+        $tenantData = @(foreach ($t in $tenantData) {
+            $copy = [ordered]@{}
+            foreach ($p in $t.PSObject.Properties) { $copy[$p.Name] = $p.Value }
+            $subs = Invoke-InforcerApiRequest -Endpoint "/tenants/$($t.msTenantId)/subscriptions" -Method GET -PreserveStructure
+            if ($null -ne $subs) { $copy['subscriptions'] = @($subs.subscriptions) }
+            [PSCustomObject]$copy
+        })
     }
 
     if ($OutputType -eq 'JsonObject') {

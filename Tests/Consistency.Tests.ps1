@@ -44,7 +44,7 @@ Describe 'Consistency contract' {
             'Connect-Inforcer'              = @('ApiKey', 'ClientId', 'ClientSecret', 'Region', 'BaseUrl', 'FetchGraphData', 'PassThru')
             'Disconnect-Inforcer'           = @()
             'Test-InforcerConnection'       = @()
-            'Get-InforcerTenant'            = @('Format', 'TenantId', 'OutputType')
+            'Get-InforcerTenant'            = @('Format', 'TenantId', 'IncludeSubscriptions', 'OutputType')
             'Get-InforcerBaseline'          = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerTenantPolicies'    = @('Format', 'TenantId', 'OutputType')
             'Get-InforcerAlignmentDetails'    = @('Format', 'TenantId', 'BaselineId', 'Tag', 'OutputType')

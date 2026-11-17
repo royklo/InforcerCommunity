@@ -46,6 +46,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [TenantTag](#tenanttag)
   - [AlignmentSummary](#alignmentsummary)
   - [TenantLicense](#tenantlicense)
+  - [Subscription](#subscription)
   - [Policy](#policy)
   - [PolicyTag](#policytag)
   - [EventType](#eventtype)
@@ -181,7 +182,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 
 | Area / feature | Grant | v1 routes | Status |
 |----------------|-------|-----------|--------|
-| Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}` | unconfirmed |
+| Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}`, `/v1/tenants/{msTenantId}/subscriptions` | unconfirmed |
 | Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
 | Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
 | Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`, `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`, `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`, `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | unconfirmed (which write grant) |
@@ -203,7 +204,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Connect-Inforcer` | `POST /oauth/token` (no permission needed; any valid client connects) and a best-effort `GET /v1/reports/types` to prime the report catalog | None |
 | `Disconnect-Inforcer` | none | None |
 | `Test-InforcerConnection` | `GET /v1/baselines` | Baselines; without it the test returns `False` |
-| `Get-InforcerTenant` | `GET /v1/tenants`. `-TenantId <GUID>` makes only `GET /v1/tenants/{msTenantId}`; a name adds the cached list | Tenants |
+| `Get-InforcerTenant` | `GET /v1/tenants`. `-TenantId <GUID>` makes only `GET /v1/tenants/{msTenantId}`; a name adds the cached list. `-IncludeSubscriptions` adds `GET /v1/tenants/{msTenantId}/subscriptions` per tenant | Tenants |
 | `Get-InforcerBaseline` | `GET /v1/baselines` (+ `GET /v1/tenants` for a tenant name) | Baselines, Tenants† |
 | `Get-InforcerTenantPolicies` | `GET /v1/tenants/{msTenantId}/policies` | Policies, Tenants† |
 | `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails` | Baselines + Align + Tenants |
@@ -307,6 +308,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 |---------|--------|-----------------|--------|
 | `/v1/tenants` | GET | `/beta/tenants` | `Get-InforcerTenant` |
 | `/v1/tenants/{msTenantId}` | GET | `/beta/tenants/{tenantId}` | `Get-InforcerTenant -TenantId` (the sanctioned use of this endpoint); also reached through it by Export and Compare |
+| `/v1/tenants/{msTenantId}/subscriptions` | GET (`{ "subscriptions": [...] }`, all in one response) | none (v1 only) | `Get-InforcerTenant -IncludeSubscriptions` |
 | `/v1/tenants/{msTenantId}/policies` | GET | `/beta/tenants/{tenantId}/policies` | `Get-InforcerTenantPolicies`, Export, Compare |
 | `/v1/tenants/{msTenantId}/alignmentDetails` | GET (`baselineId` required) | `/beta/tenants/{tenantId}/alignmentDetails` (`customBaselineId`) | `Get-InforcerAlignmentDetails`; Export/Compare baseline scoping |
 | `/v1/tenants/{msTenantId}/secureScores` | GET | `/beta/tenants/{tenantId}/secureScores` | `Get-InforcerSecureScore` |
@@ -338,7 +340,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 30 paths and 33 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 31 paths and 34 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
 
 ### Managing users (v1 only)
 
@@ -426,7 +428,7 @@ Body: [UserLicenseAssignment](#userlicenseassignment), at least one licence.
 
 **Response**: `204` without a body. Errors: `400` (a licence with no free seat, not subscribed to, conflicting with the user's other licences, or given through a group; a refused request that both adds and removes is a `400` on `body`), `404` (tenant or user).
 
-The `skuId` of a licence comes from a user's `assignedLicenses` ([UserLicense](#userlicense)); the tenant record lists its licences by part number only (`sku`), without `skuId` or free seats.
+The `skuId` of a licence comes from the tenant's subscriptions (`GET /v1/tenants/{msTenantId}/subscriptions`, [Subscription](#subscription), which also shows free seats) or from a user's `assignedLicenses` ([UserLicense](#userlicense)). The tenant record lists its licences by part number only (`sku`).
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`
 
@@ -575,6 +577,19 @@ Retrieves a specific tenant by ID.
 **Response**: [Tenant](#tenant)
 
 > **Implementation Note**: On beta the module uses `GET /beta/tenants` with client-side filtering for consistency and deduplication. On v1 the list holds the same fields; `-TenantId` calls `GET /v1/tenants/{msTenantId}`, which adds `authenticationMode`.
+
+---
+
+#### GET /v1/tenants/{msTenantId}/subscriptions
+
+Lists the Microsoft products the tenant subscribes to, one entry per SKU with its seats totalled across every subscription to that product. v1 only.
+
+**Cmdlet**: `Get-InforcerTenant -IncludeSubscriptions` (adds them as `subscriptions`)
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Tenants *(unconfirmed)*
+
+**Response**: `{ "subscriptions": [ Subscription ] }` ([Subscription](#subscription)), all in one response. Errors: `404` (tenant), `409` (the request conflicts with the tenant's current state; the spec gives no detail), `502`.
 
 ---
 
@@ -996,6 +1011,21 @@ Represents a license associated with a tenant.
 | Property | Type | Description |
 |----------|------|-------------|
 | sku | string | SKU identifier of the license (e.g., `PREMIUM`, `INTUNE`). |
+
+---
+
+### Subscription
+
+One element of `subscriptions` from `GET /v1/tenants/{msTenantId}/subscriptions` (v1 only). Every property is always present.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| skuId | string (uuid) | The SKU's id, as `-AddLicense` and `assignLicenses` take it. |
+| sku | string, nullable | The part number, such as `SPB`. |
+| name | string, nullable | The display name; `null` when there is no known one. |
+| capabilityStatus | string | `enabled`, `warning` (grace period after it lapsed), `suspended`, `deleted`, `lockedOut` or `unknown`. camelCase, unlike `capabilityStatus` on a user's licence, which is Microsoft's value as is. |
+| appliesTo | string | `user`, `company` (the whole tenant) or `unknown`. |
+| units | object | Seats: `enabled` (paid for), `consumed` (assigned), `available` (enabled minus consumed, never below zero), `suspended`, `warning`, `lockedOut`. |
 
 ---
 

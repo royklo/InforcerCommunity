@@ -154,19 +154,21 @@ Retrieves tenant information. Optionally filter by `-TenantId` (Microsoft Tenant
 - **Both logins:** the list holds every field (licenses, `SecureScore`, `IsBaseline`, tags, alignment summaries, `LastBackupTimestamp`).
 - **Client-credentials login (v1):** `ClientTenantId` does not exist. `-TenantId` loads the tenant's own record, which adds `AuthenticationMode`; `-TenantId <GUID>` makes only that one call, a name is first looked up in the tenant list.
 - **`-TenantId` always returns the current record:** with an API key the tenant list is fetched once per call (piped tenants share that fetch); with client credentials the tenant is fetched by id.
+- **Subscriptions (client credentials only):** `-IncludeSubscriptions` adds `subscriptions`, the tenant's licences with their `skuId` (for `Set-InforcerUser -AddLicense`), name, status and seats (`units.enabled`, `units.consumed`, `units.available`, ...). One extra request per tenant; with an API key it stops with `RequiresApiClient`. A tenant whose subscriptions cannot be read is still returned, without `subscriptions`, next to the error.
 - **JSON:** with client credentials `-OutputType JsonObject` is always a JSON array, also for one tenant. With an API key a single tenant is a bare JSON object, as in 0.8.0.
 
 **Endpoints called (beta)**: `GET /beta/tenants`
 **Required API scope(s) (API key, beta)**: `Tenants.Read`
-**Endpoints on v1**: `GET /v1/tenants`; `-TenantId <GUID>` calls only `GET /v1/tenants/{msTenantId}` (a name also reads the tenant list)
+**Endpoints on v1**: `GET /v1/tenants`; `-TenantId <GUID>` calls only `GET /v1/tenants/{msTenantId}` (a name also reads the tenant list); `-IncludeSubscriptions` adds `GET /v1/tenants/{msTenantId}/subscriptions` per tenant
 **Required API client permission(s) (v1)**: Tenants *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`
+**Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`; with `-IncludeSubscriptions` also `subscriptions` ([Subscription](./API-REFERENCE.md#subscription))
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
 | **TenantId** | Object | No | Filter to this tenant: Microsoft tenant ID (GUID), tenant name or DNS name; numeric Client Tenant ID with an API key only. Aliases: `ClientTenantId`, `MsTenantId`. |
+| **IncludeSubscriptions** | Switch | No | Adds `subscriptions` (licences with `skuId` and free seats). API client login only. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -176,6 +178,8 @@ Get-InforcerTenant
 Get-InforcerTenant | Where-Object IsBaseline
 Get-InforcerTenant -TenantId 'Contoso'
 Get-InforcerTenant -TenantId 102            # API key only (numeric Client Tenant ID)
+# Licences of Contoso with a free seat (client credentials only)
+(Get-InforcerTenant -TenantId 'Contoso' -IncludeSubscriptions).subscriptions | Where-Object { $_.units.available -gt 0 } | Select-Object name, skuId, @{ n = 'free'; e = { $_.units.available } }
 Get-InforcerTenant -OutputType JsonObject
 ```
 
@@ -206,6 +210,15 @@ The default view shows 8 key properties. Use `| Select-Object *` to see all prop
 ### Example output — single tenant with -TenantId
 
 Same shape as one of the objects above (one tenant). With client credentials it has no `ClientTenantId` and adds `AuthenticationMode`.
+
+### Example output — free seats with -IncludeSubscriptions
+
+```
+name                     skuId                                free
+----                     -----                                ----
+Microsoft 365 E5         00000000-0000-0000-0000-0000000000c1    5
+Exchange Online (Plan 1) 00000000-0000-0000-0000-0000000000c2   12
+```
 
 ---
 
@@ -629,7 +642,7 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **UsageLocation**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType** | String | No | Profile fields; `''` clears the field. |
 | **BusinessPhones**, **OtherMails** | String[] | No | Replace the whole list; `@()` clears it. |
 | **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
-| **AddLicense** | Guid[] | No | `skuId`s of licences to give the user (from `assignedLicenses` of `Get-InforcerUser -UserId`). The user needs a usage location. |
+| **AddLicense** | Guid[] | No | `skuId`s of licences to give the user (from `Get-InforcerTenant -IncludeSubscriptions`, which also shows free seats, or `assignedLicenses` of `Get-InforcerUser -UserId`). The user needs a usage location. |
 | **RemoveLicense** | Guid[] | No | `skuId`s of licences to take from the user. A licence given through a group is refused. |
 | **HiddenFromAddressLists** | Bool | No | `$true` hides the mailbox from the address lists, `$false` shows it again. Waits until Exchange Online has applied it (at most 5 minutes). A Global Administrator's mailbox is refused. |
 | **Password** | SecureString | No | A new password. It must meet the tenant's password policy. |

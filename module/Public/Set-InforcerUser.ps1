@@ -122,7 +122,8 @@ function Set-InforcerUser {
         The Microsoft Entra object id of the user's manager. '' removes the manager.
 
     .PARAMETER AddLicense
-        The skuId of one or more licences to give the user, as in assignedLicenses of Get-InforcerUser -UserId.
+        The skuId of one or more licences to give the user, from Get-InforcerTenant -IncludeSubscriptions
+        (which also shows free seats) or assignedLicenses of Get-InforcerUser -UserId.
         A licence with no free seat, not subscribed to, or conflicting with the user's other licences is
         refused. The user needs a usage location (-UsageLocation, set in the same call if needed).
 

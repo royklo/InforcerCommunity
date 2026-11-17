@@ -178,7 +178,7 @@ Some output contains personal data (names, UPNs, email addresses, IP addresses, 
 | **Connect-Inforcer**           | Establishes a secure connection to the inforcer REST API with an API client (`-ClientId`/`-ClientSecret`, v1) or a legacy API key (`-ApiKey`, beta). Supports `-FetchGraphData` to also connect Microsoft Graph. |
 | **Disconnect-Inforcer**        | Disconnects and clears the session (including Graph if connected). |
 | **Test-InforcerConnection**    | Tests the API connection; returns `$true` or `$false`.      |
-| **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId). |
+| **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId); `-IncludeSubscriptions` adds the tenant's licences with free seats (API client login only). |
 | **Get-InforcerBaseline**       | Retrieves baseline groups and members.                      |
 | **Get-InforcerTenantPolicies** | Retrieves policies for a specified tenant.                  |
 | **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |

@@ -481,9 +481,9 @@ The default view shows 9 key properties. Use `| Select-Object *` to see all prop
 
 ## Get-InforcerUser
 
-Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`.
+Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`, and `-IncludeMailbox` (API client only) to get their Exchange Online mailbox as `mailbox`.
 
-> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses. See [Personal data](#personal-data).
+> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses; `-IncludeMailbox` adds automatic reply texts, forwarding targets and who can read the mailbox. See [Personal data](#personal-data).
 
 > **v1:** the list view returns `Groups` and `Roles` as counts (`groupCount`/`roleCount` mapped to those names), not arrays; `-UserId` returns the full record.
 
@@ -491,10 +491,10 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/users` (list) or `GET /beta/tenants/{tenantId}/users/{userId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Users.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
-**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`)
+**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`, `.../mailbox/autoReply`, `.../mailbox/permissions`, `.../mailbox/mailGroups`, `.../mailbox/inboxRules` (with `-IncludeMailbox`)
 **Required API client permission(s) (v1)**: User & Group Management + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`)
+**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`) | [Mailbox](./API-REFERENCE.md#mailbox) (`mailbox`)
 
 | Parameter | Type | Mandatory | ParameterSet | Description |
 |-----------|------|-----------|--------------|-------------|
@@ -504,6 +504,7 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 | **MaxResults** | Int | No | List | Max users to return. 0 = no limit. Default: 0. |
 | **UserId** | String | Yes | ById | The user ID (GUID) to retrieve full details for. |
 | **IncludeAuthenticationMethods** | Switch | No | ById | Adds `authenticationMethods`: the user's registered sign-in methods (password, phone, Microsoft Authenticator, passkey, ...), one extra request. Passwords and Temporary Access Pass codes are never returned. Needs an API client; an API key stops with `RequiresApiClient`. |
+| **IncludeMailbox** | Switch | No | ById | Adds `mailbox`: type, size, archive, litigation hold, email addresses, `hiddenFromAddressList` and forwarding, plus `autoReply`, `permissions`, `unreadPermissions`, `mailGroups` and `inboxRules` (five extra requests). `$null` when the user has no mailbox. Needs an API client. |
 | **OutputType** | String | No | Both | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -514,6 +515,9 @@ Get-InforcerUser -TenantId 'Contoso' -Search "Adele"
 Get-InforcerUser -TenantId 'Contoso' -MaxResults 50
 Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005"
 (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeAuthenticationMethods).authenticationMethods
+# Where the mail goes: forwarding and inbox rules that send mail outside the tenant
+$mailbox = (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMailbox).mailbox
+$mailbox.forwarding; $mailbox.inboxRules | Where-Object forwardsExternally
 Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
 Get-InforcerUser -TenantId 'Contoso' -OutputType JsonObject
 ```
@@ -558,6 +562,29 @@ type                   displayName phoneType deletable createdDateTime
 password                                         False 01/09/2026 09:00:00
 phone                              mobile         True
 microsoftAuthenticator Contoso Phone              True 02/09/2026 10:15:00
+```
+
+### Example output — mailbox
+
+```powershell
+(Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeMailbox).mailbox
+```
+
+```
+displayName           : Jo Bloggs
+type                  : user
+emailAddresses        : {@{address=jo.bloggs@contoso.com; primary=True}, @{address=jo@contoso.com; primary=False}}
+onPremisesSyncEnabled : False
+hiddenFromAddressList : False
+litigationHold        : False
+size                  : @{usedBytes=1073741824; itemCount=5120; quotaBytes=53687091200}
+archive               :
+forwarding            : @{enabled=False; recipientUserId=; recipientDisplayName=; smtpAddress=; keepCopy=False}
+autoReply             : @{status=disabled; externalAudience=none; internalReplyMessage=; externalReplyMessage=; scheduledStartDateTime=; scheduledEndDateTime=; simplified=False}
+permissions           : {@{permission=fullAccess; trusteeId=00000000-0000-0000-0000-000000000006; displayName=Sam Taylor; inherited=False}}
+unreadPermissions     : {}
+mailGroups            : {@{id=00000000-0000-0000-0000-0000000000c1; displayName=Sales; mail=sales@contoso.com; type=distributionList}}
+inboxRules            : {}
 ```
 
 ---
@@ -614,23 +641,23 @@ TenantId          : 00000000-0000-0000-0000-000000000001
 
 ## Set-InforcerUser
 
-Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, changes their licences, hides their mailbox from the address lists, removes registered sign-in methods or resets MFA, issues a Temporary Access Pass, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
+Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, changes their licences, changes their Exchange Online mailbox (shared or user, address lists, email addresses, automatic replies, forwarding, permissions, mail groups, inbox rules), removes registered sign-in methods or resets MFA, issues a Temporary Access Pass, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
 
 Only the parameters you pass are changed; every other field stays as it is. Pass an empty string (`''`) or `$null` to clear a field, such as `-JobTitle ''`, or `-ManagerId ''` to remove the manager. `DisplayName`, `MailNickname`, `UserPrincipalName` and `Mail` cannot be cleared. `-AccountEnabled $false` blocks sign-in, but existing sessions last until their tokens expire. `Get-InforcerUser` can show the old values for up to about five minutes, because the API caches users. Returns nothing, except the pass with `-TemporaryAccessPass`. Supports `-WhatIf` and `-Confirm`.
 
 When the manager could not be changed but the other changes were saved (HTTP 502), the error lists each step and whether it was applied, for example `Steps: profile: succeeded; manager: failed (Manager not found)`.
 
-`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. `-RemoveAuthenticationMethod` deletes sign-in methods by their `id` from `Get-InforcerUser -IncludeAuthenticationMethods`; only methods with `deletable` true can go, and Microsoft Entra can still refuse one, such as the default method while another phone remains. `-ResetMfa` deletes every deletable method in one request, in the order Microsoft Entra needs, so the user must register MFA again; the password is kept. `-AddLicense`/`-RemoveLicense` change licences by `skuId` in one request; if one is refused, nothing changes. `-TemporaryAccessPass` creates a Temporary Access Pass and returns it (shown only once; it replaces an existing pass). `-HiddenFromAddressLists $true` hides the mailbox from the address lists (`$false` shows it again); Exchange Online applies it in the background, so the cmdlet waits with a progress bar until it has succeeded or failed, at most 5 minutes, and then warns with the action id that it carries on. Outlook's address book can take up to 48 hours to show it. One call runs its steps in this order: profile update, licences, address lists, password reset, removing sign-in methods (one request each), MFA reset, Temporary Access Pass, sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
+`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. `-RemoveAuthenticationMethod` deletes sign-in methods by their `id` from `Get-InforcerUser -IncludeAuthenticationMethods`; only methods with `deletable` true can go, and Microsoft Entra can still refuse one, such as the default method while another phone remains. `-ResetMfa` deletes every deletable method in one request, in the order Microsoft Entra needs, so the user must register MFA again; the password is kept. `-AddLicense`/`-RemoveLicense` change licences by `skuId` in one request; if one is refused, nothing changes. `-TemporaryAccessPass` creates a Temporary Access Pass and returns it (shown only once; it replaces an existing pass). Mailbox changes (`-MailboxType`, `-HiddenFromAddressLists`, `-AddEmailAddress`, `-PrimaryEmailAddress`, `-RemoveEmailAddress`, `-AutoReply`, `-ForwardTo`/`-RemoveForwarding`, `-GrantMailboxPermission`/`-RemoveMailboxPermission`, `-AddMailGroup`/`-RemoveMailGroup`, `-RemoveInboxRule`/`-RemoveAllInboxRules`) are queued in Exchange Online, which applies one change to a mailbox at a time, about a minute each; the cmdlet waits for each with a progress bar until it has succeeded or failed (at most 5 minutes, then it warns with the action id that Exchange carries on) before the next step. Outlook's address book can take up to 48 hours to show a hidden mailbox. One call runs its steps in this order: profile update, licences (when `-AddLicense` is given), mailbox type, address lists, adding email addresses, primary address, removing email addresses, automatic replies, forwarding, mailbox permissions (grant, then remove), mail groups (add, then remove), inbox rules, licences (when only `-RemoveLicense` is given, so a mailbox is converted to shared before its licence goes), password reset, removing sign-in methods (one request each), MFA reset, Temporary Access Pass, sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
 
 **Pipeline:** users from `Get-InforcerUser` or `New-InforcerUser` can be piped in; `-UserId` binds from their `id` and `-TenantId` from their `TenantId` when they have one.
 
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
-**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses` (`-AddLicense`/`-RemoveLicense`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility` and `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` (`-HiddenFromAddressLists`), `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` (`-RemoveAuthenticationMethod`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` (`-ResetMfa`), `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` (`-TemporaryAccessPass`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses` (`-AddLicense`/`-RemoveLicense`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type` (`-MailboxType`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility` (`-HiddenFromAddressLists`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses` (`-AddEmailAddress`, `-PrimaryEmailAddress`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}` (`-RemoveEmailAddress`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply` (`-AutoReply`), `PATCH`/`DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding` (`-ForwardTo`/`-RemoveForwarding`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}` (`-GrantMailboxPermission`/`-RemoveMailboxPermission`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}` (`-AddMailGroup`/`-RemoveMailGroup`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules/{ruleId}` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules?all=true` (`-RemoveInboxRule`/`-RemoveAllInboxRules`), each followed by `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` until done, `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` (`-RemoveAuthenticationMethod`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` (`-ResetMfa`), `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` (`-TemporaryAccessPass`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
 **Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Request schemas**: [UserUpdate](./API-REFERENCE.md#userupdate) | [PasswordReset](./API-REFERENCE.md#passwordreset) | [UserLicenseAssignment](./API-REFERENCE.md#userlicenseassignment)
-**Polled schema** (with `-HiddenFromAddressLists`): [MailboxAction](./API-REFERENCE.md#mailboxaction)
+**Polled schema** (after every mailbox change): [MailboxAction](./API-REFERENCE.md#mailboxaction)
 **Output schema** (with `-TemporaryAccessPass`): [TemporaryAccessPass](./API-REFERENCE.md#temporaryaccesspass)
 
 | Parameter | Type | Mandatory | Description |
@@ -645,6 +672,19 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **AddLicense** | Guid[] | No | `skuId`s of licences to give the user (from `Get-InforcerTenant -IncludeSubscriptions`, which also shows free seats, or `assignedLicenses` of `Get-InforcerUser -UserId`). The user needs a usage location. |
 | **RemoveLicense** | Guid[] | No | `skuId`s of licences to take from the user. A licence given through a group is refused. |
 | **HiddenFromAddressLists** | Bool | No | `$true` hides the mailbox from the address lists, `$false` shows it again. Waits until Exchange Online has applied it (at most 5 minutes). A Global Administrator's mailbox is refused. |
+| **MailboxType** | String | No | `User` or `Shared`. Converts the mailbox, for a leaver before the licence is removed. |
+| **AutoReply** | Object | No | Hashtable, or the `autoReply` from `Get-InforcerUser -IncludeMailbox` (nulls and `simplified` are left out): `status` (`disabled`, `alwaysEnabled`, `scheduled`), `internalReplyMessage`, `externalAudience` (`none`, `contactsOnly`, `all`), `externalReplyMessage`, `scheduledStartDateTime`, `scheduledEndDateTime`. Exchange sets the replies as a whole; with `disabled` only `status` is sent. |
+| **ForwardTo** | String | No | A user's object id in the tenant, or an address on a verified domain. Replaces earlier forwarding. |
+| **KeepForwardedCopy** | Switch | No | Keeps a copy of forwarded mail. Only with `-ForwardTo` (else `ForwardToRequired`). |
+| **RemoveForwarding** | Switch | No | Stops forwarding. Not with `-ForwardTo` (`ConflictingForwarding`). |
+| **GrantMailboxPermission** | Object[] | No | Each `@{ permission = 'fullAccess'\|'sendAs'\|'sendOnBehalf'; trusteeId = '<user id>'; automapping = $true }` (`automapping` only for `fullAccess`). Missing keys stop with `InvalidMailboxPermission`. |
+| **RemoveMailboxPermission** | Object[] | No | Each with `permission` and `trusteeId`, such as entries of `mailbox.permissions`. Inherited ones cannot be removed. |
+| **AddMailGroup**, **RemoveMailGroup** | Guid[] | No | Object ids of distribution lists or mail-enabled security groups. Microsoft 365 groups and on-premises groups are refused. |
+| **AddEmailAddress** | String[] | No | Addresses to add, on domains verified in the tenant. |
+| **PrimaryEmailAddress** | String | No | Adds the address if needed and makes it the main one, before `-RemoveEmailAddress` runs. |
+| **RemoveEmailAddress** | String[] | No | Addresses to remove; the main and sign-in address are refused. |
+| **RemoveInboxRule** | String[] | No | Ids from `mailbox.inboxRules`; rules with `deletable` false fail. |
+| **RemoveAllInboxRules** | Switch | No | Removes every rule Exchange can remove (the junk filter and similar stay). |
 | **Password** | SecureString | No | A new password. It must meet the tenant's password policy. |
 | **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the new password at the next sign-in. Default: `$true`. Only with `-Password`; on its own it stops with `PasswordRequired`. |
 | **RemoveAuthenticationMethod** | String[] | No | Ids of registered sign-in methods to delete, from `authenticationMethods` of `Get-InforcerUser -IncludeAuthenticationMethods`. Only methods with `deletable` true. |
@@ -654,7 +694,7 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **TemporaryAccessPassUsableOnce** | Bool | No | Whether the pass works only once. Only with `-TemporaryAccessPass`. |
 | **RevokeSessions** | Switch | No | Signs the user out of every session. |
 
-At least one field, `-AddLicense`, `-RemoveLicense`, `-HiddenFromAddressLists`, `-Password`, `-RemoveAuthenticationMethod`, `-ResetMfa`, `-TemporaryAccessPass` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
+At least one field, `-AddLicense`, `-RemoveLicense`, a mailbox change, `-Password`, `-RemoveAuthenticationMethod`, `-ResetMfa`, `-TemporaryAccessPass` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
 
 ### Examples
 
@@ -671,6 +711,14 @@ Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-0000000000
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -AddLicense '00000000-0000-0000-0000-0000000000b1'
 # Offboard a leaver: block sign-in, hide the mailbox from the address book, end every session
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -HiddenFromAddressLists $true -RevokeSessions
+# Offboard and keep the mail: shared mailbox, automatic reply, manager gets full access, then the licence goes
+$reply = @{ status = 'alwaysEnabled'; externalAudience = 'all'; internalReplyMessage = 'Jo has left Contoso. Please contact sales@contoso.com.'; externalReplyMessage = 'Jo has left Contoso. Please contact sales@contoso.com.' }
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -MailboxType Shared -AutoReply $reply -GrantMailboxPermission @{ permission = 'fullAccess'; trusteeId = '00000000-0000-0000-0000-000000000006' } -RemoveLicense '00000000-0000-0000-0000-0000000000b1' -RevokeSessions
+# Compromised mailbox: stop forwarding and remove the inbox rules that send mail outside the tenant
+$mailbox = (Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeMailbox).mailbox
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -RemoveForwarding -RemoveInboxRule @($mailbox.inboxRules | Where-Object forwardsExternally).id
+# New main address, old one removed in the same call
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -PrimaryEmailAddress 'jo.bloggs@contoso.com' -RemoveEmailAddress 'jo@contoso.com'
 # Remove one lost phone, keep the other sign-in methods
 $user = Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods
 Set-InforcerUser -TenantId 'Contoso' -UserId $user.id -RemoveAuthenticationMethod @($user.authenticationMethods | Where-Object phoneNumber -eq '+44 7700 900000').id

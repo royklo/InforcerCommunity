@@ -1,7 +1,7 @@
 function Set-InforcerUser {
     <#
     .SYNOPSIS
-        Updates a Microsoft Entra user's profile, manager, sign-in or licences, hides their mailbox from the address lists, resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
+        Updates a Microsoft Entra user's profile, manager, sign-in or licences, changes their Exchange Online mailbox (shared or user, address lists, email addresses, automatic replies, forwarding, permissions, mail groups, inbox rules), resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
 
         Required API scope(s): none; the API-key (beta) API cannot update users.
         Required permission: User & Group Management (API client, unconfirmed which grant).
@@ -16,10 +16,13 @@ function Set-InforcerUser {
 
         -AddLicense and -RemoveLicense change the user's licences in one request
         (POST .../users/{userId}/assignLicenses); if one licence is refused, nothing changes.
-        -HiddenFromAddressLists hides the user's mailbox from the address lists, or shows it again
-        (PATCH .../users/{userId}/mailbox/addressListVisibility). Exchange Online applies it in the
-        background; the cmdlet waits until it has succeeded or failed, at most 5 minutes, and then warns
-        that it carries on. Outlook's address book can take up to 48 hours to show it.
+        Mailbox changes (-MailboxType, -HiddenFromAddressLists, -AddEmailAddress, -PrimaryEmailAddress,
+        -RemoveEmailAddress, -AutoReply, -ForwardTo, -RemoveForwarding, -GrantMailboxPermission,
+        -RemoveMailboxPermission, -AddMailGroup, -RemoveMailGroup, -RemoveInboxRule, -RemoveAllInboxRules)
+        each go to .../users/{userId}/mailbox/... and are queued in Exchange Online, which applies one change
+        to a mailbox at a time, about a minute each. The cmdlet waits for each to succeed or fail (at most
+        5 minutes per change, then it warns that Exchange carries on) before the next step. Read the
+        mailbox with Get-InforcerUser -IncludeMailbox. A Global Administrator's mailbox is refused.
         -Password sets a new password (POST /tenants/{msTenantId}/users/{userId}/password); the user must
         change it when they next sign in unless you pass -ForceChangePasswordNextSignIn $false.
         -RemoveAuthenticationMethod deletes registered sign-in methods, such as a phone or Microsoft
@@ -31,8 +34,12 @@ function Set-InforcerUser {
         and returns it; the pass cannot be read again, and it replaces a pass the user already has.
         -RevokeSessions signs the user out of every session (POST .../users/{userId}/revokeSessions);
         access tokens already issued stay valid until they expire, typically within 90 minutes.
-        In one call the steps run in this order: profile update, licences, address lists, password reset, removing
-        sign-in methods, MFA reset, Temporary Access Pass, sign-out. When a step fails, the later steps
+        In one call the steps run in this order: profile update, licences (when -AddLicense is given), mailbox
+        type, address lists, adding email addresses, primary email address, removing email addresses,
+        automatic replies, forwarding, granting and removing mailbox permissions, adding to and removing
+        from mail groups, removing inbox rules, licences (when only -RemoveLicense is given, so a mailbox is
+        converted to shared before its licence goes), password reset, removing sign-in methods, MFA reset,
+        Temporary Access Pass, sign-out. When a step fails, the later steps
         are skipped and the error says which steps were already done.
 
         -AccountEnabled $false blocks sign-in, but existing sessions last until their tokens expire;
@@ -135,6 +142,63 @@ function Set-InforcerUser {
         $true hides the user's mailbox from the address lists (the global address list in Outlook), $false
         shows it again. The user needs a mailbox; a Global Administrator's mailbox is refused.
 
+    .PARAMETER MailboxType
+        User or Shared. Converts the mailbox to a shared mailbox (for a leaver, before the licence is
+        removed) or back to a user mailbox.
+
+    .PARAMETER AutoReply
+        The automatic replies, as a hashtable or the autoReply object Get-InforcerUser -IncludeMailbox
+        returns (null values and simplified are left out). status is always needed: disabled, alwaysEnabled
+        or scheduled. alwaysEnabled and scheduled also need internalReplyMessage and externalAudience (none,
+        contactsOnly or all), externalReplyMessage unless externalAudience is none, and scheduled needs
+        scheduledStartDateTime and scheduledEndDateTime. Exchange sets the replies as a whole, so a property
+        left out is not kept. Messages keep only bold, italic, underline and text size.
+
+    .PARAMETER ForwardTo
+        Forwards the user's mail to another user in the tenant (their Microsoft Entra object id) or to an
+        address on one of the tenant's verified domains. Replaces any earlier forwarding.
+
+    .PARAMETER KeepForwardedCopy
+        Keeps a copy of forwarded mail in the mailbox. Only with -ForwardTo.
+
+    .PARAMETER RemoveForwarding
+        Stops forwarding the user's mail.
+
+    .PARAMETER GrantMailboxPermission
+        One or more permissions to give another user on this mailbox, each with permission (fullAccess,
+        sendAs or sendOnBehalf) and trusteeId (the other user's object id), and for fullAccess optionally
+        automapping ($true adds the mailbox to their Outlook).
+
+    .PARAMETER RemoveMailboxPermission
+        One or more permissions to take away, each with permission and trusteeId, such as entries of
+        mailbox.permissions from Get-InforcerUser -IncludeMailbox. An inherited permission cannot be removed.
+
+    .PARAMETER AddMailGroup
+        The object id of one or more distribution lists or mail-enabled security groups to add the user to.
+        Microsoft 365 groups and groups synced from on-premises Active Directory are refused.
+
+    .PARAMETER RemoveMailGroup
+        The object id of one or more distribution lists or mail-enabled security groups to remove the user from.
+
+    .PARAMETER AddEmailAddress
+        One or more email addresses to add to the mailbox, on domains verified in the tenant. Refused for
+        a user synced from on-premises Active Directory.
+
+    .PARAMETER PrimaryEmailAddress
+        Adds this address if needed and makes it the mailbox's main address. Runs after -AddEmailAddress
+        and before -RemoveEmailAddress, so the old main address can be removed in the same call.
+
+    .PARAMETER RemoveEmailAddress
+        One or more email addresses to remove from the mailbox. The main address and the sign-in address
+        are refused.
+
+    .PARAMETER RemoveInboxRule
+        The id of one or more inbox rules to remove, from mailbox.inboxRules of Get-InforcerUser
+        -IncludeMailbox. A rule with deletable false cannot be removed.
+
+    .PARAMETER RemoveAllInboxRules
+        Removes every inbox rule Exchange can remove; rules such as the junk filter are kept.
+
     .PARAMETER Password
         A new password as a SecureString. It must meet the tenant's password policy.
         inforcer does not store or log it.
@@ -222,6 +286,19 @@ function Set-InforcerUser {
         Offboards a leaver: blocks sign-in, hides the mailbox from the address book and ends every session.
 
     .EXAMPLE
+        $reply = @{ status = 'alwaysEnabled'; externalAudience = 'all'; internalReplyMessage = 'Jo has left Contoso. Please contact sales@contoso.com.'; externalReplyMessage = 'Jo has left Contoso. Please contact sales@contoso.com.' }
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -MailboxType Shared -AutoReply $reply -GrantMailboxPermission @{ permission = 'fullAccess'; trusteeId = '00000000-0000-0000-0000-000000000006' } -RemoveLicense '00000000-0000-0000-0000-0000000000b1' -RevokeSessions
+
+        Offboards a leaver and keeps their mail: blocks sign-in, converts the mailbox to shared, sets an
+        automatic reply, gives the manager full access, then removes the licence and ends every session.
+
+    .EXAMPLE
+        $mailbox = (Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeMailbox).mailbox
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -RemoveForwarding -RemoveInboxRule @($mailbox.inboxRules | Where-Object forwardsExternally).id
+
+        Stops a compromised mailbox from sending mail out: removes its forwarding and every inbox rule that forwards outside the tenant.
+
+    .EXAMPLE
         Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
 
         Shows what would change without changing it.
@@ -299,6 +376,45 @@ function Set-InforcerUser {
 
         [bool]$HiddenFromAddressLists,
 
+        [ValidateSet('User', 'Shared')]
+        [string]$MailboxType,
+
+        [ValidateNotNull()]
+        [object]$AutoReply,
+
+        [ValidateNotNullOrEmpty()]
+        [string]$ForwardTo,
+
+        [switch]$KeepForwardedCopy,
+
+        [switch]$RemoveForwarding,
+
+        [ValidateNotNullOrEmpty()]
+        [object[]]$GrantMailboxPermission,
+
+        [ValidateNotNullOrEmpty()]
+        [object[]]$RemoveMailboxPermission,
+
+        [ValidateNotNullOrEmpty()]
+        [guid[]]$AddMailGroup,
+
+        [ValidateNotNullOrEmpty()]
+        [guid[]]$RemoveMailGroup,
+
+        [ValidateNotNullOrEmpty()]
+        [string[]]$AddEmailAddress,
+
+        [ValidateNotNullOrEmpty()]
+        [string]$PrimaryEmailAddress,
+
+        [ValidateNotNullOrEmpty()]
+        [string[]]$RemoveEmailAddress,
+
+        [ValidateNotNullOrEmpty()]
+        [string[]]$RemoveInboxRule,
+
+        [switch]$RemoveAllInboxRules,
+
         [System.Security.SecureString]$Password,
 
         [bool]$ForceChangePasswordNextSignIn = $true,
@@ -336,18 +452,79 @@ function Set-InforcerUser {
             Write-Error -Message '-TemporaryAccessPassLifetime and -TemporaryAccessPassUsableOnce only work together with -TemporaryAccessPass.' -ErrorId 'TemporaryAccessPassRequired' -Category InvalidArgument
             return
         }
+        if ($ForwardTo -and $RemoveForwarding) {
+            Write-Error -Message 'Use -ForwardTo or -RemoveForwarding, not both.' -ErrorId 'ConflictingForwarding' -Category InvalidArgument
+            return
+        }
+        if ($KeepForwardedCopy -and -not $ForwardTo) {
+            Write-Error -Message '-KeepForwardedCopy only works together with -ForwardTo.' -ErrorId 'ForwardToRequired' -Category InvalidArgument
+            return
+        }
+        foreach ($p in @($GrantMailboxPermission) + @($RemoveMailboxPermission)) {
+            if ($null -ne $p -and (-not $p.permission -or -not $p.trusteeId)) {
+                Write-Error -Message 'Each mailbox permission needs permission (fullAccess, sendAs or sendOnBehalf) and trusteeId, such as @{ permission = ''fullAccess''; trusteeId = ''<user id>'' }.' -ErrorId 'InvalidMailboxPermission' -Category InvalidArgument
+                return
+            }
+        }
         $body = ConvertTo-InforcerUserBody -BoundParameters $PSBoundParameters
         $steps = [System.Collections.Generic.List[string]]::new()
+        # Mailbox steps: name -> request. Each is queued in Exchange Online and awaited before the next step.
+        $mailboxCalls = @{}
+        $addMailboxStep = {
+            param([string]$Name, [string]$Path, [string]$Method, $Json)
+            $steps.Add($Name)
+            $mailboxCalls[$Name] = @{ Path = $Path; Method = $Method; Body = $(if ($null -ne $Json) { $Json | ConvertTo-Json -Depth 10 -Compress }) }
+        }
         if ($body.Count -gt 0) { $steps.Add("update $(@($body.Keys) -join ', ')") }
-        if ($AddLicense -or $RemoveLicense) { $steps.Add('change licences') }
-        if ($PSBoundParameters.ContainsKey('HiddenFromAddressLists')) { $steps.Add($(if ($HiddenFromAddressLists) { 'hide mailbox from address lists' } else { 'show mailbox in address lists' })) }
+        # Licences are one request (so a swap is atomic). Removing only runs after the mailbox steps,
+        # so a mailbox is converted to shared before its licence goes.
+        $licenceFirst = [bool]$AddLicense
+        if ($licenceFirst) { $steps.Add('change licences') }
+        if ($MailboxType) { & $addMailboxStep "convert mailbox to $($MailboxType.ToLower())" 'type' PATCH @{ type = $MailboxType.ToLower() } }
+        if ($PSBoundParameters.ContainsKey('HiddenFromAddressLists')) {
+            & $addMailboxStep $(if ($HiddenFromAddressLists) { 'hide mailbox from address lists' } else { 'show mailbox in address lists' }) 'addressListVisibility' PATCH @{ hidden = $HiddenFromAddressLists }
+        }
+        foreach ($address in $AddEmailAddress | Select-Object -Unique) { & $addMailboxStep "add email address $address" 'emailAddresses' POST @{ address = $address } }
+        if ($PrimaryEmailAddress) { & $addMailboxStep "make $PrimaryEmailAddress the primary email address" 'emailAddresses' POST ([ordered]@{ address = $PrimaryEmailAddress; primary = $true }) }
+        foreach ($address in $RemoveEmailAddress | Select-Object -Unique) { & $addMailboxStep "remove email address $address" "emailAddresses/$([System.Uri]::EscapeDataString($address))" DELETE $null }
+        if ($PSBoundParameters.ContainsKey('AutoReply')) {
+            $reply = [ordered]@{}
+            $source = if ($AutoReply -is [System.Collections.IDictionary]) { [pscustomobject]$AutoReply } else { $AutoReply }
+            foreach ($p in $source.PSObject.Properties) {
+                # A read can be sent back: nulls and the read-only simplified are left out, dates get an offset.
+                if ($null -eq $p.Value -or $p.Name -eq 'simplified') { continue }
+                $reply[$p.Name] = if ($p.Value -is [datetime] -or $p.Value -is [datetimeoffset]) { $p.Value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") } else { $p.Value }
+            }
+            if ($reply['status'] -eq 'disabled') { $reply = [ordered]@{ status = 'disabled' } }
+            & $addMailboxStep $(if ($reply['status'] -eq 'disabled') { 'turn off automatic replies' } else { 'set automatic replies' }) 'autoReply' PATCH $reply
+        }
+        if ($ForwardTo) {
+            $forward = [ordered]@{}
+            $forward[$(if ($ForwardTo -as [guid]) { 'recipientUserId' } else { 'smtpAddress' })] = $ForwardTo
+            $forward['keepCopy'] = $KeepForwardedCopy.IsPresent
+            & $addMailboxStep "forward mail to $ForwardTo" 'forwarding' PATCH $forward
+        }
+        if ($RemoveForwarding) { & $addMailboxStep 'stop forwarding mail' 'forwarding' DELETE $null }
+        foreach ($p in $GrantMailboxPermission) {
+            $grant = [ordered]@{ trusteeId = "$($p.trusteeId)"; permission = "$($p.permission)" }
+            if ($null -ne $p.automapping) { $grant['automapping'] = [bool]$p.automapping }
+            & $addMailboxStep "grant $($p.permission) to $($p.trusteeId)" 'permissions' POST $grant
+        }
+        foreach ($p in $RemoveMailboxPermission) {
+            & $addMailboxStep "remove $($p.permission) from $($p.trusteeId)" "permissions/$([System.Uri]::EscapeDataString("$($p.permission)"))/$([System.Uri]::EscapeDataString("$($p.trusteeId)"))" DELETE $null
+        }
+        foreach ($groupId in $AddMailGroup | Select-Object -Unique) { & $addMailboxStep "add to mail group $groupId" 'mailGroups' POST @{ groupId = "$groupId" } }
+        foreach ($groupId in $RemoveMailGroup | Select-Object -Unique) { & $addMailboxStep "remove from mail group $groupId" "mailGroups/$groupId" DELETE $null }
+        foreach ($ruleId in $RemoveInboxRule | Select-Object -Unique) { & $addMailboxStep "remove inbox rule $ruleId" "inboxRules/$([System.Uri]::EscapeDataString($ruleId))" DELETE $null }
+        if ($RemoveAllInboxRules) { & $addMailboxStep 'remove every inbox rule' 'inboxRules?all=true' DELETE $null }
+        if ($RemoveLicense -and -not $licenceFirst) { $steps.Add('change licences') }
         if ($Password) { $steps.Add('reset password') }
         foreach ($methodId in $RemoveAuthenticationMethod | Select-Object -Unique) { $steps.Add("remove authentication method $methodId") }
         if ($ResetMfa) { $steps.Add('reset MFA') }
         if ($TemporaryAccessPass) { $steps.Add('create Temporary Access Pass') }
         if ($RevokeSessions) { $steps.Add('sign out of every session') }
         if ($steps.Count -eq 0) {
-            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, -HiddenFromAddressLists, -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
+            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, a mailbox change (such as -MailboxType, -HiddenFromAddressLists, -AutoReply or -ForwardTo), -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
             return
         }
 
@@ -383,8 +560,11 @@ function Set-InforcerUser {
                 if ($AddLicense) { $json['addSkuIds'] = @($AddLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
                 if ($RemoveLicense) { $json['removeSkuIds'] = @($RemoveLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
                 $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/assignLicenses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
-            } elseif ($step -like '* address lists') {
-                $action = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/mailbox/addressListVisibility" -Method PATCH -Body (@{ hidden = $HiddenFromAddressLists } | ConvertTo-Json -Compress) @errorHandling
+            } elseif ($mailboxCalls.ContainsKey($step)) {
+                $call = $mailboxCalls[$step]
+                $request = @{ Endpoint = "$userEndpoint/mailbox/$($call.Path)"; Method = $call.Method }
+                if ($call.Body) { $request['Body'] = $call.Body }
+                $action = Invoke-InforcerApiRequest @request @errorHandling
                 if (-not $stepErr) { $action = Wait-InforcerMailboxAction -UserEndpoint $userEndpoint -ActionId $action.actionId -Step $step -UserId $UserId @errorHandling }
             } elseif ($step -eq 'create Temporary Access Pass') {
                 $json = [ordered]@{}

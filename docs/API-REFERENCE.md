@@ -60,6 +60,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [UserLicenseAssignment](#userlicenseassignment)
   - [TemporaryAccessPass](#temporaryaccesspass)
   - [MailboxAction](#mailboxaction)
+  - [Mailbox](#mailbox)
   - [UserAuthenticationMethod](#userauthenticationmethod)
   - [TenantGroupSummary](#tenantgroupsummary)
   - [TenantGroup](#tenantgroup)
@@ -184,8 +185,8 @@ The permission names below are the ones the portal shows (feature and grant). **
 |----------------|-------|-----------|--------|
 | Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}`, `/v1/tenants/{msTenantId}/subscriptions` | unconfirmed |
 | Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
-| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
-| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`, `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`, `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`, `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | unconfirmed (which write grant) |
+| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/users/{userId}/mailbox` (and its `autoReply`, `permissions`, `mailGroups`, `inboxRules`), `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
+| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`, `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`, `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type`, `PATCH`/`DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules[/{ruleId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | unconfirmed (which write grant) |
 | Tenants / Entra Dashboard | Read: View | `/v1/tenants/{msTenantId}/secureScores`, `/v1/tenants/{msTenantId}/directoryRoles` | unconfirmed |
 | Align / Baselines | Read: View | `/v1/baselines` | unconfirmed |
 | Align / Align | Read: View | `/v1/alignmentScores`, `/v1/tenants/{msTenantId}/alignmentDetails` | unconfirmed |
@@ -210,9 +211,9 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails` | Baselines + Align + Tenants |
 | `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search` | Activity |
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
-| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `.../users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`) | User & Group Management, Tenants† |
+| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `.../users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `.../users/{userId}/mailbox` and its `autoReply`, `permissions`, `mailGroups`, `inboxRules` (with `-IncludeMailbox`) | User & Group Management, Tenants† |
 | `New-InforcerUser` | `POST /v1/tenants/{msTenantId}/users` | User & Group Management (write), Tenants† |
-| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/assignLicenses` (with `-AddLicense`/`-RemoveLicense`), `PATCH .../users/{userId}/mailbox/addressListVisibility` then `GET .../users/{userId}/mailbox/actions/{actionId}` until done (with `-HiddenFromAddressLists`), `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/authenticationMethods/temporaryAccessPasses` (with `-TemporaryAccessPass`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
+| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/assignLicenses` (with `-AddLicense`/`-RemoveLicense`), the mailbox writes under `.../users/{userId}/mailbox/` (`type`, `addressListVisibility`, `emailAddresses`, `autoReply`, `forwarding`, `permissions`, `mailGroups`, `inboxRules`; one per mailbox parameter), each followed by `GET .../users/{userId}/mailbox/actions/{actionId}` until done, `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/authenticationMethods/temporaryAccessPasses` (with `-TemporaryAccessPass`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
@@ -321,8 +322,20 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tenants/{msTenantId}/users/{userId}/mfa` | DELETE (204) | none (v1 only) | `Set-InforcerUser -ResetMfa` |
 | `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` | POST (201, pass) | none (v1 only) | `Set-InforcerUser -TemporaryAccessPass` |
 | `/v1/tenants/{msTenantId}/users/{userId}/assignLicenses` | POST (204) | none (v1 only) | `Set-InforcerUser -AddLicense`/`-RemoveLicense` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox` | GET | none (v1 only) | `Get-InforcerUser -UserId -IncludeMailbox` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/type` | PATCH (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -MailboxType` |
 | `/v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility` | PATCH (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -HiddenFromAddressLists` |
-| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | GET | none (v1 only) | `Set-InforcerUser -HiddenFromAddressLists` (waits on it) |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses` | POST (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -AddEmailAddress`/`-PrimaryEmailAddress` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveEmailAddress` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply` | GET, PATCH (202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -AutoReply` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding` | PATCH, DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -ForwardTo`/`-RemoveForwarding` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions` | GET, POST (202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -GrantMailboxPermission` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveMailboxPermission` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups` | GET, POST (202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -AddMailGroup` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveMailGroup` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules` | GET, DELETE (`all=true`, 202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -RemoveAllInboxRules` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules/{ruleId}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveInboxRule` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | GET | none (v1 only) | `Set-InforcerUser` (waits on every mailbox change) |
 | `/v1/tenants/{msTenantId}/users/{userId}/password` | POST (204) | none (v1 only) | `Set-InforcerUser -Password` |
 | `/v1/tenants/{msTenantId}/users/{userId}/revokeSessions` | POST (204) | none (v1 only) | `Set-InforcerUser -RevokeSessions` |
 | `/v1/tenants/{msTenantId}/groups` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/groups` | `Get-InforcerGroup` |
@@ -340,7 +353,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 31 paths and 34 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 43 paths and 51 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH, and the mailbox's `autoReply`, `forwarding`, `permissions`, `mailGroups` and `inboxRules` two methods each). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `permission` (`fullAccess`, `sendAs` or `sendOnBehalf`), `trusteeId` (the Entra object ID of the user holding a mailbox permission), `address` (an email address), `ruleId` (an inbox rule's id, digits), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
 
 ### Managing users (v1 only)
 
@@ -441,22 +454,92 @@ Body (optional): `{ lifetimeInMinutes (10 to 43200), usableOnce, startDateTime }
 
 **Response**: `201` with [TemporaryAccessPass](#temporaryaccesspass). Errors: `400` on the property the policy does not allow (lifetime, start in the past, one-time use), or with the reason as `detail` when the policy does not allow a pass for the user at all (for example Temporary Access Pass is off in the tenant); `404` (tenant or user). Policy changes in Microsoft Entra take effect after a short delay.
 
+#### Mailbox changes: how every write works
+
+Every mailbox write below is applied by Exchange Online after the response: the answer is `202` with `{ actionId }`, and [`GET .../mailbox/actions/{actionId}`](#get-v1tenantsmstenantidusersuseridmailboxactionsactionid) says when it has succeeded or failed. Changes to one mailbox run one at a time in the order they were accepted, each confirmed in Exchange before the next starts, so allow about a minute per change; an action still waiting an hour after it started fails with `MailboxBusy`. Every request queues a new action, also a repeat, so do not resend while one is queued or running. Repeating a change that is already in place succeeds. Common errors: `400` (also for a Global Administrator's mailbox, and for unknown body properties), `404` (tenant or user), `409`, `502`. A user with no mailbox is accepted with `202`, and the action then fails. `Set-InforcerUser` waits on each action (at most 5 minutes) before its next step.
+
+**Required API scope(s)** for every mailbox route: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
+#### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`
+
+The mailbox as Exchange Online holds it now ([Mailbox](#mailbox)). A user with no mailbox is a `404`. `Get-InforcerUser -IncludeMailbox` adds it (with the four lists below) as `mailbox`.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management *(unconfirmed)*
+
+#### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`
+
+The automatic replies in the shape `PATCH` takes, so they can be read, changed and sent back (leave out the properties that are `null`). `simplified: true` means a message had formatting the API cannot keep (a link, table or colour) and is returned without it. `404` when the user has no mailbox.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`
+
+Turns automatic replies on (`alwaysEnabled`), schedules them (`scheduled`) or turns them off (`disabled`). `status` is always sent; Exchange sets the replies as a whole, so a property left out is not kept. `disabled` takes no other property and keeps the saved messages. Otherwise `internalReplyMessage` and `externalAudience` (`none`, `contactsOnly`, `all`) are needed, `externalReplyMessage` unless the audience is `none`, and `scheduled` needs `scheduledStartDateTime` and `scheduledEndDateTime` (with an offset, end after start and in the future). Messages up to 16000 characters, keeping only bold, italic, underline and text size.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type`
+
+Converts the mailbox to a shared mailbox or back to a user mailbox. Body: `{ "type": "shared" }` or `{ "type": "user" }`.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding` and `DELETE` on the same path
+
+`PATCH` forwards the mail to one user in the tenant (`recipientUserId`) or one address on a verified domain (`smtpAddress`), exactly one of them, with `keepCopy`. Setting one replaces the other. The mailbox's own user or address, a guest, a user with no email address and anything outside the verified domains are a `400`. `DELETE` stops forwarding (to a user and to an address).
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses` and `DELETE .../emailAddresses/{address}`
+
+`POST { address, primary }` adds an address on a domain verified in the tenant; `primary: true` also makes it the main one. `DELETE` removes one; the main and the sign-in address are a `400`, so after changing the main address wait for that action before removing the old one. A user synced from on-premises Active Directory is a `400` for both.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `GET`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions` and `DELETE .../permissions/{permission}/{trusteeId}`
+
+`GET` lists who holds `fullAccess`, `sendAs` and `sendOnBehalf` (`{ permissions: [...], unreadPermissions: [...] }`, see [Mailbox](#mailbox)); a kind in `unreadPermissions` could not be read just now, so its holders are missing. A failed name lookup is a `502`. `POST { trusteeId, permission, automapping }` grants one to another user in the tenant (`automapping` only with `fullAccess`). `DELETE` removes one; an inherited permission fails, and a holder with `trusteeId` `null` (a group or deleted account) cannot be removed through the API.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
+#### `GET`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups` and `DELETE .../mailGroups/{groupId}`
+
+`GET` lists the distribution lists and mail-enabled security groups the user is a direct member of (`{ mailGroups: [ { id, displayName, mail, type } ] }`, `type` `distributionList` or `mailEnabledSecurity`; Microsoft 365 groups are left out; `404` only when the user is not in the tenant). `POST { groupId }` adds the user, `DELETE` removes them. Microsoft 365 groups, groups without an address and groups synced from on-premises are a `400`.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
+#### `GET`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules` and `DELETE .../inboxRules/{ruleId}`
+
+`GET` lists the inbox rules, with where each forwards or redirects mail (`{ inboxRules: [...] }`, see [Mailbox](#mailbox)). `DELETE ...?all=true` removes every rule Exchange can remove (the junk filter and similar are kept); `DELETE .../{ruleId}` removes one, and a rule with `deletable: false` fails.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
 #### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`
 
-Hides the user's mailbox from the address lists, or shows it again. Exchange Online applies the change after the response, so the answer is the id of a queued action. Changes to one mailbox run one at a time, so an action can wait behind another. Outlook's address book can take up to 48 hours to show the change.
+Hides the user's mailbox from the address lists, or shows it again. Outlook's address book can take up to 48 hours to show the change. The current value is `hiddenFromAddressList` on [Mailbox](#mailbox).
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
 
 Body (JSON Merge Patch): `{ "hidden": true }` or `{ "hidden": false }`. `hidden` cannot be cleared; other properties are a `400`.
 
-**Response**: `202` with `{ actionId }`. Errors: `400` (also for a Global Administrator's mailbox), `404` (tenant or user), `502`.
+**Response**: `202` with `{ actionId }`. Errors: `400` (also for a Global Administrator's mailbox), `404` (tenant or user), `409`, `502`.
 
-There is no field that reads the current setting, and no list of a user's mailbox actions: the `actionId` is the only way to follow one.
+There is no list of a user's mailbox actions: the `actionId` is the only way to follow one.
 
 #### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}`
 
-Returns a queued mailbox change and where it has got to, whether it was asked for through the API or in inforcer. `Set-InforcerUser -HiddenFromAddressLists` polls it (2, 4, 8, then every 15 seconds, at most 5 minutes) until it has succeeded or failed.
+Returns a queued mailbox change and where it has got to, whether it was asked for through the API or in inforcer. `Set-InforcerUser` polls it after every mailbox change (2, 4, 8, then every 15 seconds, at most 5 minutes) until it has succeeded or failed.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
@@ -1269,12 +1352,30 @@ The answer of `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{acti
 | Property | Type | Description |
 |----------|------|-------------|
 | actionId | string (uuid) | The action's id, from the `202` that queued it. |
-| action | string | The change: `setAddressListVisibility`, or one asked for in inforcer that the API cannot ask for (`convertToShared`, `convertToUser`, `setAutoReply`, `setForwarding`, `grantPermission`, `removePermission`, `removeInboxRules`, `addToMailGroup`, `removeFromMailGroup`, `addEmailAddress`, `removeEmailAddress`). More may be added. |
+| action | string | The change: `convertToShared`, `convertToUser`, `setAddressListVisibility`, `setAutoReply`, `setForwarding`, `grantPermission`, `removePermission`, `removeInboxRules`, `addToMailGroup`, `removeFromMailGroup`, `addEmailAddress`, `removeEmailAddress`, or `setMailApps` and `setCalendarAccess`, which only inforcer itself can ask for. More may be added. |
 | status | string | `queued` (waits for an earlier change to the same mailbox), `running`, `succeeded` (Exchange shows the change) or `failed`. |
 | queuedBehind | string (uuid), nullable | While `queued`, the action it waits for, when the caller can read that one. |
 | requestedAt | string (date-time) | When it was asked for. |
 | completedAt | string (date-time), nullable | When it succeeded or failed; `null` before. |
 | error | object, nullable | `{ code, message }` once it has failed, such as `WriteNotApplied` or `NotStarted`; otherwise `null`. |
+
+### Mailbox
+
+The answer of `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`. Every property is always present. `Get-InforcerUser -IncludeMailbox` adds `autoReply`, `permissions`, `unreadPermissions`, `mailGroups` and `inboxRules` from the routes of the same names.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| displayName | string, nullable | The mailbox's name in Exchange. |
+| type | string | `user`, `shared`, `room`, `equipment` or `other` (treat an unknown value as `other`). |
+| emailAddresses | array | `{ address, primary }`, the main address first. |
+| onPremisesSyncEnabled | boolean | The user is synced from on-premises Active Directory, so addresses and address list visibility are changed there. |
+| hiddenFromAddressList | boolean | Hidden from the address lists (set with `addressListVisibility` and its `hidden`). |
+| litigationHold | boolean | On litigation hold. |
+| size | object, nullable | `{ usedBytes, itemCount, quotaBytes }` (`quotaBytes` `null` = unlimited); `null` when Exchange could not report it. |
+| archive | object, nullable | `{ usedBytes }` of the online archive; `null` when there is none. |
+| forwarding | object | `{ enabled, recipientUserId, recipientDisplayName, smtpAddress, keepCopy }`. Both targets can be `null` while `enabled` when the recipient is a contact or group. |
+
+An element of `permissions`: `{ permission, trusteeId, displayName, inherited }` (`trusteeId` `null` for a holder that is not a user). An element of `inboxRules`: `{ id, name, enabled, description, deletesMessages, hidden, deletable, forwardsExternally, recipients }`, where `recipients` are `{ kind (forward, forwardAsAttachment, redirect), address, displayName, external }`, `forwardsExternally` is `null` when a recipient could not be checked, and `enabled` is `null` for a rule that is not deletable. `autoReply`: `{ status, externalAudience, internalReplyMessage, externalReplyMessage, scheduledStartDateTime, scheduledEndDateTime, simplified }`.
 
 ### UserAuthenticationMethod
 

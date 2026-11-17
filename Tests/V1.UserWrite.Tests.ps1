@@ -339,7 +339,7 @@ Describe 'Set-InforcerUser' {
         $global:UwCalls.Count | Should -Be 0
     }
 
-    It 'hides the mailbox after the licences and waits until Exchange Online reports it done' {
+    It 'hides the mailbox before removing licences and waits until Exchange Online reports it done' {
         Set-UwSession
         Mock -ModuleName InforcerCommunity Start-Sleep {}
         $global:UwPolls = 0
@@ -359,8 +359,8 @@ Describe 'Set-InforcerUser' {
         $w | Should -BeNullOrEmpty
         $out | Should -BeNullOrEmpty
         @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
-            Should -Be @('POST /assignLicenses', 'PATCH /mailbox/addressListVisibility', 'GET /mailbox/actions/00000000-0000-0000-0000-0000000000a1', 'GET /mailbox/actions/00000000-0000-0000-0000-0000000000a1', 'POST /revokeSessions')
-        $global:UwCalls[1].Body | Should -Be '{"hidden":true}'
+            Should -Be @('PATCH /mailbox/addressListVisibility', 'GET /mailbox/actions/00000000-0000-0000-0000-0000000000a1', 'GET /mailbox/actions/00000000-0000-0000-0000-0000000000a1', 'POST /assignLicenses', 'POST /revokeSessions')
+        $global:UwCalls[0].Body | Should -Be '{"hidden":true}'
     }
 
     It 'sends hidden false to show the mailbox again' {
@@ -419,6 +419,101 @@ Describe 'Set-InforcerUser' {
         @($global:UwCalls | ForEach-Object { $_.Method }) | Should -Be @('PATCH', 'POST')
     }
 
+    It 'offboards in order: profile, mailbox changes one at a time, then the licence removal and the sign-out' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1","status":"succeeded","error":null}' }
+            if ($Uri -like '*/mailbox/*') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            New-UwResponse '' 204
+        }
+        $reply = [ordered]@{ status = 'alwaysEnabled'; externalAudience = 'none'; internalReplyMessage = 'Jo has left.' }
+        $manager = '00000000-0000-0000-0000-000000000006'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AccountEnabled $false -MailboxType Shared -AutoReply $reply -GrantMailboxPermission @{ permission = 'fullAccess'; trusteeId = $manager; automapping = $true } -RemoveLicense '00000000-0000-0000-0000-0000000000b1' -RevokeSessions -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        @($global:UwCalls | Where-Object Uri -notlike '*/mailbox/actions/*' | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('PATCH ', 'PATCH /mailbox/type', 'PATCH /mailbox/autoReply', 'POST /mailbox/permissions', 'POST /assignLicenses', 'POST /revokeSessions')
+        @($global:UwCalls | Where-Object Uri -like '*/mailbox/actions/*').Count | Should -Be 3
+        $writes = @($global:UwCalls | Where-Object Uri -match '/mailbox/(type|autoReply|permissions)$')
+        $writes[0].Body | Should -Be '{"type":"shared"}'
+        $writes[1].Body | Should -Be '{"status":"alwaysEnabled","externalAudience":"none","internalReplyMessage":"Jo has left."}'
+        $writes[2].Body | Should -Be ('{"trusteeId":"' + $manager + '","permission":"fullAccess","automapping":true}')
+    }
+
+    It 'keeps -AddLicense before the mailbox changes, so a new mailbox gets its licence first' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"status":"succeeded","error":null}' }
+            if ($Uri -like '*/mailbox/*') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            New-UwResponse '' 204
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AddLicense '00000000-0000-0000-0000-0000000000b1' -HiddenFromAddressLists $true -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        @($global:UwCalls | Where-Object Uri -notlike '*/mailbox/actions/*' | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('POST /assignLicenses', 'PATCH /mailbox/addressListVisibility')
+    }
+
+    It 'sends a read automatic reply back without nulls and simplified, and only status when it is disabled' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"status":"succeeded","error":null}' }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202
+        }
+        $read = '{"status":"scheduled","externalAudience":"all","internalReplyMessage":"Away","externalReplyMessage":"Away","scheduledStartDateTime":"2026-12-01T09:00:00+01:00","scheduledEndDateTime":null,"simplified":true}' | ConvertFrom-Json
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AutoReply $read -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $global:UwCalls[0].Body | Should -Be '{"status":"scheduled","externalAudience":"all","internalReplyMessage":"Away","externalReplyMessage":"Away","scheduledStartDateTime":"2026-12-01T08:00:00Z"}'
+        $read.status = 'disabled'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AutoReply $read
+        @($global:UwCalls | Where-Object Method -eq 'PATCH')[-1].Body | Should -Be '{"status":"disabled"}'
+    }
+
+    It 'forwards to a user id or to an address, and refuses conflicting forwarding options without a request' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"status":"succeeded","error":null}' }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ForwardTo '00000000-0000-0000-0000-000000000006' -KeepForwardedCopy
+        $global:UwCalls[0].Body | Should -Be '{"recipientUserId":"00000000-0000-0000-0000-000000000006","keepCopy":true}'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ForwardTo 'sales@contoso.com'
+        @($global:UwCalls | Where-Object Method -eq 'PATCH')[-1].Body | Should -Be '{"smtpAddress":"sales@contoso.com","keepCopy":false}'
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ForwardTo 'sales@contoso.com' -RemoveForwarding -ErrorAction SilentlyContinue -ErrorVariable e1
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -KeepForwardedCopy -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e2
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -GrantMailboxPermission @{ permission = 'sendAs' } -ErrorAction SilentlyContinue -ErrorVariable e3
+        $e1[-1].FullyQualifiedErrorId | Should -BeLike 'ConflictingForwarding*'
+        $e2[-1].FullyQualifiedErrorId | Should -BeLike 'ForwardToRequired*'
+        $e3[-1].FullyQualifiedErrorId | Should -BeLike 'InvalidMailboxPermission*'
+        $global:UwCalls.Count | Should -Be 0
+    }
+
+    It 'adds addresses before making one primary and removing the old one, and builds the remove paths' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"status":"succeeded","error":null}' }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202
+        }
+        $g = '00000000-0000-0000-0000-0000000000c1'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -RemoveEmailAddress 'jo@contoso.com' -PrimaryEmailAddress 'jo.bloggs@contoso.com' -AddEmailAddress 'jb@contoso.com' -RemoveForwarding -RemoveMailboxPermission ([pscustomobject]@{ permission = 'sendAs'; trusteeId = '00000000-0000-0000-0000-000000000006'; displayName = 'Sam' }) -AddMailGroup $g -RemoveMailGroup $g -RemoveInboxRule '1234' -RemoveAllInboxRules -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        @($global:UwCalls | Where-Object Uri -notlike '*/mailbox/actions/*' | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+/mailbox', '')" }) |
+            Should -Be @('POST /emailAddresses', 'POST /emailAddresses', 'DELETE /emailAddresses/jo%40contoso.com', 'DELETE /forwarding',
+                'DELETE /permissions/sendAs/00000000-0000-0000-0000-000000000006', "POST /mailGroups", "DELETE /mailGroups/$g", 'DELETE /inboxRules/1234', 'DELETE /inboxRules?all=true')
+        $global:UwCalls[0].Body | Should -Be '{"address":"jb@contoso.com"}'
+        $global:UwCalls[2].Body | Should -Be '{"address":"jo.bloggs@contoso.com","primary":true}'
+        @($global:UwCalls | Where-Object { $_.Uri -like '*/mailGroups' })[0].Body | Should -Be ('{"groupId":"' + $g + '"}')
+    }
+
     It 'surfaces a 404 from a sign-out alone with the original error' {
         Set-UwSession
         Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"User not found","status":404}' 404 }
@@ -465,6 +560,67 @@ Describe 'Get-InforcerUser -IncludeAuthenticationMethods' {
         Set-UwSession -Beta
         Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"data":{"id":"u1"},"success":true}' }
         Get-InforcerUser -TenantId 5 -UserId 'u1' -IncludeAuthenticationMethods -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[0].FullyQualifiedErrorId | Should -BeLike 'RequiresApiClient*'
+        $global:UwCalls.Count | Should -Be 0
+    }
+}
+
+Describe 'Get-InforcerUser -IncludeMailbox' {
+    It 'adds the mailbox with its automatic replies, permissions, mail groups and inbox rules' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            switch -Wildcard ($Uri) {
+                '*/mailbox' { return New-UwResponse '{"displayName":"Jo Bloggs","type":"user","emailAddresses":[{"address":"jo@contoso.com","primary":true}],"onPremisesSyncEnabled":false,"hiddenFromAddressList":false,"litigationHold":false,"size":null,"archive":null,"forwarding":{"enabled":false,"recipientUserId":null,"recipientDisplayName":null,"smtpAddress":null,"keepCopy":false}}' }
+                '*/mailbox/autoReply' { return New-UwResponse '{"status":"disabled","externalAudience":"none","internalReplyMessage":"","externalReplyMessage":"","scheduledStartDateTime":null,"scheduledEndDateTime":null,"simplified":false}' }
+                '*/mailbox/permissions' { return New-UwResponse '{"permissions":[{"permission":"fullAccess","trusteeId":"00000000-0000-0000-0000-000000000006","displayName":"Sam","inherited":false}],"unreadPermissions":["sendOnBehalf"]}' }
+                '*/mailbox/mailGroups' { return New-UwResponse '{"mailGroups":[]}' }
+                '*/mailbox/inboxRules' { return New-UwResponse '{"inboxRules":[{"id":"1234","name":"Fwd","enabled":true,"description":null,"deletesMessages":false,"hidden":false,"deletable":true,"forwardsExternally":true,"recipients":[]}]}' }
+            }
+            New-UwResponse ('{"id":"' + $script:Uid + '","displayName":"Jo Bloggs"}')
+        }
+        $u = Get-InforcerUser -TenantId $script:Tid -UserId $script:Uid -IncludeMailbox -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $global:UwCalls.Count | Should -Be 6
+        $u.mailbox.type | Should -Be 'user'
+        $u.mailbox.autoReply.status | Should -Be 'disabled'
+        $u.mailbox.permissions[0].trusteeId | Should -Be '00000000-0000-0000-0000-000000000006'
+        @($u.mailbox.unreadPermissions) | Should -Be @('sendOnBehalf')
+        @($u.mailbox.mailGroups).Count | Should -Be 0
+        $u.mailbox.inboxRules[0].forwardsExternally | Should -BeTrue
+        $json = Get-InforcerUser -TenantId $script:Tid -UserId $script:Uid -IncludeMailbox -OutputType JsonObject
+        $json | Should -Match '"mailGroups":\s*\[\]'
+    }
+
+    It 'sets mailbox to null without an error or more requests when the user has no mailbox' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox') { return New-UwResponse '{"title":"Mailbox not found","status":404}' 404 }
+            New-UwResponse '{"id":"u1"}'
+        }
+        $u = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeMailbox -ErrorAction Stop
+        $global:UwCalls.Count | Should -Be 2
+        $u.PSObject.Properties['mailbox'] | Should -Not -BeNullOrEmpty
+        $u.mailbox | Should -BeNullOrEmpty
+    }
+
+    It 'reports any other failure and leaves mailbox out rather than saying there is none' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox') { return New-UwResponse '{"title":"Bad gateway","status":502}' 502 }
+            New-UwResponse '{"id":"u1"}'
+        }
+        $u = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeMailbox -ErrorAction SilentlyContinue -ErrorVariable e
+        "$($e[-1])" | Should -BeLike '*502*'
+        $u.PSObject.Properties['mailbox'] | Should -BeNullOrEmpty
+    }
+
+    It 'refuses an API-key (beta) login with RequiresApiClient and makes no request' {
+        Set-UwSession -Beta
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"data":{"id":"u1"},"success":true}' }
+        Get-InforcerUser -TenantId 5 -UserId 'u1' -IncludeMailbox -ErrorAction SilentlyContinue -ErrorVariable e
         $e[0].FullyQualifiedErrorId | Should -BeLike 'RequiresApiClient*'
         $global:UwCalls.Count | Should -Be 0
     }

@@ -58,6 +58,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [UserUpdate](#userupdate)
   - [PasswordReset](#passwordreset)
   - [UserLicenseAssignment](#userlicenseassignment)
+  - [UserGroupsChange](#usergroupschange)
   - [TemporaryAccessPass](#temporaryaccesspass)
   - [MailboxAction](#mailboxaction)
   - [Mailbox](#mailbox)
@@ -186,7 +187,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}`, `/v1/tenants/{msTenantId}/subscriptions` | unconfirmed |
 | Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
 | Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/users/{userId}/mailbox` (and its `autoReply`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`), `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
-| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`, `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`, `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type`, `PATCH`/`DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess/{trusteeId}`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailApps`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules[/{ruleId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | unconfirmed (which write grant) |
+| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/groups`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`, `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`, `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type`, `PATCH`/`DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess/{trusteeId}`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailApps`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules[/{ruleId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | unconfirmed (which write grant) |
 | Tenants / Entra Dashboard | Read: View | `/v1/tenants/{msTenantId}/secureScores`, `/v1/tenants/{msTenantId}/directoryRoles` | unconfirmed |
 | Align / Baselines | Read: View | `/v1/baselines` | unconfirmed |
 | Align / Align | Read: View | `/v1/alignmentScores`, `/v1/tenants/{msTenantId}/alignmentDetails` | unconfirmed |
@@ -213,7 +214,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
 | `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `.../users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `.../users/{userId}/mailbox` and its `autoReply`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules` (with `-IncludeMailbox`) | User & Group Management, Tenants† |
 | `New-InforcerUser` | `POST /v1/tenants/{msTenantId}/users` | User & Group Management (write), Tenants† |
-| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/assignLicenses` (with `-AddLicense`/`-RemoveLicense`), the mailbox writes under `.../users/{userId}/mailbox/` (`type`, `addressListVisibility`, `emailAddresses`, `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`, `mailApps`; one per mailbox parameter, one for all mail apps), each followed by `GET .../users/{userId}/mailbox/actions/{actionId}` until done, `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/authenticationMethods/temporaryAccessPasses` (with `-TemporaryAccessPass`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
+| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/assignLicenses` (with `-AddLicense`/`-RemoveLicense`), `POST .../users/{userId}/groups` (with `-AddGroup`/`-RemoveGroup`), the mailbox writes under `.../users/{userId}/mailbox/` (`type`, `addressListVisibility`, `emailAddresses`, `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`, `mailApps`; one per mailbox parameter, one for all mail apps), each followed by `GET .../users/{userId}/mailbox/actions/{actionId}` until done, `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/authenticationMethods/temporaryAccessPasses` (with `-TemporaryAccessPass`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
@@ -322,6 +323,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tenants/{msTenantId}/users/{userId}/mfa` | DELETE (204) | none (v1 only) | `Set-InforcerUser -ResetMfa` |
 | `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` | POST (201, pass) | none (v1 only) | `Set-InforcerUser -TemporaryAccessPass` |
 | `/v1/tenants/{msTenantId}/users/{userId}/assignLicenses` | POST (204) | none (v1 only) | `Set-InforcerUser -AddLicense`/`-RemoveLicense` |
+| `/v1/tenants/{msTenantId}/users/{userId}/groups` | POST (204) | none (v1 only) | `Set-InforcerUser -AddGroup`/`-RemoveGroup` |
 | `/v1/tenants/{msTenantId}/users/{userId}/mailbox` | GET | none (v1 only) | `Get-InforcerUser -UserId -IncludeMailbox` |
 | `/v1/tenants/{msTenantId}/users/{userId}/mailbox/type` | PATCH (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -MailboxType` |
 | `/v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility` | PATCH (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -HiddenFromAddressLists` |
@@ -356,7 +358,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 46 paths and 55 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH, and the mailbox's `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups` and `inboxRules` two methods each). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `permission` (`fullAccess`, `sendAs` or `sendOnBehalf`), `trusteeId` (the Entra object ID of the user holding a mailbox permission or calendar access), `address` (an email address), `ruleId` (an inbox rule's id, digits), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 47 paths and 56 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH, and the mailbox's `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups` and `inboxRules` two methods each). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `permission` (`fullAccess`, `sendAs` or `sendOnBehalf`), `trusteeId` (the Entra object ID of the user holding a mailbox permission or calendar access), `address` (an email address), `ruleId` (an inbox rule's id, digits), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
 
 ### Managing users (v1 only)
 
@@ -445,6 +447,17 @@ Body: [UserLicenseAssignment](#userlicenseassignment), at least one licence.
 **Response**: `204` without a body. Errors: `400` (a licence with no free seat, not subscribed to, conflicting with the user's other licences, or given through a group; a refused request that both adds and removes is a `400` on `body`), `404` (tenant or user).
 
 The `skuId` of a licence comes from the tenant's subscriptions (`GET /v1/tenants/{msTenantId}/subscriptions`, [Subscription](#subscription), which also shows free seats) or from a user's `assignedLicenses` ([UserLicense](#userlicense)). The tenant record lists its licences by part number only (`sku`).
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/groups`
+
+Adds the user to Microsoft Entra groups and removes them from others in one call. Each group is changed on its own, so a group that cannot be added does not stop the removals. A group the user is already in, or is not in, counts as done, so a request can be repeated. Members of role-assignable groups cannot be changed. To move a user without leaving them in neither group, add first and remove in a second call once the add succeeded; `Set-InforcerUser` does this when both `-AddGroup` and `-RemoveGroup` are given.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [UserGroupsChange](#usergroupschange).
+
+**Response**: `204` without a body; a change can take a few seconds to show in a GET. Errors: `400` (invalid request, or when some groups were changed and a group refused, a `results` list with each group and whether it was changed), `404` (tenant or user), `502` (a service failed; `results` when some groups were changed).
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`
 
@@ -1350,6 +1363,15 @@ The body of `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`. Send 
 |----------|------|----------|-------------|
 | addSkuIds | string[] (uuid) | No | The `skuId`s to give the user, as in `assignedLicenses`. |
 | removeSkuIds | string[] (uuid) | No | The `skuId`s to take from the user. |
+
+### UserGroupsChange
+
+The body of `POST /v1/tenants/{msTenantId}/users/{userId}/groups`. At least one group in all, and a group in only one of the lists.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| add | string[] (uuid) | No | Object ids of the groups to add the user to, at most 20. A repeated id is ignored. |
+| remove | string[] (uuid) | No | Object ids of the groups to remove the user from, at most 20. A repeated id is ignored. |
 
 ### TemporaryAccessPass
 

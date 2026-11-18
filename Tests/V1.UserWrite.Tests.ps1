@@ -552,6 +552,28 @@ Describe 'Set-InforcerUser' {
         $global:UwCalls[0].Body | Should -Be '{"userType":"Member"}'
     }
 
+    It 'adds to groups after the licences and removes only once the add succeeded' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        $g1 = '00000000-0000-0000-0000-0000000000c1'; $g2 = '00000000-0000-0000-0000-0000000000c2'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AddLicense '00000000-0000-0000-0000-0000000000b1' -AddGroup $g2, $g2 -RemoveGroup $g1 -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('POST /assignLicenses', 'POST /groups', 'POST /groups')
+        $global:UwCalls[1].Body | Should -Be ('{"add":["' + $g2 + '"]}')
+        $global:UwCalls[2].Body | Should -Be ('{"remove":["' + $g1 + '"]}')
+
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"Group is role-assignable","status":400}' 400 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AddGroup $g2 -RemoveGroup $g1 -ErrorAction SilentlyContinue -ErrorVariable e2
+        $global:UwCalls.Count | Should -Be 1
+        $e2[-1].Exception.Message | Should -BeLike '*Could not add to groups*Not done: remove from groups*'
+
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AddGroup $g1 -RemoveGroup $g1 -ErrorAction SilentlyContinue -ErrorVariable e3
+        $e3[-1].FullyQualifiedErrorId | Should -BeLike 'ConflictingGroup*'
+        $global:UwCalls.Count | Should -Be 0
+    }
+
     It 'surfaces a 404 from a sign-out alone with the original error' {
         Set-UwSession
         Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"User not found","status":404}' 404 }

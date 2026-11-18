@@ -1,7 +1,7 @@
 function Set-InforcerUser {
     <#
     .SYNOPSIS
-        Updates a Microsoft Entra user's profile, manager, sign-in or licences, changes their Exchange Online mailbox (shared or user, address lists, email addresses, automatic replies, forwarding, permissions, calendar sharing, mail groups, inbox rules, mail apps), resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
+        Updates a Microsoft Entra user's profile, manager, sign-in, licences or group memberships, changes their Exchange Online mailbox (shared or user, address lists, email addresses, automatic replies, forwarding, permissions, calendar sharing, mail groups, inbox rules, mail apps), resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
 
         Required API scope(s): none; the API-key (beta) API cannot update users.
         Required permission: User & Group Management (API client, unconfirmed which grant).
@@ -16,6 +16,10 @@ function Set-InforcerUser {
 
         -AddLicense and -RemoveLicense change the user's licences in one request
         (POST .../users/{userId}/assignLicenses); if one licence is refused, nothing changes.
+        -AddGroup and -RemoveGroup change the user's Microsoft Entra group memberships
+        (POST .../users/{userId}/groups). Adding runs first and removing only after every add succeeded, so a
+        user moved between groups is never left in neither. A group the user is already in, or not in, counts
+        as done.
         Mailbox changes (-MailboxType, -HiddenFromAddressLists, -AddEmailAddress, -PrimaryEmailAddress,
         -RemoveEmailAddress, -AutoReply, -ForwardTo, -RemoveForwarding, -GrantMailboxPermission,
         -RemoveMailboxPermission, -GrantCalendarAccess, -RemoveCalendarAccess, -AddMailGroup, -RemoveMailGroup,
@@ -35,7 +39,8 @@ function Set-InforcerUser {
         and returns it; the pass cannot be read again, and it replaces a pass the user already has.
         -RevokeSessions signs the user out of every session (POST .../users/{userId}/revokeSessions);
         access tokens already issued stay valid until they expire, typically within 90 minutes.
-        In one call the steps run in this order: profile update, licences (when -AddLicense is given), mailbox
+        In one call the steps run in this order: profile update, licences (when -AddLicense is given), adding
+        to groups, removing from groups, mailbox
         type, address lists, adding email addresses, primary email address, removing email addresses,
         automatic replies, forwarding, granting and removing mailbox permissions, sharing and unsharing the
         calendar, adding to and removing from mail groups, removing inbox rules, mail apps, licences (when
@@ -141,6 +146,14 @@ function Set-InforcerUser {
     .PARAMETER RemoveLicense
         The skuId of one or more licences to take from the user. A licence the user gets through a group
         is refused; one the user does not have is ignored.
+
+    .PARAMETER AddGroup
+        The object id of one or more Microsoft Entra groups (at most 20) to add the user to. Role-assignable
+        groups are refused.
+
+    .PARAMETER RemoveGroup
+        The object id of one or more Microsoft Entra groups (at most 20) to remove the user from. Runs only
+        after -AddGroup succeeded. Role-assignable groups are refused.
 
     .PARAMETER HiddenFromAddressLists
         $true hides the user's mailbox from the address lists (the global address list in Outlook), $false
@@ -328,6 +341,11 @@ function Set-InforcerUser {
         Blocks IMAP and POP for the mailbox and makes another user a delegate of its calendar.
 
     .EXAMPLE
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AddGroup '00000000-0000-0000-0000-0000000000c2' -RemoveGroup '00000000-0000-0000-0000-0000000000c1'
+
+        Moves the user to another group: adds them to the new group, then removes them from the old one.
+
+    .EXAMPLE
         Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
 
         Shows what would change without changing it.
@@ -405,6 +423,12 @@ function Set-InforcerUser {
 
         [ValidateNotNullOrEmpty()]
         [guid[]]$RemoveLicense,
+
+        [ValidateCount(1, 20)]
+        [guid[]]$AddGroup,
+
+        [ValidateCount(1, 20)]
+        [guid[]]$RemoveGroup,
 
         [bool]$HiddenFromAddressLists,
 
@@ -521,6 +545,11 @@ function Set-InforcerUser {
             Write-Error -Message "Allow or block a mail app, not both: $($bothWays -join ', ')." -ErrorId 'ConflictingMailApp' -Category InvalidArgument
             return
         }
+        $groupBothWays = @($AddGroup | Where-Object { $_ -in $RemoveGroup })
+        if ($groupBothWays) {
+            Write-Error -Message "Add the user to a group or remove them from it, not both: $($groupBothWays -join ', ')." -ErrorId 'ConflictingGroup' -Category InvalidArgument
+            return
+        }
         $body = ConvertTo-InforcerUserBody -BoundParameters $PSBoundParameters
         $steps = [System.Collections.Generic.List[string]]::new()
         # Mailbox steps: name -> request. Each is queued in Exchange Online and awaited before the next step.
@@ -535,6 +564,8 @@ function Set-InforcerUser {
         # so a mailbox is converted to shared before its licence goes.
         $licenceFirst = [bool]$AddLicense
         if ($licenceFirst) { $steps.Add('change licences') }
+        if ($AddGroup) { $steps.Add('add to groups') }
+        if ($RemoveGroup) { $steps.Add('remove from groups') }
         if ($MailboxType) { & $addMailboxStep "convert mailbox to $($MailboxType.ToLower())" 'type' PATCH @{ type = $MailboxType.ToLower() } }
         if ($PSBoundParameters.ContainsKey('HiddenFromAddressLists')) {
             & $addMailboxStep $(if ($HiddenFromAddressLists) { 'hide mailbox from address lists' } else { 'show mailbox in address lists' }) 'addressListVisibility' PATCH @{ hidden = $HiddenFromAddressLists }
@@ -592,7 +623,7 @@ function Set-InforcerUser {
         if ($TemporaryAccessPass) { $steps.Add('create Temporary Access Pass') }
         if ($RevokeSessions) { $steps.Add('sign out of every session') }
         if ($steps.Count -eq 0) {
-            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, a mailbox change (such as -MailboxType, -AutoReply, -ForwardTo, -GrantCalendarAccess or -BlockMailApp), -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
+            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, -AddGroup, -RemoveGroup, a mailbox change (such as -MailboxType, -AutoReply, -ForwardTo, -GrantCalendarAccess or -BlockMailApp), -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
             return
         }
 
@@ -628,6 +659,10 @@ function Set-InforcerUser {
                 if ($AddLicense) { $json['addSkuIds'] = @($AddLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
                 if ($RemoveLicense) { $json['removeSkuIds'] = @($RemoveLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
                 $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/assignLicenses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
+            } elseif ($step -in 'add to groups', 'remove from groups') {
+                $groups = @(if ($step -eq 'add to groups') { $AddGroup } else { $RemoveGroup }) | Select-Object -Unique | ForEach-Object { "$_" }
+                $json = @{ $(if ($step -eq 'add to groups') { 'add' } else { 'remove' }) = @($groups) } | ConvertTo-Json -Compress
+                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/groups" -Method POST -Body $json @errorHandling
             } elseif ($mailboxCalls.ContainsKey($step)) {
                 $call = $mailboxCalls[$step]
                 $request = @{ Endpoint = "$userEndpoint/mailbox/$($call.Path)"; Method = $call.Method }

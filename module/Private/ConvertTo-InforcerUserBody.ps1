@@ -17,7 +17,7 @@ function ConvertTo-InforcerUserBody {
     $fields = 'AccountEnabled', 'DisplayName', 'MailNickname', 'UserPrincipalName', 'GivenName', 'Surname',
         'JobTitle', 'Department', 'OfficeLocation', 'StreetAddress', 'City', 'State', 'PostalCode', 'Country',
         'MobilePhone', 'UsageLocation', 'PreferredLanguage', 'CompanyName', 'EmployeeId', 'EmployeeType',
-        'Mail', 'BusinessPhones', 'OtherMails', 'ManagerId'
+        'Mail', 'BusinessPhones', 'OtherMails', 'ManagerId', 'UserType'
 
     $body = [ordered]@{}
     foreach ($name in $fields) {

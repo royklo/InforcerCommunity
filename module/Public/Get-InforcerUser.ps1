@@ -35,9 +35,9 @@ function Get-InforcerUser {
 
     .PARAMETER IncludeMailbox
         Adds mailbox to the user: the Exchange Online mailbox as it is now (type, size, archive, litigation
-        hold, email addresses, hiddenFromAddressList, forwarding), with autoReply, permissions (and
-        unreadPermissions, the kinds Exchange could not read just now), mailGroups (distribution lists and
-        mail-enabled security groups) and inboxRules. Five extra requests. mailbox is null when the user has
+        hold, email addresses, hiddenFromAddressList, forwarding, mailApps), with autoReply, permissions (and
+        unreadPermissions, the kinds Exchange could not read just now), calendarAccess, mailGroups
+        (distribution lists and mail-enabled security groups) and inboxRules. Six extra requests. mailbox is null when the user has
         no mailbox. Only with -UserId and a login with an API client. Change these with Set-InforcerUser.
 
     .PARAMETER OutputType
@@ -184,7 +184,7 @@ function Get-InforcerUser {
                 $noMailbox = $mailboxErr -and $mailboxErr[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*'
                 if ($mailboxErr -and -not $noMailbox) { Write-Error -ErrorRecord $mailboxErr[-1] }
                 if ($null -ne $mailbox) {
-                    foreach ($part in 'autoReply', 'permissions', 'mailGroups', 'inboxRules') {
+                    foreach ($part in 'autoReply', 'permissions', 'calendarAccess', 'mailGroups', 'inboxRules') {
                         $result = Invoke-InforcerApiRequest -Endpoint "$endpoint/mailbox/$part" -Method GET -PreserveStructure
                         if ($null -eq $result) { continue }
                         # Plain assignments: an if-expression would unroll an empty list to null.

@@ -514,6 +514,44 @@ Describe 'Set-InforcerUser' {
         @($global:UwCalls | Where-Object { $_.Uri -like '*/mailGroups' })[0].Body | Should -Be ('{"groupId":"' + $g + '"}')
     }
 
+    It 'shares and unshares the calendar and sets mail apps in one change with the API spelling, after the inbox rules' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"status":"succeeded","error":null}' }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202
+        }
+        $t = '00000000-0000-0000-0000-000000000006'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -BlockMailApp imap, POP -AllowMailApp outlookweb -RemoveAllInboxRules -RemoveCalendarAccess $t -GrantCalendarAccess @{ trusteeId = $t; role = 'Editor' } -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $writes = @($global:UwCalls | Where-Object Uri -notlike '*/mailbox/actions/*')
+        @($writes | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+/mailbox', '')" }) |
+            Should -Be @('POST /calendarAccess', "DELETE /calendarAccess/$t", 'DELETE /inboxRules?all=true', 'PATCH /mailApps')
+        $writes[0].Body | Should -Be ('{"trusteeId":"' + $t + '","role":"editor"}')
+        $writes[3].Body | Should -Be '{"outlookWeb":true,"imap":false,"pop":false}'
+    }
+
+    It 'refuses a calendar share without a valid role and an app both allowed and blocked, without a request' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -GrantCalendarAccess @{ trusteeId = '00000000-0000-0000-0000-000000000006'; role = 'owner' } -ErrorAction SilentlyContinue -ErrorVariable e1
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AllowMailApp Pop -BlockMailApp pop -ErrorAction SilentlyContinue -ErrorVariable e2
+        $e1[-1].FullyQualifiedErrorId | Should -BeLike 'InvalidCalendarAccess*'
+        $e2[-1].FullyQualifiedErrorId | Should -BeLike 'ConflictingMailApp*'
+        $global:UwCalls.Count | Should -Be 0
+    }
+
+    It 'sends userType on create and update' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse ('{"id":"' + $script:Uid + '"}') 201 }
+        $null = New-InforcerUser -TenantId $script:Tid -DisplayName 'Jo' -UserPrincipalName 'jo@contoso.com' -Password $script:Pw -UserType Guest
+        $global:UwCalls[0].Body | Should -Match '"userType":"Guest"'
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -UserType Member
+        $global:UwCalls[0].Body | Should -Be '{"userType":"Member"}'
+    }
+
     It 'surfaces a 404 from a sign-out alone with the original error' {
         Set-UwSession
         Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"User not found","status":404}' 404 }
@@ -566,7 +604,7 @@ Describe 'Get-InforcerUser -IncludeAuthenticationMethods' {
 }
 
 Describe 'Get-InforcerUser -IncludeMailbox' {
-    It 'adds the mailbox with its automatic replies, permissions, mail groups and inbox rules' {
+    It 'adds the mailbox with its automatic replies, permissions, calendar access, mail groups and inbox rules' {
         Set-UwSession
         Set-UwRoute {
             param($Uri, $Method, $Body)
@@ -574,6 +612,7 @@ Describe 'Get-InforcerUser -IncludeMailbox' {
                 '*/mailbox' { return New-UwResponse '{"displayName":"Jo Bloggs","type":"user","emailAddresses":[{"address":"jo@contoso.com","primary":true}],"onPremisesSyncEnabled":false,"hiddenFromAddressList":false,"litigationHold":false,"size":null,"archive":null,"forwarding":{"enabled":false,"recipientUserId":null,"recipientDisplayName":null,"smtpAddress":null,"keepCopy":false}}' }
                 '*/mailbox/autoReply' { return New-UwResponse '{"status":"disabled","externalAudience":"none","internalReplyMessage":"","externalReplyMessage":"","scheduledStartDateTime":null,"scheduledEndDateTime":null,"simplified":false}' }
                 '*/mailbox/permissions' { return New-UwResponse '{"permissions":[{"permission":"fullAccess","trusteeId":"00000000-0000-0000-0000-000000000006","displayName":"Sam","inherited":false}],"unreadPermissions":["sendOnBehalf"]}' }
+                '*/mailbox/calendarAccess' { return New-UwResponse '{"calendarAccess":[{"trusteeId":"00000000-0000-0000-0000-000000000006","displayName":"Sam","role":"delegate"}]}' }
                 '*/mailbox/mailGroups' { return New-UwResponse '{"mailGroups":[]}' }
                 '*/mailbox/inboxRules' { return New-UwResponse '{"inboxRules":[{"id":"1234","name":"Fwd","enabled":true,"description":null,"deletesMessages":false,"hidden":false,"deletable":true,"forwardsExternally":true,"recipients":[]}]}' }
             }
@@ -581,8 +620,9 @@ Describe 'Get-InforcerUser -IncludeMailbox' {
         }
         $u = Get-InforcerUser -TenantId $script:Tid -UserId $script:Uid -IncludeMailbox -ErrorVariable e
         $e | Should -BeNullOrEmpty
-        $global:UwCalls.Count | Should -Be 6
+        $global:UwCalls.Count | Should -Be 7
         $u.mailbox.type | Should -Be 'user'
+        $u.mailbox.calendarAccess[0].role | Should -Be 'delegate'
         $u.mailbox.autoReply.status | Should -Be 'disabled'
         $u.mailbox.permissions[0].trusteeId | Should -Be '00000000-0000-0000-0000-000000000006'
         @($u.mailbox.unreadPermissions) | Should -Be @('sendOnBehalf')

@@ -99,6 +99,9 @@ function New-InforcerUser {
     .PARAMETER ManagerId
         The Microsoft Entra object id of the user's manager.
 
+    .PARAMETER UserType
+        Member (the default when left out) or Guest.
+
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject' (JSON string, depth 100).
         Piped tenants with JsonObject return one array for all of them.
@@ -181,6 +184,9 @@ function New-InforcerUser {
         [string[]]$BusinessPhones,
         [string[]]$OtherMails,
         [string]$ManagerId,
+
+        [ValidateSet('Member', 'Guest')]
+        [string]$UserType,
 
         [ValidateSet('PowerShellObject', 'JsonObject')]
         [string]$OutputType = 'PowerShellObject'

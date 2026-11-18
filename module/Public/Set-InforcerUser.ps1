@@ -1,7 +1,7 @@
 function Set-InforcerUser {
     <#
     .SYNOPSIS
-        Updates a Microsoft Entra user's profile, manager, sign-in or licences, changes their Exchange Online mailbox (shared or user, address lists, email addresses, automatic replies, forwarding, permissions, mail groups, inbox rules), resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
+        Updates a Microsoft Entra user's profile, manager, sign-in or licences, changes their Exchange Online mailbox (shared or user, address lists, email addresses, automatic replies, forwarding, permissions, calendar sharing, mail groups, inbox rules, mail apps), resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
 
         Required API scope(s): none; the API-key (beta) API cannot update users.
         Required permission: User & Group Management (API client, unconfirmed which grant).
@@ -12,13 +12,14 @@ function Set-InforcerUser {
 
         Only the parameters you pass are changed; everything else stays as it is. Pass an empty string
         ('') or $null to clear a field, such as -JobTitle '' or -ManagerId '' to remove the manager.
-        DisplayName, MailNickname, UserPrincipalName and Mail cannot be cleared.
+        DisplayName, MailNickname, UserPrincipalName, Mail and UserType cannot be cleared.
 
         -AddLicense and -RemoveLicense change the user's licences in one request
         (POST .../users/{userId}/assignLicenses); if one licence is refused, nothing changes.
         Mailbox changes (-MailboxType, -HiddenFromAddressLists, -AddEmailAddress, -PrimaryEmailAddress,
         -RemoveEmailAddress, -AutoReply, -ForwardTo, -RemoveForwarding, -GrantMailboxPermission,
-        -RemoveMailboxPermission, -AddMailGroup, -RemoveMailGroup, -RemoveInboxRule, -RemoveAllInboxRules)
+        -RemoveMailboxPermission, -GrantCalendarAccess, -RemoveCalendarAccess, -AddMailGroup, -RemoveMailGroup,
+        -RemoveInboxRule, -RemoveAllInboxRules, -AllowMailApp, -BlockMailApp)
         each go to .../users/{userId}/mailbox/... and are queued in Exchange Online, which applies one change
         to a mailbox at a time, about a minute each. The cmdlet waits for each to succeed or fail (at most
         5 minutes per change, then it warns that Exchange carries on) before the next step. Read the
@@ -36,9 +37,9 @@ function Set-InforcerUser {
         access tokens already issued stay valid until they expire, typically within 90 minutes.
         In one call the steps run in this order: profile update, licences (when -AddLicense is given), mailbox
         type, address lists, adding email addresses, primary email address, removing email addresses,
-        automatic replies, forwarding, granting and removing mailbox permissions, adding to and removing
-        from mail groups, removing inbox rules, licences (when only -RemoveLicense is given, so a mailbox is
-        converted to shared before its licence goes), password reset, removing sign-in methods, MFA reset,
+        automatic replies, forwarding, granting and removing mailbox permissions, sharing and unsharing the
+        calendar, adding to and removing from mail groups, removing inbox rules, mail apps, licences (when
+        only -RemoveLicense is given, so a mailbox is converted to shared before its licence goes), password reset, removing sign-in methods, MFA reset,
         Temporary Access Pass, sign-out. When a step fails, the later steps
         are skipped and the error says which steps were already done.
 
@@ -128,6 +129,9 @@ function Set-InforcerUser {
     .PARAMETER ManagerId
         The Microsoft Entra object id of the user's manager. '' removes the manager.
 
+    .PARAMETER UserType
+        Member or Guest. Cannot be cleared.
+
     .PARAMETER AddLicense
         The skuId of one or more licences to give the user, from Get-InforcerTenant -IncludeSubscriptions
         (which also shows free seats) or assignedLicenses of Get-InforcerUser -UserId.
@@ -173,6 +177,15 @@ function Set-InforcerUser {
         One or more permissions to take away, each with permission and trusteeId, such as entries of
         mailbox.permissions from Get-InforcerUser -IncludeMailbox. An inherited permission cannot be removed.
 
+    .PARAMETER GrantCalendarAccess
+        One or more users to share the calendar with, each with trusteeId (a member of the tenant, not a
+        guest) and role: reviewer (sees events), editor (also creates, changes and deletes them) or delegate
+        (an editor who also receives meeting requests). A user who already has access gets the new role.
+
+    .PARAMETER RemoveCalendarAccess
+        The object id of one or more users whose access to the calendar is taken away, whatever their
+        role, such as trusteeId of mailbox.calendarAccess from Get-InforcerUser -IncludeMailbox.
+
     .PARAMETER AddMailGroup
         The object id of one or more distribution lists or mail-enabled security groups to add the user to.
         Microsoft 365 groups and groups synced from on-premises Active Directory are refused.
@@ -198,6 +211,17 @@ function Set-InforcerUser {
 
     .PARAMETER RemoveAllInboxRules
         Removes every inbox rule Exchange can remove; rules such as the junk filter are kept.
+
+    .PARAMETER AllowMailApp
+        Mail apps the mailbox may connect with: OutlookWeb (also the new Outlook for Windows),
+        OutlookDesktop (classic Outlook for Windows), OutlookMac (the new Outlook for Mac),
+        ExchangeWebServices, Imap, Pop, OutlookApp (iOS and Android) and OtherMailApps (Exchange
+        ActiveSync, such as iPhone Mail). A tenant-wide policy can still block an app. Apps not named keep
+        their setting; see mailbox.mailApps from Get-InforcerUser -IncludeMailbox.
+
+    .PARAMETER BlockMailApp
+        Mail apps the mailbox may no longer connect with, with the names of -AllowMailApp. Allowing and
+        blocking happen in one change.
 
     .PARAMETER Password
         A new password as a SecureString. It must meet the tenant's password policy.
@@ -299,6 +323,11 @@ function Set-InforcerUser {
         Stops a compromised mailbox from sending mail out: removes its forwarding and every inbox rule that forwards outside the tenant.
 
     .EXAMPLE
+        Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -BlockMailApp Imap, Pop -GrantCalendarAccess @{ trusteeId = '00000000-0000-0000-0000-000000000006'; role = 'delegate' }
+
+        Blocks IMAP and POP for the mailbox and makes another user a delegate of its calendar.
+
+    .EXAMPLE
         Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
 
         Shows what would change without changing it.
@@ -368,6 +397,9 @@ function Set-InforcerUser {
 
         [string]$ManagerId,
 
+        [ValidateSet('Member', 'Guest')]
+        [string]$UserType,
+
         [ValidateNotNullOrEmpty()]
         [guid[]]$AddLicense,
 
@@ -396,6 +428,12 @@ function Set-InforcerUser {
         [object[]]$RemoveMailboxPermission,
 
         [ValidateNotNullOrEmpty()]
+        [object[]]$GrantCalendarAccess,
+
+        [ValidateNotNullOrEmpty()]
+        [guid[]]$RemoveCalendarAccess,
+
+        [ValidateNotNullOrEmpty()]
         [guid[]]$AddMailGroup,
 
         [ValidateNotNullOrEmpty()]
@@ -414,6 +452,12 @@ function Set-InforcerUser {
         [string[]]$RemoveInboxRule,
 
         [switch]$RemoveAllInboxRules,
+
+        [ValidateSet('OutlookWeb', 'OutlookDesktop', 'OutlookMac', 'ExchangeWebServices', 'Imap', 'Pop', 'OutlookApp', 'OtherMailApps')]
+        [string[]]$AllowMailApp,
+
+        [ValidateSet('OutlookWeb', 'OutlookDesktop', 'OutlookMac', 'ExchangeWebServices', 'Imap', 'Pop', 'OutlookApp', 'OtherMailApps')]
+        [string[]]$BlockMailApp,
 
         [System.Security.SecureString]$Password,
 
@@ -466,6 +510,17 @@ function Set-InforcerUser {
                 return
             }
         }
+        foreach ($c in $GrantCalendarAccess) {
+            if ($null -ne $c -and (-not $c.trusteeId -or $c.role -notin 'reviewer', 'editor', 'delegate')) {
+                Write-Error -Message 'Each calendar share needs trusteeId and role (reviewer, editor or delegate), such as @{ trusteeId = ''<user id>''; role = ''reviewer'' }.' -ErrorId 'InvalidCalendarAccess' -Category InvalidArgument
+                return
+            }
+        }
+        $bothWays = @($AllowMailApp | Where-Object { $_ -in $BlockMailApp })
+        if ($bothWays) {
+            Write-Error -Message "Allow or block a mail app, not both: $($bothWays -join ', ')." -ErrorId 'ConflictingMailApp' -Category InvalidArgument
+            return
+        }
         $body = ConvertTo-InforcerUserBody -BoundParameters $PSBoundParameters
         $steps = [System.Collections.Generic.List[string]]::new()
         # Mailbox steps: name -> request. Each is queued in Exchange Online and awaited before the next step.
@@ -513,10 +568,23 @@ function Set-InforcerUser {
         foreach ($p in $RemoveMailboxPermission) {
             & $addMailboxStep "remove $($p.permission) from $($p.trusteeId)" "permissions/$([System.Uri]::EscapeDataString("$($p.permission)"))/$([System.Uri]::EscapeDataString("$($p.trusteeId)"))" DELETE $null
         }
+        foreach ($c in $GrantCalendarAccess) {
+            & $addMailboxStep "share calendar with $($c.trusteeId) as $("$($c.role)".ToLower())" 'calendarAccess' POST ([ordered]@{ trusteeId = "$($c.trusteeId)"; role = "$($c.role)".ToLower() })
+        }
+        foreach ($trusteeId in $RemoveCalendarAccess | Select-Object -Unique) { & $addMailboxStep "remove calendar access of $trusteeId" "calendarAccess/$trusteeId" DELETE $null }
         foreach ($groupId in $AddMailGroup | Select-Object -Unique) { & $addMailboxStep "add to mail group $groupId" 'mailGroups' POST @{ groupId = "$groupId" } }
         foreach ($groupId in $RemoveMailGroup | Select-Object -Unique) { & $addMailboxStep "remove from mail group $groupId" "mailGroups/$groupId" DELETE $null }
         foreach ($ruleId in $RemoveInboxRule | Select-Object -Unique) { & $addMailboxStep "remove inbox rule $ruleId" "inboxRules/$([System.Uri]::EscapeDataString($ruleId))" DELETE $null }
         if ($RemoveAllInboxRules) { & $addMailboxStep 'remove every inbox rule' 'inboxRules?all=true' DELETE $null }
+        if ($AllowMailApp -or $BlockMailApp) {
+            # A case-insensitive lookup gives the API's spelling whatever casing was typed.
+            $apiName = @{}
+            foreach ($n in 'outlookWeb', 'outlookDesktop', 'outlookMac', 'exchangeWebServices', 'imap', 'pop', 'outlookApp', 'otherMailApps') { $apiName[$n] = $n }
+            $apps = [ordered]@{}
+            foreach ($app in $AllowMailApp) { $apps[$apiName[$app]] = $true }
+            foreach ($app in $BlockMailApp) { $apps[$apiName[$app]] = $false }
+            & $addMailboxStep "$(@(if ($AllowMailApp) { "allow $($AllowMailApp -join ', ')" }; if ($BlockMailApp) { "block $($BlockMailApp -join ', ')" }) -join ' and ')" 'mailApps' PATCH $apps
+        }
         if ($RemoveLicense -and -not $licenceFirst) { $steps.Add('change licences') }
         if ($Password) { $steps.Add('reset password') }
         foreach ($methodId in $RemoveAuthenticationMethod | Select-Object -Unique) { $steps.Add("remove authentication method $methodId") }
@@ -524,7 +592,7 @@ function Set-InforcerUser {
         if ($TemporaryAccessPass) { $steps.Add('create Temporary Access Pass') }
         if ($RevokeSessions) { $steps.Add('sign out of every session') }
         if ($steps.Count -eq 0) {
-            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, a mailbox change (such as -MailboxType, -HiddenFromAddressLists, -AutoReply or -ForwardTo), -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
+            Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, a mailbox change (such as -MailboxType, -AutoReply, -ForwardTo, -GrantCalendarAccess or -BlockMailApp), -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
             return
         }
 

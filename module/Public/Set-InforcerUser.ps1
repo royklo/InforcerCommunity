@@ -1,7 +1,7 @@
 function Set-InforcerUser {
     <#
     .SYNOPSIS
-        Updates a Microsoft Entra user's profile, manager, sign-in, licences or group memberships, changes their Exchange Online mailbox (shared or user, address lists, email addresses, automatic replies, forwarding, permissions, calendar sharing, mail groups, inbox rules, mail apps), resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
+        Updates a Microsoft Entra user's profile, manager, sign-in, licences or group memberships, changes their Exchange Online mailbox (shared or user, online archive, address lists, email addresses, automatic replies, forwarding, permissions, calendar sharing, mail groups, inbox rules, mail apps), resets their password, removes sign-in methods (or all of them, to reset MFA), issues a Temporary Access Pass or signs them out everywhere.
 
         Required API scope(s): none; the API-key (beta) API cannot update users.
         Required permission: User & Group Management (API client, unconfirmed which grant).
@@ -20,7 +20,7 @@ function Set-InforcerUser {
         (POST .../users/{userId}/groups). Adding runs first and removing only after every add succeeded, so a
         user moved between groups is never left in neither. A group the user is already in, or not in, counts
         as done.
-        Mailbox changes (-MailboxType, -HiddenFromAddressLists, -AddEmailAddress, -PrimaryEmailAddress,
+        Mailbox changes (-MailboxType, -EnableArchive, -HiddenFromAddressLists, -AddEmailAddress, -PrimaryEmailAddress,
         -RemoveEmailAddress, -AutoReply, -ForwardTo, -RemoveForwarding, -GrantMailboxPermission,
         -RemoveMailboxPermission, -GrantCalendarAccess, -RemoveCalendarAccess, -AddMailGroup, -RemoveMailGroup,
         -RemoveInboxRule, -RemoveAllInboxRules, -AllowMailApp, -BlockMailApp)
@@ -41,7 +41,7 @@ function Set-InforcerUser {
         access tokens already issued stay valid until they expire, typically within 90 minutes.
         In one call the steps run in this order: profile update, licences (when -AddLicense is given), adding
         to groups, removing from groups, mailbox
-        type, address lists, adding email addresses, primary email address, removing email addresses,
+        type, online archive, address lists, adding email addresses, primary email address, removing email addresses,
         automatic replies, forwarding, granting and removing mailbox permissions, sharing and unsharing the
         calendar, adding to and removing from mail groups, removing inbox rules, mail apps, licences (when
         only -RemoveLicense is given, so a mailbox is converted to shared before its licence goes), password reset, removing sign-in methods, MFA reset,
@@ -162,6 +162,11 @@ function Set-InforcerUser {
     .PARAMETER MailboxType
         User or Shared. Converts the mailbox to a shared mailbox (for a leaver, before the licence is
         removed) or back to a user mailbox.
+
+    .PARAMETER EnableArchive
+        Turns on the mailbox's online archive. It cannot be turned off here; one already on is left as it is.
+        Mail moves into the archive under the tenant's retention policy, not straight away. Refused for a
+        user synced from on-premises Active Directory.
 
     .PARAMETER AutoReply
         The automatic replies, as a hashtable or the autoReply object Get-InforcerUser -IncludeMailbox
@@ -435,6 +440,8 @@ function Set-InforcerUser {
         [ValidateSet('User', 'Shared')]
         [string]$MailboxType,
 
+        [switch]$EnableArchive,
+
         [ValidateNotNull()]
         [object]$AutoReply,
 
@@ -567,6 +574,7 @@ function Set-InforcerUser {
         if ($AddGroup) { $steps.Add('add to groups') }
         if ($RemoveGroup) { $steps.Add('remove from groups') }
         if ($MailboxType) { & $addMailboxStep "convert mailbox to $($MailboxType.ToLower())" 'type' PATCH @{ type = $MailboxType.ToLower() } }
+        if ($EnableArchive) { & $addMailboxStep 'turn on the online archive' 'archive' PATCH @{ enabled = $true } }
         if ($PSBoundParameters.ContainsKey('HiddenFromAddressLists')) {
             & $addMailboxStep $(if ($HiddenFromAddressLists) { 'hide mailbox from address lists' } else { 'show mailbox in address lists' }) 'addressListVisibility' PATCH @{ hidden = $HiddenFromAddressLists }
         }

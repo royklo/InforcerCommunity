@@ -430,11 +430,12 @@ Describe 'Set-InforcerUser' {
         }
         $reply = [ordered]@{ status = 'alwaysEnabled'; externalAudience = 'none'; internalReplyMessage = 'Jo has left.' }
         $manager = '00000000-0000-0000-0000-000000000006'
-        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AccountEnabled $false -MailboxType Shared -AutoReply $reply -GrantMailboxPermission @{ permission = 'fullAccess'; trusteeId = $manager; automapping = $true } -RemoveLicense '00000000-0000-0000-0000-0000000000b1' -RevokeSessions -ErrorVariable e
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -AccountEnabled $false -MailboxType Shared -EnableArchive -AutoReply $reply -GrantMailboxPermission @{ permission = 'fullAccess'; trusteeId = $manager; automapping = $true } -RemoveLicense '00000000-0000-0000-0000-0000000000b1' -RevokeSessions -ErrorVariable e
         $e | Should -BeNullOrEmpty
         @($global:UwCalls | Where-Object Uri -notlike '*/mailbox/actions/*' | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
-            Should -Be @('PATCH ', 'PATCH /mailbox/type', 'PATCH /mailbox/autoReply', 'POST /mailbox/permissions', 'POST /assignLicenses', 'POST /revokeSessions')
-        @($global:UwCalls | Where-Object Uri -like '*/mailbox/actions/*').Count | Should -Be 3
+            Should -Be @('PATCH ', 'PATCH /mailbox/type', 'PATCH /mailbox/archive', 'PATCH /mailbox/autoReply', 'POST /mailbox/permissions', 'POST /assignLicenses', 'POST /revokeSessions')
+        @($global:UwCalls | Where-Object Uri -like '*/mailbox/actions/*').Count | Should -Be 4
+        @($global:UwCalls | Where-Object Uri -like '*/mailbox/archive')[0].Body | Should -Be '{"enabled":true}'
         $writes = @($global:UwCalls | Where-Object Uri -match '/mailbox/(type|autoReply|permissions)$')
         $writes[0].Body | Should -Be '{"type":"shared"}'
         $writes[1].Body | Should -Be '{"status":"alwaysEnabled","externalAudience":"none","internalReplyMessage":"Jo has left."}'

@@ -481,9 +481,9 @@ The default view shows 9 key properties. Use `| Select-Object *` to see all prop
 
 ## Get-InforcerUser
 
-Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`, and `-IncludeMailbox` (API client only) to get their Exchange Online mailbox as `mailbox`.
+Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`, `-IncludeMailbox` (API client only) to get their Exchange Online mailbox as `mailbox`, and `-IncludeMessageTrace` (API client only) to get the mail they sent and received in the last 10 days as `messageTrace`.
 
-> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses; `-IncludeMailbox` adds automatic reply texts, forwarding targets and who can read the mailbox. See [Personal data](#personal-data).
+> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses; `-IncludeMailbox` adds automatic reply texts, forwarding targets and who can read the mailbox; `-IncludeMessageTrace` adds the addresses and subject lines of the user's mail. See [Personal data](#personal-data).
 
 > **v1:** the list view returns `Groups` and `Roles` as counts (`groupCount`/`roleCount` mapped to those names), not arrays; `-UserId` returns the full record.
 
@@ -491,10 +491,10 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/users` (list) or `GET /beta/tenants/{tenantId}/users/{userId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Users.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
-**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`, `.../mailbox/autoReply`, `.../mailbox/permissions`, `.../mailbox/calendarAccess`, `.../mailbox/mailGroups`, `.../mailbox/inboxRules` (with `-IncludeMailbox`)
+**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`, `.../mailbox/autoReply`, `.../mailbox/permissions`, `.../mailbox/calendarAccess`, `.../mailbox/mailGroups`, `.../mailbox/inboxRules` (with `-IncludeMailbox`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/messageTrace` (with `-IncludeMessageTrace`, every page)
 **Required API client permission(s) (v1)**: User & Group Management + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`) | [Mailbox](./API-REFERENCE.md#mailbox) (`mailbox`)
+**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`) | [Mailbox](./API-REFERENCE.md#mailbox) (`mailbox`) | [MailboxMessageTrace](./API-REFERENCE.md#mailboxmessagetrace) (`messageTrace`)
 
 | Parameter | Type | Mandatory | ParameterSet | Description |
 |-----------|------|-----------|--------------|-------------|
@@ -505,6 +505,7 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 | **UserId** | String | Yes | ById | The user ID (GUID) to retrieve full details for. |
 | **IncludeAuthenticationMethods** | Switch | No | ById | Adds `authenticationMethods`: the user's registered sign-in methods (password, phone, Microsoft Authenticator, passkey, ...), one extra request. Passwords and Temporary Access Pass codes are never returned. Needs an API client; an API key stops with `RequiresApiClient`. |
 | **IncludeMailbox** | Switch | No | ById | Adds `mailbox`: type, size, archive, litigation hold, email addresses, `hiddenFromAddressList`, forwarding and `mailApps`, plus `autoReply`, `permissions`, `unreadPermissions`, `calendarAccess`, `mailGroups` and `inboxRules` (six extra requests). `$null` when the user has no mailbox. Needs an API client. |
+| **IncludeMessageTrace** | Switch | No | ById | Adds `messageTrace`: the mail the user sent and received in the last 10 days, newest first, one entry per message per recipient (`received`, `direction`, `sender`, `recipient`, `subject`, `status`); delivery details only, never content. Reads every page (one request per 1,000 entries each way). Empty when the user has no mailbox. Needs an API client. |
 | **OutputType** | String | No | Both | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -518,6 +519,8 @@ Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-0000000000
 # Where the mail goes: forwarding and inbox rules that send mail outside the tenant
 $mailbox = (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMailbox).mailbox
 $mailbox.forwarding; $mailbox.inboxRules | Where-Object forwardsExternally
+# Mail of the last 10 days that did not arrive
+(Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMessageTrace).messageTrace | Where-Object status -ne 'Delivered'
 Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
 Get-InforcerUser -TenantId 'Contoso' -OutputType JsonObject
 ```
@@ -847,6 +850,35 @@ a bare `True`/blank:
 
 Both properties are on the object in raw API form (`membershipRule`, `onPremisesSyncEnabled`) and are
 unaffected by the display formatting — `-OutputType JsonObject` and `Select-Object` see the raw values.
+
+---
+
+## Set-InforcerGroup
+
+Adds users to a Microsoft Entra group and removes others from it, in one request. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change groups. Each user is changed on its own, so a user who cannot be added does not stop the removals, and a user already in the group (or not in it) counts as done, so the same command can safely run again. When some users changed and others did not, the error lists each user (`Steps: ...`). Role-assignable groups, dynamic groups, distribution lists and mail-enabled security groups cannot be changed this way. Returns nothing. Supports `-WhatIf` and `-Confirm`. To change the groups of one user, use `Set-InforcerUser -AddGroup`/`-RemoveGroup`.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tenants/{msTenantId}/groups/{groupId}/members` (+ `GET /v1/tenants/{msTenantId}/groups` for a group name, `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+**Request schema**: [GroupMembersChange](./API-REFERENCE.md#groupmemberschange)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **Group** | String | Yes | The group's object ID or display name. Alias: `GroupId`. |
+| **AddMember** | Guid[] | No | Object IDs of the users to add, at most 20. |
+| **RemoveMember** | Guid[] | No | Object IDs of the users to remove, at most 20. A user in both lists stops with `ConflictingMember`; neither list stops with `NoChangeSpecified`. |
+
+### Examples
+
+```powershell
+Set-InforcerGroup -TenantId 'Contoso' -Group 'Sales' -AddMember '00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000006'
+Set-InforcerGroup -TenantId 'Contoso' -Group '00000000-0000-0000-0000-0000000000c1' -AddMember '00000000-0000-0000-0000-000000000005' -RemoveMember '00000000-0000-0000-0000-000000000006' -WhatIf
+```
+
+No output on success.
 
 ---
 

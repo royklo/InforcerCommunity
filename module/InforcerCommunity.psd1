@@ -22,6 +22,7 @@
         'New-InforcerUser'
         'Set-InforcerUser'
         'Get-InforcerGroup'
+        'Set-InforcerGroup'
         'Get-InforcerRole'
         'Get-InforcerSecureScore'
         'Export-InforcerTenantDocumentation'

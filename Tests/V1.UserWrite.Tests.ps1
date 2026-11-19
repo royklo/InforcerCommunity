@@ -688,3 +688,80 @@ Describe 'Get-InforcerUser -IncludeMailbox' {
         $global:UwCalls.Count | Should -Be 0
     }
 }
+
+Describe 'Get-InforcerUser -IncludeMessageTrace' {
+    It 'reads every page of the trace and attaches it as messageTrace' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/mailbox/messageTrace?continuationToken=p2') {
+                return New-UwResponse '{"messages":[{"received":"2026-11-18T09:00:00Z","direction":"received","sender":"ann@fabrikam.com","recipient":"jo@contoso.com","subject":"Hi","status":"FilteredAsSpam"}],"continuationToken":null}'
+            }
+            if ($Uri -like '*/mailbox/messageTrace') {
+                return New-UwResponse '{"messages":[{"received":"2026-11-19T09:00:00Z","direction":"sent","sender":"jo@contoso.com","recipient":"ann@fabrikam.com","subject":"Re: Hi","status":"Delivered"}],"continuationToken":"p2"}'
+            }
+            New-UwResponse ('{"id":"' + $script:Uid + '","displayName":"Jo Bloggs"}')
+        }
+        $u = Get-InforcerUser -TenantId $script:Tid -UserId $script:Uid -IncludeMessageTrace -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $global:UwCalls.Count | Should -Be 3
+        @($u.messageTrace).Count | Should -Be 2
+        $u.messageTrace[1].status | Should -Be 'FilteredAsSpam'
+    }
+
+    It 'gives an empty trace for a user without a mailbox and reports other failures' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/messageTrace') { return New-UwResponse '{"title":"Mailbox not found","status":404}' 404 }
+            New-UwResponse '{"id":"u1"}'
+        }
+        $u = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeMessageTrace -ErrorAction Stop
+        $u.PSObject.Properties['messageTrace'] | Should -Not -BeNullOrEmpty
+        @($u.messageTrace).Count | Should -Be 0
+
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Uri -like '*/messageTrace') { return New-UwResponse '{"title":"Bad gateway","status":502}' 502 }
+            New-UwResponse '{"id":"u1"}'
+        }
+        $u = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeMessageTrace -ErrorAction SilentlyContinue -ErrorVariable e2
+        "$($e2[-1])" | Should -BeLike '*502*'
+        $u.PSObject.Properties['messageTrace'] | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Set-InforcerGroup' {
+    It 'adds and removes members in one request' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        $g = '00000000-0000-0000-0000-0000000000c1'; $u2 = '00000000-0000-0000-0000-000000000006'
+        Set-InforcerGroup -TenantId $script:Tid -Group $g -AddMember $script:Uid, $script:Uid -RemoveMember $u2 -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $global:UwCalls.Count | Should -Be 1
+        $global:UwCalls[0].Method | Should -Be 'POST'
+        $global:UwCalls[0].Uri | Should -Be "https://api.example.invalid/v1/tenants/$($script:Tid)/groups/$g/members"
+        $global:UwCalls[0].Body | Should -Be ('{"add":["' + $script:Uid + '"],"remove":["' + $u2 + '"]}')
+    }
+
+    It 'refuses no change, a user in both lists and an API-key login without a request' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '' 204 }
+        $g = '00000000-0000-0000-0000-0000000000c1'
+        Set-InforcerGroup -TenantId $script:Tid -Group $g -ErrorAction SilentlyContinue -ErrorVariable e1
+        $e1[-1].FullyQualifiedErrorId | Should -BeLike 'NoChangeSpecified*'
+        Set-InforcerGroup -TenantId $script:Tid -Group $g -AddMember $script:Uid -RemoveMember $script:Uid -ErrorAction SilentlyContinue -ErrorVariable e2
+        $e2[-1].FullyQualifiedErrorId | Should -BeLike 'ConflictingMember*'
+        Set-UwSession -Beta
+        Set-InforcerGroup -TenantId 5 -Group $g -AddMember $script:Uid -ErrorAction SilentlyContinue -ErrorVariable e3
+        $e3[-1].FullyQualifiedErrorId | Should -BeLike 'RequiresApiClient*'
+        $global:UwCalls.Count | Should -Be 0
+    }
+
+    It 'shows the per-user results of a partial failure' {
+        Set-UwSession
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"Some changes failed","status":400,"results":[{"id":"00000000-0000-0000-0000-000000000005","status":"succeeded"},{"id":"00000000-0000-0000-0000-000000000006","status":"failed","error":{"code":"Refused","message":"User not found"}}]}' 400 }
+        Set-InforcerGroup -TenantId $script:Tid -Group '00000000-0000-0000-0000-0000000000c1' -AddMember $script:Uid, '00000000-0000-0000-0000-000000000006' -ErrorAction SilentlyContinue -ErrorVariable e
+        "$($e[-1])" | Should -BeLike '*Steps:*'
+    }
+}

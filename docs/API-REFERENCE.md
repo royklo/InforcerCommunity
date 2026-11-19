@@ -21,6 +21,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [Rate limits](#rate-limits)
   - [failedPolicyTypes](#failedpolicytypes)
   - [v1 endpoints](#v1-endpoints)
+  - [Managing users (v1 only)](#managing-users-v1-only)
   - [How v1 fields map to the module's names](#how-v1-fields-map-to-the-modules-names)
     - [Alignment details renames](#alignment-details-renames)
 - [Beta endpoints](#beta-endpoints)
@@ -45,6 +46,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [TenantTag](#tenanttag)
   - [AlignmentSummary](#alignmentsummary)
   - [TenantLicense](#tenantlicense)
+  - [Subscription](#subscription)
   - [Policy](#policy)
   - [PolicyTag](#policytag)
   - [EventType](#eventtype)
@@ -52,6 +54,15 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [UserSummary](#usersummary)
   - [User](#user)
   - [UserLicense](#userlicense)
+  - [CreatedUser](#createduser)
+  - [UserUpdate](#userupdate)
+  - [PasswordReset](#passwordreset)
+  - [UserLicenseAssignment](#userlicenseassignment)
+  - [UserGroupsChange](#usergroupschange)
+  - [TemporaryAccessPass](#temporaryaccesspass)
+  - [MailboxAction](#mailboxaction)
+  - [Mailbox](#mailbox)
+  - [UserAuthenticationMethod](#userauthenticationmethod)
   - [TenantGroupSummary](#tenantgroupsummary)
   - [TenantGroup](#tenantgroup)
   - [TenantRole](#tenantrole)
@@ -142,7 +153,9 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Get-InforcerAlignmentDetails` | `GET /beta/baselines`, `GET /beta/alignmentScores`, `GET /beta/tenants`, `GET /beta/tenants/{tenantId}/alignmentDetails` | `Baselines.Read` + `AlignmentScores.Read` + `Tenants.Read` + `tenants.policies.Read` |
 | `Get-InforcerAuditEvent` | `POST /beta/auditEvents/search` (one search; without `-EventType` no event-type filter is sent) | `Audit.Read` *(unmapped — see note above)* |
 | `Get-InforcerSupportedEventType` | `GET /beta/auditEvents/eventTypes` | `Audit.Read` *(unmapped — see note above)* |
-| `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Users.Read` + `Tenants.Read`† |
+| `Get-InforcerUser` | `GET /beta/tenants/{tenantId}/users[/...] ` + `GET /beta/tenants` *(GUID/name lookup)*; `-IncludeAuthenticationMethods` has no beta equivalent (needs an API client) | `Tenants.Users.Read` + `Tenants.Read`† |
+| `New-InforcerUser` | none: the beta API cannot create users (the cmdlet needs an API client) | not available with an API key |
+| `Set-InforcerUser` | none: the beta API cannot update users, reset passwords or revoke sessions (the cmdlet needs an API client) | not available with an API key |
 | `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
 | `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
 | `Get-InforcerSecureScore` | `GET /beta/tenants/{tenantId}/secureScores` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.SecureScores.Read` + `Tenants.Read`† |
@@ -171,9 +184,10 @@ The permission names below are the ones the portal shows (feature and grant). **
 
 | Area / feature | Grant | v1 routes | Status |
 |----------------|-------|-----------|--------|
-| Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}` | unconfirmed |
+| Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}`, `/v1/tenants/{msTenantId}/subscriptions` | unconfirmed |
 | Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
-| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
+| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/users/{userId}/mailbox` (and its `autoReply`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`), `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
+| Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/groups`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`, `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`, `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/archive`, `PATCH`/`DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess/{trusteeId}`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailApps`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules[/{ruleId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | unconfirmed (which write grant) |
 | Tenants / Entra Dashboard | Read: View | `/v1/tenants/{msTenantId}/secureScores`, `/v1/tenants/{msTenantId}/directoryRoles` | unconfirmed |
 | Align / Baselines | Read: View | `/v1/baselines` | unconfirmed |
 | Align / Align | Read: View | `/v1/alignmentScores`, `/v1/tenants/{msTenantId}/alignmentDetails` | unconfirmed |
@@ -192,13 +206,15 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Connect-Inforcer` | `POST /oauth/token` (no permission needed; any valid client connects) and a best-effort `GET /v1/reports/types` to prime the report catalog | None |
 | `Disconnect-Inforcer` | none | None |
 | `Test-InforcerConnection` | `GET /v1/baselines` | Baselines; without it the test returns `False` |
-| `Get-InforcerTenant` | `GET /v1/tenants`. `-TenantId <GUID>` makes only `GET /v1/tenants/{msTenantId}`; a name adds the cached list | Tenants |
+| `Get-InforcerTenant` | `GET /v1/tenants`. `-TenantId <GUID>` makes only `GET /v1/tenants/{msTenantId}`; a name adds the cached list. `-IncludeSubscriptions` adds `GET /v1/tenants/{msTenantId}/subscriptions` per tenant | Tenants |
 | `Get-InforcerBaseline` | `GET /v1/baselines` (+ `GET /v1/tenants` for a tenant name) | Baselines, Tenants† |
 | `Get-InforcerTenantPolicies` | `GET /v1/tenants/{msTenantId}/policies` | Policies, Tenants† |
 | `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails` | Baselines + Align + Tenants |
 | `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search` | Activity |
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
-| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]` | User & Group Management, Tenants† |
+| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `.../users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `.../users/{userId}/mailbox` and its `autoReply`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules` (with `-IncludeMailbox`) | User & Group Management, Tenants† |
+| `New-InforcerUser` | `POST /v1/tenants/{msTenantId}/users` | User & Group Management (write), Tenants† |
+| `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/assignLicenses` (with `-AddLicense`/`-RemoveLicense`), `POST .../users/{userId}/groups` (with `-AddGroup`/`-RemoveGroup`), the mailbox writes under `.../users/{userId}/mailbox/` (`type`, `archive`, `addressListVisibility`, `emailAddresses`, `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`, `mailApps`; one per mailbox parameter, one for all mail apps), each followed by `GET .../users/{userId}/mailbox/actions/{actionId}` until done, `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/authenticationMethods/temporaryAccessPasses` (with `-TemporaryAccessPass`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
@@ -294,11 +310,40 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 |---------|--------|-----------------|--------|
 | `/v1/tenants` | GET | `/beta/tenants` | `Get-InforcerTenant` |
 | `/v1/tenants/{msTenantId}` | GET | `/beta/tenants/{tenantId}` | `Get-InforcerTenant -TenantId` (the sanctioned use of this endpoint); also reached through it by Export and Compare |
+| `/v1/tenants/{msTenantId}/subscriptions` | GET (`{ "subscriptions": [...] }`, all in one response) | none (v1 only) | `Get-InforcerTenant -IncludeSubscriptions` |
 | `/v1/tenants/{msTenantId}/policies` | GET | `/beta/tenants/{tenantId}/policies` | `Get-InforcerTenantPolicies`, Export, Compare |
 | `/v1/tenants/{msTenantId}/alignmentDetails` | GET (`baselineId` required) | `/beta/tenants/{tenantId}/alignmentDetails` (`customBaselineId`) | `Get-InforcerAlignmentDetails`; Export/Compare baseline scoping |
 | `/v1/tenants/{msTenantId}/secureScores` | GET | `/beta/tenants/{tenantId}/secureScores` | `Get-InforcerSecureScore` |
 | `/v1/tenants/{msTenantId}/users` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/users` | `Get-InforcerUser` |
+| `/v1/tenants/{msTenantId}/users` | POST (201 `{ id }`) | none (v1 only) | `New-InforcerUser` |
 | `/v1/tenants/{msTenantId}/users/{userId}` | GET | `/beta/tenants/{tenantId}/users/{userId}` | `Get-InforcerUser -UserId` |
+| `/v1/tenants/{msTenantId}/users/{userId}` | PATCH (JSON Merge Patch, 204) | none (v1 only) | `Set-InforcerUser` |
+| `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` | GET | none (v1 only) | `Get-InforcerUser -UserId -IncludeAuthenticationMethods` |
+| `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` | DELETE (204) | none (v1 only) | `Set-InforcerUser -RemoveAuthenticationMethod` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mfa` | DELETE (204) | none (v1 only) | `Set-InforcerUser -ResetMfa` |
+| `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` | POST (201, pass) | none (v1 only) | `Set-InforcerUser -TemporaryAccessPass` |
+| `/v1/tenants/{msTenantId}/users/{userId}/assignLicenses` | POST (204) | none (v1 only) | `Set-InforcerUser -AddLicense`/`-RemoveLicense` |
+| `/v1/tenants/{msTenantId}/users/{userId}/groups` | POST (204) | none (v1 only) | `Set-InforcerUser -AddGroup`/`-RemoveGroup` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox` | GET | none (v1 only) | `Get-InforcerUser -UserId -IncludeMailbox` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/type` | PATCH (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -MailboxType` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/archive` | PATCH (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -EnableArchive` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility` | PATCH (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -HiddenFromAddressLists` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses` | POST (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -AddEmailAddress`/`-PrimaryEmailAddress` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveEmailAddress` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply` | GET, PATCH (202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -AutoReply` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding` | PATCH, DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -ForwardTo`/`-RemoveForwarding` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions` | GET, POST (202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -GrantMailboxPermission` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveMailboxPermission` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess` | GET, POST (202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -GrantCalendarAccess` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess/{trusteeId}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveCalendarAccess` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/mailApps` | PATCH (JSON Merge Patch, 202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -AllowMailApp`/`-BlockMailApp` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups` | GET, POST (202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -AddMailGroup` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveMailGroup` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules` | GET, DELETE (`all=true`, 202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -RemoveAllInboxRules` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules/{ruleId}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveInboxRule` |
+| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | GET | none (v1 only) | `Set-InforcerUser` (waits on every mailbox change) |
+| `/v1/tenants/{msTenantId}/users/{userId}/password` | POST (204) | none (v1 only) | `Set-InforcerUser -Password` |
+| `/v1/tenants/{msTenantId}/users/{userId}/revokeSessions` | POST (204) | none (v1 only) | `Set-InforcerUser -RevokeSessions` |
 | `/v1/tenants/{msTenantId}/groups` | GET (`search`, `continuationToken`) | `/beta/tenants/{tenantId}/groups` | `Get-InforcerGroup` |
 | `/v1/tenants/{msTenantId}/groups/{groupId}` | GET | `/beta/tenants/{tenantId}/groups/{groupId}` | `Get-InforcerGroup -Group` |
 | `/v1/tenants/{msTenantId}/groups/{groupId}/members` | GET (`continuationToken`) | none (v1 only) | `Get-InforcerGroup -Group` (attached as members) |
@@ -314,7 +359,230 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 21 paths and 22 operations (`/v1/reports/runs` has GET and POST). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 48 paths and 57 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH, and the mailbox's `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups` and `inboxRules` two methods each). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `permission` (`fullAccess`, `sendAs` or `sendOnBehalf`), `trusteeId` (the Entra object ID of the user holding a mailbox permission or calendar access), `address` (an email address), `ruleId` (an inbox rule's id, digits), `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+
+### Managing users (v1 only)
+
+The beta API has no equivalent, so `New-InforcerUser`, `Set-InforcerUser` and `Get-InforcerUser -IncludeAuthenticationMethods` need an API client; an API-key login stops with `RequiresApiClient`.
+
+#### `POST /v1/tenants/{msTenantId}/users`
+
+Creates a Microsoft Entra user in the tenant.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: the [UserUpdate](#userupdate) profile fields, of which `accountEnabled`, `displayName`, `mailNickname` and `userPrincipalName` are required, plus `passwordProfile` `{ password, forceChangePasswordNextSignIn }` (both required; the password must meet the tenant's password policy).
+
+**Response**: `201` with [CreatedUser](#createduser) and a `Location` header. Errors: `400` (invalid field, with `errors{}`), `404` (tenant), `409` (for example the user principal name is taken).
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}`
+
+Updates a user's profile, manager and whether they can sign in. JSON Merge Patch (RFC 7396): a property left out is kept, `null` clears it.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [UserUpdate](#userupdate), at least one property. Sent as `application/json` (the API also takes `application/merge-patch+json`).
+
+**Response**: `204` without a body; a `GET` (by id or in the list) can show the old values for up to about five minutes; the two are cached separately. When the manager could not be changed but the other changes were saved, the API answers `502` with problem+json and `results[]`: one `{ step, status, title?, statusCode? }` per step (`profile`, `manager`). The module adds them to the error text as `Steps: profile: succeeded; manager: failed (reason)`.
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/password`
+
+Sets a new password for the user, and can require them to change it when they next sign in. inforcer does not store or log the password.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [PasswordReset](#passwordreset), both fields required.
+
+**Response**: `204` without a body. Errors: `400` (missing field, or the password does not meet the tenant's password policy, in `errors.password`), `404` (tenant or user).
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`
+
+Signs the user out of every session by revoking their refresh tokens and session cookies. Access tokens already issued stay valid until they expire, typically within 90 minutes. No body.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+**Response**: `204` without a body. Errors: `404` (tenant or user, `User not found`).
+
+`Set-InforcerUser` runs the steps of one call in this order: `PATCH` (when a profile field is passed), licences, password, delete authentication methods (one call per id), MFA reset, Temporary Access Pass, revoke sessions. When a step fails the later ones are skipped, and the error (`UserUpdatePartlyApplied`) names the steps already done and the steps not done.
+
+#### `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`
+
+Lists the sign-in methods the user has registered, such as their password, phones, Microsoft Authenticator and passkeys. Secrets such as passwords and Temporary Access Pass codes are never returned.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management *(unconfirmed)*
+
+**Response**: `200` with `{ "authenticationMethods": [ ... ] }`, all methods in one response in no fixed order (see [UserAuthenticationMethod](#userauthenticationmethod)). `Get-InforcerUser -UserId -IncludeAuthenticationMethods` adds the array to the user as `authenticationMethods`. Like the other `GET` calls, the answer can be up to about five minutes old.
+
+#### `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`
+
+Deletes one of the user's sign-in methods, such as a phone, Microsoft Authenticator or a passkey, so it can no longer be used to sign in. `methodId` is the method's `id` from the list above; usually a GUID, but not for every type (a passkey's id is not).
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+**Response**: `204` without a body. Errors: `400` when the method is not `deletable` (reason in `errors.methodId`) or Microsoft Entra refuses it, for example the default method while another phone remains (reason in `detail`); `404` (tenant, user or method). Microsoft Entra's reads lag its changes, so the list can still show a deleted method for a short time. `Set-InforcerUser -RemoveAuthenticationMethod` sends one call per id.
+
+#### `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`
+
+Resets the user's MFA: deletes every authentication method that the list above returns with `deletable` true, in the order Microsoft Entra needs (an alternate mobile phone first, the default method last), so the user must register MFA again. The password is kept. A method already gone counts as deleted, so the call is safe to repeat.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+**Response**: `204` without a body, also when there was nothing to delete. When Microsoft Entra refuses a method the API answers `400` with problem+json and `results[]`: one `{ step, id, status, title? }` per method, `step` being the method's type and `title` the reason; `500` and `502` carry `results[]` too when methods were attempted. The module adds them to the error text as `Steps: phone <id>: succeeded; fido2 <id>: failed (reason)`. `404`: tenant or user.
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`
+
+Adds and removes the user's licences in one call. If any licence is refused, nothing changes. Removing a licence the user does not have succeeds. Adding a licence enables all its service plans, including any disabled on a licence the user already has.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [UserLicenseAssignment](#userlicenseassignment), at least one licence.
+
+**Response**: `204` without a body. Errors: `400` (a licence with no free seat, not subscribed to, conflicting with the user's other licences, or given through a group; a refused request that both adds and removes is a `400` on `body`), `404` (tenant or user).
+
+The `skuId` of a licence comes from the tenant's subscriptions (`GET /v1/tenants/{msTenantId}/subscriptions`, [Subscription](#subscription), which also shows free seats) or from a user's `assignedLicenses` ([UserLicense](#userlicense)). The tenant record lists its licences by part number only (`sku`).
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/groups`
+
+Adds the user to Microsoft Entra groups and removes them from others in one call. Each group is changed on its own, so a group that cannot be added does not stop the removals. A group the user is already in, or is not in, counts as done, so a request can be repeated. Members of role-assignable groups cannot be changed. To move a user without leaving them in neither group, add first and remove in a second call once the add succeeded; `Set-InforcerUser` does this when both `-AddGroup` and `-RemoveGroup` are given.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body: [UserGroupsChange](#usergroupschange).
+
+**Response**: `204` without a body; a change can take a few seconds to show in a GET. Errors: `400` (invalid request, or when some groups were changed and a group refused, a `results` list with each group and whether it was changed), `404` (tenant or user), `502` (a service failed; `results` when some groups were changed).
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`
+
+Creates a Temporary Access Pass for the user and returns it. The pass is returned only in this response (sent with `Cache-Control: no-store`) and cannot be read again. A user has at most one pass, so a new one replaces any existing pass. The pass then appears in the authentication methods list and can be deleted like any other method.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body (optional): `{ lifetimeInMinutes (10 to 43200), usableOnce, startDateTime }`; a property left out takes the tenant's authentication methods policy default.
+
+**Response**: `201` with [TemporaryAccessPass](#temporaryaccesspass). Errors: `400` on the property the policy does not allow (lifetime, start in the past, one-time use), or with the reason as `detail` when the policy does not allow a pass for the user at all (for example Temporary Access Pass is off in the tenant); `404` (tenant or user). Policy changes in Microsoft Entra take effect after a short delay.
+
+#### Mailbox changes: how every write works
+
+Every mailbox write below is applied by Exchange Online after the response: the answer is `202` with `{ actionId }`, and [`GET .../mailbox/actions/{actionId}`](#get-v1tenantsmstenantidusersuseridmailboxactionsactionid) says when it has succeeded or failed. Changes to one mailbox run one at a time in the order they were accepted, each confirmed in Exchange before the next starts, so allow about a minute per change; an action still waiting an hour after it started fails with `MailboxBusy`. Every request queues a new action, also a repeat, so do not resend while one is queued or running. Repeating a change that is already in place succeeds. Common errors: `400` (also for a Global Administrator's mailbox, and for unknown body properties), `404` (tenant or user), `409`, `502`. A user with no mailbox is accepted with `202`, and the action then fails. `Set-InforcerUser` waits on each action (at most 5 minutes) before its next step.
+
+**Required API scope(s)** for every mailbox route: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
+#### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`
+
+The mailbox as Exchange Online holds it now ([Mailbox](#mailbox)). A user with no mailbox is a `404`. `Get-InforcerUser -IncludeMailbox` adds it (with the five lists below) as `mailbox`.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management *(unconfirmed)*
+
+#### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`
+
+The automatic replies in the shape `PATCH` takes, so they can be read, changed and sent back (leave out the properties that are `null`). `simplified: true` means a message had formatting the API cannot keep (a link, table or colour) and is returned without it. `404` when the user has no mailbox.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`
+
+Turns automatic replies on (`alwaysEnabled`), schedules them (`scheduled`) or turns them off (`disabled`). `status` is always sent; Exchange sets the replies as a whole, so a property left out is not kept. `disabled` takes no other property and keeps the saved messages. Otherwise `internalReplyMessage` and `externalAudience` (`none`, `contactsOnly`, `all`) are needed, `externalReplyMessage` unless the audience is `none`, and `scheduled` needs `scheduledStartDateTime` and `scheduledEndDateTime` (with an offset, end after start and in the future). Messages up to 16000 characters, keeping only bold, italic, underline and text size.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type`
+
+Converts the mailbox to a shared mailbox or back to a user mailbox. Body: `{ "type": "shared" }` or `{ "type": "user" }`.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/archive`
+
+Turns on the mailbox's online archive. Body: `{ "enabled": true }` (JSON Merge Patch; `false` is a `400`, because the archive cannot be turned off here). An archive already on succeeds. Mail moves into the archive under the tenant's retention policy, not straight away. A user synced from on-premises is a `400`. The `archive` property of [Mailbox](#mailbox) shows whether it is on.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding` and `DELETE` on the same path
+
+`PATCH` forwards the mail to one user in the tenant (`recipientUserId`) or one address on a verified domain (`smtpAddress`), exactly one of them, with `keepCopy`. Setting one replaces the other. The mailbox's own user or address, a guest, a user with no email address and anything outside the verified domains are a `400`. `DELETE` stops forwarding (to a user and to an address).
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses` and `DELETE .../emailAddresses/{address}`
+
+`POST { address, primary }` adds an address on a domain verified in the tenant; `primary: true` also makes it the main one. `DELETE` removes one; the main and the sign-in address are a `400`, so after changing the main address wait for that action before removing the old one. A user synced from on-premises Active Directory is a `400` for both.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `GET`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions` and `DELETE .../permissions/{permission}/{trusteeId}`
+
+`GET` lists who holds `fullAccess`, `sendAs` and `sendOnBehalf` (`{ permissions: [...], unreadPermissions: [...] }`, see [Mailbox](#mailbox)); a kind in `unreadPermissions` could not be read just now, so its holders are missing. A failed name lookup is a `502`. `POST { trusteeId, permission, automapping }` grants one to another user in the tenant (`automapping` only with `fullAccess`). `DELETE` removes one; an inherited permission fails, and a holder with `trusteeId` `null` (a group or deleted account) cannot be removed through the API.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
+#### `GET`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess` and `DELETE .../calendarAccess/{trusteeId}`
+
+`GET` lists who the calendar is shared with (`{ calendarAccess: [ { trusteeId, displayName, role } ] }`, in no fixed order). `role` is `reviewer` (sees events), `editor` (also creates, changes and deletes them), `delegate` (an editor who also receives meeting requests) or `other` (access set outside inforcer, such as free/busy only; it can be replaced or removed). `trusteeId` is `null` for a holder that is not a user (a group or deleted account), whose access cannot be changed, and also when Exchange could not look the holder up just now. A failed name lookup is a `502`. `POST { trusteeId, role }` shares the calendar with a member of the tenant (a guest or the mailbox's own user is a `400`) or changes the role of someone who already has access. `DELETE` takes the access away whatever the role; removing access the user does not have succeeds.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailApps`
+
+Allows or blocks the mail apps the mailbox can connect with. The body is a JSON Merge Patch with at least one of `outlookWeb` (also the new Outlook for Windows), `outlookDesktop` (classic Outlook for Windows), `outlookMac` (the new Outlook for Mac), `exchangeWebServices`, `imap`, `pop`, `outlookApp` (iOS and Android) and `otherMailApps` (Exchange ActiveSync), each `true` or `false`; apps left out keep their setting and `null` is refused. A tenant-wide policy can still block an app this allows. The current values are `mailApps` of [Mailbox](#mailbox). `Set-InforcerUser` sends `-AllowMailApp` and `-BlockMailApp` together in one request.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+#### `GET`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups` and `DELETE .../mailGroups/{groupId}`
+
+`GET` lists the distribution lists and mail-enabled security groups the user is a direct member of (`{ mailGroups: [ { id, displayName, mail, type } ] }`, `type` `distributionList` or `mailEnabledSecurity`; Microsoft 365 groups are left out; `404` only when the user is not in the tenant). `POST { groupId }` adds the user, `DELETE` removes them. Microsoft 365 groups, groups without an address and groups synced from on-premises are a `400`.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
+#### `GET`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules` and `DELETE .../inboxRules/{ruleId}`
+
+`GET` lists the inbox rules, with where each forwards or redirects mail (`{ inboxRules: [...] }`, see [Mailbox](#mailbox)). `DELETE ...?all=true` removes every rule Exchange can remove (the junk filter and similar are kept); `DELETE .../{ruleId}` removes one, and a rule with `deletable: false` fails.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (read for GET, write for the rest) *(unconfirmed)*
+
+#### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`
+
+Hides the user's mailbox from the address lists, or shows it again. Outlook's address book can take up to 48 hours to show the change. The current value is `hiddenFromAddressList` on [Mailbox](#mailbox).
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+Body (JSON Merge Patch): `{ "hidden": true }` or `{ "hidden": false }`. `hidden` cannot be cleared; other properties are a `400`.
+
+**Response**: `202` with `{ actionId }`. Errors: `400` (also for a Global Administrator's mailbox), `404` (tenant or user), `409`, `502`.
+
+There is no list of a user's mailbox actions: the `actionId` is the only way to follow one.
+
+#### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}`
+
+Returns a queued mailbox change and where it has got to, whether it was asked for through the API or in inforcer. `Set-InforcerUser` polls it after every mailbox change (2, 4, 8, then every 15 seconds, at most 5 minutes) until it has succeeded or failed.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
+
+**Response**: `200` with [MailboxAction](#mailboxaction). `404`: tenant, user or action.
 
 ### How v1 fields map to the module's names
 
@@ -430,6 +698,19 @@ Retrieves a specific tenant by ID.
 **Response**: [Tenant](#tenant)
 
 > **Implementation Note**: On beta the module uses `GET /beta/tenants` with client-side filtering for consistency and deduplication. On v1 the list holds the same fields; `-TenantId` calls `GET /v1/tenants/{msTenantId}`, which adds `authenticationMode`.
+
+---
+
+#### GET /v1/tenants/{msTenantId}/subscriptions
+
+Lists the Microsoft products the tenant subscribes to, one entry per SKU with its seats totalled across every subscription to that product. v1 only.
+
+**Cmdlet**: `Get-InforcerTenant -IncludeSubscriptions` (adds them as `subscriptions`)
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Tenants *(unconfirmed)*
+
+**Response**: `{ "subscriptions": [ Subscription ] }` ([Subscription](#subscription)), all in one response. Errors: `404` (tenant), `409` (the request conflicts with the tenant's current state; the spec gives no detail), `502`.
 
 ---
 
@@ -854,6 +1135,21 @@ Represents a license associated with a tenant.
 
 ---
 
+### Subscription
+
+One element of `subscriptions` from `GET /v1/tenants/{msTenantId}/subscriptions` (v1 only). Every property is always present.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| skuId | string (uuid) | The SKU's id, as `-AddLicense` and `assignLicenses` take it. |
+| sku | string, nullable | The part number, such as `SPB`. |
+| name | string, nullable | The display name; `null` when there is no known one. |
+| capabilityStatus | string | `enabled`, `warning` (grace period after it lapsed), `suspended`, `deleted`, `lockedOut` or `unknown`. camelCase, unlike `capabilityStatus` on a user's licence, which is Microsoft's value as is. |
+| appliesTo | string | `user`, `company` (the whole tenant) or `unknown`. |
+| units | object | Seats: `enabled` (paid for), `consumed` (assigned), `available` (enabled minus consumed, never below zero), `suspended`, `warning`, `lockedOut`. |
+
+---
+
 ### Policy
 
 Represents a policy associated with a tenant.
@@ -1024,6 +1320,126 @@ License assignment on a user, used in both UserSummary and User schemas.
 | isExpired | boolean | Whether the license is expired. |
 | isCancelled | boolean | Whether the license is cancelled. |
 | state | string | License assignment state. |
+
+### CreatedUser
+
+Returned by `POST /v1/tenants/{msTenantId}/users`. `New-InforcerUser` adds `TenantId`, `displayName` and `userPrincipalName` (from the request) so the result can be piped to `Set-InforcerUser`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string (uuid) | The new user's Microsoft Entra object id. |
+
+### UserUpdate
+
+The profile fields of `PATCH /v1/tenants/{msTenantId}/users/{userId}` (and of the create body). All optional and nullable unless noted; `null` clears a field. `displayName`, `mailNickname`, `userPrincipalName`, `mail`, `userType` and `accountEnabled` cannot be cleared. Unknown properties are rejected.
+
+| Property | Type | Limits / notes |
+|----------|------|----------------|
+| accountEnabled | boolean | `false` blocks sign-in; existing sessions last until their tokens expire. |
+| displayName | string | 1-256 characters. |
+| mailNickname | string | 1-64 characters. The mail alias. |
+| userPrincipalName | string | The sign-in name. |
+| givenName, surname | string | 1-64 characters. |
+| jobTitle | string | 1-128 characters. |
+| department | string | 1-64 characters. |
+| officeLocation, city, state, country | string | 1-128 characters. |
+| streetAddress | string | 1-1024 characters. |
+| postalCode | string | 1-40 characters. |
+| mobilePhone, preferredLanguage, companyName, employeeType | string | 1-64 characters. |
+| usageLocation | string | Two letters (ISO 3166), such as `GB`. |
+| employeeId | string | 1-16 characters. |
+| mail | string (email) | |
+| businessPhones | string[] | At most one number. |
+| otherMails | string[] (email) | |
+| managerId | string (uuid) | The manager's object id; `null` removes the manager. |
+| userType | string | `Member` or `Guest`. A new user is a `Member` when it is left out. |
+
+### PasswordReset
+
+The body of `POST /v1/tenants/{msTenantId}/users/{userId}/password`.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| password | string | Yes | The new password; it must meet the tenant's password policy. A blank password is a `400`. |
+| forceChangePasswordNextSignIn | boolean | Yes | Whether the user must change the password when they next sign in. `Set-InforcerUser` sends `true` unless you pass `-ForceChangePasswordNextSignIn $false`. |
+
+### UserLicenseAssignment
+
+The body of `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`. Send at least one licence.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| addSkuIds | string[] (uuid) | No | The `skuId`s to give the user, as in `assignedLicenses`. |
+| removeSkuIds | string[] (uuid) | No | The `skuId`s to take from the user. |
+
+### UserGroupsChange
+
+The body of `POST /v1/tenants/{msTenantId}/users/{userId}/groups`. At least one group in all, and a group in only one of the lists.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| add | string[] (uuid) | No | Object ids of the groups to add the user to, at most 20. A repeated id is ignored. |
+| remove | string[] (uuid) | No | Object ids of the groups to remove the user from, at most 20. A repeated id is ignored. |
+
+### TemporaryAccessPass
+
+The answer of `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`. `Set-InforcerUser -TemporaryAccessPass` returns it with `userId` added.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string | The pass's authentication method id, as the authentication methods list returns it. |
+| temporaryAccessPass | string | The pass the user signs in with. Returned only here; it cannot be read again. |
+| startDateTime | string (date-time), nullable | When the pass becomes usable. |
+| lifetimeInMinutes | integer, nullable | How long the pass lasts from `startDateTime`. |
+| usableOnce | boolean, nullable | Whether the pass can be used only once. |
+
+### MailboxAction
+
+The answer of `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}`. Every property is always present.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| actionId | string (uuid) | The action's id, from the `202` that queued it. |
+| action | string | The change: `convertToShared`, `convertToUser`, `setAddressListVisibility`, `setAutoReply`, `setForwarding`, `grantPermission`, `removePermission`, `removeInboxRules`, `addToMailGroup`, `removeFromMailGroup`, `addEmailAddress`, `removeEmailAddress`, `setMailApps`, `setCalendarAccess` or `enableArchive`. A change asked for in inforcer can have a value the API cannot ask for. More may be added. |
+| status | string | `queued` (waits for an earlier change to the same mailbox), `running`, `succeeded` (Exchange shows the change) or `failed`. |
+| queuedBehind | string (uuid), nullable | While `queued`, the action it waits for, when the caller can read that one. |
+| requestedAt | string (date-time) | When it was asked for. |
+| completedAt | string (date-time), nullable | When it succeeded or failed; `null` before. |
+| error | object, nullable | `{ code, message }` once it has failed, such as `WriteNotApplied` or `NotStarted`; otherwise `null`. |
+
+### Mailbox
+
+The answer of `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`. Every property is always present. `Get-InforcerUser -IncludeMailbox` adds `autoReply`, `permissions`, `unreadPermissions`, `calendarAccess`, `mailGroups` and `inboxRules` from the routes of the same names.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| displayName | string, nullable | The mailbox's name in Exchange. |
+| type | string | `user`, `shared`, `room`, `equipment` or `other` (treat an unknown value as `other`). |
+| emailAddresses | array | `{ address, primary }`, the main address first. |
+| onPremisesSyncEnabled | boolean | The user is synced from on-premises Active Directory, so addresses and address list visibility are changed there. |
+| hiddenFromAddressList | boolean | Hidden from the address lists (set with `addressListVisibility` and its `hidden`). |
+| litigationHold | boolean | On litigation hold. |
+| size | object, nullable | `{ usedBytes, itemCount, quotaBytes }` (`quotaBytes` `null` = unlimited); `null` when Exchange could not report it. |
+| archive | object, nullable | `{ usedBytes }` of the online archive; `null` when there is none. |
+| forwarding | object | `{ enabled, recipientUserId, recipientDisplayName, smtpAddress, keepCopy }`. Both targets can be `null` while `enabled` when the recipient is a contact or group. |
+| mailApps | object, nullable | `{ outlookWeb, outlookDesktop, outlookMac, exchangeWebServices, imap, pop, outlookApp, otherMailApps }`, each `true` (allowed), `false` (blocked) or `null` (Exchange gives no value; for `exchangeWebServices` the organisation's setting applies). `null` when Exchange could not report them. A tenant-wide policy can still block an allowed app. |
+
+An element of `permissions`: `{ permission, trusteeId, displayName, inherited }` (`trusteeId` `null` for a holder that is not a user, or one Exchange could not look up just now). An element of `calendarAccess`: `{ trusteeId, displayName, role }`. An element of `inboxRules`: `{ id, name, enabled, description, deletesMessages, hidden, deletable, forwardsExternally, recipients }`, where `recipients` are `{ kind (forward, forwardAsAttachment, redirect), address, displayName, external }`, `forwardsExternally` is `null` when a recipient could not be checked, and `enabled` is `null` for a rule that is not deletable. `autoReply`: `{ status, externalAudience, internalReplyMessage, externalReplyMessage, scheduledStartDateTime, scheduledEndDateTime, simplified }`.
+
+### UserAuthenticationMethod
+
+One element of `authenticationMethods` from `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`. Every property is always present; the ones that do not apply to the type are `null`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string | The method's Microsoft Entra id. Usually a uuid, but not for every type (a passkey's id is not). The password and each phone type have the same id for every user. |
+| type | string | `password`, `phone`, `email`, `microsoftAuthenticator`, `passkey`, `windowsHelloForBusiness`, `platformCredential`, `temporaryAccessPass`, `softwareOath`, `hardwareOath`, `qrCodePin`, `externalAuthentication` or `other`. More values may be added; treat an unknown value as `other`. |
+| displayName | string \| null | The device or key name, for Microsoft Authenticator, passkeys, Windows Hello for Business, platform credentials and hardware OATH tokens. |
+| createdDateTime | string (date-time) \| null | When the method was registered; for `password`, when it was last set. |
+| deletable | boolean | Whether inforcer can delete the method. `false` for `password`, `externalAuthentication` and `other`. |
+| phoneNumber | string \| null | For a `phone` method. |
+| phoneType | string \| null | `mobile`, `alternateMobile` or `office`, for a `phone` method. |
+| emailAddress | string \| null | For an `email` method. |
 
 ### TenantGroupSummary
 

@@ -168,7 +168,7 @@ A call Graph refuses leaves those IDs as they are, with a warning that names the
 
 ## Personal data
 
-Some output contains personal data (names, UPNs, email addresses, IP addresses, sign-in details): user details (`Get-InforcerUser -UserId`), audit events, report outputs, and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput`. The module caches no user or audit data. It writes files only where you ask: to `-OutputPath`, or for `Invoke-InforcerReport` and `Save-InforcerReportOutput` to the current directory when `-OutputPath` is omitted (`-NoSave` writes nothing). Handle those files as personal data: keep them access-controlled and delete them when no longer needed.
+Some output contains personal data (names, UPNs, email addresses, IP addresses, sign-in details): user details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses in `-IncludeAuthenticationMethods` and the mailbox details in `-IncludeMailbox`), audit events, report outputs, and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput`. The module caches no user or audit data. It writes files only where you ask: to `-OutputPath`, or for `Invoke-InforcerReport` and `Save-InforcerReportOutput` to the current directory when `-OutputPath` is omitted (`-NoSave` writes nothing). Handle those files as personal data: keep them access-controlled and delete them when no longer needed.
 
 ## Cmdlets
 
@@ -178,13 +178,15 @@ Some output contains personal data (names, UPNs, email addresses, IP addresses, 
 | **Connect-Inforcer**           | Establishes a secure connection to the inforcer REST API with an API client (`-ClientId`/`-ClientSecret`, v1) or a legacy API key (`-ApiKey`, beta). Supports `-FetchGraphData` to also connect Microsoft Graph. |
 | **Disconnect-Inforcer**        | Disconnects and clears the session (including Graph if connected). |
 | **Test-InforcerConnection**    | Tests the API connection; returns `$true` or `$false`.      |
-| **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId). |
+| **Get-InforcerTenant**         | Retrieves tenant information (optional filter by TenantId); `-IncludeSubscriptions` adds the tenant's licences with free seats (API client login only). |
 | **Get-InforcerBaseline**       | Retrieves baseline groups and members.                      |
 | **Get-InforcerTenantPolicies** | Retrieves policies for a specified tenant.                  |
 | **Get-InforcerAlignmentDetails** | Retrieves alignment scores (table or raw format).           |
 | **Get-InforcerAuditEvent**     | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 | **Get-InforcerSupportedEventType** | Returns the canonical list of audit event types accepted by `Get-InforcerAuditEvent -EventType`. Drives the tab completer; cached after first call. |
-| **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId). |
+| **Get-InforcerUser**           | Retrieves users from a tenant (list/search or detail by UserId); `-IncludeAuthenticationMethods` adds their sign-in methods and `-IncludeMailbox` their Exchange Online mailbox (API client login only). |
+| **New-InforcerUser**           | Creates a Microsoft Entra user in a tenant (API client login only). |
+| **Set-InforcerUser**           | Updates a user's profile, manager or sign-in, changes licences and group memberships, changes their mailbox (shared mailbox, online archive, automatic replies, forwarding, permissions, calendar sharing, mail groups, email addresses, inbox rules, mail apps, address lists), resets their password, removes sign-in methods or resets MFA, issues a Temporary Access Pass, or signs them out everywhere; only the fields you pass change (API client login only). |
 | **Get-InforcerGroup**          | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
 | **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Get-InforcerSecureScore**    | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |

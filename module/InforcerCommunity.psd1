@@ -19,6 +19,8 @@
         'Get-InforcerAuditEvent'
         'Get-InforcerSupportedEventType'
         'Get-InforcerUser'
+        'New-InforcerUser'
+        'Set-InforcerUser'
         'Get-InforcerGroup'
         'Get-InforcerRole'
         'Get-InforcerSecureScore'

@@ -4,7 +4,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
-> **Logins**: every cmdlet works with both logins. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
+> **Logins**: every cmdlet works with both logins, except `New-InforcerUser` and `Set-InforcerUser`, which need an API client because the beta API cannot create or change users. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
 
 > **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
 
@@ -12,7 +12,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ## Personal data
 
-User details (`Get-InforcerUser -UserId`), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
+User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
 
 ---
 
@@ -154,19 +154,21 @@ Retrieves tenant information. Optionally filter by `-TenantId` (Microsoft Tenant
 - **Both logins:** the list holds every field (licenses, `SecureScore`, `IsBaseline`, tags, alignment summaries, `LastBackupTimestamp`).
 - **Client-credentials login (v1):** `ClientTenantId` does not exist. `-TenantId` loads the tenant's own record, which adds `AuthenticationMode`; `-TenantId <GUID>` makes only that one call, a name is first looked up in the tenant list.
 - **`-TenantId` always returns the current record:** with an API key the tenant list is fetched once per call (piped tenants share that fetch); with client credentials the tenant is fetched by id.
+- **Subscriptions (client credentials only):** `-IncludeSubscriptions` adds `subscriptions`, the tenant's licences with their `skuId` (for `Set-InforcerUser -AddLicense`), name, status and seats (`units.enabled`, `units.consumed`, `units.available`, ...). One extra request per tenant; with an API key it stops with `RequiresApiClient`. A tenant whose subscriptions cannot be read is still returned, without `subscriptions`, next to the error.
 - **JSON:** with client credentials `-OutputType JsonObject` is always a JSON array, also for one tenant. With an API key a single tenant is a bare JSON object, as in 0.8.0.
 
 **Endpoints called (beta)**: `GET /beta/tenants`
 **Required API scope(s) (API key, beta)**: `Tenants.Read`
-**Endpoints on v1**: `GET /v1/tenants`; `-TenantId <GUID>` calls only `GET /v1/tenants/{msTenantId}` (a name also reads the tenant list)
+**Endpoints on v1**: `GET /v1/tenants`; `-TenantId <GUID>` calls only `GET /v1/tenants/{msTenantId}` (a name also reads the tenant list); `-IncludeSubscriptions` adds `GET /v1/tenants/{msTenantId}/subscriptions` per tenant
 **Required API client permission(s) (v1)**: Tenants *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`
+**Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`; with `-IncludeSubscriptions` also `subscriptions` ([Subscription](./API-REFERENCE.md#subscription))
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
 | **TenantId** | Object | No | Filter to this tenant: Microsoft tenant ID (GUID), tenant name or DNS name; numeric Client Tenant ID with an API key only. Aliases: `ClientTenantId`, `MsTenantId`. |
+| **IncludeSubscriptions** | Switch | No | Adds `subscriptions` (licences with `skuId` and free seats). API client login only. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -176,6 +178,8 @@ Get-InforcerTenant
 Get-InforcerTenant | Where-Object IsBaseline
 Get-InforcerTenant -TenantId 'Contoso'
 Get-InforcerTenant -TenantId 102            # API key only (numeric Client Tenant ID)
+# Licences of Contoso with a free seat (client credentials only)
+(Get-InforcerTenant -TenantId 'Contoso' -IncludeSubscriptions).subscriptions | Where-Object { $_.units.available -gt 0 } | Select-Object name, skuId, @{ n = 'free'; e = { $_.units.available } }
 Get-InforcerTenant -OutputType JsonObject
 ```
 
@@ -206,6 +210,15 @@ The default view shows 8 key properties. Use `| Select-Object *` to see all prop
 ### Example output — single tenant with -TenantId
 
 Same shape as one of the objects above (one tenant). With client credentials it has no `ClientTenantId` and adds `AuthenticationMode`.
+
+### Example output — free seats with -IncludeSubscriptions
+
+```
+name                     skuId                                free
+----                     -----                                ----
+Microsoft 365 E5         00000000-0000-0000-0000-0000000000c1    5
+Exchange Online (Plan 1) 00000000-0000-0000-0000-0000000000c2   12
+```
 
 ---
 
@@ -468,9 +481,9 @@ The default view shows 9 key properties. Use `| Select-Object *` to see all prop
 
 ## Get-InforcerUser
 
-Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information.
+Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`, and `-IncludeMailbox` (API client only) to get their Exchange Online mailbox as `mailbox`.
 
-> **Personal data:** `-UserId` returns a full personal record. See [Personal data](#personal-data).
+> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses; `-IncludeMailbox` adds automatic reply texts, forwarding targets and who can read the mailbox. See [Personal data](#personal-data).
 
 > **v1:** the list view returns `Groups` and `Roles` as counts (`groupCount`/`roleCount` mapped to those names), not arrays; `-UserId` returns the full record.
 
@@ -478,10 +491,10 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/users` (list) or `GET /beta/tenants/{tenantId}/users/{userId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Users.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
-**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`
+**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`, `.../mailbox/autoReply`, `.../mailbox/permissions`, `.../mailbox/calendarAccess`, `.../mailbox/mailGroups`, `.../mailbox/inboxRules` (with `-IncludeMailbox`)
 **Required API client permission(s) (v1)**: User & Group Management + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail)
+**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`) | [Mailbox](./API-REFERENCE.md#mailbox) (`mailbox`)
 
 | Parameter | Type | Mandatory | ParameterSet | Description |
 |-----------|------|-----------|--------------|-------------|
@@ -490,6 +503,8 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 | **Search** | String | No | List | Server-side search filter for the user list. |
 | **MaxResults** | Int | No | List | Max users to return. 0 = no limit. Default: 0. |
 | **UserId** | String | Yes | ById | The user ID (GUID) to retrieve full details for. |
+| **IncludeAuthenticationMethods** | Switch | No | ById | Adds `authenticationMethods`: the user's registered sign-in methods (password, phone, Microsoft Authenticator, passkey, ...), one extra request. Passwords and Temporary Access Pass codes are never returned. Needs an API client; an API key stops with `RequiresApiClient`. |
+| **IncludeMailbox** | Switch | No | ById | Adds `mailbox`: type, size, archive, litigation hold, email addresses, `hiddenFromAddressList`, forwarding and `mailApps`, plus `autoReply`, `permissions`, `unreadPermissions`, `calendarAccess`, `mailGroups` and `inboxRules` (six extra requests). `$null` when the user has no mailbox. Needs an API client. |
 | **OutputType** | String | No | Both | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 ### Examples
@@ -499,6 +514,10 @@ Get-InforcerUser -TenantId 'Contoso'
 Get-InforcerUser -TenantId 'Contoso' -Search "Adele"
 Get-InforcerUser -TenantId 'Contoso' -MaxResults 50
 Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005"
+(Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeAuthenticationMethods).authenticationMethods
+# Where the mail goes: forwarding and inbox rules that send mail outside the tenant
+$mailbox = (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMailbox).mailbox
+$mailbox.forwarding; $mailbox.inboxRules | Where-Object forwardsExternally
 Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
 Get-InforcerUser -TenantId 'Contoso' -OutputType JsonObject
 ```
@@ -528,6 +547,216 @@ IsGlobalAdmin    : False
 IsCloudOnly      : True
 IsMfaRegistered  : False
 RiskLevel        :
+```
+
+### Example output — authentication methods
+
+```powershell
+(Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods).authenticationMethods |
+    Format-Table type, displayName, phoneType, deletable, createdDateTime
+```
+
+```
+type                   displayName phoneType deletable createdDateTime
+----                   ----------- --------- --------- ---------------
+password                                         False 01/09/2026 09:00:00
+phone                              mobile         True
+microsoftAuthenticator Contoso Phone              True 02/09/2026 10:15:00
+```
+
+### Example output — mailbox
+
+```powershell
+(Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeMailbox).mailbox
+```
+
+```
+displayName           : Jo Bloggs
+type                  : user
+emailAddresses        : {@{address=jo.bloggs@contoso.com; primary=True}, @{address=jo@contoso.com; primary=False}}
+onPremisesSyncEnabled : False
+hiddenFromAddressList : False
+litigationHold        : False
+size                  : @{usedBytes=1073741824; itemCount=5120; quotaBytes=53687091200}
+archive               :
+forwarding            : @{enabled=False; recipientUserId=; recipientDisplayName=; smtpAddress=; keepCopy=False}
+mailApps              : @{outlookWeb=True; outlookDesktop=True; outlookMac=True; exchangeWebServices=; imap=False; pop=False; outlookApp=True; otherMailApps=True}
+autoReply             : @{status=disabled; externalAudience=none; internalReplyMessage=; externalReplyMessage=; scheduledStartDateTime=; scheduledEndDateTime=; simplified=False}
+permissions           : {@{permission=fullAccess; trusteeId=00000000-0000-0000-0000-000000000006; displayName=Sam Taylor; inherited=False}}
+unreadPermissions     : {}
+calendarAccess        : {@{trusteeId=00000000-0000-0000-0000-000000000006; displayName=Sam Taylor; role=reviewer}}
+mailGroups            : {@{id=00000000-0000-0000-0000-0000000000c1; displayName=Sales; mail=sales@contoso.com; type=distributionList}}
+inboxRules            : {}
+```
+
+---
+
+## New-InforcerUser
+
+Creates a Microsoft Entra user in a tenant. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot create users.
+
+The user can sign in by default and must change the password at the first sign-in. `-MailNickname` defaults to the part of `-UserPrincipalName` before the `@`. The password must meet the tenant's password policy; it is sent only in the request body and never written to verbose output. `Get-InforcerUser` can take up to about five minutes to show the new user, because the API caches users. Supports `-WhatIf` and `-Confirm`.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tenants/{msTenantId}/users` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+**Output schema**: [CreatedUser](./API-REFERENCE.md#createduser), with `TenantId`, `displayName` and `userPrincipalName` added.
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **DisplayName** | String | Yes | The name shown for the user. |
+| **UserPrincipalName** | String | Yes | The sign-in name, such as `jo.bloggs@contoso.com`. The domain must be verified in the tenant. |
+| **Password** | SecureString | Yes | The initial password. |
+| **MailNickname** | String | No | The mail alias. Default: the part of `-UserPrincipalName` before the `@`. |
+| **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the password at the first sign-in. Default: `$true`. |
+| **AccountEnabled** | Bool | No | Whether the user can sign in. Default: `$true`. |
+| **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType**, **Mail** | String | No | Profile fields, sent as given. |
+| **UsageLocation** | String | No | Two-letter country code (ISO 3166) where the user's licences are used, such as `GB`. Needed before licences can be assigned. |
+| **BusinessPhones** | String[] | No | Business phone number. Microsoft Entra allows one. |
+| **OtherMails** | String[] | No | Other email addresses. |
+| **ManagerId** | String | No | The Microsoft Entra object id of the user's manager. |
+| **UserType** | String | No | `Member` (the default when left out) or `Guest`. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100; piped tenants return one array. |
+
+### Examples
+
+```powershell
+$password = Read-Host -AsSecureString -Prompt 'Initial password'
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -GivenName 'Jo' -Surname 'Bloggs' -Department 'Sales' -UsageLocation 'GB' -AccountEnabled $false
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -WhatIf
+New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -OutputType JsonObject
+```
+
+### Example output
+
+```
+DisplayName       : Jo Bloggs
+UserPrincipalName : jo.bloggs@contoso.com
+Id                : 00000000-0000-0000-0000-000000000005
+TenantId          : 00000000-0000-0000-0000-000000000001
+```
+
+---
+
+## Set-InforcerUser
+
+Updates a Microsoft Entra user's profile, manager or whether they can sign in, resets their password, changes their licences or group memberships, changes their Exchange Online mailbox (shared or user, online archive, address lists, email addresses, automatic replies, forwarding, permissions, calendar sharing, mail groups, inbox rules, mail apps), removes registered sign-in methods or resets MFA, issues a Temporary Access Pass, or signs them out of every session. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change users.
+
+Only the parameters you pass are changed; every other field stays as it is. Pass an empty string (`''`) or `$null` to clear a field, such as `-JobTitle ''`, or `-ManagerId ''` to remove the manager. `DisplayName`, `MailNickname`, `UserPrincipalName`, `Mail` and `UserType` cannot be cleared. `-AccountEnabled $false` blocks sign-in, but existing sessions last until their tokens expire. `Get-InforcerUser` can show the old values for up to about five minutes, because the API caches users. Returns nothing, except the pass with `-TemporaryAccessPass`. Supports `-WhatIf` and `-Confirm`.
+
+When the manager could not be changed but the other changes were saved (HTTP 502), the error lists each step and whether it was applied, for example `Steps: profile: succeeded; manager: failed (Manager not found)`.
+
+`-Password` sets a new password; the user must change it at the next sign-in unless you pass `-ForceChangePasswordNextSignIn $false`. The password is sent only in the request body and never written to verbose output. `-RevokeSessions` signs the user out of every session; access tokens already issued stay valid until they expire, typically within 90 minutes. `-RemoveAuthenticationMethod` deletes sign-in methods by their `id` from `Get-InforcerUser -IncludeAuthenticationMethods`; only methods with `deletable` true can go, and Microsoft Entra can still refuse one, such as the default method while another phone remains. `-ResetMfa` deletes every deletable method in one request, in the order Microsoft Entra needs, so the user must register MFA again; the password is kept. `-AddLicense`/`-RemoveLicense` change licences by `skuId` in one request; if one is refused, nothing changes. `-AddGroup`/`-RemoveGroup` change Microsoft Entra group memberships; adding runs first and removing only after every add succeeded, so a user moved between groups is never left in neither, and a group the user is already in (or not in) counts as done. `-TemporaryAccessPass` creates a Temporary Access Pass and returns it (shown only once; it replaces an existing pass). Mailbox changes (`-MailboxType`, `-EnableArchive`, `-HiddenFromAddressLists`, `-AddEmailAddress`, `-PrimaryEmailAddress`, `-RemoveEmailAddress`, `-AutoReply`, `-ForwardTo`/`-RemoveForwarding`, `-GrantMailboxPermission`/`-RemoveMailboxPermission`, `-GrantCalendarAccess`/`-RemoveCalendarAccess`, `-AddMailGroup`/`-RemoveMailGroup`, `-RemoveInboxRule`/`-RemoveAllInboxRules`, `-AllowMailApp`/`-BlockMailApp`) are queued in Exchange Online, which applies one change to a mailbox at a time, about a minute each; the cmdlet waits for each with a progress bar until it has succeeded or failed (at most 5 minutes, then it warns with the action id that Exchange carries on) before the next step. Outlook's address book can take up to 48 hours to show a hidden mailbox. One call runs its steps in this order: profile update, licences (when `-AddLicense` is given), adding to groups, removing from groups, mailbox type, online archive, address lists, adding email addresses, primary address, removing email addresses, automatic replies, forwarding, mailbox permissions (grant, then remove), calendar sharing (share, then unshare), mail groups (add, then remove), inbox rules, mail apps (one change for all), licences (when only `-RemoveLicense` is given, so a mailbox is converted to shared before its licence goes), password reset, removing sign-in methods (one request each), MFA reset, Temporary Access Pass, sign-out. When a step fails, the later steps are skipped and the error `UserUpdatePartlyApplied` says which steps were already done and which were not.
+
+**Pipeline:** users from `Get-InforcerUser` or `New-InforcerUser` can be piped in; `-UserId` binds from their `id` and `-TenantId` from their `TenantId` when they have one.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses` (`-AddLicense`/`-RemoveLicense`), `POST /v1/tenants/{msTenantId}/users/{userId}/groups` (`-AddGroup`, then `-RemoveGroup`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type` (`-MailboxType`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/archive` (`-EnableArchive`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility` (`-HiddenFromAddressLists`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses` (`-AddEmailAddress`, `-PrimaryEmailAddress`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}` (`-RemoveEmailAddress`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply` (`-AutoReply`), `PATCH`/`DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding` (`-ForwardTo`/`-RemoveForwarding`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}` (`-GrantMailboxPermission`/`-RemoveMailboxPermission`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess/{trusteeId}` (`-GrantCalendarAccess`/`-RemoveCalendarAccess`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}` (`-AddMailGroup`/`-RemoveMailGroup`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules/{ruleId}` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules?all=true` (`-RemoveInboxRule`/`-RemoveAllInboxRules`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailApps` (`-AllowMailApp`/`-BlockMailApp`), each followed by `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` until done, `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` (`-RemoveAuthenticationMethod`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` (`-ResetMfa`), `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` (`-TemporaryAccessPass`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+**Request schemas**: [UserUpdate](./API-REFERENCE.md#userupdate) | [PasswordReset](./API-REFERENCE.md#passwordreset) | [UserLicenseAssignment](./API-REFERENCE.md#userlicenseassignment) | [UserGroupsChange](./API-REFERENCE.md#usergroupschange)
+**Polled schema** (after every mailbox change): [MailboxAction](./API-REFERENCE.md#mailboxaction)
+**Output schema** (with `-TemporaryAccessPass`): [TemporaryAccessPass](./API-REFERENCE.md#temporaryaccesspass)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **UserId** | String | Yes | The user's Microsoft Entra object id. Alias: `Id`. Supports pipeline input by property name. |
+| **AccountEnabled** | Bool | No | Whether the user can sign in. |
+| **DisplayName**, **MailNickname**, **UserPrincipalName**, **Mail** | String | No | Cannot be cleared; an empty value is refused. |
+| **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **UsageLocation**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType** | String | No | Profile fields; `''` clears the field. |
+| **BusinessPhones**, **OtherMails** | String[] | No | Replace the whole list; `@()` clears it. |
+| **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
+| **UserType** | String | No | `Member` or `Guest`. Cannot be cleared. |
+| **AddLicense** | Guid[] | No | `skuId`s of licences to give the user (from `Get-InforcerTenant -IncludeSubscriptions`, which also shows free seats, or `assignedLicenses` of `Get-InforcerUser -UserId`). The user needs a usage location. |
+| **RemoveLicense** | Guid[] | No | `skuId`s of licences to take from the user. A licence given through a group is refused. |
+| **AddGroup** | Guid[] | No | Object ids of Microsoft Entra groups (at most 20) to add the user to. Role-assignable groups are refused. |
+| **RemoveGroup** | Guid[] | No | Object ids of Microsoft Entra groups (at most 20) to remove the user from; runs only after `-AddGroup` succeeded. |
+| **HiddenFromAddressLists** | Bool | No | `$true` hides the mailbox from the address lists, `$false` shows it again. Waits until Exchange Online has applied it (at most 5 minutes). A Global Administrator's mailbox is refused. |
+| **MailboxType** | String | No | `User` or `Shared`. Converts the mailbox, for a leaver before the licence is removed. |
+| **EnableArchive** | Switch | No | Turns on the online archive. It cannot be turned off here; mail moves into it under the tenant's retention policy. Refused for a user synced from on-premises. |
+| **AutoReply** | Object | No | Hashtable, or the `autoReply` from `Get-InforcerUser -IncludeMailbox` (nulls and `simplified` are left out): `status` (`disabled`, `alwaysEnabled`, `scheduled`), `internalReplyMessage`, `externalAudience` (`none`, `contactsOnly`, `all`), `externalReplyMessage`, `scheduledStartDateTime`, `scheduledEndDateTime`. Exchange sets the replies as a whole; with `disabled` only `status` is sent. |
+| **ForwardTo** | String | No | A user's object id in the tenant, or an address on a verified domain. Replaces earlier forwarding. |
+| **KeepForwardedCopy** | Switch | No | Keeps a copy of forwarded mail. Only with `-ForwardTo` (else `ForwardToRequired`). |
+| **RemoveForwarding** | Switch | No | Stops forwarding. Not with `-ForwardTo` (`ConflictingForwarding`). |
+| **GrantMailboxPermission** | Object[] | No | Each `@{ permission = 'fullAccess'\|'sendAs'\|'sendOnBehalf'; trusteeId = '<user id>'; automapping = $true }` (`automapping` only for `fullAccess`). Missing keys stop with `InvalidMailboxPermission`. |
+| **RemoveMailboxPermission** | Object[] | No | Each with `permission` and `trusteeId`, such as entries of `mailbox.permissions`. Inherited ones cannot be removed. |
+| **GrantCalendarAccess** | Object[] | No | Each `@{ trusteeId = '<user id>'; role = 'reviewer'\|'editor'\|'delegate' }`: share the calendar with a member of the tenant (not a guest), or change their role. A missing id or other role stops with `InvalidCalendarAccess`. |
+| **RemoveCalendarAccess** | Guid[] | No | Object ids of users whose calendar access is taken away, whatever their role (`trusteeId` of `mailbox.calendarAccess`). |
+| **AddMailGroup**, **RemoveMailGroup** | Guid[] | No | Object ids of distribution lists or mail-enabled security groups. Microsoft 365 groups and on-premises groups are refused. |
+| **AddEmailAddress** | String[] | No | Addresses to add, on domains verified in the tenant. |
+| **PrimaryEmailAddress** | String | No | Adds the address if needed and makes it the main one, before `-RemoveEmailAddress` runs. |
+| **RemoveEmailAddress** | String[] | No | Addresses to remove; the main and sign-in address are refused. |
+| **RemoveInboxRule** | String[] | No | Ids from `mailbox.inboxRules`; rules with `deletable` false fail. |
+| **RemoveAllInboxRules** | Switch | No | Removes every rule Exchange can remove (the junk filter and similar stay). |
+| **AllowMailApp**, **BlockMailApp** | String[] | No | Mail apps to allow or block: `OutlookWeb` (also the new Outlook for Windows), `OutlookDesktop` (classic Outlook for Windows), `OutlookMac`, `ExchangeWebServices`, `Imap`, `Pop`, `OutlookApp` (iOS and Android), `OtherMailApps` (Exchange ActiveSync). Sent as one change; apps not named keep their setting. A tenant-wide policy can still block an allowed app. The same app in both stops with `ConflictingMailApp`. |
+| **Password** | SecureString | No | A new password. It must meet the tenant's password policy. |
+| **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the new password at the next sign-in. Default: `$true`. Only with `-Password`; on its own it stops with `PasswordRequired`. |
+| **RemoveAuthenticationMethod** | String[] | No | Ids of registered sign-in methods to delete, from `authenticationMethods` of `Get-InforcerUser -IncludeAuthenticationMethods`. Only methods with `deletable` true. |
+| **ResetMfa** | Switch | No | Deletes every deletable sign-in method, so the user must register MFA again. The password is kept. |
+| **TemporaryAccessPass** | Switch | No | Creates a Temporary Access Pass and returns it. Runs after `-ResetMfa`. |
+| **TemporaryAccessPassLifetime** | Int | No | Minutes, 10 to 43200 (and within the tenant's policy). Only with `-TemporaryAccessPass`. |
+| **TemporaryAccessPassUsableOnce** | Bool | No | Whether the pass works only once. Only with `-TemporaryAccessPass`. |
+| **RevokeSessions** | Switch | No | Signs the user out of every session. |
+
+At least one field, `-AddLicense`, `-RemoveLicense`, a mailbox change, `-Password`, `-RemoveAuthenticationMethod`, `-ResetMfa`, `-TemporaryAccessPass` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
+
+### Examples
+
+```powershell
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Department 'Sales' -JobTitle 'Account Manager'
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -RevokeSessions
+$password = Read-Host -AsSecureString -Prompt 'New password'
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Password $password -RevokeSessions
+# Lock out a compromised account: new password, every removable sign-in method deleted, signed out everywhere
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Password $password -ResetMfa -RevokeSessions
+# New sign-in methods after an MFA reset: one-time pass, valid for an hour
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -ResetMfa -TemporaryAccessPass -TemporaryAccessPassLifetime 60 -TemporaryAccessPassUsableOnce $true
+# Licence: set the usage location, then give the licence
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -AddLicense '00000000-0000-0000-0000-0000000000b1'
+# Offboard a leaver: block sign-in, hide the mailbox from the address book, end every session
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -HiddenFromAddressLists $true -RevokeSessions
+# Offboard and keep the mail: shared mailbox, automatic reply, manager gets full access, then the licence goes
+$reply = @{ status = 'alwaysEnabled'; externalAudience = 'all'; internalReplyMessage = 'Jo has left Contoso. Please contact sales@contoso.com.'; externalReplyMessage = 'Jo has left Contoso. Please contact sales@contoso.com.' }
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AccountEnabled $false -MailboxType Shared -AutoReply $reply -GrantMailboxPermission @{ permission = 'fullAccess'; trusteeId = '00000000-0000-0000-0000-000000000006' } -RemoveLicense '00000000-0000-0000-0000-0000000000b1' -RevokeSessions
+# Compromised mailbox: stop forwarding and remove the inbox rules that send mail outside the tenant
+$mailbox = (Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeMailbox).mailbox
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -RemoveForwarding -RemoveInboxRule @($mailbox.inboxRules | Where-Object forwardsExternally).id
+# Block IMAP and POP and make a colleague a delegate of the calendar
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -BlockMailApp Imap, Pop -GrantCalendarAccess @{ trusteeId = '00000000-0000-0000-0000-000000000006'; role = 'delegate' }
+# Move the user to another group: added to the new one first, then removed from the old one
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -AddGroup '00000000-0000-0000-0000-0000000000c2' -RemoveGroup '00000000-0000-0000-0000-0000000000c1'
+# New main address, old one removed in the same call
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -PrimaryEmailAddress 'jo.bloggs@contoso.com' -RemoveEmailAddress 'jo@contoso.com'
+# Remove one lost phone, keep the other sign-in methods
+$user = Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods
+Set-InforcerUser -TenantId 'Contoso' -UserId $user.id -RemoveAuthenticationMethod @($user.authenticationMethods | Where-Object phoneNumber -eq '+44 7700 900000').id
+Get-InforcerUser -TenantId 'Contoso' -Search 'Adele' | Set-InforcerUser -TenantId 'Contoso' -ManagerId ''
+Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
+```
+
+### Example output
+
+With `-TemporaryAccessPass`:
+
+```
+id                  : 00000000-0000-0000-0000-0000000000c1
+temporaryAccessPass : Ab3#kq7P
+startDateTime       : 2026-11-15T10:00:00+00:00
+lifetimeInMinutes   : 60
+usableOnce          : True
+userId              : 00000000-0000-0000-0000-000000000005
+```
+
+Otherwise none. With `-WhatIf`:
+
+```
+What if: Performing the operation "Update usageLocation" on target "user 00000000-0000-0000-0000-000000000005 in tenant 00000000-0000-0000-0000-000000000001".
 ```
 
 ---

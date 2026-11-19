@@ -273,6 +273,43 @@ Describe 'Get-InforcerBaseline' {
     }
 }
 
+Describe 'Get-InforcerTenant -IncludeSubscriptions' {
+    BeforeEach {
+        Reset-V1TenantsRoutes
+        $global:V1TenantsRoutes['/v1/tenants/00000000-0000-0000-0000-000000000001/subscriptions$'] = '{"subscriptions":[{"skuId":"00000000-0000-0000-0000-0000000000c1","sku":"SPE_E5","name":"Microsoft 365 E5","capabilityStatus":"enabled","appliesTo":"user","units":{"enabled":25,"consumed":20,"available":5,"suspended":0,"warning":0,"lockedOut":0}}]}'
+        $global:V1TenantsRoutes['/v1/tenants/00000000-0000-0000-0000-000000000002/subscriptions$'] = @{ Status = 409; Body = '{"title":"Conflict","status":409}' }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { Get-V1TenantsResponse $Request.Uri }
+    }
+
+    It 'v1: adds the subscriptions with skuId and seats, in both output types' {
+        Set-V1TenantsSession
+        $t = Get-InforcerTenant -TenantId $script:T1 -IncludeSubscriptions
+        $t.subscriptions.Count | Should -Be 1
+        $t.subscriptions[0].skuId | Should -Be '00000000-0000-0000-0000-0000000000c1'
+        $t.subscriptions[0].units.available | Should -Be 5
+        $json = Get-InforcerTenant -TenantId $script:T1 -IncludeSubscriptions -OutputType JsonObject | ConvertFrom-Json -Depth 100
+        $json[0].subscriptions[0].sku | Should -Be 'SPE_E5'
+    }
+
+    It 'v1: one request per tenant; a tenant whose subscriptions fail still comes back, with the error; the cached list is not changed' {
+        Set-V1TenantsSession
+        $out = @(Get-InforcerTenant -IncludeSubscriptions -ErrorAction SilentlyContinue -ErrorVariable e)
+        $out.Count | Should -Be 2
+        $out[0].subscriptions.Count | Should -Be 1
+        $out[1].PSObject.Properties['subscriptions'] | Should -BeNullOrEmpty
+        "$($e[-1])" | Should -BeLike '*409*'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 2 -Exactly -ParameterFilter { $Request.Uri -match '/subscriptions$' }
+        & $script:M { @($script:InforcerTenantListCache.Tenants | Where-Object { $_.PSObject.Properties['subscriptions'] }).Count } | Should -Be 0
+    }
+
+    It 'beta: stops with RequiresApiClient and makes no request' {
+        Set-V1TenantsSession -Beta
+        Get-InforcerTenant -IncludeSubscriptions -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[-1].FullyQualifiedErrorId | Should -BeLike 'RequiresApiClient*'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 0 -Exactly
+    }
+}
+
 Describe 'Resolve-InforcerBaselineId' {
     It 'v1: resolves a baseline name case-insensitively through the neutral /baselines endpoint' {
         Set-V1TenantsSession

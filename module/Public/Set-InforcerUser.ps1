@@ -161,7 +161,10 @@ function Set-InforcerUser {
 
     .PARAMETER MailboxType
         User or Shared. Converts the mailbox to a shared mailbox (for a leaver, before the licence is
-        removed) or back to a user mailbox.
+        removed) or back to a user mailbox. Give the user a licence with Exchange Online first (-AddLicense
+        in the same call runs before the mailbox steps): an unlicensed user mailbox goes offline within
+        minutes and every later mailbox change fails with MailboxNotFound until a licence is added. Its
+        content is kept.
 
     .PARAMETER EnableArchive
         Turns on the mailbox's online archive. It cannot be turned off here; one already on is left as it is.

@@ -459,7 +459,7 @@ The `skuId` of a licence comes from the tenant's subscriptions (`GET /v1/tenants
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/groups`
 
-Adds the user to Microsoft Entra groups and removes them from others in one call. Each group is changed on its own, so a group that cannot be added does not stop the removals. A group the user is already in, or is not in, counts as done, so a request can be repeated. Members of role-assignable groups cannot be changed. To move a user without leaving them in neither group, add first and remove in a second call once the add succeeded; `Set-InforcerUser` does this when both `-AddGroup` and `-RemoveGroup` are given.
+Adds the user to Microsoft Entra groups and removes them from others in one call. Each group is changed on its own, so a group that cannot be added does not stop the removals. A group the user is already in, or is not in, counts as done, so a request can be repeated. Members of role-assignable groups, dynamic groups, distribution lists and mail-enabled security groups cannot be changed. To move a user without leaving them in neither group, add first and remove in a second call once the add succeeded; `Set-InforcerUser` does this when both `-AddGroup` and `-RemoveGroup` are given.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*

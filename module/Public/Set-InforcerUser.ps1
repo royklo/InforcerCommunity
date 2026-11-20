@@ -148,12 +148,12 @@ function Set-InforcerUser {
         is refused; one the user does not have is ignored.
 
     .PARAMETER AddGroup
-        The object id of one or more Microsoft Entra groups (at most 20) to add the user to. Role-assignable
-        groups are refused.
+        The object id of one or more Microsoft Entra groups (at most 20) to add the user to.
+        Role-assignable groups, dynamic groups, distribution lists and mail-enabled security groups are refused.
 
     .PARAMETER RemoveGroup
         The object id of one or more Microsoft Entra groups (at most 20) to remove the user from. Runs only
-        after -AddGroup succeeded. Role-assignable groups are refused.
+        after -AddGroup succeeded. Role-assignable groups, dynamic groups, distribution lists and mail-enabled security groups are refused.
 
     .PARAMETER HiddenFromAddressLists
         $true hides the user's mailbox from the address lists (the global address list in Outlook), $false

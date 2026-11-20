@@ -678,8 +678,8 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **UserType** | String | No | `Member` or `Guest`. Cannot be cleared. |
 | **AddLicense** | Guid[] | No | `skuId`s of licences to give the user (from `Get-InforcerTenant -IncludeSubscriptions`, which also shows free seats, or `assignedLicenses` of `Get-InforcerUser -UserId`). The user needs a usage location. |
 | **RemoveLicense** | Guid[] | No | `skuId`s of licences to take from the user. A licence given through a group is refused. |
-| **AddGroup** | Guid[] | No | Object ids of Microsoft Entra groups (at most 20) to add the user to. Role-assignable groups are refused. |
-| **RemoveGroup** | Guid[] | No | Object ids of Microsoft Entra groups (at most 20) to remove the user from; runs only after `-AddGroup` succeeded. |
+| **AddGroup** | Guid[] | No | Object ids of Microsoft Entra groups (at most 20) to add the user to. Role-assignable groups, dynamic groups, distribution lists and mail-enabled security groups are refused. |
+| **RemoveGroup** | Guid[] | No | Object ids of Microsoft Entra groups (at most 20) to remove the user from; runs only after `-AddGroup` succeeded. Role-assignable groups, dynamic groups, distribution lists and mail-enabled security groups are refused. |
 | **HiddenFromAddressLists** | Bool | No | `$true` hides the mailbox from the address lists, `$false` shows it again. Waits until Exchange Online has applied it (at most 5 minutes). A Global Administrator's mailbox is refused. |
 | **MailboxType** | String | No | `User` or `Shared`. Converts the mailbox, for a leaver before the licence is removed. `User` needs a licence with Exchange Online (`-AddLicense` in the same call runs first): an unlicensed user mailbox goes offline within minutes and later mailbox changes fail with `MailboxNotFound` until a licence is added; its content is kept. |
 | **EnableArchive** | Switch | No | Turns on the online archive. It cannot be turned off here; mail moves into it under the tenant's retention policy. Refused for a user synced from on-premises. |

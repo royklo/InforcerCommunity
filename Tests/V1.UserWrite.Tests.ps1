@@ -765,3 +765,31 @@ Describe 'Set-InforcerGroup' {
         "$($e[-1])" | Should -BeLike '*Steps:*'
     }
 }
+
+Describe 'Request paths and failed steps' {
+    It 'refuses an id of . or .. so a value cannot reach another route' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'GET') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000aa","status":"succeeded","error":null}' }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000aa"}' 202
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -RemoveMailboxPermission @{ permission = '..'; trusteeId = 'forwarding' } -Confirm:$false -ErrorAction SilentlyContinue -ErrorVariable e
+        @($global:UwCalls | Where-Object { $_.Uri -like '*/mailbox/forwarding*' }).Count | Should -Be 0
+        $global:UwCalls.Count | Should -Be 0
+        "$($e[-1])" | Should -BeLike "*'..'*"
+        { Set-InforcerUser -TenantId $script:Tid -UserId '..' -Department 'X' -Confirm:$false -ErrorAction Stop } | Should -Throw "*'..'*"
+        $global:UwCalls.Count | Should -Be 0
+    }
+
+    It 'keeps the done and not-done report when a step fails unexpectedly' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute { param($Uri, $Method, $Body) if ($Uri -like '*/mailbox/*') { return New-UwResponse '{}' 202 }; New-UwResponse '' 204 }
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -Department 'X' -HiddenFromAddressLists $true -RevokeSessions -Confirm:$false -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[-1].FullyQualifiedErrorId | Should -BeLike 'UserUpdatePartlyApplied*'
+        "$($e[-1])" | Should -BeLike '*Already done: update department*Not done: sign out of every session*'
+        @($global:UwCalls | Where-Object { $_.Uri -like '*/revokeSessions' }).Count | Should -Be 0
+    }
+}

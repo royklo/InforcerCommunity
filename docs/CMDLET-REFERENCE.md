@@ -673,7 +673,7 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **AccountEnabled** | Bool | No | Whether the user can sign in. |
 | **DisplayName**, **MailNickname**, **UserPrincipalName**, **Mail** | String | No | Cannot be cleared; an empty value is refused. |
 | **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **UsageLocation**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType** | String | No | Profile fields; `''` clears the field. |
-| **BusinessPhones**, **OtherMails** | String[] | No | Replace the whole list; `@()` clears it. |
+| **BusinessPhones**, **OtherMails** | String[] | No | Replace the whole list; `@()` clears it. Microsoft Entra allows one business phone. |
 | **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
 | **UserType** | String | No | `Member` or `Guest`. Cannot be cleared. |
 | **AddLicense** | Guid[] | No | `skuId`s of licences to give the user (from `Get-InforcerTenant -IncludeSubscriptions`, which also shows free seats, or `assignedLicenses` of `Get-InforcerUser -UserId`). The user needs a usage location. |

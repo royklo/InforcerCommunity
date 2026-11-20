@@ -654,49 +654,55 @@ function Set-InforcerUser {
         if ($steps.Count -gt 1) { $errorHandling['ErrorAction'] = 'SilentlyContinue' }
         foreach ($step in $steps) {
             $stepErr = $null
-            if ($step -eq 'reset password') {
-                $json = [ordered]@{
-                    password                      = ConvertFrom-InforcerSecureString -SecureString $Password
-                    forceChangePasswordNextSignIn = $ForceChangePasswordNextSignIn
-                } | ConvertTo-Json -Compress
-                try {
-                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/password" -Method POST -Body $json @errorHandling
-                } finally { $json = $null }
-            } elseif ($step -like 'remove authentication method *') {
-                $methodId = $step.Substring('remove authentication method '.Length)
-                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/$([System.Uri]::EscapeDataString($methodId))" -Method DELETE @errorHandling
-            } elseif ($step -eq 'change licences') {
-                $json = [ordered]@{}
-                if ($AddLicense) { $json['addSkuIds'] = @($AddLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
-                if ($RemoveLicense) { $json['removeSkuIds'] = @($RemoveLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
-                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/assignLicenses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
-            } elseif ($step -in 'add to groups', 'remove from groups') {
-                $groups = @(if ($step -eq 'add to groups') { $AddGroup } else { $RemoveGroup }) | Select-Object -Unique | ForEach-Object { "$_" }
-                $json = @{ $(if ($step -eq 'add to groups') { 'add' } else { 'remove' }) = @($groups) } | ConvertTo-Json -Compress
-                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/groups" -Method POST -Body $json @errorHandling
-            } elseif ($mailboxCalls.ContainsKey($step)) {
-                $call = $mailboxCalls[$step]
-                $request = @{ Endpoint = "$userEndpoint/mailbox/$($call.Path)"; Method = $call.Method }
-                if ($call.Body) { $request['Body'] = $call.Body }
-                $action = Invoke-InforcerApiRequest @request @errorHandling
-                if (-not $stepErr) { $action = Wait-InforcerMailboxAction -UserEndpoint $userEndpoint -ActionId $action.actionId -Step $step -UserId $UserId @errorHandling }
-            } elseif ($step -eq 'create Temporary Access Pass') {
-                $json = [ordered]@{}
-                if ($PSBoundParameters.ContainsKey('TemporaryAccessPassLifetime')) { $json['lifetimeInMinutes'] = $TemporaryAccessPassLifetime }
-                if ($PSBoundParameters.ContainsKey('TemporaryAccessPassUsableOnce')) { $json['usableOnce'] = $TemporaryAccessPassUsableOnce }
-                $pass = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/temporaryAccessPasses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
-                # Emitted at once: the pass cannot be read again, so a later failing step must not lose it.
-                if (-not $stepErr -and $pass) {
-                    $pass | Add-Member -NotePropertyName userId -NotePropertyValue $UserId -Force
-                    $pass
+            # An unexpected exception counts as this step failing, so the done/not-done report survives it.
+            try {
+                if ($step -eq 'reset password') {
+                    $json = [ordered]@{
+                        password                      = ConvertFrom-InforcerSecureString -SecureString $Password
+                        forceChangePasswordNextSignIn = $ForceChangePasswordNextSignIn
+                    } | ConvertTo-Json -Compress
+                    try {
+                        $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/password" -Method POST -Body $json @errorHandling
+                    } finally { $json = $null }
+                } elseif ($step -like 'remove authentication method *') {
+                    $methodId = $step.Substring('remove authentication method '.Length)
+                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/$([System.Uri]::EscapeDataString($methodId))" -Method DELETE @errorHandling
+                } elseif ($step -eq 'change licences') {
+                    $json = [ordered]@{}
+                    if ($AddLicense) { $json['addSkuIds'] = @($AddLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
+                    if ($RemoveLicense) { $json['removeSkuIds'] = @($RemoveLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
+                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/assignLicenses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
+                } elseif ($step -in 'add to groups', 'remove from groups') {
+                    $groups = @(if ($step -eq 'add to groups') { $AddGroup } else { $RemoveGroup }) | Select-Object -Unique | ForEach-Object { "$_" }
+                    $json = @{ $(if ($step -eq 'add to groups') { 'add' } else { 'remove' }) = @($groups) } | ConvertTo-Json -Compress
+                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/groups" -Method POST -Body $json @errorHandling
+                } elseif ($mailboxCalls.ContainsKey($step)) {
+                    $call = $mailboxCalls[$step]
+                    $request = @{ Endpoint = "$userEndpoint/mailbox/$($call.Path)"; Method = $call.Method }
+                    if ($call.Body) { $request['Body'] = $call.Body }
+                    $action = Invoke-InforcerApiRequest @request @errorHandling
+                    if (-not $stepErr) { $action = Wait-InforcerMailboxAction -UserEndpoint $userEndpoint -ActionId $action.actionId -Step $step -UserId $UserId @errorHandling }
+                } elseif ($step -eq 'create Temporary Access Pass') {
+                    $json = [ordered]@{}
+                    if ($PSBoundParameters.ContainsKey('TemporaryAccessPassLifetime')) { $json['lifetimeInMinutes'] = $TemporaryAccessPassLifetime }
+                    if ($PSBoundParameters.ContainsKey('TemporaryAccessPassUsableOnce')) { $json['usableOnce'] = $TemporaryAccessPassUsableOnce }
+                    $pass = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/temporaryAccessPasses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
+                    # Emitted at once: the pass cannot be read again, so a later failing step must not lose it.
+                    if (-not $stepErr -and $pass) {
+                        $pass | Add-Member -NotePropertyName userId -NotePropertyValue $UserId -Force
+                        $pass
+                    }
+                    $pass = $null
+                } elseif ($step -eq 'reset MFA') {
+                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/mfa" -Method DELETE @errorHandling
+                } elseif ($step -eq 'sign out of every session') {
+                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/revokeSessions" -Method POST @errorHandling
+                } else {
+                    $null = Invoke-InforcerApiRequest -Endpoint $userEndpoint -Method PATCH -Body ($body | ConvertTo-Json -Depth 100 -Compress) @errorHandling
                 }
-                $pass = $null
-            } elseif ($step -eq 'reset MFA') {
-                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/mfa" -Method DELETE @errorHandling
-            } elseif ($step -eq 'sign out of every session') {
-                $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/revokeSessions" -Method POST @errorHandling
-            } else {
-                $null = Invoke-InforcerApiRequest -Endpoint $userEndpoint -Method PATCH -Body ($body | ConvertTo-Json -Depth 100 -Compress) @errorHandling
+            } catch {
+                $stepErr = @($_)
+                if ($steps.Count -eq 1) { Write-Error -ErrorRecord $_ }
             }
             if (-not $stepErr) { $done.Add($step); continue }
 

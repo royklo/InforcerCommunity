@@ -26,8 +26,8 @@ function Set-InforcerUser {
         -RemoveInboxRule, -RemoveAllInboxRules, -AllowMailApp, -BlockMailApp)
         each go to .../users/{userId}/mailbox/... and are queued in Exchange Online, which applies one change
         to a mailbox at a time, about a minute each. The cmdlet waits for each to succeed or fail (at most
-        5 minutes per change, then it warns that Exchange carries on) before the next step. Read the
-        mailbox with Get-InforcerUser -IncludeMailbox. A Global Administrator's mailbox is refused.
+        5 minutes per change; a change still queued then stops the steps after it, while Exchange carries on)
+        before the next step. Read the mailbox with Get-InforcerUser -IncludeMailbox. A Global Administrator's mailbox is refused.
         -Password sets a new password (POST /tenants/{msTenantId}/users/{userId}/password); the user must
         change it when they next sign in unless you pass -ForceChangePasswordNextSignIn $false.
         -RemoveAuthenticationMethod deletes registered sign-in methods, such as a phone or Microsoft
@@ -566,7 +566,7 @@ function Set-InforcerUser {
         $addMailboxStep = {
             param([string]$Name, [string]$Path, [string]$Method, $Json)
             $steps.Add($Name)
-            $mailboxCalls[$Name] = @{ Path = $Path; Method = $Method; Body = $(if ($null -ne $Json) { $Json | ConvertTo-Json -Depth 10 -Compress }) }
+            $mailboxCalls[$Name] = @{ Path = $Path; Method = $Method; Body = $(if ($null -ne $Json) { $Json | ConvertTo-Json -Depth 100 -Compress }) }
         }
         if ($body.Count -gt 0) { $steps.Add("update $(@($body.Keys) -join ', ')") }
         # Licences are one request (so a swap is atomic). Removing only runs after the mailbox steps,
@@ -589,7 +589,7 @@ function Set-InforcerUser {
             foreach ($p in $source.PSObject.Properties) {
                 # A read can be sent back: nulls and the read-only simplified are left out, dates get an offset.
                 if ($null -eq $p.Value -or $p.Name -eq 'simplified') { continue }
-                $reply[$p.Name] = if ($p.Value -is [datetime] -or $p.Value -is [datetimeoffset]) { $p.Value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") } else { $p.Value }
+                $reply[$p.Name] = if ($p.Value -is [datetime] -or $p.Value -is [datetimeoffset]) { $p.Value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture) } else { $p.Value }
             }
             if ($reply['status'] -eq 'disabled') { $reply = [ordered]@{ status = 'disabled' } }
             & $addMailboxStep $(if ($reply['status'] -eq 'disabled') { 'turn off automatic replies' } else { 'set automatic replies' }) 'autoReply' PATCH $reply
@@ -659,7 +659,7 @@ function Set-InforcerUser {
                     $json = [ordered]@{
                         password                      = ConvertFrom-InforcerSecureString -SecureString $Password
                         forceChangePasswordNextSignIn = $ForceChangePasswordNextSignIn
-                    } | ConvertTo-Json -Compress
+                    } | ConvertTo-Json -Depth 100 -Compress
                     try {
                         $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/password" -Method POST -Body $json @errorHandling
                     } finally { $json = $null }
@@ -670,22 +670,22 @@ function Set-InforcerUser {
                     $json = [ordered]@{}
                     if ($AddLicense) { $json['addSkuIds'] = @($AddLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
                     if ($RemoveLicense) { $json['removeSkuIds'] = @($RemoveLicense | Select-Object -Unique | ForEach-Object { "$_" }) }
-                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/assignLicenses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
+                    $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/assignLicenses" -Method POST -Body ($json | ConvertTo-Json -Depth 100 -Compress) @errorHandling
                 } elseif ($step -in 'add to groups', 'remove from groups') {
                     $groups = @(if ($step -eq 'add to groups') { $AddGroup } else { $RemoveGroup }) | Select-Object -Unique | ForEach-Object { "$_" }
-                    $json = @{ $(if ($step -eq 'add to groups') { 'add' } else { 'remove' }) = @($groups) } | ConvertTo-Json -Compress
+                    $json = @{ $(if ($step -eq 'add to groups') { 'add' } else { 'remove' }) = @($groups) } | ConvertTo-Json -Depth 100 -Compress
                     $null = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/groups" -Method POST -Body $json @errorHandling
                 } elseif ($mailboxCalls.ContainsKey($step)) {
                     $call = $mailboxCalls[$step]
                     $request = @{ Endpoint = "$userEndpoint/mailbox/$($call.Path)"; Method = $call.Method }
                     if ($call.Body) { $request['Body'] = $call.Body }
                     $action = Invoke-InforcerApiRequest @request @errorHandling
-                    if (-not $stepErr) { $action = Wait-InforcerMailboxAction -UserEndpoint $userEndpoint -ActionId $action.actionId -Step $step -UserId $UserId @errorHandling }
+                    if (-not $stepErr) { Wait-InforcerMailboxAction -UserEndpoint $userEndpoint -ActionId $action.actionId -Step $step -UserId $UserId @errorHandling }
                 } elseif ($step -eq 'create Temporary Access Pass') {
                     $json = [ordered]@{}
                     if ($PSBoundParameters.ContainsKey('TemporaryAccessPassLifetime')) { $json['lifetimeInMinutes'] = $TemporaryAccessPassLifetime }
                     if ($PSBoundParameters.ContainsKey('TemporaryAccessPassUsableOnce')) { $json['usableOnce'] = $TemporaryAccessPassUsableOnce }
-                    $pass = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/temporaryAccessPasses" -Method POST -Body ($json | ConvertTo-Json -Compress) @errorHandling
+                    $pass = Invoke-InforcerApiRequest -Endpoint "$userEndpoint/authenticationMethods/temporaryAccessPasses" -Method POST -Body ($json | ConvertTo-Json -Depth 100 -Compress) @errorHandling
                     # Emitted at once: the pass cannot be read again, so a later failing step must not lose it.
                     if (-not $stepErr -and $pass) {
                         $pass | Add-Member -NotePropertyName userId -NotePropertyValue $UserId -Force

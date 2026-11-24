@@ -405,6 +405,13 @@ Describe 'Invoke-InforcerApiRequest on v1' {
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly
         Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 0 -Exactly
     }
+    It 'does not retry a 409 on a POST search, which only reads' {
+        Mock -ModuleName InforcerCommunity Start-Sleep { }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 409 -Body '{"title":"Conflict","status":409}' }
+        $e = & $script:M { Invoke-InforcerApiRequest -Endpoint '/tdr/threats/search' -Method POST -Body '{}' -ErrorAction SilentlyContinue -ErrorVariable ev; $ev }
+        $e[0].FullyQualifiedErrorId | Should -Match '^ApiRequestFailed_409'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly
+    }
     It 'caps a long Retry-After at 300 seconds' {
         Mock -ModuleName InforcerCommunity Start-Sleep { }
         Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 429 -RetryAfter '3600' }

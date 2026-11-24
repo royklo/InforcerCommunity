@@ -403,7 +403,7 @@ Describe 'Set-InforcerUser' {
             Should -Throw '*Exchange Online could not be reached (NotStarted)*'
     }
 
-    It 'warns and carries on when the change is still queued at the deadline' {
+    It 'stops the later steps when a change is still queued at the deadline' {
         Set-UwSession
         Mock -ModuleName InforcerCommunity Start-Sleep {}
         $global:UwClock = [datetime]'2026-11-16T10:00:00'
@@ -413,10 +413,10 @@ Describe 'Set-InforcerUser' {
             if ($Method -eq 'PATCH') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
             New-UwResponse '' 204
         }
-        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -HiddenFromAddressLists $true -RevokeSessions -ErrorVariable e -WarningVariable w -WarningAction SilentlyContinue
-        $e | Should -BeNullOrEmpty
-        "$w" | Should -BeLike '*still queued*action id 00000000-0000-0000-0000-0000000000a1*'
-        @($global:UwCalls | ForEach-Object { $_.Method }) | Should -Be @('PATCH', 'POST')
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -HiddenFromAddressLists $true -RevokeSessions -ErrorVariable e -ErrorAction SilentlyContinue
+        $e[-1].FullyQualifiedErrorId | Should -BeLike 'UserUpdatePartlyApplied*'
+        "$($e[-1])" | Should -BeLike '*still queued*action id 00000000-0000-0000-0000-0000000000a1*Not done: sign out of every session*'
+        @($global:UwCalls | ForEach-Object { $_.Method }) | Should -Be @('PATCH')
     }
 
     It 'offboards in order: profile, mailbox changes one at a time, then the licence removal and the sign-out' {
@@ -760,13 +760,19 @@ Describe 'Set-InforcerGroup' {
 
     It 'shows the per-user results of a partial failure' {
         Set-UwSession
-        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"Some changes failed","status":400,"results":[{"id":"00000000-0000-0000-0000-000000000005","status":"succeeded"},{"id":"00000000-0000-0000-0000-000000000006","status":"failed","error":{"code":"Refused","message":"User not found"}}]}' 400 }
+        Set-UwRoute { param($Uri, $Method, $Body) New-UwResponse '{"title":"Some changes failed","status":400,"results":[{"step":"add","id":"00000000-0000-0000-0000-000000000005","status":"succeeded"},{"step":"add","id":"00000000-0000-0000-0000-000000000006","status":"failed","title":"User not found","statusCode":404}]}' 400 }
         Set-InforcerGroup -TenantId $script:Tid -Group '00000000-0000-0000-0000-0000000000c1' -AddMember $script:Uid, '00000000-0000-0000-0000-000000000006' -ErrorAction SilentlyContinue -ErrorVariable e
-        "$($e[-1])" | Should -BeLike '*Steps:*'
+        "$($e[-1])" | Should -BeLike '*Steps: add 00000000-0000-0000-0000-000000000005: succeeded; add 00000000-0000-0000-0000-000000000006: failed (User not found)*'
     }
 }
 
 Describe 'Request paths and failed steps' {
+    It 'refuses a percent-encoded . or .. in a request path' {
+        Set-UwSession
+        { & (Get-Module InforcerCommunity) { Get-InforcerBaseUrl -Endpoint '/tenants/t1/users/%2e%2e/%2E%2e/t2/users/u1' } } | Should -Throw "*'%2e%2e'*"
+        { & (Get-Module InforcerCommunity) { Get-InforcerBaseUrl -Endpoint '/tenants/t1/users/%2e' } } | Should -Throw
+    }
+
     It 'refuses an id of . or .. so a value cannot reach another route' {
         Set-UwSession
         Mock -ModuleName InforcerCommunity Start-Sleep {}

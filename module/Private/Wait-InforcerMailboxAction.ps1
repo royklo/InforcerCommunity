@@ -1,6 +1,7 @@
 function Wait-InforcerMailboxAction {
     # Polls a queued mailbox action until Exchange Online reports succeeded or failed.
-    # A failed action is written as an error; one still running at the deadline is a warning, not an error.
+    # A failed action is an error, and so is one still running at the deadline: a later step (a licence
+    # removal) must not run before Exchange has confirmed this one.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$UserEndpoint,
@@ -16,7 +17,7 @@ function Wait-InforcerMailboxAction {
     try {
         while ($status -notin 'succeeded', 'failed') {
             if ((Get-Date) -ge $deadline) {
-                Write-Warning "The request to $Step for user $UserId is still $status after $TimeoutSeconds seconds. Exchange Online carries on in the background (action id $ActionId)."
+                Write-Error -Message "The request to $Step for user $UserId is still $status after $TimeoutSeconds seconds, so the steps after it were not run. Exchange Online carries on in the background (action id $ActionId); check it with Get-InforcerUser -IncludeMailbox before running the rest again." -ErrorId 'MailboxActionTimedOut' -Category OperationTimeout
                 return
             }
             Write-Progress -Activity "Mailbox of user $UserId" -Status "${Step}: $status"

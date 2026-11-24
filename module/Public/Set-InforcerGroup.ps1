@@ -107,6 +107,6 @@ function Set-InforcerGroup {
         ) -join '; '
         if (-not $PSCmdlet.ShouldProcess("group $resolvedGroupId in tenant $resolvedTenantId", $change)) { return }
 
-        $null = Invoke-InforcerApiRequest -Endpoint "/tenants/$resolvedTenantId/groups/$resolvedGroupId/members" -Method POST -Body ($body | ConvertTo-Json -Compress)
+        $null = Invoke-InforcerApiRequest -Endpoint "/tenants/$resolvedTenantId/groups/$resolvedGroupId/members" -Method POST -Body ($body | ConvertTo-Json -Depth 100 -Compress)
     }
 }

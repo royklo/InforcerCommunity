@@ -18,7 +18,8 @@ function Invoke-InforcerApiRequest {
           * App-layer:     { success, message, errors[], errorCode }
           * APIM gateway:  { statusCode, message }
         ErrorId is ApiRequestFailed_<status>. On v1, 429 is retried up to three times honouring Retry-After
-        (seconds or HTTP date, capped at 300 s) and a 401 renews the token once and retries.
+        (seconds or HTTP date, capped at 300 s), a 409 on a write is retried twice (Retry-After, else 8 s
+        then 16 s) and a 401 renews the token once and retries.
 
         The x-correlation-id response header is logged to the verbose stream and included in error
         messages when present.
@@ -85,6 +86,7 @@ function Invoke-InforcerApiRequest {
     }
 
     $retries429 = 0
+    $retries409 = 0
     $renewToken = $false
     $tokenRenewed = $false
     while ($true) {
@@ -119,6 +121,14 @@ function Invoke-InforcerApiRequest {
             $retries429++
             $delay = Get-InforcerRetryDelay -Value (Get-InforcerHeaderValue -Headers $response.Headers -Name 'Retry-After') -Attempt $retries429
             Write-Verbose "Rate limited (HTTP 429). Retrying in $delay second(s) (attempt $retries429 of 3)."
+            Start-Sleep -Seconds $delay
+            continue
+        }
+        # Microsoft Graph refuses a write on a user shortly after another one (409); it clears within seconds.
+        if ($statusCode -eq 409 -and $isV1 -and $Method -ne 'GET' -and $retries409 -lt 2) {
+            $retries409++
+            $delay = Get-InforcerRetryDelay -Value (Get-InforcerHeaderValue -Headers $response.Headers -Name 'Retry-After') -Attempt ($retries409 + 2)
+            Write-Verbose "Conflict (HTTP 409). Retrying in $delay second(s) (attempt $retries409 of 2)."
             Start-Sleep -Seconds $delay
             continue
         }

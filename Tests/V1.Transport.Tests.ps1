@@ -368,6 +368,35 @@ Describe 'Invoke-InforcerApiRequest on v1' {
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 4 -Exactly
         Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 3 -Exactly
     }
+    It 'retries a 409 on a write twice, 8 s then 16 s, and then succeeds' {
+        $script:calls = 0
+        Mock -ModuleName InforcerCommunity Start-Sleep { }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest {
+            $script:calls++
+            if ($script:calls -le 2) { return (New-V1TestResponse -Status 409 -Body '{"title":"Conflict","status":409}') }
+            New-V1TestResponse -Status 204 -Body ''
+        }
+        $e = & $script:M { $null = Invoke-InforcerApiRequest -Endpoint '/tenants/x/users/y/password' -Method POST -Body '{}' -ErrorAction SilentlyContinue -ErrorVariable ev; $ev }
+        @($e).Count | Should -Be 0
+        Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 1 -Exactly -ParameterFilter { $Seconds -eq 8 }
+        Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 1 -Exactly -ParameterFilter { $Seconds -eq 16 }
+    }
+    It 'honours Retry-After on a 409 and gives up after two retries with ApiRequestFailed_409' {
+        Mock -ModuleName InforcerCommunity Start-Sleep { }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 409 -RetryAfter '5' -Body '{"title":"Conflict","status":409}' }
+        $e = & $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants/x/users/y/assignLicenses' -Method POST -Body '{}' -ErrorAction SilentlyContinue -ErrorVariable ev; $ev }
+        $e[0].FullyQualifiedErrorId | Should -Match '^ApiRequestFailed_409'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 3 -Exactly
+        Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 2 -Exactly -ParameterFilter { $Seconds -eq 5 }
+    }
+    It 'does not retry a 409 on a read (a state such as an offline mailbox, not a passing conflict)' {
+        Mock -ModuleName InforcerCommunity Start-Sleep { }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 409 -Body '{"title":"Mailbox offline","status":409}' }
+        $e = & $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants/x/users/y/mailbox' -ErrorAction SilentlyContinue -ErrorVariable ev; $ev }
+        $e[0].FullyQualifiedErrorId | Should -Match '^ApiRequestFailed_409'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly
+        Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 0 -Exactly
+    }
     It 'caps a long Retry-After at 300 seconds' {
         Mock -ModuleName InforcerCommunity Start-Sleep { }
         Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 429 -RetryAfter '3600' }

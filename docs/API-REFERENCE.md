@@ -542,7 +542,7 @@ Turns on the mailbox's online archive. Body: `{ "enabled": true }` (JSON Merge P
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses` and `DELETE .../emailAddresses/{address}`
 
-`POST { address, primary }` adds an address on a domain verified in the tenant; `primary: true` also makes it the main one. `DELETE` removes one; the main and the sign-in address are a `400`, so after changing the main address wait for that action before removing the old one. A user synced from on-premises Active Directory is a `400` for both.
+`POST { address, primary }` adds an address on a domain verified in the tenant; `primary: true` also makes it the main one. `DELETE` removes one, given as is (`jo.bloggs@contoso.com`) or percent-encoded; the main and the sign-in address are a `400`, so after changing the main address wait for that action before removing the old one. A user synced from on-premises Active Directory is a `400` for both.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
@@ -1574,7 +1574,7 @@ The answer of `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{acti
 | Property | Type | Description |
 |----------|------|-------------|
 | actionId | string (uuid) | The action's id, from the `202` that queued it. |
-| action | string | The change: `convertToShared`, `convertToUser`, `setAddressListVisibility`, `setAutoReply`, `setForwarding`, `grantPermission`, `removePermission`, `removeInboxRules`, `addToMailGroup`, `removeFromMailGroup`, `addEmailAddress`, `removeEmailAddress`, `setMailApps`, `setCalendarAccess` or `enableArchive`. A change asked for in inforcer can have a value the API cannot ask for. More may be added. |
+| action | string | The change: `convertToShared`, `convertToUser`, `setAddressListVisibility`, `setAutoReply`, `setForwarding`, `grantPermission`, `removePermission`, `removeInboxRules`, `addToMailGroup`, `removeFromMailGroup`, `addEmailAddress`, `removeEmailAddress`, `setMailApps`, `setCalendarAccess`, `enableArchive` or `replaceEmailAddress`. A change asked for in inforcer can have a value the API cannot ask for, such as `replaceEmailAddress`. More may be added. |
 | status | string | `queued` (waits for an earlier change to the same mailbox), `running`, `succeeded` (Exchange shows the change) or `failed`. |
 | queuedBehind | string (uuid), nullable | While `queued`, the action it waits for, when the caller can read that one. |
 | requestedAt | string (date-time) | When it was asked for. |

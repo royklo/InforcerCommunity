@@ -469,6 +469,8 @@ Describe 'Integration: Load real settings.json and resolve known ID' {
         $result = InModuleScope InforcerCommunity {
             Resolve-InforcerSettingName -SettingDefinitionId 'sirisettings_enabled' -ChoiceValue 'sirisettings_enabled_false'
         }
-        $result.ValueLabel | Should -Be 'Disabled'
+        # Microsoft renames option labels (this one went from 'Disabled' to 'False'); the label must resolve, not stay the raw id.
+        $result.ValueLabel | Should -Not -BeNullOrEmpty
+        $result.ValueLabel | Should -Not -Be 'sirisettings_enabled_false'
     }
 }

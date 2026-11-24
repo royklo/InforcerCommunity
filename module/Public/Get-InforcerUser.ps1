@@ -168,7 +168,7 @@ function Get-InforcerUser {
 
         if ($PSCmdlet.ParameterSetName -eq 'ById') {
             # --- ById: single user detail ---
-            $endpoint = "/tenants/$resolvedTenantId/users/$UserId"
+            $endpoint = "/tenants/$resolvedTenantId/users/$([System.Uri]::EscapeDataString($UserId))"
             $err = $null
             # -PreserveStructure: user detail response is a single object with many nested arrays
             # (groups, roles, devices, appRoleAssignments, assignedLicenses, businessPhones, ...).

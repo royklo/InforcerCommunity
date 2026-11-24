@@ -43,8 +43,8 @@ function Get-InforcerBaseUrl {
         if (-not $Session) { throw [System.InvalidOperationException]::new('Not connected. Run Connect-Inforcer first.') }
         $path = $Endpoint.Trim()
         if (-not $path.StartsWith('/')) { $path = '/' + $path }
-        # An id of . or .. would make the URI climb to another route (a permission removal reaching .../forwarding).
-        $dotSegment = @(($path -split '\?', 2)[0] -split '/') | Where-Object { $_ -in '.', '..' } | Select-Object -First 1
+        # An id of . or .. (also percent-encoded, %2e%2e) would make the URI climb to another route.
+        $dotSegment = @(($path -split '\?', 2)[0] -split '/') | Where-Object { [System.Uri]::UnescapeDataString($_) -in '.', '..' } | Select-Object -First 1
         if ($dotSegment) { throw [System.ArgumentException]::new("'$dotSegment' is not a valid id in a request path.") }
 
         if ($Session.ApiVersion -eq 'v1') {

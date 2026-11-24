@@ -23,6 +23,8 @@
         'Set-InforcerUser'
         'Get-InforcerGroup'
         'Set-InforcerGroup'
+        'Get-InforcerThreat'
+        'Get-InforcerThreatIndicator'
         'Get-InforcerRole'
         'Get-InforcerSecureScore'
         'Export-InforcerTenantDocumentation'

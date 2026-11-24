@@ -30,12 +30,13 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 24
+        $script:expectedCount = 26
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
             'Get-InforcerUser', 'New-InforcerUser', 'Set-InforcerUser', 'Get-InforcerGroup', 'Set-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore',
+            'Get-InforcerThreat', 'Get-InforcerThreatIndicator',
             'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
             'Get-InforcerAssessment', 'Invoke-InforcerAssessment',
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
@@ -55,6 +56,8 @@ Describe 'Consistency contract' {
             'Set-InforcerUser'              = @('TenantId', 'UserId', 'AccountEnabled', 'DisplayName', 'ManagerId', 'UserType', 'Password', 'ForceChangePasswordNextSignIn', 'AddLicense', 'RemoveLicense', 'AddGroup', 'RemoveGroup', 'HiddenFromAddressLists', 'MailboxType', 'EnableArchive', 'AutoReply', 'ForwardTo', 'KeepForwardedCopy', 'RemoveForwarding', 'GrantMailboxPermission', 'RemoveMailboxPermission', 'GrantCalendarAccess', 'RemoveCalendarAccess', 'AddMailGroup', 'RemoveMailGroup', 'AddEmailAddress', 'PrimaryEmailAddress', 'RemoveEmailAddress', 'RemoveInboxRule', 'RemoveAllInboxRules', 'AllowMailApp', 'BlockMailApp', 'RemoveAuthenticationMethod', 'ResetMfa', 'TemporaryAccessPass', 'TemporaryAccessPassLifetime', 'TemporaryAccessPassUsableOnce', 'RevokeSessions')
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
             'Set-InforcerGroup'             = @('TenantId', 'Group', 'AddMember', 'RemoveMember')
+            'Get-InforcerThreat'            = @('Format', 'TenantId', 'ThreatId', 'Status', 'Severity', 'Verdict', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
+            'Get-InforcerThreatIndicator'   = @('Format', 'TenantId', 'IndicatorId', 'ThreatId', 'Severity', 'AlertType', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')
             'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'Show', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')

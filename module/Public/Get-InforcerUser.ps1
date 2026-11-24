@@ -38,13 +38,14 @@ function Get-InforcerUser {
         hold, email addresses, hiddenFromAddressList, forwarding, mailApps), with autoReply, permissions (and
         unreadPermissions, the kinds Exchange could not read just now), calendarAccess, mailGroups
         (distribution lists and mail-enabled security groups) and inboxRules. Six extra requests. mailbox is null when the user has
-        no mailbox. Only with -UserId and a login with an API client. Change these with Set-InforcerUser.
+        no mailbox. A mailbox Exchange took offline (no licence with Exchange Online) gives the error
+        'Mailbox offline' and leaves mailbox out. Only with -UserId and a login with an API client. Change these with Set-InforcerUser.
 
     .PARAMETER IncludeMessageTrace
         Adds messageTrace to the user: the mail they sent and received in the last 10 days, newest first,
         one entry per message per recipient (received, direction, sender, recipient, subject, status).
         Delivery details only, never message content. Reads every page (one request per 1,000 entries
-        each way). Empty when the user has no mailbox. Only with -UserId and a login with an API client.
+        each way). Empty when the user has no mailbox; an offline mailbox gives the error 'Mailbox offline'. Only with -UserId and a login with an API client.
 
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'. Depth 100; the v1 list is always a JSON array.

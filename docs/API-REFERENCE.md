@@ -294,7 +294,7 @@ Errors are `application/problem+json`: `type`, `title`, `status`, `detail`, `ins
 | 401 | Token missing or expired | Token renewed once, request retried |
 | 403 | Missing permission or tenant | Error showing the API's title and detail |
 | 404 | Does not exist **or** outside the client's tenant filter | Error showing the API's title and detail (e.g. `Tenant not found`) |
-| 409 | Conflict | On a v1 write (not a `GET`): retried twice, after `Retry-After` or else 8 s then 16 s, because Microsoft Entra refuses a write on a user that comes seconds after another one. A read is not retried (a `409` there is a state, such as an offline mailbox). Then an error with the API's detail. |
+| 409 | Conflict | On a v1 write (not a `GET`): retried twice, after `Retry-After` or else 8 s then 16 s, because Microsoft Entra refuses a write on a user that comes seconds after another one. Not retried: creating a user (a `409` there means the user principal name is taken) and a read (a `409` there is a state, such as an offline mailbox). Then an error with the API's detail. |
 | 429 | Rate limit | Waits for `Retry-After` (seconds or HTTP date, capped at 300 s), up to 3 retries. v1 only: with an API key (beta) the first `429` fails the call, as in 0.8.0. Report-file downloads are not retried on `429`. |
 | 500 / 502 | Server error (assessment runs can return both) | Error with the API's detail |
 
@@ -416,7 +416,7 @@ Sets a new password for the user, and can require them to change it when they ne
 
 Body: [PasswordReset](#passwordreset), both fields required.
 
-**Response**: `204` without a body. Errors: `400` (missing field, or the password does not meet the tenant's password policy, in `errors.password`), `404` (tenant or user).
+**Response**: `204` without a body. Errors: `400` (missing field, or the password does not meet the tenant's password policy, in `errors.password`), `404` (tenant or user), `409` (Microsoft Entra reported a conflict, such as while it still applies another change; the module retries it).
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`
 
@@ -425,7 +425,7 @@ Signs the user out of every session by revoking their refresh tokens and session
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
 
-**Response**: `204` without a body. Errors: `404` (tenant or user, `User not found`).
+**Response**: `204` without a body. Errors: `404` (tenant or user, `User not found`), `409` (Microsoft Entra reported a conflict, such as while it still applies another change; the module retries it).
 
 `Set-InforcerUser` runs the steps of one call in this order: `PATCH` (when a profile field is passed), licences, password, delete authentication methods (one call per id), MFA reset, Temporary Access Pass, revoke sessions. When a step fails the later ones are skipped, and the error (`UserUpdatePartlyApplied`) names the steps already done and the steps not done.
 
@@ -445,7 +445,7 @@ Deletes one of the user's sign-in methods, such as a phone, Microsoft Authentica
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
 
-**Response**: `204` without a body. Errors: `400` when the method is not `deletable` (reason in `errors.methodId`) or Microsoft Entra refuses it, for example the default method while another phone remains (reason in `detail`); `404` (tenant, user or method). Microsoft Entra's reads lag its changes, so the list can still show a deleted method for a short time. `Set-InforcerUser -RemoveAuthenticationMethod` sends one call per id.
+**Response**: `204` without a body. Errors: `400` when the method is not `deletable` (reason in `errors.methodId`) or Microsoft Entra refuses it, for example the default method while another phone remains (reason in `detail`); `404` (tenant, user or method), `409` (Microsoft Entra reported a conflict, such as while it still applies another change; the module retries it). Microsoft Entra's reads lag its changes, so the list can still show a deleted method for a short time. `Set-InforcerUser -RemoveAuthenticationMethod` sends one call per id.
 
 #### `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`
 
@@ -454,7 +454,7 @@ Resets the user's MFA: deletes every authentication method that the list above r
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
 
-**Response**: `204` without a body, also when there was nothing to delete. When Microsoft Entra refuses a method the API answers `400` with problem+json and `results[]`: one `{ step, id, status, title? }` per method, `step` being the method's type and `title` the reason; `500` and `502` carry `results[]` too when methods were attempted. The module adds them to the error text as `Steps: phone <id>: succeeded; fido2 <id>: failed (reason)`. `404`: tenant or user.
+**Response**: `204` without a body, also when there was nothing to delete. A conflict in Microsoft Entra is a `409`, with `results[]` naming the conflicting method's reason as its `title`; the module retries it. When Microsoft Entra refuses a method the API answers `400` with problem+json and `results[]`: one `{ step, id, status, title? }` per method, `step` being the method's type and `title` the reason; `500` and `502` carry `results[]` too when methods were attempted. The module adds them to the error text as `Steps: phone <id>: succeeded; fido2 <id>: failed (reason)`. `404`: tenant or user.
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`
 
@@ -465,7 +465,7 @@ Adds and removes the user's licences in one call. If any licence is refused, not
 
 Body: [UserLicenseAssignment](#userlicenseassignment), at least one licence.
 
-**Response**: `204` without a body. Errors: `400` (a licence with no free seat, not subscribed to, conflicting with the user's other licences, or given through a group; a refused request that both adds and removes is a `400` on `body`), `404` (tenant or user).
+**Response**: `204` without a body. Errors: `400` (a licence with no free seat, not subscribed to, conflicting with the user's other licences, or given through a group; a refused request that both adds and removes is a `400` on `body`), `404` (tenant or user), `409` (Microsoft Entra reported a conflict, such as while it still applies another change; the module retries it).
 
 The `skuId` of a licence comes from the tenant's subscriptions (`GET /v1/tenants/{msTenantId}/subscriptions`, [Subscription](#subscription), which also shows free seats) or from a user's `assignedLicenses` ([UserLicense](#userlicense)). The tenant record lists its licences by part number only (`sku`).
 
@@ -478,7 +478,7 @@ Adds the user to Microsoft Entra groups and removes them from others in one call
 
 Body: [UserGroupsChange](#usergroupschange).
 
-**Response**: `204` without a body; a change can take a few seconds to show in a GET. Errors: `400` (invalid request, or when some groups were changed and a group refused, a `results` list with each group and whether it was changed), `404` (tenant or user), `502` (a service failed; `results` when some groups were changed).
+**Response**: `204` without a body; a change can take a few seconds to show in a GET. Errors: `400` (invalid request, or when some groups were changed and a group refused, a `results` list with each group and whether it was changed), `404` (tenant or user), `409` (Microsoft Entra reported a conflict; `results` when some groups were changed or the groups failed for different reasons; the module retries it), `502` (a service failed; `results` as for `409`).
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`
 
@@ -489,7 +489,7 @@ Creates a Temporary Access Pass for the user and returns it. The pass is returne
 
 Body (optional): `{ lifetimeInMinutes (10 to 43200), usableOnce, startDateTime }`; a property left out takes the tenant's authentication methods policy default.
 
-**Response**: `201` with [TemporaryAccessPass](#temporaryaccesspass). Errors: `400` on the property the policy does not allow (lifetime, start in the past, one-time use), or with the reason as `detail` when the policy does not allow a pass for the user at all (for example Temporary Access Pass is off in the tenant); `404` (tenant or user). Policy changes in Microsoft Entra take effect after a short delay.
+**Response**: `201` with [TemporaryAccessPass](#temporaryaccesspass). Errors: `400` on the property the policy does not allow (lifetime, start in the past, one-time use), or with the reason as `detail` when the policy does not allow a pass for the user at all (for example Temporary Access Pass is off in the tenant); `404` (tenant or user); `409` (Microsoft Entra reported a conflict, such as while it still applies another change; the module retries it). Policy changes in Microsoft Entra take effect after a short delay.
 
 #### Mailbox changes: how every write works
 
@@ -500,7 +500,7 @@ Every mailbox write below is applied by Exchange Online after the response: the 
 
 #### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`
 
-The mailbox as Exchange Online holds it now ([Mailbox](#mailbox)). A user with no mailbox is a `404`. `Get-InforcerUser -IncludeMailbox` adds it (with the five lists below) as `mailbox`.
+The mailbox as Exchange Online holds it now ([Mailbox](#mailbox)). A user with no mailbox is a `404`. A user mailbox Exchange took offline, because the user has no licence that includes Exchange Online, is a `409` with the title `Mailbox offline` (on this route, the five lists below and the message trace); assigning a licence within 30 days of its removal brings it back, or Exchange deletes it. `Get-InforcerUser -IncludeMailbox` adds it (with the five lists below) as `mailbox`.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management *(unconfirmed)*
@@ -521,7 +521,7 @@ Turns automatic replies on (`alwaysEnabled`), schedules them (`scheduled`) or tu
 
 #### `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type`
 
-Converts the mailbox to a shared mailbox or back to a user mailbox. Body: `{ "type": "shared" }` or `{ "type": "user" }`.
+Converts the mailbox to a shared mailbox or back to a user mailbox. Body: `{ "type": "shared" }` or `{ "type": "user" }`. Converting to a user mailbox when the user has no licence that includes Exchange Online makes the action fail with `MailboxLicenseMissing` and changes nothing (Exchange would take the mailbox offline); assign the licence first, and allow a few minutes for a new licence to reach Exchange.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
@@ -611,7 +611,7 @@ The mail the user sent and received in the last 10 days (the longest window Exch
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management *(unconfirmed)*
 
-**Response**: `200` with [MailboxMessageTrace](#mailboxmessagetrace). Errors: `400` (a token that is not valid or has expired), `404` (tenant, user, or a user with no mailbox), `409`, `502`.
+**Response**: `200` with [MailboxMessageTrace](#mailboxmessagetrace). Errors: `400` (a token that is not valid or has expired), `404` (tenant, user, or a user with no mailbox), `409` (`Mailbox offline`, see above), `502`.
 
 #### `GET /v1/tenants/{msTenantId}/users/{userId}/offboardings/{offboardingId}`
 
@@ -631,7 +631,7 @@ Adds users to a Microsoft Entra group and removes others from it in one call. Ea
 
 Body: [GroupMembersChange](#groupmemberschange).
 
-**Response**: `204` without a body; a change can take a few seconds to show in a GET. Errors: `400` (invalid request or a group whose members cannot change; when some users were changed and one refused, a `results` list with each user), `404` (tenant or group), `502` (a service failed; `results` when some users were changed).
+**Response**: `204` without a body; a change can take a few seconds to show in a GET. Errors: `400` (invalid request or a group whose members cannot change; when some users were changed and one refused, a `results` list with each user), `404` (tenant or group), `409` (Microsoft Entra reported a conflict; `results` when some users were changed or the users failed for different reasons; the module retries it), `502` (a service failed; `results` as for `409`).
 
 ### Threat detection and response (v1 only)
 

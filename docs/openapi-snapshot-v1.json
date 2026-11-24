@@ -100,16 +100,19 @@
     },
     "schemas": {
       "acceptedDeviation": {
+        "description": "A difference from the baseline that someone accepted or a live scheduled exclusion covers, so it no longer counts as a deviation",
         "properties": {
           "acceptAllChanges": {
             "description": "Whether the deviation accepts every difference rather than listed ones",
             "type": "boolean"
           },
           "acceptedByUsername": {
+            "description": "The username of the person who accepted the deviation",
             "nullable": true,
             "type": "string"
           },
           "acceptedTimestamp": {
+            "description": "When the deviation was accepted",
             "format": "date-time",
             "type": "string"
           },
@@ -123,22 +126,26 @@
             "type": "string"
           },
           "policyAssignmentsDiff": {
+            "description": "The accepted differences in the policy's assignments",
             "items": {
               "$ref": "#/components/schemas/policyDiff"
             },
             "type": "array"
           },
           "policyDataDiff": {
+            "description": "The accepted differences in the policy's settings",
             "items": {
               "$ref": "#/components/schemas/policyDiff"
             },
             "type": "array"
           },
           "reason": {
+            "description": "The reason given for accepting the deviation",
             "nullable": true,
             "type": "string"
           },
           "validUntil": {
+            "description": "When the acceptance expires, or null when it does not expire",
             "format": "date-time",
             "nullable": true,
             "type": "string"
@@ -158,6 +165,7 @@
         "type": "object"
       },
       "alignmentDetails": {
+        "description": "How a tenant's policies compare with one baseline",
         "properties": {
           "alignmentScore": {
             "description": "The tenant's alignment score, from 0 to 100",
@@ -201,6 +209,7 @@
         "type": "object"
       },
       "alignmentDetailsBaseline": {
+        "description": "The baseline that inforcer compared the tenant with",
         "properties": {
           "id": {
             "description": "The baseline's id",
@@ -221,26 +230,32 @@
         "description": "The number of policies in each outcome",
         "properties": {
           "additionalInTenant": {
+            "description": "The number of tenant policies the baseline does not have",
             "format": "int32",
             "type": "integer"
           },
           "deviated": {
+            "description": "The number of policies that differ from the baseline in ways that are not accepted",
             "format": "int32",
             "type": "integer"
           },
           "matched": {
+            "description": "The number of policies that match the baseline without accepted deviations",
             "format": "int32",
             "type": "integer"
           },
           "matchedWithAcceptedDeviations": {
+            "description": "The number of policies that match the baseline because of accepted deviations",
             "format": "int32",
             "type": "integer"
           },
           "missingFromTenant": {
+            "description": "The number of baseline policies the tenant does not have",
             "format": "int32",
             "type": "integer"
           },
           "totalPolicies": {
+            "description": "The number of policies compared, which is the sum of the other counts. It leaves out policy types that the score excludes, though those policies still appear in policies",
             "format": "int32",
             "type": "integer"
           }
@@ -328,8 +343,10 @@
         "description": "A tenant's alignment against one baseline"
       },
       "alignmentScoreList": {
+        "description": "The alignment of the licensed tenants in the API client's tenant scope against each of their baselines whose baseline tenant is also in that scope",
         "properties": {
           "alignmentScores": {
+            "description": "One entry for each tenant and baseline pair, ordered by tenant name and then baseline name",
             "items": {
               "$ref": "#/components/schemas/alignmentScore"
             },
@@ -366,25 +383,30 @@
             "description": "The baseline tenant's Microsoft Entra tenant id"
           },
           "alignedBaselineName": {
+            "description": "The baseline's name",
             "nullable": true,
             "type": "string"
           },
           "alignedThreshold": {
+            "description": "The alignment score, from 0 to 100, at or above which the tenant is aligned",
             "format": "double",
             "nullable": true,
             "type": "number"
           },
           "alignmentScore": {
+            "description": "The tenant's latest alignment score, from 0 to 100, or null before its first alignment",
             "format": "double",
             "nullable": true,
             "type": "number"
           },
           "lastAlignmentTimestamp": {
+            "description": "When inforcer last compared the tenant with the baseline, or null before its first alignment",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "semiAlignedThreshold": {
+            "description": "The alignment score, from 0 to 100, at or above which the tenant is semi-aligned",
             "format": "double",
             "nullable": true,
             "type": "number"
@@ -402,6 +424,7 @@
         "type": "object"
       },
       "assessment": {
+        "description": "A set of checks that inforcer can run against a tenant",
         "properties": {
           "assessmentType": {
             "description": "The assessment's type, such as platform, custom or community",
@@ -409,11 +432,13 @@
             "type": "string"
           },
           "created": {
+            "description": "When the assessment was created, or null when that is not known",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "description": {
+            "description": "What the assessment covers, or null when it has no description",
             "nullable": true,
             "type": "string"
           },
@@ -422,14 +447,17 @@
             "type": "string"
           },
           "lastUpdated": {
+            "description": "When the assessment was last updated, or null when that is not known",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "name": {
+            "description": "The assessment's name",
             "type": "string"
           },
           "tags": {
+            "description": "The assessment's tags, empty when it has none",
             "items": {
               "type": "string"
             },
@@ -448,6 +476,7 @@
         "type": "object"
       },
       "assessmentCheckFinding": {
+        "description": "What a check found when it evaluated the tenant",
         "properties": {
           "compliant": {
             "description": "Whether every evaluated object passes the check. False when the check's data could not be read, see status",
@@ -486,6 +515,7 @@
         "type": "object"
       },
       "assessmentCheckFramework": {
+        "description": "A framework or standard that references a check, with the check's place in it",
         "properties": {
           "metadata": {
             "additionalProperties": {
@@ -506,6 +536,7 @@
         "type": "object"
       },
       "assessmentCheckResult": {
+        "description": "The result of one of an assessment's checks for a tenant",
         "properties": {
           "category": {
             "description": "The product area the check applies to, such as Entra or Exchange",
@@ -519,6 +550,7 @@
             "type": "string"
           },
           "description": {
+            "description": "What the check verifies, or null when it has no description",
             "nullable": true,
             "type": "string"
           },
@@ -533,6 +565,7 @@
             "type": "array"
           },
           "id": {
+            "description": "The check's id",
             "type": "string"
           },
           "impact": {
@@ -556,9 +589,11 @@
             "type": "string"
           },
           "name": {
+            "description": "The check's name",
             "type": "string"
           },
           "rationale": {
+            "description": "Why the check matters, or null when it has no rationale",
             "nullable": true,
             "type": "string"
           },
@@ -568,10 +603,12 @@
             "type": "string"
           },
           "subCategory": {
+            "description": "The check's sub-category within its category, or null when it has none",
             "nullable": true,
             "type": "string"
           },
           "tags": {
+            "description": "The check's tags, empty when it has none",
             "items": {
               "type": "string"
             },
@@ -604,16 +641,19 @@
         "type": "object"
       },
       "assessmentCheckScore": {
+        "description": "How one evaluated policy or setting scored against a check",
         "properties": {
           "objectId": {
             "description": "The id of the evaluated policy or setting",
             "type": "string"
           },
           "objectName": {
+            "description": "The display name of the evaluated policy or setting, or null when it has none",
             "nullable": true,
             "type": "string"
           },
           "passes": {
+            "description": "The conditions of the check that the object meets",
             "items": {
               "type": "string"
             },
@@ -627,12 +667,14 @@
             "type": "number"
           },
           "violations": {
+            "description": "The conditions of the check that the object fails to meet",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "warnings": {
+            "description": "Conditions that may need attention but do not fail the check",
             "items": {
               "type": "string"
             },
@@ -650,8 +692,10 @@
         "type": "object"
       },
       "assessmentList": {
+        "description": "The assessments the client can run, in one response",
         "properties": {
           "assessments": {
+            "description": "The assessments, each with the id that a run needs",
             "items": {
               "$ref": "#/components/schemas/assessment"
             },
@@ -664,6 +708,7 @@
         "type": "object"
       },
       "assessmentRun": {
+        "description": "The result of running an assessment against a tenant, with a summary and the result of each check",
         "properties": {
           "assessmentId": {
             "description": "The id of the assessment that was run",
@@ -741,6 +786,7 @@
         "type": "object"
       },
       "auditEvent": {
+        "description": "An event in the client's inforcer activity log",
         "properties": {
           "code": {
             "description": "What happened, within the event type",
@@ -753,9 +799,11 @@
             "type": "string"
           },
           "eventType": {
+            "description": "The event's type, one of those from GET /v1/auditEvents/types",
             "type": "string"
           },
           "id": {
+            "description": "The event's id",
             "format": "uuid",
             "type": "string"
           },
@@ -774,6 +822,7 @@
             "type": "string"
           },
           "timestamp": {
+            "description": "When inforcer recorded the event, in UTC",
             "format": "date-time",
             "type": "string"
           },
@@ -796,8 +845,10 @@
         "type": "object"
       },
       "auditEventList": {
+        "description": "A page of events from the client's activity log, newest first",
         "properties": {
           "auditEvents": {
+            "description": "The events on this page, newest first",
             "items": {
               "$ref": "#/components/schemas/auditEvent"
             },
@@ -816,6 +867,7 @@
         "type": "object"
       },
       "auditEventType": {
+        "description": "A type of event the activity log records",
         "properties": {
           "name": {
             "description": "The event type's name",
@@ -828,8 +880,10 @@
         "type": "object"
       },
       "auditEventTypeList": {
+        "description": "The types of event the activity log records",
         "properties": {
           "eventTypes": {
+            "description": "The event types",
             "items": {
               "$ref": "#/components/schemas/auditEventType"
             },
@@ -842,6 +896,7 @@
         "type": "object"
       },
       "baseline": {
+        "description": "A set of policies that inforcer compares member tenants against",
         "properties": {
           "alignedThreshold": {
             "description": "The alignment score, from 0 to 100, at or above which a member is aligned",
@@ -861,10 +916,12 @@
             "description": "The tenant the baseline's policies come from. For a shared copy it belongs to the sharing client"
           },
           "description": {
+            "description": "The baseline's description, or null when it has none",
             "nullable": true,
             "type": "string"
           },
           "id": {
+            "description": "The baseline's id",
             "format": "uuid",
             "type": "string"
           },
@@ -930,6 +987,7 @@
         "type": "object"
       },
       "baselineItem": {
+        "description": "A policy category the baseline includes, or excludes when its mode is exclude",
         "properties": {
           "alignAssignments": {
             "description": "Whether the policies' assignments are compared",
@@ -959,8 +1017,10 @@
         "type": "object"
       },
       "baselineList": {
+        "description": "The client's baselines whose baseline tenant is in the API client's tenant scope",
         "properties": {
           "baselines": {
+            "description": "The baselines, including the client's copies of baselines other clients share",
             "items": {
               "$ref": "#/components/schemas/baseline"
             },
@@ -973,6 +1033,7 @@
         "type": "object"
       },
       "baselineMember": {
+        "description": "A tenant assigned to a baseline",
         "properties": {
           "dnsName": {
             "description": "The tenant's primary DNS name",
@@ -985,6 +1046,7 @@
             "type": "number"
           },
           "lastAlignmentTimestamp": {
+            "description": "When inforcer last compared the member with the baseline, or null before its first alignment",
             "format": "date-time",
             "nullable": true,
             "type": "string"
@@ -1007,6 +1069,7 @@
         "type": "object"
       },
       "comparedPolicy": {
+        "description": "A policy compared between the baseline and the tenant, with its differences, variables, accepted deviations and similar policies",
         "properties": {
           "acceptedDeviations": {
             "description": "Deviations accepted for a policy missing from the tenant, newest first",
@@ -1016,14 +1079,17 @@
             "type": "array"
           },
           "description": {
+            "description": "The description in the policy's own data, or null when it has none",
             "nullable": true,
             "type": "string"
           },
           "displayName": {
+            "description": "The baseline policy's name in Microsoft 365, or the tenant policy's name when only the tenant has the policy",
             "nullable": true,
             "type": "string"
           },
           "friendlyName": {
+            "description": "inforcer's friendly name for the policy, or its display name when inforcer has none",
             "nullable": true,
             "type": "string"
           },
@@ -1033,6 +1099,7 @@
             "type": "string"
           },
           "platform": {
+            "description": "The platform of the policy's category, such as Android Device Administrator, or null when there is none",
             "nullable": true,
             "type": "string"
           },
@@ -1042,6 +1109,7 @@
             "type": "string"
           },
           "policyTypeId": {
+            "description": "inforcer's numeric id for the policy type",
             "format": "int32",
             "type": "integer"
           },
@@ -1050,6 +1118,7 @@
             "type": "string"
           },
           "primaryGroup": {
+            "description": "The primary group of the policy's category, such as Android or iOS, or null when there is none",
             "nullable": true,
             "type": "string"
           },
@@ -1059,9 +1128,11 @@
             "type": "string"
           },
           "readOnly": {
+            "description": "Whether the policy is read-only because it is Microsoft-managed or created from a template",
             "type": "boolean"
           },
           "secondaryGroup": {
+            "description": "The secondary group of the policy's category, such as Configuration Profiles, or null when there is none",
             "nullable": true,
             "type": "string"
           },
@@ -1073,6 +1144,7 @@
             "type": "array"
           },
           "tags": {
+            "description": "The baseline policy's tags in inforcer. Empty when only the tenant has the policy",
             "items": {
               "$ref": "#/components/schemas/policyTag"
             },
@@ -1115,21 +1187,26 @@
         "type": "object"
       },
       "group": {
+        "description": "A Microsoft Entra group of a tenant, read from Microsoft Graph",
         "properties": {
           "createdDateTime": {
+            "description": "When the group was created in Microsoft Entra, in UTC",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "description": {
+            "description": "The group's description, or null when it has none",
             "nullable": true,
             "type": "string"
           },
           "displayName": {
+            "description": "The group's display name",
             "nullable": true,
             "type": "string"
           },
           "groupTypes": {
+            "description": "The group's Microsoft Entra group types, such as Unified for a Microsoft 365 group or DynamicMembership for a dynamic group. Empty for a static security group or a distribution list",
             "items": {
               "type": "string"
             },
@@ -1142,14 +1219,17 @@
             "type": "string"
           },
           "mail": {
+            "description": "The group's email address, or null when it has none",
             "nullable": true,
             "type": "string"
           },
           "mailEnabled": {
+            "description": "Whether the group is mail-enabled",
             "nullable": true,
             "type": "boolean"
           },
           "mailNickname": {
+            "description": "The group's mail alias",
             "nullable": true,
             "type": "string"
           },
@@ -1159,6 +1239,7 @@
             "type": "string"
           },
           "onPremisesSyncEnabled": {
+            "description": "True when the group syncs from an on-premises directory, false when it no longer syncs, or null when it never has",
             "nullable": true,
             "type": "boolean"
           },
@@ -1184,6 +1265,7 @@
         "type": "object"
       },
       "groupList": {
+        "description": "A page of a tenant's Microsoft Entra groups",
         "properties": {
           "continuationToken": {
             "description": "The token to fetch the next page, or null when this is the last page",
@@ -1196,6 +1278,7 @@
             "type": "integer"
           },
           "groups": {
+            "description": "The groups on this page",
             "items": {
               "$ref": "#/components/schemas/groupSummary"
             },
@@ -1210,8 +1293,10 @@
         "type": "object"
       },
       "groupMember": {
+        "description": "A direct member of a Microsoft Entra group, such as a user or another group",
         "properties": {
           "displayName": {
+            "description": "The member's display name",
             "nullable": true,
             "type": "string"
           },
@@ -1235,6 +1320,7 @@
         "type": "object"
       },
       "groupMemberList": {
+        "description": "A page of a Microsoft Entra group's direct members",
         "properties": {
           "continuationToken": {
             "description": "The token to fetch the next page, or null when this is the last page",
@@ -1248,6 +1334,7 @@
             "type": "integer"
           },
           "members": {
+            "description": "The direct members on this page. The list does not include members of nested groups",
             "items": {
               "$ref": "#/components/schemas/groupMember"
             },
@@ -1262,16 +1349,20 @@
         "type": "object"
       },
       "groupSummary": {
+        "description": "A Microsoft Entra group of a tenant, from inforcer's synced copy of the tenant's directory",
         "properties": {
           "description": {
+            "description": "The group's description, or null when it has none",
             "nullable": true,
             "type": "string"
           },
           "displayName": {
+            "description": "The group's display name",
             "nullable": true,
             "type": "string"
           },
           "groupTypes": {
+            "description": "The group's Microsoft Entra group types, such as Unified for a Microsoft 365 group or DynamicMembership for a dynamic group. Empty for a static security group or a distribution list",
             "items": {
               "type": "string"
             },
@@ -1284,6 +1375,7 @@
             "type": "string"
           },
           "mail": {
+            "description": "The group's email address, or null when it has none",
             "nullable": true,
             "type": "string"
           },
@@ -1334,19 +1426,24 @@
             ],
             "type": "object"
           }
-        ]
+        ],
+        "description": "A problem details object for an operation that applied some of its steps or items and failed others"
       },
       "policy": {
+        "description": "A policy of a tenant, in inforcer's policy format",
         "properties": {
           "description": {
+            "description": "The description property of the policy's data, or null when the data has none",
             "nullable": true,
             "type": "string"
           },
           "displayName": {
+            "description": "The displayName property of the policy's data, or null when the data has none",
             "nullable": true,
             "type": "string"
           },
           "friendlyName": {
+            "description": "inforcer's friendly name for the policy, or null when inforcer has none",
             "nullable": true,
             "type": "string"
           },
@@ -1355,10 +1452,12 @@
             "type": "string"
           },
           "name": {
+            "description": "The name property of the policy's data, or null when the data has none",
             "nullable": true,
             "type": "string"
           },
           "platform": {
+            "description": "The platform of the policy's category, such as Android Device Administrator, or null when there is none",
             "nullable": true,
             "type": "string"
           },
@@ -1367,6 +1466,7 @@
             "type": "object"
           },
           "policyTypeId": {
+            "description": "inforcer's numeric id for the policy type",
             "format": "int32",
             "type": "integer"
           },
@@ -1376,6 +1476,7 @@
             "type": "string"
           },
           "primaryGroup": {
+            "description": "The primary group of the policy's category, such as Android or iOS, or the policy type's name when the policy has no category",
             "type": "string"
           },
           "product": {
@@ -1383,13 +1484,16 @@
             "type": "string"
           },
           "readOnly": {
+            "description": "The readOnly property of the policy's data, or false when the data has none",
             "type": "boolean"
           },
           "secondaryGroup": {
+            "description": "The secondary group of the policy's category, such as Configuration Profiles, or null when there is none",
             "nullable": true,
             "type": "string"
           },
           "tags": {
+            "description": "The client's tags on the policy in inforcer",
             "items": {
               "$ref": "#/components/schemas/policyTag"
             },
@@ -1423,9 +1527,11 @@
             "type": "string"
           },
           "op": {
+            "description": "The JSON patch operation: add when only the tenant has the value, remove when only the baseline has it, or replace when the values differ",
             "type": "string"
           },
           "path": {
+            "description": "The JSON path to the value that differs",
             "type": "string"
           },
           "tenantValue": {
@@ -1443,6 +1549,7 @@
         "type": "object"
       },
       "policyList": {
+        "description": "A tenant's policies, in inforcer's policy format",
         "properties": {
           "failedPolicyTypes": {
             "additionalProperties": {
@@ -1452,6 +1559,7 @@
             "type": "object"
           },
           "policies": {
+            "description": "The tenant's policies, grouped by policy type and ordered by display name within each type",
             "items": {
               "$ref": "#/components/schemas/policy"
             },
@@ -1465,12 +1573,15 @@
         "type": "object"
       },
       "policyTag": {
+        "description": "A tag the client puts on policies in inforcer",
         "properties": {
           "description": {
+            "description": "The tag's description",
             "nullable": true,
             "type": "string"
           },
           "name": {
+            "description": "The tag's text",
             "type": "string"
           }
         },
@@ -1510,11 +1621,14 @@
         "type": "object"
       },
       "reportParameter": {
+        "description": "A parameter that a report type needs to run",
         "properties": {
           "description": {
+            "description": "What the parameter sets, such as Report Period",
             "type": "string"
           },
           "key": {
+            "description": "The parameter's key, to use in a report run's parameters",
             "type": "string"
           },
           "options": {
@@ -1534,11 +1648,14 @@
         "type": "object"
       },
       "reportParameterOption": {
+        "description": "A value that a report parameter accepts",
         "properties": {
           "description": {
+            "description": "What the value means, such as Last 30 days",
             "type": "string"
           },
           "key": {
+            "description": "The value to send for the parameter, such as 30",
             "type": "string"
           }
         },
@@ -1549,6 +1666,7 @@
         "type": "object"
       },
       "reportRun": {
+        "description": "A run of one or more reports for one or more tenants",
         "properties": {
           "completedAt": {
             "description": "Null until the run reaches a terminal status",
@@ -1557,6 +1675,7 @@
             "type": "string"
           },
           "createdAt": {
+            "description": "When the run was created, in UTC",
             "format": "date-time",
             "type": "string"
           },
@@ -1574,6 +1693,7 @@
             "type": "array"
           },
           "reportRunId": {
+            "description": "The report run's id",
             "format": "uuid",
             "type": "string"
           },
@@ -1591,6 +1711,7 @@
             "type": "string"
           },
           "status": {
+            "description": "The run's status. completedWithErrors means at least one report failed to render, and failed means the run stopped with an error",
             "enum": [
               "pending",
               "running",
@@ -1601,6 +1722,7 @@
             "type": "string"
           },
           "triggeredByType": {
+            "description": "Who started the run. user is a user or API client, and scheduled is a report schedule",
             "enum": [
               "user",
               "scheduled"
@@ -1622,8 +1744,10 @@
         "type": "object"
       },
       "reportRunList": {
+        "description": "The client's report runs from the last 7 days that the API client can see",
         "properties": {
           "reportRuns": {
+            "description": "The report runs, newest first",
             "items": {
               "$ref": "#/components/schemas/reportRun"
             },
@@ -1636,6 +1760,7 @@
         "type": "object"
       },
       "reportRunOutput": {
+        "description": "One rendered output of a report run, for one tenant or collated across tenants",
         "properties": {
           "format": {
             "description": "The output format, such as csv, json, html or pdf",
@@ -1682,8 +1807,10 @@
         "type": "object"
       },
       "reportRunOutputList": {
+        "description": "The rendered outputs of a report run",
         "properties": {
           "outputs": {
+            "description": "The run's outputs for tenants where the API client can run that report type and the tenant holds its licence. A collated output appears only when those tenants include every tenant the run targeted",
             "items": {
               "$ref": "#/components/schemas/reportRunOutput"
             },
@@ -1696,12 +1823,14 @@
         "type": "object"
       },
       "reportType": {
+        "description": "A kind of report that inforcer can run for tenants",
         "properties": {
           "collatable": {
             "description": "Whether a run can collate its tenants into one output",
             "type": "boolean"
           },
           "description": {
+            "description": "What the report contains",
             "nullable": true,
             "type": "string"
           },
@@ -1710,9 +1839,11 @@
             "type": "string"
           },
           "name": {
+            "description": "The report type's display name",
             "type": "string"
           },
           "requiredParameters": {
+            "description": "The parameters a run of this report type needs, or empty when it needs none",
             "items": {
               "$ref": "#/components/schemas/reportParameter"
             },
@@ -1723,12 +1854,14 @@
             "type": "boolean"
           },
           "supportedOutputFormats": {
+            "description": "The output formats a run can produce, such as csv, html, pdf, xlsx or json",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "tags": {
+            "description": "Categories for the report type, such as Security, Licensing or Identity",
             "items": {
               "type": "string"
             },
@@ -1748,8 +1881,10 @@
         "type": "object"
       },
       "reportTypeList": {
+        "description": "The report types the API client can run",
         "properties": {
           "reportTypes": {
+            "description": "The report types, ordered by name",
             "items": {
               "$ref": "#/components/schemas/reportType"
             },
@@ -1762,6 +1897,7 @@
         "type": "object"
       },
       "searchAuditEventsRequest": {
+        "description": "Filters and paging for a search of the client's activity log. Every filter is optional",
         "properties": {
           "continuationToken": {
             "description": "The token from the previous page, to fetch the next one",
@@ -1806,15 +1942,19 @@
         "type": "object"
       },
       "secureScoreControlCategory": {
+        "description": "The Microsoft Secure Score of one control category, with its daily history",
         "properties": {
           "controlCategory": {
+            "description": "The control category, such as Identity or Data",
             "type": "string"
           },
           "currentScore": {
+            "description": "What the category's controls add to the latest score",
             "format": "double",
             "type": "number"
           },
           "currentScorePercentage": {
+            "description": "The category's latest score as a percentage of its maximum, or 0 when the maximum is 0",
             "format": "double",
             "type": "number"
           },
@@ -1826,6 +1966,7 @@
             "type": "array"
           },
           "maxScore": {
+            "description": "The most the category's controls can add to the score",
             "format": "double",
             "type": "number"
           }
@@ -1840,21 +1981,26 @@
         "type": "object"
       },
       "secureScoreControlCategorySnapshot": {
+        "description": "A control category's Microsoft Secure Score on one day",
         "properties": {
           "createdDateTime": {
+            "description": "When Microsoft calculated the tenant's score for that day, or null when Microsoft gave no time",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "currentScore": {
+            "description": "What the category's controls added to the score on that day",
             "format": "double",
             "type": "number"
           },
           "currentScorePercentage": {
+            "description": "The category's score on that day as a percentage of its maximum, or 0 when the maximum is 0",
             "format": "double",
             "type": "number"
           },
           "maxScore": {
+            "description": "The most the category's current controls can add to the score",
             "format": "double",
             "type": "number"
           }
@@ -1868,6 +2014,7 @@
         "type": "object"
       },
       "secureScoreControlProfile": {
+        "description": "A Microsoft Secure Score control that the tenant has not fully implemented in its latest score",
         "properties": {
           "actionUrl": {
             "description": "Where to implement the control",
@@ -1880,10 +2027,12 @@
             "type": "string"
           },
           "currentScore": {
+            "description": "What the control adds to the latest score",
             "format": "double",
             "type": "number"
           },
           "currentScorePercentage": {
+            "description": "What the control adds to the latest score, as a percentage of the maximum score",
             "format": "double",
             "type": "number"
           },
@@ -1917,6 +2066,7 @@
             "type": "number"
           },
           "scoreDifferencePercentage": {
+            "description": "The score still available from the control, as a percentage of the maximum score",
             "format": "double",
             "type": "number"
           },
@@ -1926,6 +2076,7 @@
             "type": "string"
           },
           "title": {
+            "description": "The control's title, as Microsoft names it",
             "nullable": true,
             "type": "string"
           }
@@ -1948,6 +2099,7 @@
         "type": "object"
       },
       "secureScoreSnapshot": {
+        "description": "A tenant's Microsoft Secure Score on one day",
         "properties": {
           "createdDateTime": {
             "description": "When Microsoft calculated the score, or null when Microsoft did not say",
@@ -1956,14 +2108,17 @@
             "type": "string"
           },
           "currentScore": {
+            "description": "The score on that day, or 0 when Microsoft did not report one",
             "format": "double",
             "type": "number"
           },
           "currentScorePercentage": {
+            "description": "The score as a percentage of the maximum, or 0 when the maximum is 0",
             "format": "double",
             "type": "number"
           },
           "maxScore": {
+            "description": "The highest score the tenant could reach on that day, or 0 when Microsoft did not report one",
             "format": "double",
             "type": "number"
           }
@@ -1977,6 +2132,7 @@
         "type": "object"
       },
       "secureScores": {
+        "description": "A tenant's Microsoft Secure Score from Microsoft Graph, with its daily history, the controls that would raise it and the scores per control category",
         "properties": {
           "controlCategoryScores": {
             "description": "The scores per control category",
@@ -2044,12 +2200,15 @@
         "type": "object"
       },
       "similarPolicy": {
+        "description": "A tenant policy of the same type that closely matches a baseline policy the tenant does not have",
         "properties": {
           "categoryName": {
+            "description": "The baseline policy's category, as its product and primary group joined by a hyphen, or null when the policy has no category",
             "nullable": true,
             "type": "string"
           },
           "diffCount": {
+            "description": "The number of differences between the two policies' settings",
             "format": "int32",
             "type": "integer"
           },
@@ -2059,29 +2218,35 @@
             "type": "string"
           },
           "lastModified": {
+            "description": "The time of the tenant policy's latest snapshot in inforcer, in UTC",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "matchCount": {
+            "description": "The number of top-level properties across both policies less diffCount, which estimates how many properties match",
             "format": "int32",
             "type": "integer"
           },
           "matchPercentage": {
+            "description": "The similarity score as a percentage, from 0 to 100",
             "format": "double",
             "type": "number"
           },
           "name": {
+            "description": "The tenant policy's name",
             "nullable": true,
             "type": "string"
           },
           "policyAssignmentsDiff": {
+            "description": "The differences between the baseline and tenant policies' assignments",
             "items": {
               "$ref": "#/components/schemas/policyDiff"
             },
             "type": "array"
           },
           "policyDataDiff": {
+            "description": "The differences between the baseline and tenant policies' settings",
             "items": {
               "$ref": "#/components/schemas/policyDiff"
             },
@@ -2093,6 +2258,7 @@
             "type": "string"
           },
           "policyTypeId": {
+            "description": "inforcer's numeric id for the policy type",
             "format": "int32",
             "type": "integer"
           },
@@ -2113,9 +2279,11 @@
                 "nullable": true,
                 "type": "object"
               }
-            ]
+            ],
+            "description": "How the similarity score breaks down"
           },
           "similarityScore": {
+            "description": "How similar the two policies are, from 0 to 1",
             "format": "double",
             "nullable": true,
             "type": "number"
@@ -2143,26 +2311,31 @@
         "description": "How the similarity score breaks down",
         "properties": {
           "assignments": {
+            "description": "The similarity of the policies' assignments, as a percentage from 0 to 100, or 100 when neither policy has assignments to compare",
             "format": "double",
             "nullable": true,
             "type": "number"
           },
           "configuration": {
+            "description": "The similarity of the policies' settings, as a percentage from 0 to 100, or 100 when neither policy has settings to compare",
             "format": "double",
             "nullable": true,
             "type": "number"
           },
           "critical": {
+            "description": "The similarity of critical settings, as a percentage. Always 100, because inforcer does not score critical settings separately",
             "format": "double",
             "nullable": true,
             "type": "number"
           },
           "metadata": {
+            "description": "The similarity of the policies' metadata, as a percentage. Always 100, because inforcer does not score metadata",
             "format": "double",
             "nullable": true,
             "type": "number"
           },
           "summary": {
+            "description": "A label for the overall similarity: Nearly identical policies, Highly similar policies, Moderately similar policies or Low similarity",
             "nullable": true,
             "type": "string"
           }
@@ -2184,6 +2357,7 @@
             "type": "string"
           },
           "status": {
+            "description": "Whether the step was applied",
             "enum": [
               "succeeded",
               "failed"
@@ -2211,6 +2385,7 @@
         "type": "object"
       },
       "tenant": {
+        "description": "A tenant's Microsoft Entra tenant id, display name, and primary DNS name",
         "properties": {
           "dnsName": {
             "description": "The tenant's primary DNS name",
@@ -2232,8 +2407,10 @@
         "type": "object"
       },
       "tenantDetail": {
+        "description": "A tenant in the API client's tenant scope, with its Secure Score, backup state, tags, alignment, licences, and authentication mode",
         "properties": {
           "alignmentSummaries": {
+            "description": "The tenant's alignment against each baseline it is a member of, empty when it is in no baseline",
             "items": {
               "$ref": "#/components/schemas/alignmentSummary"
             },
@@ -2263,6 +2440,7 @@
             "type": "string"
           },
           "licenses": {
+            "description": "The inforcer licences enabled for the tenant",
             "items": {
               "$ref": "#/components/schemas/tenantLicense"
             },
@@ -2292,6 +2470,7 @@
             "type": "number"
           },
           "tags": {
+            "description": "The tags the client has added to the tenant in inforcer",
             "items": {
               "$ref": "#/components/schemas/tenantTag"
             },
@@ -2311,6 +2490,7 @@
         "type": "object"
       },
       "tenantLicense": {
+        "description": "An inforcer licence enabled for a tenant, such as STANDARD_USER",
         "properties": {
           "sku": {
             "description": "The license SKU",
@@ -2323,8 +2503,10 @@
         "type": "object"
       },
       "tenantList": {
+        "description": "The client's own tenants in the API client's tenant scope. The list leaves out tenants that other clients share with the client",
         "properties": {
           "tenants": {
+            "description": "The tenants, with one entry per tenant",
             "items": {
               "$ref": "#/components/schemas/tenantListItem"
             },
@@ -2337,8 +2519,10 @@
         "type": "object"
       },
       "tenantListItem": {
+        "description": "A tenant in the API client's tenant scope, with its Secure Score, backup state, tags, alignment and licences",
         "properties": {
           "alignmentSummaries": {
+            "description": "The tenant's alignment against each baseline it is a member of, empty when it is in no baseline",
             "items": {
               "$ref": "#/components/schemas/alignmentSummary"
             },
@@ -2359,6 +2543,7 @@
             "type": "string"
           },
           "licenses": {
+            "description": "The inforcer licences enabled for the tenant",
             "items": {
               "$ref": "#/components/schemas/tenantLicense"
             },
@@ -2388,6 +2573,7 @@
             "type": "number"
           },
           "tags": {
+            "description": "The tags the client has added to the tenant in inforcer",
             "items": {
               "$ref": "#/components/schemas/tenantTag"
             },
@@ -2407,6 +2593,7 @@
         "type": "object"
       },
       "tenantPolicyMatch": {
+        "description": "A tenant policy that matches a baseline policy, with its differences from that policy",
         "properties": {
           "acceptedDeviations": {
             "description": "Deviations accepted for this tenant policy, newest first",
@@ -2421,18 +2608,21 @@
             "type": "string"
           },
           "policyAssignmentsDiff": {
+            "description": "The assignments in which this tenant policy differs from the baseline policy, leaving out accepted deviations and values that client variables account for. Empty when none remain",
             "items": {
               "$ref": "#/components/schemas/policyDiff"
             },
             "type": "array"
           },
           "policyDataDiff": {
+            "description": "The settings in which this tenant policy differs from the baseline policy, leaving out accepted deviations and values that client variables account for. Empty when none remain",
             "items": {
               "$ref": "#/components/schemas/policyDiff"
             },
             "type": "array"
           },
           "tags": {
+            "description": "The inforcer tags on the tenant policy",
             "items": {
               "$ref": "#/components/schemas/policyTag"
             },
@@ -2449,6 +2639,7 @@
         "type": "object"
       },
       "tenantRole": {
+        "description": "A Microsoft Entra directory role definition of a tenant",
         "properties": {
           "description": {
             "description": "The role's description",
@@ -2493,8 +2684,10 @@
         "type": "object"
       },
       "tenantRoleList": {
+        "description": "A tenant's Microsoft Entra directory role definitions, in one response, leaving out the roles Entra does not show because they cannot be assigned",
         "properties": {
           "roles": {
+            "description": "The tenant's role definitions",
             "items": {
               "$ref": "#/components/schemas/tenantRole"
             },
@@ -2507,11 +2700,14 @@
         "type": "object"
       },
       "tenantTag": {
+        "description": "A tag the client has added to a tenant in inforcer",
         "properties": {
           "description": {
+            "description": "The tag's description, or an empty string when it has none",
             "type": "string"
           },
           "name": {
+            "description": "The tag's name",
             "type": "string"
           }
         },
@@ -2522,6 +2718,7 @@
         "type": "object"
       },
       "triggerReportRunItem": {
+        "description": "One report to run, with its output format and parameters",
         "properties": {
           "collate": {
             "default": false,
@@ -2551,8 +2748,10 @@
         "type": "object"
       },
       "triggerReportRunRequest": {
+        "description": "A request to run one or more reports for one or more tenants",
         "properties": {
           "msTenantIds": {
+            "description": "The Microsoft Entra tenant ids of the tenants to run the reports for",
             "items": {
               "$ref": "#/components/schemas/msTenantId"
             },
@@ -2560,6 +2759,7 @@
             "type": "array"
           },
           "reports": {
+            "description": "The reports to run",
             "items": {
               "$ref": "#/components/schemas/triggerReportRunItem"
             },
@@ -2574,6 +2774,7 @@
         "type": "object"
       },
       "triggerReportRunResponse": {
+        "description": "The report run that inforcer queued",
         "properties": {
           "reportRunId": {
             "description": "The id of the queued report run",
@@ -2587,12 +2788,15 @@
         "type": "object"
       },
       "user": {
+        "description": "A Microsoft Entra user of a tenant, read from Microsoft Graph, with their groups, roles, devices and licences",
         "properties": {
           "accountEnabled": {
+            "description": "Whether the user can sign in",
             "nullable": true,
             "type": "boolean"
           },
           "appRoleAssignments": {
+            "description": "The app roles the user holds through a direct assignment in enterprise applications",
             "items": {
               "$ref": "#/components/schemas/userAppRoleAssignment"
             },
@@ -2600,6 +2804,7 @@
             "type": "array"
           },
           "assignedLicenses": {
+            "description": "The licences assigned to the user, directly or through a group",
             "items": {
               "$ref": "#/components/schemas/userLicense"
             },
@@ -2607,6 +2812,7 @@
             "type": "array"
           },
           "businessPhones": {
+            "description": "The user's business phone numbers",
             "items": {
               "type": "string"
             },
@@ -2614,27 +2820,33 @@
             "type": "array"
           },
           "city": {
+            "description": "The city where the user is based",
             "nullable": true,
             "type": "string"
           },
           "companyName": {
+            "description": "The name of the company the user works for",
             "nullable": true,
             "type": "string"
           },
           "country": {
+            "description": "The country or region where the user is based, such as United Kingdom",
             "nullable": true,
             "type": "string"
           },
           "createdDateTime": {
+            "description": "When the user was created in Microsoft Entra, in UTC",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "creationType": {
+            "description": "How the user account was created, such as Invitation for a guest. Null for an account created as a work or school account",
             "nullable": true,
             "type": "string"
           },
           "department": {
+            "description": "The department the user works in",
             "nullable": true,
             "type": "string"
           },
@@ -2647,23 +2859,28 @@
             "type": "array"
           },
           "displayName": {
+            "description": "The user's name as shown in Microsoft Entra and address lists",
             "nullable": true,
             "type": "string"
           },
           "employeeHireDate": {
+            "description": "When the user was hired or will start work, in UTC",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "employeeId": {
+            "description": "The user's employee id in their organisation",
             "nullable": true,
             "type": "string"
           },
           "employeeType": {
+            "description": "The kind of worker the user is, such as Employee or Contractor",
             "nullable": true,
             "type": "string"
           },
           "givenName": {
+            "description": "The user's first name",
             "nullable": true,
             "type": "string"
           },
@@ -2682,6 +2899,7 @@
             "type": "string"
           },
           "imAddresses": {
+            "description": "The user's instant messaging addresses",
             "items": {
               "type": "string"
             },
@@ -2689,18 +2907,22 @@
             "type": "array"
           },
           "isAllDevicesCompliant": {
+            "description": "Whether every device the user owns is compliant, or null when the user owns no devices or inforcer cannot read them",
             "nullable": true,
             "type": "boolean"
           },
           "isCloudOnly": {
+            "description": "Whether the user exists only in Microsoft Entra, with no sync from on-premises Active Directory and no onPremisesImmutableId",
             "nullable": true,
             "type": "boolean"
           },
           "isGlobalAdmin": {
+            "description": "Whether the user holds the Global Administrator role, directly or through a group",
             "nullable": true,
             "type": "boolean"
           },
           "isHybrid": {
+            "description": "Whether the user is synced from on-premises Active Directory and has an onPremisesImmutableId",
             "nullable": true,
             "type": "boolean"
           },
@@ -2715,28 +2937,34 @@
             "type": "boolean"
           },
           "jobTitle": {
+            "description": "The user's job title",
             "nullable": true,
             "type": "string"
           },
           "lastPasswordChangeDateTime": {
+            "description": "When the user last changed their password, or when it was first set, in UTC",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "lastSignInDateTime": {
+            "description": "When the user last signed in interactively, in UTC. Null when the user has never signed in or the tenant has no Microsoft Entra ID P1 or P2 licence",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "legalAgeGroupClassification": {
+            "description": "The user's legal age group, as Microsoft Entra works it out from their age group and consent, such as Adult or MinorWithParentalConsent",
             "nullable": true,
             "type": "string"
           },
           "mail": {
+            "description": "The user's primary email address",
             "nullable": true,
             "type": "string"
           },
           "mailNickname": {
+            "description": "The user's mail alias",
             "nullable": true,
             "type": "string"
           },
@@ -2744,47 +2972,58 @@
             "$ref": "#/components/schemas/userManager"
           },
           "mobilePhone": {
+            "description": "The user's primary mobile phone number",
             "nullable": true,
             "type": "string"
           },
           "officeLocation": {
+            "description": "The user's office location",
             "nullable": true,
             "type": "string"
           },
           "onPremisesDistinguishedName": {
+            "description": "The user's distinguished name in on-premises Active Directory",
             "nullable": true,
             "type": "string"
           },
           "onPremisesDomainName": {
+            "description": "The user's domain name in on-premises Active Directory, such as contoso.local",
             "nullable": true,
             "type": "string"
           },
           "onPremisesImmutableId": {
+            "description": "The id that links the user to their on-premises Active Directory account",
             "nullable": true,
             "type": "string"
           },
           "onPremisesLastSyncDateTime": {
+            "description": "When the user was last synced from on-premises Active Directory, in UTC",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "onPremisesSamAccountName": {
+            "description": "The user's sAMAccountName in on-premises Active Directory",
             "nullable": true,
             "type": "string"
           },
           "onPremisesSecurityIdentifier": {
+            "description": "The user's security identifier in on-premises Active Directory",
             "nullable": true,
             "type": "string"
           },
           "onPremisesSyncEnabled": {
+            "description": "True when the user syncs from on-premises Active Directory, false when sync has stopped, and null when the user has never synced",
             "nullable": true,
             "type": "boolean"
           },
           "onPremisesUserPrincipalName": {
+            "description": "The user's user principal name in on-premises Active Directory",
             "nullable": true,
             "type": "string"
           },
           "otherMails": {
+            "description": "The user's additional email addresses, such as a personal address",
             "items": {
               "type": "string"
             },
@@ -2792,22 +3031,27 @@
             "type": "array"
           },
           "passwordPolicies": {
+            "description": "The password policies set on the user, such as DisablePasswordExpiration, separated by commas",
             "nullable": true,
             "type": "string"
           },
           "postalCode": {
+            "description": "The postal code of the user's address",
             "nullable": true,
             "type": "string"
           },
           "preferredDataLocation": {
+            "description": "The geographic location where the user's Microsoft 365 data is stored, such as GBR, for a tenant with Multi-Geo",
             "nullable": true,
             "type": "string"
           },
           "preferredLanguage": {
+            "description": "The user's preferred language, as an ISO 639-1 code with a country code, such as en-GB",
             "nullable": true,
             "type": "string"
           },
           "proxyAddresses": {
+            "description": "The user's email addresses for Exchange Online, such as SMTP:jo.bloggs@contoso.com. The uppercase SMTP prefix marks the primary address",
             "items": {
               "type": "string"
             },
@@ -2838,27 +3082,33 @@
             "type": "array"
           },
           "signInSessionsValidFromDateTime": {
+            "description": "The time before which refresh tokens and session cookies are invalid, in UTC. Revoking the user's sessions resets it to the current time",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "state": {
+            "description": "The state or province in the user's address",
             "nullable": true,
             "type": "string"
           },
           "streetAddress": {
+            "description": "The street address of the user's place of work",
             "nullable": true,
             "type": "string"
           },
           "surname": {
+            "description": "The user's last name",
             "nullable": true,
             "type": "string"
           },
           "usageLocation": {
+            "description": "The ISO 3166 two-letter country code where the user's licences are used, such as GB",
             "nullable": true,
             "type": "string"
           },
           "userPrincipalName": {
+            "description": "The user's sign-in name, such as jo.bloggs@contoso.com",
             "nullable": true,
             "type": "string"
           },
@@ -2932,30 +3182,37 @@
         "type": "object"
       },
       "userAppRoleAssignment": {
+        "description": "An app role that the user holds in an application, as Microsoft Entra records it",
         "properties": {
           "appRoleId": {
+            "description": "The id of the app role granted. An id of all zeros means default access to the application, with no specific role",
             "format": "uuid",
             "nullable": true,
             "type": "string"
           },
           "principalDisplayName": {
+            "description": "The display name of the user, group or service principal the role is granted to",
             "nullable": true,
             "type": "string"
           },
           "principalId": {
+            "description": "The Microsoft Entra object id of the user, group or service principal the role is granted to",
             "format": "uuid",
             "nullable": true,
             "type": "string"
           },
           "principalType": {
+            "description": "The kind of principal the role is granted to, such as User, Group or ServicePrincipal",
             "nullable": true,
             "type": "string"
           },
           "resourceDisplayName": {
+            "description": "The display name of the application's service principal that defines the role",
             "nullable": true,
             "type": "string"
           },
           "resourceId": {
+            "description": "The Microsoft Entra object id of the application's service principal that defines the role",
             "format": "uuid",
             "nullable": true,
             "type": "string"
@@ -2972,21 +3229,26 @@
         "type": "object"
       },
       "userDevice": {
+        "description": "A Microsoft Entra device the user owns, as Microsoft Entra records it",
         "properties": {
           "complianceExpiryDateTime": {
+            "description": "When the device's compliance expires",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "deviceCategory": {
+            "description": "The device's category in Intune",
             "nullable": true,
             "type": "string"
           },
           "deviceOwnership": {
+            "description": "Whether the device is company or personal, as Intune sets it",
             "nullable": true,
             "type": "string"
           },
           "displayName": {
+            "description": "The device's name",
             "nullable": true,
             "type": "string"
           },
@@ -2997,51 +3259,63 @@
             "type": "string"
           },
           "isCompliant": {
+            "description": "Whether the device complies with its Intune compliance policies",
             "nullable": true,
             "type": "boolean"
           },
           "isManaged": {
+            "description": "Whether a mobile device management app, such as Intune, manages the device",
             "nullable": true,
             "type": "boolean"
           },
           "isManagementRestricted": {
+            "description": "Whether the device is in a restricted management administrative unit, so that only roles scoped to that unit can manage it",
             "nullable": true,
             "type": "boolean"
           },
           "isRooted": {
+            "description": "Whether the device is rooted or jailbroken, as Intune reports it",
             "nullable": true,
             "type": "boolean"
           },
           "managementType": {
+            "description": "The channel that manages the device, as Intune sets it, such as mdm or eas",
             "nullable": true,
             "type": "string"
           },
           "manufacturer": {
+            "description": "The device's manufacturer",
             "nullable": true,
             "type": "string"
           },
           "model": {
+            "description": "The device's model",
             "nullable": true,
             "type": "string"
           },
           "operatingSystem": {
+            "description": "The device's operating system, such as Windows, iOS or Android",
             "nullable": true,
             "type": "string"
           },
           "operatingSystemVersion": {
+            "description": "The version of the device's operating system",
             "nullable": true,
             "type": "string"
           },
           "profileType": {
+            "description": "The kind of device profile, such as RegisteredDevice, SecureVM, Printer, Shared or IoT",
             "nullable": true,
             "type": "string"
           },
           "registrationDateTime": {
+            "description": "When the device was registered in Microsoft Entra",
             "format": "date-time",
             "nullable": true,
             "type": "string"
           },
           "trustType": {
+            "description": "How the device joins Microsoft Entra: Workplace for registered, AzureAd for Microsoft Entra joined, or ServerAd for hybrid joined",
             "nullable": true,
             "type": "string"
           }
@@ -3068,15 +3342,19 @@
         "type": "object"
       },
       "userGroup": {
+        "description": "A Microsoft Entra group the user is a member of, directly or through another group",
         "properties": {
           "description": {
+            "description": "The group's description, or null when it has none",
             "nullable": true,
             "type": "string"
           },
           "displayName": {
+            "description": "The group's display name",
             "type": "string"
           },
           "groupTypes": {
+            "description": "The group's Microsoft Entra group types, such as Unified for a Microsoft 365 group or DynamicMembership for a dynamic group. Empty for a static security group or a distribution list",
             "items": {
               "type": "string"
             },
@@ -3098,16 +3376,20 @@
         "type": "object"
       },
       "userLicense": {
+        "description": "A licence assigned to the user, with the state of the tenant's subscription to its SKU",
         "properties": {
           "capabilityStatus": {
+            "description": "The state of the tenant's subscription to the SKU, such as Enabled, Warning, Suspended or LockedOut. Null when the SKU is not among the tenant's subscribed SKUs",
             "nullable": true,
             "type": "string"
           },
           "isCancelled": {
+            "description": "Whether the tenant's subscription to the SKU is locked out, which is a capabilityStatus of LockedOut. Null when capabilityStatus is null",
             "nullable": true,
             "type": "boolean"
           },
           "isExpired": {
+            "description": "Whether the tenant's subscription to the SKU is suspended, which is a capabilityStatus of Suspended. Null when capabilityStatus is null",
             "nullable": true,
             "type": "boolean"
           },
@@ -3122,6 +3404,7 @@
             "type": "string"
           },
           "skuId": {
+            "description": "The SKU's Microsoft id",
             "format": "uuid",
             "nullable": true,
             "type": "string"
@@ -3144,6 +3427,7 @@
         "type": "object"
       },
       "userList": {
+        "description": "A page of a tenant's Microsoft Entra users, sorted by display name, with a continuationToken for the next page",
         "properties": {
           "continuationToken": {
             "description": "The token to fetch the next page, or null when this is the last page",
@@ -3157,6 +3441,7 @@
             "type": "integer"
           },
           "users": {
+            "description": "The users on this page, sorted by display name",
             "items": {
               "$ref": "#/components/schemas/userSummary"
             },
@@ -3187,8 +3472,10 @@
         "type": "object"
       },
       "userRole": {
+        "description": "A Microsoft Entra directory role the user holds",
         "properties": {
           "displayName": {
+            "description": "The directory role's display name, such as Global Administrator",
             "type": "string"
           },
           "id": {
@@ -3198,6 +3485,7 @@
             "type": "string"
           },
           "roleTemplateId": {
+            "description": "The id of the role template the directory role is based on, which is the same in every tenant. Null when Microsoft Entra does not return a valid one",
             "format": "uuid",
             "nullable": true,
             "type": "string"
@@ -3211,18 +3499,22 @@
         "type": "object"
       },
       "userSummary": {
+        "description": "A Microsoft Entra user of a tenant, as the user list returns it, with counts of their groups and roles",
         "properties": {
           "assignedLicenses": {
+            "description": "The licences assigned to the user, directly or through a group",
             "items": {
               "$ref": "#/components/schemas/userLicense"
             },
             "type": "array"
           },
           "department": {
+            "description": "The department the user works in",
             "nullable": true,
             "type": "string"
           },
           "displayName": {
+            "description": "The user's name as shown in Microsoft Entra and address lists",
             "nullable": true,
             "type": "string"
           },
@@ -3238,10 +3530,12 @@
             "type": "string"
           },
           "isAccountEnabled": {
+            "description": "Whether the user can sign in",
             "nullable": true,
             "type": "boolean"
           },
           "isGlobalAdmin": {
+            "description": "Whether the user holds the Global Administrator role, directly or through a group",
             "nullable": true,
             "type": "boolean"
           },
@@ -3256,6 +3550,7 @@
             "type": "boolean"
           },
           "jobTitle": {
+            "description": "The user's job title",
             "nullable": true,
             "type": "string"
           },
@@ -3265,6 +3560,7 @@
             "type": "integer"
           },
           "userPrincipalName": {
+            "description": "The user's sign-in name, such as jo.bloggs@contoso.com",
             "nullable": true,
             "type": "string"
           },
@@ -3311,15 +3607,19 @@
             },
             "type": "object"
           }
-        ]
+        ],
+        "description": "A problem details object for a request that failed validation"
       },
       "variableSubstitution": {
+        "description": "A client variable that inforcer substitutes at one place in a policy before it compares the policy",
         "properties": {
           "baselineValue": {
+            "description": "The variable's value for the baseline tenant, or null when it has none. Shows ***** when the variable is hidden",
             "nullable": true,
             "type": "string"
           },
           "description": {
+            "description": "The client variable's description, or null when it has none",
             "nullable": true,
             "type": "string"
           },
@@ -3328,10 +3628,11 @@
             "type": "boolean"
           },
           "isHidden": {
-            "description": "Whether the variable is hidden, in which case its values are not returned",
+            "description": "Whether the variable is hidden, in which case its values show as *****",
             "type": "boolean"
           },
           "name": {
+            "description": "The client variable's name",
             "type": "string"
           },
           "propertyPath": {
@@ -3340,6 +3641,7 @@
             "type": "string"
           },
           "tenantValue": {
+            "description": "The variable's value for the tenant, or null when it has none. Shows ***** when the variable is hidden",
             "nullable": true,
             "type": "string"
           }
@@ -3377,7 +3679,7 @@
   "paths": {
     "/v1/alignmentScores": {
       "get": {
-        "description": "Lists the alignment of each licensed tenant in the API client's tenant scope against each of its baselines",
+        "description": "Lists the alignment of each licensed tenant in the API client's tenant scope against each of its baselines whose baseline tenant is also in that scope",
         "operationId": "listAlignmentScores",
         "responses": {
           "200": {
@@ -3408,7 +3710,7 @@
     },
     "/v1/assessments": {
       "get": {
-        "description": "Lists the assessments available to the API client's client",
+        "description": "Lists the assessments the client can run",
         "operationId": "listAssessments",
         "responses": {
           "200": {
@@ -3439,7 +3741,7 @@
     },
     "/v1/auditEvents/search": {
       "post": {
-        "description": "Searches the activity log of the API client's client, newest first",
+        "description": "Searches the client's activity log, newest first",
         "operationId": "searchAuditEvents",
         "requestBody": {
           "content": {
@@ -3567,7 +3869,7 @@
     },
     "/v1/reports/runs": {
       "get": {
-        "description": "Lists the client's report runs from the last 7 days, newest first, capped at 500.\nRuns started by the API client or its owner user are always listed.\nWith permission to view others' report runs, scheduled runs and runs started by others are also listed, where the API client can run those reports on all of the run's tenants.\n",
+        "description": "Lists the client's report runs from the last 7 days, newest first, up to 500. The list always includes runs that the API client or its owner user started. With permission to view others' report runs, it also includes scheduled runs and runs that others started, when the API client can run those reports on all of the run's tenants.",
         "operationId": "listReportRuns",
         "responses": {
           "200": {
@@ -3596,7 +3898,7 @@
         ]
       },
       "post": {
-        "description": "Queues a run of one or more reports for tenants in the caller's tenant scope.\nEach requested report type needs its run permissions on every requested tenant, and every requested tenant must hold the license that report type needs. Otherwise the request fails with 403.\n",
+        "description": "Queues a run of one or more reports for tenants in the API client's tenant scope. The API client needs the run permissions for each report type on every requested tenant, and every requested tenant must hold the licence that the report type needs. Otherwise the request returns a 403.",
         "operationId": "triggerReportRun",
         "requestBody": {
           "content": {
@@ -3657,7 +3959,7 @@
     },
     "/v1/reports/runs/{reportRunId}/outputs": {
       "get": {
-        "description": "Lists the rendered outputs of a finished report run, for tenants in the caller's tenant scope. A collated output is listed only when the scope covers every tenant the run targeted",
+        "description": "Lists the rendered outputs of a finished report run, for tenants where the API client can run that report type and the tenant holds its licence. The list includes a collated output only when those tenants include every tenant the run targeted",
         "operationId": "listReportRunOutputs",
         "parameters": [
           {
@@ -3703,7 +4005,7 @@
     },
     "/v1/reports/runs/{reportRunId}/outputs/{outputId}": {
       "get": {
-        "description": "Downloads the content of one output of a finished report run, for a tenant in the caller's tenant scope. A collated output is served only when the scope covers every tenant the run targeted",
+        "description": "Downloads the content of one output of a finished report run, for a tenant where the API client can run that report type and the tenant holds its licence. inforcer serves a collated output only when those tenants include every tenant the run targeted",
         "operationId": "getReportRunOutput",
         "parameters": [
           {
@@ -3786,7 +4088,7 @@
     },
     "/v1/reports/types": {
       "get": {
-        "description": "Lists the report types the API client holds the run permissions for. Running one also needs each target tenant to hold the license that report type needs",
+        "description": "Lists the report types the API client holds the run permissions for. Running one also needs each target tenant to hold the licence that the report type needs",
         "operationId": "listReportTypes",
         "responses": {
           "200": {
@@ -3817,7 +4119,7 @@
     },
     "/v1/tenants": {
       "get": {
-        "description": "Lists the tenants in the API client's tenant scope",
+        "description": "Lists the client's own tenants in the API client's tenant scope. The list leaves out tenants that other clients share with the client, which getTenant still returns",
         "operationId": "listTenants",
         "responses": {
           "200": {
@@ -4020,7 +4322,7 @@
     },
     "/v1/tenants/{msTenantId}/directoryRoles": {
       "get": {
-        "description": "Lists a tenant's Entra directory role definitions",
+        "description": "Lists a tenant's Microsoft Entra directory role definitions",
         "operationId": "listTenantRoles",
         "parameters": [
           {

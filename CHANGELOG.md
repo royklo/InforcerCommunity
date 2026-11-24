@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
+## [1.2.0] - 2026-11-24
+
+Manage users, groups and mailboxes, and read threats, with an API client (client credentials, v1). These cmdlets need inforcer's v1 user, group, mailbox and threat detection operations; with an API key they stop with `RequiresApiClient`.
+
+### Features
+
+- **`New-InforcerUser`** creates a Microsoft Entra user.
+- **`Set-InforcerUser`** changes a user in one call: profile, manager, sign-in, user type, licences, groups, password reset, sign-out, sign-in methods (one, or all to reset MFA), a Temporary Access Pass, and the Exchange Online mailbox (shared or user, archive, address lists, email addresses, automatic replies, forwarding, permissions, calendar sharing, mail groups, inbox rules, mail apps). Steps run in a fixed order; when one fails, the error says which were done and which were not. Supports `-WhatIf`.
+- **`Set-InforcerGroup`** adds and removes up to 20 members of a group in one call.
+- **`Get-InforcerUser -UserId`** can add the user's sign-in methods (`-IncludeAuthenticationMethods`), mailbox with its replies, permissions, calendar sharing, mail groups and inbox rules (`-IncludeMailbox`), and the last 10 days of mail they sent and received (`-IncludeMessageTrace`).
+- **`Get-InforcerTenant -IncludeSubscriptions`** lists a tenant's licences with their free seats.
+- **`Get-InforcerThreat`** and **`Get-InforcerThreatIndicator`** read inforcer's threat detection and response: threats with their AI summary and indicators, and indicators over any date range.
+- **A write that Microsoft Entra refuses because another change is still being applied (HTTP 409) is retried**, twice, after 8 and 16 seconds.
+
+### Bug Fixes
+
+- **An id of `.` or `..` is refused** in every cmdlet that puts an id in a request path, so it can no longer reach another route.
+
 ## [1.1.0] - 2026-11-16
 
 ### Features

@@ -1,6 +1,6 @@
 @{
     RootModule        = 'InforcerCommunity.psm1'
-    ModuleVersion     = '1.1.0'
+    ModuleVersion     = '1.2.0'
     GUID              = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
     Author            = 'Roy Klooster'
     Description       = 'Community PowerShell module for the Inforcer API. Created by Roy Klooster. Not owned or officially maintained by Inforcer.'
@@ -43,7 +43,7 @@
         PSData = @{
             ProjectUri   = 'https://github.com/royklo/InforcerCommunity'
             LicenseUri   = 'https://github.com/royklo/InforcerCommunity/blob/main/LICENSE'
-            ReleaseNotes = 'v1.1.0: Export-InforcerTenantDocumentation -Baseline takes several baselines and reads the tenant once (22 baselines: 34 min -> 48 s). Documents now show settings nested more than two levels deep, list items with their fields, Entra settings stored as a dotted @odata.type, and authentication strength combinations intact. See CHANGELOG.md.''s policies (same-named policies no longer leak in); a -Baseline that does not resolve or holds no policies is an error (BaselineFilterFailed) instead of exporting the whole tenant; name/value settings keep their values; -FetchGraphData reuses an app-only Graph session instead of opening a browser. See CHANGELOG.md.'
+            ReleaseNotes = 'v1.2.0: manage users, groups and mailboxes with New-InforcerUser, Set-InforcerUser and Set-InforcerGroup; read sign-in methods, mailboxes and message traces with Get-InforcerUser, licences with Get-InforcerTenant -IncludeSubscriptions, and threats with Get-InforcerThreat and Get-InforcerThreatIndicator (API client only). See CHANGELOG.md.'
             Tags         = @('Inforcer', 'API', 'Community')
         }
     }

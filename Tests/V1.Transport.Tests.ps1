@@ -397,6 +397,14 @@ Describe 'Invoke-InforcerApiRequest on v1' {
         Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly
         Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 0 -Exactly
     }
+    It 'does not retry a 409 on creating a user (the userPrincipalName is taken)' {
+        Mock -ModuleName InforcerCommunity Start-Sleep { }
+        Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 409 -Body '{"title":"A user with this userPrincipalName or email address already exists","status":409}' }
+        $e = & $script:M { Invoke-InforcerApiRequest -Endpoint '/tenants/x/users' -Method POST -Body '{}' -ErrorAction SilentlyContinue -ErrorVariable ev; $ev }
+        $e[0].FullyQualifiedErrorId | Should -Match '^ApiRequestFailed_409'
+        Should -Invoke -ModuleName InforcerCommunity Invoke-InforcerHttpRequest -Times 1 -Exactly
+        Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 0 -Exactly
+    }
     It 'caps a long Retry-After at 300 seconds' {
         Mock -ModuleName InforcerCommunity Start-Sleep { }
         Mock -ModuleName InforcerCommunity Invoke-InforcerHttpRequest { New-V1TestResponse -Status 429 -RetryAfter '3600' }

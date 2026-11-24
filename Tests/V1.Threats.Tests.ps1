@@ -206,3 +206,26 @@ Describe 'Get-InforcerThreatIndicator' {
         $global:TdrCalls.Count | Should -Be 0
     }
 }
+
+Describe 'Dates sent to the API do not follow the regional settings' {
+    It 'sends Gregorian dates with a colon separator under <Culture>' -ForEach @(@{ Culture = 'th-TH' }, @{ Culture = 'da-DK' }) {
+        $saved = [cultureinfo]::CurrentCulture
+        try {
+            [cultureinfo]::CurrentCulture = $Culture
+            Set-TdrSession
+            Set-TdrRoute { param($Uri, $Method, $Body) if ($Uri -like '*indicators*') { New-TdrResponse '{"indicators":[],"continuationToken":null}' } else { New-TdrResponse '{"threats":[],"continuationToken":null}' } }
+            $from = [datetime]::new(2026, 11, 1, 8, 5, 0, [System.DateTimeKind]::Utc)
+            $to = [datetime]::new(2026, 11, 10, 13, 5, 0, [System.DateTimeKind]::Utc)
+            Get-InforcerThreat -DateFrom $from -DateTo $to | Out-Null
+            Get-InforcerThreatIndicator -DateFrom $from -DateTo $to | Out-Null
+            foreach ($call in $global:TdrCalls) {
+                $b = $call.Body | ConvertFrom-Json -DateKind String
+                $b.dateFrom | Should -Be '2026-11-01T08:05:00Z'
+                $b.dateTo | Should -Be '2026-11-10T13:05:00Z'
+            }
+            $global:TdrCalls.Count | Should -Be 2
+        } finally {
+            [cultureinfo]::CurrentCulture = $saved
+        }
+    }
+}

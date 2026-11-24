@@ -162,8 +162,8 @@ function Get-InforcerThreat {
         if ($Status) { $body['statuses'] = @($Status) }
         if ($Severity) { $body['severities'] = @($Severity) }
         if ($Verdict) { $body['verdicts'] = @($Verdict) }
-        if ($PSBoundParameters.ContainsKey('DateFrom')) { $body['dateFrom'] = $DateFrom.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
-        if ($PSBoundParameters.ContainsKey('DateTo')) { $body['dateTo'] = $DateTo.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
+        if ($PSBoundParameters.ContainsKey('DateFrom')) { $body['dateFrom'] = $DateFrom.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture) }
+        if ($PSBoundParameters.ContainsKey('DateTo')) { $body['dateTo'] = $DateTo.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture) }
 
         $threats = Invoke-InforcerPagedRequest -Endpoint '/tdr/threats/search' -Method POST -Body $body -MaxResults $MaxResults |
             ForEach-Object { $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Threat'); $_ }

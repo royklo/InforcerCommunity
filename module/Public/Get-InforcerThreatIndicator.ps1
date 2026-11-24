@@ -180,8 +180,8 @@ function Get-InforcerThreatIndicator {
         $windowTo = $to
         do {
             $windowFrom = if ($windowTo.AddDays(-30) -gt $from) { $windowTo.AddDays(-30) } else { $from }
-            $body['dateFrom'] = $windowFrom.ToString('yyyy-MM-ddTHH:mm:ssZ')
-            $body['dateTo'] = $windowTo.ToString('yyyy-MM-ddTHH:mm:ssZ')
+            $body['dateFrom'] = $windowFrom.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture)
+            $body['dateTo'] = $windowTo.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture)
             $left = if ($MaxResults -gt 0) { $MaxResults - $indicators.Count } else { 0 }
             foreach ($i in @(Invoke-InforcerPagedRequest -Endpoint '/tdr/indicators/search' -Method POST -Body $body -MaxResults $left)) {
                 if ($null -eq $i -or -not $seen.Add("$($i.id)")) { continue }

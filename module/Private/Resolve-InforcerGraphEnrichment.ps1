@@ -58,7 +58,8 @@ function Resolve-InforcerGraphEnrichment {
         return @{}
     }
 
-    Write-Host "${prefix}Graph connected as: $($graphCtx.Account)" -ForegroundColor Green
+    $graphWho = if ($graphCtx.Account) { $graphCtx.Account } else { "app $($graphCtx.ClientId)" }
+    Write-Host "${prefix}Graph connected as: $graphWho" -ForegroundColor Green
 
     if ($msTenantId -and $graphCtx.TenantId -and $graphCtx.TenantId -ne $msTenantId) {
         $tenantName = if ($DocData.Tenant.tenantFriendlyName) { $DocData.Tenant.tenantFriendlyName } else { $msTenantId }

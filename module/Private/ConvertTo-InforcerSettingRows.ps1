@@ -224,6 +224,9 @@ function ConvertTo-FlatSettingRows {
         The policyData object from a non-catalog policy. May be $null (returns empty list).
     .PARAMETER Depth
         Current nesting depth (recursion accumulator). Default 0.
+    .PARAMETER ComparisonMode
+        Keep every list item's fields under that item. A document shows a field shared by every
+        item once; a comparison needs each item's own path, or one changed item moves the rest.
     .EXAMPLE
         ConvertTo-FlatSettingRows -PolicyData $policy.policyData
     #>
@@ -233,16 +236,18 @@ function ConvertTo-FlatSettingRows {
         $PolicyData,
 
         [Parameter()]
-        [int]$Depth = 0
+        [int]$Depth = 0,
+
+        [Parameter()]
+        [switch]$ComparisonMode
     )
 
     $rows = [System.Collections.Generic.List[object]]::new()
     if ($null -eq $PolicyData) { return $rows }
 
-    # Track emitted dotted-path parent rows to avoid duplicates (only init at top level)
-    if ($Depth -eq 0) {
-        $script:_emittedDotParents = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    }
+    # Dotted-path parent rows already emitted for this object. Per object, not per policy: two list
+    # items with the same dotted keys each need the parent row in their own path.
+    $emittedDotParents = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $skip = @(
         '@odata.type', '@odata.context', 'id', 'createdDateTime', 'lastModifiedDateTime',
@@ -251,24 +256,34 @@ function ConvertTo-FlatSettingRows {
         'policyGuid'
     )
 
+    # Only a guard against runaway recursion. It was 2, and below that an object fell through to
+    # ToString(), which is empty for a PSCustomObject: a Conditional Access device filter rule, the
+    # guest user types and Entra's passkey migration opt-out rendered as empty rows.
+    $maxDepth = 10
+
     foreach ($prop in $PolicyData.PSObject.Properties) {
         if ($prop.Name -in $skip) { continue }
-        if ($prop.Name -match '@odata') { continue }
+        # A dotted path ending in @odata.type is the setting itself, e.g. Entra's
+        # azureADRegistration.allowedToRegister.@odata.type = #microsoft.graph.allDeviceRegistrationMembership
+        # ("all users may register"). Every other @odata key is serialisation metadata.
+        if ($prop.Name -match '^(?<path>.+)\.@odata\.type$' -and $prop.Value -is [string]) {
+            $prop = [PSCustomObject]@{ Name = $Matches.path; Value = (ConvertTo-FriendlySettingName -Name ($prop.Value -replace '^#?microsoft\.graph\.', '')) }
+        } elseif ($prop.Name -match '@odata') { continue }
         # Skip internal flags (but keep linkedComplianceScript — it's rendered by MR card)
         if ($prop.Name -eq '_claimedByCompliancePolicy') { continue }
         if ($prop.Name -eq 'Length' -and $prop.Value -is [int]) { continue }
         $val = $prop.Value
-        if ($val -is [PSObject] -and $val.PSObject.Properties.Count -gt 0 -and $Depth -lt 2) {
+        if ($val -is [PSObject] -and $val.PSObject.Properties.Count -gt 0 -and $Depth -lt $maxDepth) {
             [void]$rows.Add([PSCustomObject]@{
                 Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
                 Value       = ''
                 Indent      = $Depth
                 IsConfigured = $false
             })
-            foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $val -Depth ($Depth + 1))) {
+            foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $val -Depth ($Depth + 1) -ComparisonMode:$ComparisonMode)) {
                 [void]$rows.Add($r)
             }
-        } elseif ($val -is [array] -and $val.Count -gt 0 -and $val[0] -is [PSObject] -and $Depth -lt 2) {
+        } elseif ($val -is [array] -and $val.Count -gt 0 -and $val[0] -is [PSObject] -and $Depth -lt $maxDepth) {
             # Array of objects — show count + extract display names (original behavior)
             # Special handling: recurse into scheduledActionConfigurations for compliance rules
             $propLower = $prop.Name.ToLowerInvariant()
@@ -282,50 +297,110 @@ function ConvertTo-FlatSettingRows {
                 })
                 foreach ($item in $val) {
                     if ($item -is [PSObject]) {
-                        foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $item -Depth ($Depth + 1))) {
+                        foreach ($r in (ConvertTo-FlatSettingRows -PolicyData $item -Depth ($Depth + 1) -ComparisonMode:$ComparisonMode)) {
                             [void]$rows.Add($r)
                         }
                     }
                 }
             } else {
+                # A header (IsConfigured $false): the items below it are the settings, and a
+                # comparison needs the list in their path to tell two lists' items apart.
                 [void]$rows.Add([PSCustomObject]@{
                     Name        = (ConvertTo-FriendlySettingName -Name $prop.Name)
                     Value       = "$($val.Count) items"
                     Indent      = $Depth
-                    IsConfigured = $true
+                    IsConfigured = $false
                 })
+                $itemNumber = 0
+                $entries = [System.Collections.Generic.List[object]]::new()
                 foreach ($item in $val) {
-                    if ($item -is [PSObject]) {
-                        $itemName = $null
-                        foreach ($nameField in @('displayName', 'name', 'id', 'bundleId', 'packageId')) {
-                            $nv = $item.PSObject.Properties[$nameField]
-                            if ($nv -and $nv.Value) { $itemName = $nv.Value.ToString(); break }
-                        }
-                        # Fallback: check nested mobileAppIdentifier (MAM app protection policies)
-                        if (-not $itemName) {
-                            $mai = $item.PSObject.Properties['mobileAppIdentifier']
-                            if ($mai -and $mai.Value -is [PSObject]) {
-                                foreach ($nameField in @('bundleId', 'packageId')) {
-                                    $nv2 = $mai.Value.PSObject.Properties[$nameField]
-                                    if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); break }
-                                }
+                    if ($item -isnot [PSObject]) { continue }
+                    $itemNumber++
+                    # The label is a human-readable field. An id is not: it stays a value row,
+                    # where GUID resolution and masking can reach it.
+                    $itemName = $null; $labelField = $null
+                    foreach ($nameField in @('displayName', 'name', 'bundleId', 'packageId')) {
+                        $nv = $item.PSObject.Properties[$nameField]
+                        if ($nv -and $nv.Value) { $itemName = $nv.Value.ToString(); $labelField = $nameField; break }
+                    }
+                    # Fallback: check nested mobileAppIdentifier (MAM app protection policies)
+                    if (-not $itemName) {
+                        $mai = $item.PSObject.Properties['mobileAppIdentifier']
+                        if ($mai -and $mai.Value -is [PSObject]) {
+                            foreach ($nameField in @('bundleId', 'packageId')) {
+                                $nv2 = $mai.Value.PSObject.Properties[$nameField]
+                                if ($nv2 -and $nv2.Value) { $itemName = $nv2.Value.ToString(); $labelField = 'mobileAppIdentifier'; break }
                             }
                         }
-                        if ($itemName) {
-                            [void]$rows.Add([PSCustomObject]@{
-                                Name        = $itemName
-                                Value       = ''
-                                Indent      = $Depth + 1
-                                IsConfigured = $true
-                            })
+                    }
+                    # A name/value pair (Entra directory setting templates such as Password
+                    # Protection) carries its setting in 'value'.
+                    $vp = $item.PSObject.Properties['value']
+                    if ($itemName -and $vp -and ($vp.Value -is [string] -or $vp.Value -is [ValueType])) {
+                        $entries.Add(@{ Row = [PSCustomObject]@{ Name = (ConvertTo-FriendlySettingName -Name $itemName); Value = $vp.Value.ToString(); Indent = $Depth + 1; IsConfigured = $true } })
+                        continue
+                    }
+                    # Every other field of the item, through the same rendering as any setting (decoding,
+                    # dotted paths, nesting). They used to be dropped, so an authentication method's
+                    # Include Targets showed "1 items" and nothing else.
+                    $fields = [ordered]@{}
+                    foreach ($ip in $item.PSObject.Properties) {
+                        # @odata keys are left to the renderer, which keeps a dotted @odata.type setting.
+                        if ($ip.Name -eq $labelField -or ($itemName -and $ip.Name -eq 'id')) { continue }
+                        $fields[$ip.Name] = $ip.Value
+                    }
+                    $fieldRows = [System.Collections.Generic.List[object]]::new()
+                    # The renderer skips 'id' and 'description' as policy metadata. On an item they are
+                    # content: the id is an unlabelled item's identity, the description says what it is.
+                    foreach ($own in @(@{ Key = 'id'; Name = 'ID'; Use = (-not $itemName) }, @{ Key = 'description'; Name = 'Description'; Use = $true })) {
+                        if ($own.Use -and $fields.Contains($own.Key) -and "$($fields[$own.Key])" -ne '') {
+                            $fieldRows.Add([PSCustomObject]@{ Name = $own.Name; Value = "$($fields[$own.Key])"; Indent = $Depth + 2; IsConfigured = $true })
                         }
                     }
+                    foreach ($r in (ConvertTo-FlatSettingRows -PolicyData ([PSCustomObject]$fields) -Depth ($Depth + 2) -ComparisonMode:$ComparisonMode)) {
+                        if ($r.IsConfigured -and [string]::IsNullOrEmpty("$($r.Value)")) { continue }
+                        # A field that repeats the label (an indicator's title and value) says nothing new.
+                        if (-not $ComparisonMode -and $itemName -and $r.Indent -eq $Depth + 2 -and $r.IsConfigured -and "$($r.Value)" -eq $itemName) { continue }
+                        $fieldRows.Add($r)
+                    }
+                    $keys = [System.Collections.Generic.HashSet[string]]::new()
+                    foreach ($r in $fieldRows) { if ($r.IsConfigured -and $r.Indent -eq $Depth + 2) { [void]$keys.Add("$($r.Name)`0$($r.Value)") } }
+                    $entries.Add(@{ Name = $itemName; Number = $itemNumber; Fields = $fieldRows; Keys = $keys })
+                }
+                # A top-level field with the same value on every item is shown once, under "All items":
+                # Defender's 492 Shadow AI indicators differ only in domain, type and timestamps, and
+                # repeating the other twelve fields per domain made one policy 8,000 rows.
+                # Every entry takes part, so "All items" never claims a field one of them lacks.
+                $shared = [System.Collections.Generic.HashSet[string]]::new()
+                if (-not $ComparisonMode -and $entries.Count -gt 1 -and -not @($entries | Where-Object { $_.Row })) {
+                    $shared.UnionWith($entries[0].Keys)
+                    foreach ($e in $entries) { $shared.IntersectWith($e.Keys) }
+                }
+                if ($shared.Count) {
+                    [void]$rows.Add([PSCustomObject]@{ Name = 'All items'; Value = ''; Indent = $Depth + 1; IsConfigured = $false })
+                    foreach ($r in $entries[0].Fields) { if ($r.IsConfigured -and $r.Indent -eq $Depth + 2 -and $shared.Contains("$($r.Name)`0$($r.Value)")) { [void]$rows.Add($r) } }
+                }
+                foreach ($e in $entries) {
+                    if ($e.Row) { [void]$rows.Add($e.Row); continue }
+                    $fieldRows = @($e.Fields | Where-Object { -not ($_.IsConfigured -and $_.Indent -eq $Depth + 2 -and $shared.Contains("$($_.Name)`0$($_.Value)")) })
+                    if (-not $e.Name -and $fieldRows.Count -eq 1 -and $fieldRows[0].IsConfigured) {
+                        $fieldRows[0].Indent = $Depth + 1
+                        [void]$rows.Add($fieldRows[0])
+                        continue
+                    }
+                    if (-not $e.Name -and $fieldRows.Count -eq 0) { continue }
+                    # The label is a header over its fields; a name-only item is itself the setting.
+                    [void]$rows.Add([PSCustomObject]@{ Name = $(if ($e.Name) { $e.Name } else { "Item $($e.Number)" }); Value = ''; Indent = $Depth + 1; IsConfigured = ($fieldRows.Count -eq 0) })
+                    foreach ($r in $fieldRows) { [void]$rows.Add($r) }
                 }
             }
         } else {
             $strVal = if ($null -eq $val) { '' }
                       elseif ($val -is [array]) {
-                          $joined = @($val | ForEach-Object { if ($_ -is [string] -or $_ -is [ValueType]) { $_.ToString() } }) -join ', '
+                          $items = @($val | ForEach-Object { if ($_ -is [string] -or $_ -is [ValueType]) { $_.ToString() } })
+                          # An item that holds a comma itself (authentication strength combinations
+                          # such as "password,softwareOath") would merge into its neighbours.
+                          $joined = $items -join $(if (@($items | Where-Object { $_.Contains(',') }).Count) { '; ' } else { ', ' })
                           if ([string]::IsNullOrWhiteSpace($joined) -and $val.Count -gt 0) { "$($val.Count) items" } else { $joined }
                       } else { $val.ToString() }
             # hashedScriptContent matches this pattern too, but the helper rejects digests.
@@ -340,8 +415,8 @@ function ConvertTo-FlatSettingRows {
                     $parentName = ConvertTo-FriendlySettingName -Name $segments[$i]
                     # Only emit parent row if it hasn't been emitted yet (track via a script-scoped set)
                     $parentKey = ($segments[0..$i] -join '.').ToLowerInvariant()
-                    if (-not $script:_emittedDotParents.Contains($parentKey)) {
-                        [void]$script:_emittedDotParents.Add($parentKey)
+                    if (-not $emittedDotParents.Contains($parentKey)) {
+                        [void]$emittedDotParents.Add($parentKey)
                         [void]$rows.Add([PSCustomObject]@{
                             Name        = $parentName
                             Value       = ''

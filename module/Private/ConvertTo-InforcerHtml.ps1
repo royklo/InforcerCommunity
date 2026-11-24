@@ -999,6 +999,10 @@ tr:hover td { background: var(--row-hover); }
                             elseif ($trimmed -match '^\s*#!/') { $codeClass = 'sh-code'; $summaryClass = 'sh-code-summary'; $label = 'View script' }
                             else { $codeClass = 'ps-code'; $summaryClass = 'ps-code-summary'; $label = 'View script' }
                             $settingVal = "<details class=`"script-collapsible`"><summary class=`"$summaryClass`">$label</summary><pre class=`"$codeClass`">$encCode</pre></details>"
+                        } elseif ($setting.IsConfigured -eq $false -and [string]::IsNullOrWhiteSpace("$($setting.Value)")) {
+                            # A header: left blank rather than marked empty, so hide-empty keeps it visible
+                            # and the rows under it keep their context.
+                            $settingVal = ''
                         } else {
                             $settingVal = ConvertTo-SafeHtmlValue -Value $setting.Value -AllowMultiValue
                         }

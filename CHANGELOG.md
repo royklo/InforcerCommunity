@@ -20,7 +20,8 @@ Manage users, groups and mailboxes, and read threats, with an API client (client
 
 ### Bug Fixes
 
-- **An id of `.` or `..` is refused** in every cmdlet that puts an id in a request path, so it can no longer reach another route.
+- **An id of `.` or `..` is refused** in every cmdlet that puts an id in a request path, also when written as `%2e%2e`, so it can no longer reach another route.
+- **`Get-InforcerAuditEvent` sends correct dates on every regional setting.** With a Thai calendar the year was 543 too high, and with a Finnish or Danish time format the time was written with dots.
 
 ## [1.1.0] - 2026-11-16
 

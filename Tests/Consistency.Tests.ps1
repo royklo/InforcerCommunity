@@ -91,7 +91,7 @@ Describe 'Consistency contract' {
     }
 
     It 'Get-* cmdlets that return API data have -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore')
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore', 'Get-InforcerThreat', 'Get-InforcerThreatIndicator')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'OutputType'
@@ -223,6 +223,19 @@ Describe 'No-silent-failure contract' {
         } finally {
             & (Get-Module InforcerCommunity) { $script:InforcerSession = $null }
         }
+    }
+
+    It '<Name> produces an error when not connected' -ForEach @(
+        @{ Name = 'Get-InforcerThreat'; Splat = @{} }
+        @{ Name = 'Get-InforcerThreatIndicator'; Splat = @{} }
+        @{ Name = 'New-InforcerUser'; Splat = @{ TenantId = 'Contoso'; DisplayName = 'Jo'; UserPrincipalName = 'jo@contoso.com'; Password = (ConvertTo-SecureString 'x' -AsPlainText -Force); Confirm = $false } }
+        @{ Name = 'Set-InforcerUser'; Splat = @{ TenantId = 'Contoso'; UserId = '00000000-0000-0000-0000-000000000005'; Department = 'X'; Confirm = $false } }
+        @{ Name = 'Set-InforcerGroup'; Splat = @{ TenantId = 'Contoso'; Group = '00000000-0000-0000-0000-0000000000c1'; AddMember = '00000000-0000-0000-0000-000000000005'; Confirm = $false } }
+    ) {
+        $err = $null
+        & $Name @Splat -ErrorVariable err -ErrorAction SilentlyContinue
+        $err | Should -Not -BeNullOrEmpty -Because 'should report not connected, not return silence'
+        $err[0].FullyQualifiedErrorId | Should -BeLike 'NotConnected*'
     }
 
     It 'Get-InforcerTenant produces an error when not connected' {

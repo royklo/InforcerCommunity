@@ -294,7 +294,7 @@ Errors are `application/problem+json`: `type`, `title`, `status`, `detail`, `ins
 | 401 | Token missing or expired | Token renewed once, request retried |
 | 403 | Missing permission or tenant | Error showing the API's title and detail |
 | 404 | Does not exist **or** outside the client's tenant filter | Error showing the API's title and detail (e.g. `Tenant not found`) |
-| 409 | Conflict | On a v1 write (not a `GET`): retried twice, after `Retry-After` or else 8 s then 16 s, because Microsoft Entra refuses a write on a user that comes seconds after another one. Not retried: creating a user (a `409` there means the user principal name is taken) and a read (a `409` there is a state, such as an offline mailbox). Then an error with the API's detail. |
+| 409 | Conflict | On a v1 write (not a `GET`): retried twice, after `Retry-After` or else 8 s then 16 s, because Microsoft Entra refuses a write on a user that comes seconds after another one. Not retried: creating a user (a `409` there means the user principal name is taken), a `POST` search, and a read (a `409` there is a state, such as an offline mailbox). Then an error with the API's detail. |
 | 429 | Rate limit | Waits for `Retry-After` (seconds or HTTP date, capped at 300 s), up to 3 retries. v1 only: with an API key (beta) the first `429` fails the call, as in 0.8.0. Report-file downloads are not retried on `429`. |
 | 500 / 502 | Server error (assessment runs can return both) | Error with the API's detail |
 

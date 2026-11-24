@@ -151,18 +151,42 @@ Describe 'Get-InforcerThreatIndicator' {
         ([datetime]::UtcNow - $to).TotalMinutes | Should -BeLessThan 5
     }
 
-    It 'fills the missing end 30 days after -DateFrom and sends every filter' {
+    It 'sends every filter and searches a range longer than 30 days in 30-day steps, newest first' {
         Set-TdrSession
         Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse '{"indicators":[],"continuationToken":null}' }
-        $from = [datetime]::new(2026, 10, 1, 0, 0, 0, [DateTimeKind]::Utc)
-        $null = Get-InforcerThreatIndicator -TenantId $script:T1 -ThreatId $script:Th -Severity high, critical -AlertType TorExitNode -DateFrom $from
+        $from = [datetime]::new(2026, 9, 1, 0, 0, 0, [DateTimeKind]::Utc)
+        $to = [datetime]::new(2026, 11, 10, 0, 0, 0, [DateTimeKind]::Utc)
+        $null = Get-InforcerThreatIndicator -TenantId $script:T1 -ThreatId $script:Th -Severity high, critical -AlertType TorExitNode -DateFrom $from -DateTo $to
+        $global:TdrCalls.Count | Should -Be 3
+        $global:TdrCalls[0].Body | Should -Match '"dateFrom":"2026-10-11T00:00:00Z"'
+        $global:TdrCalls[0].Body | Should -Match '"dateTo":"2026-11-10T00:00:00Z"'
+        $global:TdrCalls[1].Body | Should -Match '"dateFrom":"2026-09-11T00:00:00Z"'
+        $global:TdrCalls[2].Body | Should -Match '"dateFrom":"2026-09-01T00:00:00Z"'
+        $global:TdrCalls[2].Body | Should -Match '"dateTo":"2026-09-11T00:00:00Z"'
         $b = $global:TdrCalls[0].Body | ConvertFrom-Json
-        $global:TdrCalls[0].Body | Should -Match '"dateFrom":"2026-10-01T00:00:00Z"'
-        $global:TdrCalls[0].Body | Should -Match '"dateTo":"2026-10-31T00:00:00Z"'
         $b.msTenantIds | Should -Be @($script:T1)
         $b.threatId | Should -Be $script:Th
         $b.severities | Should -Be @('high', 'critical')
         $b.alertTypes | Should -Be @('TorExitNode')
+    }
+
+    It 'keeps an indicator on a window edge once and stops at -MaxResults' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse ('{"indicators":[' + $script:IndicatorJson + '],"continuationToken":null}') }
+        $end = [datetime]::new(2026, 11, 10, 0, 0, 0, [DateTimeKind]::Utc)
+        $r = @(Get-InforcerThreatIndicator -DateFrom $end.AddDays(-90) -DateTo $end)
+        $r.Count | Should -Be 1
+        $global:TdrCalls.Count | Should -Be 3
+        $null = Get-InforcerThreatIndicator -DateFrom $end.AddDays(-90) -DateTo $end -MaxResults 1
+        $global:TdrCalls.Count | Should -Be 4 -Because 'the first window already gave the one result asked for'
+    }
+
+    It 'refuses -DateFrom after -DateTo before any request' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) throw 'no request expected' }
+        Get-InforcerThreatIndicator -DateFrom '2026-11-02' -DateTo '2026-11-01' -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[-1].FullyQualifiedErrorId | Should -BeLike 'InvalidDateRange*'
+        $global:TdrCalls.Count | Should -Be 0
     }
 
     It 'escapes the opaque id in the path' {

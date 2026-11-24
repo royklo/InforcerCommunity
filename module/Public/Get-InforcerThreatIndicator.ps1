@@ -10,8 +10,9 @@ function Get-InforcerThreatIndicator {
         Without -IndicatorId: POST /tdr/indicators/search, the indicators whose event happened in the
         date range, newest first, across the tenants you pass (or every tenant the API client may view
         TDR indicators on). Each indicator comes back once, in its latest version within the range. An
-        indicator with no event time is placed by when it was detected. inforcer allows at most 30 days
-        between -DateFrom and -DateTo; without them the cmdlet searches the last 30 days.
+        indicator with no event time is placed by when it was detected. inforcer searches at most 30 days
+        at a time, so a longer range is searched in 30-day steps (one search each, newest first); without
+        -DateFrom the cmdlet searches the last 30 days.
 
         With -IndicatorId: GET /tdr/indicators/{indicatorId}, the latest version of that indicator. The
         id comes from a search or from a threat's iocs (Get-InforcerThreat -ThreatId).
@@ -31,7 +32,7 @@ function Get-InforcerThreatIndicator {
 
     .PARAMETER ThreatId
         Only the indicators behind this threat whose event happened in the date range. inforcer refuses
-        a threat with more than 2000 indicators; narrow it with -AlertType.
+        a threat with more than 2000 indicators in one 30-day step; narrow it with -AlertType.
 
     .PARAMETER Severity
         Only indicators of these severities: info, medium, high, critical.
@@ -41,10 +42,10 @@ function Get-InforcerThreatIndicator {
 
     .PARAMETER DateFrom
         Only indicators whose event happened at or after this time. Default: 30 days before -DateTo.
+        A range longer than 30 days costs one search per 30 days.
 
     .PARAMETER DateTo
-        Only indicators whose event happened at or before this time. Default: now, or 30 days after
-        -DateFrom when only -DateFrom is given.
+        Only indicators whose event happened at or before this time. Default: now.
 
     .PARAMETER MaxResults
         Stop after this many indicators. 0 = no limit (default).
@@ -58,9 +59,9 @@ function Get-InforcerThreatIndicator {
         The high and critical indicators of the last 30 days, across every tenant.
 
     .EXAMPLE
-        Get-InforcerThreatIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom '2026-11-01' -DateTo '2026-11-20'
+        Get-InforcerThreatIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom (Get-Date).AddDays(-90)
 
-        The indicators behind one threat.
+        The indicators behind one threat over the last 90 days (three searches).
 
     .EXAMPLE
         (Get-InforcerThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').iocs | Where-Object indicatorId | ForEach-Object { Get-InforcerThreatIndicator -IndicatorId $_.indicatorId }
@@ -159,25 +160,38 @@ function Get-InforcerThreatIndicator {
             return $indicator
         }
 
-        # inforcer requires both dates, at most 30 days apart.
-        $to = if ($PSBoundParameters.ContainsKey('DateTo')) { $DateTo.ToUniversalTime() }
-              elseif ($PSBoundParameters.ContainsKey('DateFrom')) { $DateFrom.ToUniversalTime().AddDays(30) }
-              else { [DateTime]::UtcNow }
+        $to = if ($PSBoundParameters.ContainsKey('DateTo')) { $DateTo.ToUniversalTime() } else { [DateTime]::UtcNow }
         $from = if ($PSBoundParameters.ContainsKey('DateFrom')) { $DateFrom.ToUniversalTime() } else { $to.AddDays(-30) }
-
-        $body = @{
-            dateFrom = $from.ToString('yyyy-MM-ddTHH:mm:ssZ')
-            dateTo   = $to.ToString('yyyy-MM-ddTHH:mm:ssZ')
-            pageSize = $(if ($MaxResults -gt 0 -and $MaxResults -lt 500) { $MaxResults } else { 500 })
+        if ($from -gt $to) {
+            Write-Error -Message '-DateFrom must be before -DateTo.' -ErrorId 'InvalidDateRange' -Category InvalidArgument
+            return
         }
+
+        $body = @{ pageSize = $(if ($MaxResults -gt 0 -and $MaxResults -lt 500) { $MaxResults } else { 500 }) }
         if ($tenants.Count) { $body['msTenantIds'] = @($tenants | Select-Object -Unique) }
         if ($PSBoundParameters.ContainsKey('ThreatId')) { $body['threatId'] = "$ThreatId" }
         if ($Severity) { $body['severities'] = @($Severity) }
         if ($AlertType) { $body['alertTypes'] = @($AlertType) }
 
-        $indicators = Invoke-InforcerPagedRequest -Endpoint '/tdr/indicators/search' -Method POST -Body $body -MaxResults $MaxResults |
-            ForEach-Object { $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.ThreatIndicator'); $_ }
+        # inforcer searches at most 30 days at a time: walk back from -DateTo in 30-day (UTC) windows.
+        # An indicator on a window edge comes back twice, so keep the first (newest) copy.
+        $seen = [System.Collections.Generic.HashSet[string]]::new()
+        $indicators = [System.Collections.Generic.List[object]]::new()
+        $windowTo = $to
+        do {
+            $windowFrom = if ($windowTo.AddDays(-30) -gt $from) { $windowTo.AddDays(-30) } else { $from }
+            $body['dateFrom'] = $windowFrom.ToString('yyyy-MM-ddTHH:mm:ssZ')
+            $body['dateTo'] = $windowTo.ToString('yyyy-MM-ddTHH:mm:ssZ')
+            $left = if ($MaxResults -gt 0) { $MaxResults - $indicators.Count } else { 0 }
+            foreach ($i in @(Invoke-InforcerPagedRequest -Endpoint '/tdr/indicators/search' -Method POST -Body $body -MaxResults $left)) {
+                if ($null -eq $i -or -not $seen.Add("$($i.id)")) { continue }
+                $i.PSObject.TypeNames.Insert(0, 'InforcerCommunity.ThreatIndicator')
+                $indicators.Add($i)
+            }
+            $windowTo = $windowFrom
+        } while ($windowTo -gt $from -and ($MaxResults -eq 0 -or $indicators.Count -lt $MaxResults))
+
         if ($OutputType -eq 'JsonObject') { return ConvertTo-Json -InputObject @($indicators) -Depth 100 }
-        $indicators
+        foreach ($i in $indicators) { $i }
     }
 }

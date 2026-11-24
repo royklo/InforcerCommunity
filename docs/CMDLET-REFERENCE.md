@@ -1067,7 +1067,7 @@ MsTenantId        : 00000000-0000-0000-0000-000000000001
 
 ## Get-InforcerThreatIndicator
 
-Retrieves the indicators (single detections, such as a sign-in through Tor) inforcer's threat detection and response raised. Without `-IndicatorId` it searches the indicators whose event happened in the date range, newest first, each in its latest version within the range, across the tenants you pass or every tenant the API client may view. inforcer allows at most 30 days between `-DateFrom` and `-DateTo`; without them the cmdlet searches the last 30 days, and with only `-DateFrom` the 30 days after it. `-ThreatId` limits the search to the indicators behind one threat (inforcer refuses a threat with more than 2000; narrow it with `-AlertType`). With `-IndicatorId` it returns one indicator; the id is opaque, pass it as a search or a threat's `iocs` gave it. Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
+Retrieves the indicators (single detections, such as a sign-in through Tor) inforcer's threat detection and response raised. Without `-IndicatorId` it searches the indicators whose event happened in the date range, newest first, each in its latest version within the range, across the tenants you pass or every tenant the API client may view. inforcer searches at most 30 days at a time, so the cmdlet searches a longer range in 30-day steps, newest first (one search per 30 days, an indicator on a step's edge listed once); without `-DateFrom` it searches the last 30 days. `-ThreatId` limits the search to the indicators behind one threat (inforcer refuses a threat with more than 2000 in one step; narrow it with `-AlertType`). With `-IndicatorId` it returns one indicator; the id is opaque, pass it as a search or a threat's `iocs` gave it. Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
 
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
@@ -1084,8 +1084,8 @@ Retrieves the indicators (single detections, such as a sign-in through Tor) info
 | **ThreatId** | Guid | No | Only the indicators behind this threat. |
 | **Severity** | String[] | No | `info`, `medium`, `high`, `critical`. |
 | **AlertType** | String[] | No | Alert types, such as `TorExitNode`. |
-| **DateFrom** | DateTime | No | Events at or after this time. Default: 30 days before `-DateTo`. |
-| **DateTo** | DateTime | No | Events at or before this time. Default: now, or 30 days after `-DateFrom` when only that is given. |
+| **DateFrom** | DateTime | No | Events at or after this time. Default: 30 days before `-DateTo`. A longer range costs one search per 30 days. |
+| **DateTo** | DateTime | No | Events at or before this time. Default: now. |
 | **MaxResults** | Int | No | Stop after this many indicators. `0` = no limit (default). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (a JSON array; one object with `-IndicatorId`; Depth 100). |
 
@@ -1093,7 +1093,7 @@ Retrieves the indicators (single detections, such as a sign-in through Tor) info
 
 ```powershell
 Get-InforcerThreatIndicator -Severity high, critical
-Get-InforcerThreatIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom '2026-11-01' -DateTo '2026-11-20'
+Get-InforcerThreatIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom (Get-Date).AddDays(-90)
 (Get-InforcerThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').iocs | Where-Object indicatorId | ForEach-Object { Get-InforcerThreatIndicator -IndicatorId $_.indicatorId }
 Get-InforcerThreatIndicator -AlertType TorExitNode -OutputType JsonObject
 ```

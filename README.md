@@ -192,6 +192,8 @@ Some output contains personal data (names, UPNs, email addresses, IP addresses, 
 | **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Get-InforcerThreat**         | Retrieves the threats inforcer's threat detection and response raised (search, or one with its summary and indicators) (API client login only). |
 | **Get-InforcerThreatIndicator** | Retrieves threat detection and response indicators (detections), by search or by id (API client login only). |
+| **Get-InforcerAutoContainment** | Retrieves whether auto-containment (inforcer acting on threats by itself) is on for a tenant, and its settings (API client login only). |
+| **Set-InforcerAutoContainment** | Turns auto-containment on or off and changes what it may do; asks for confirmation (API client login only). |
 | **Get-InforcerSecureScore**    | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |
 | **Export-InforcerTenantDocumentation** | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. Pass `-OutputPath` to write files; without it the DocModel is returned and nothing is written. |
 | **Compare-InforcerEnvironments** | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. Pass `-OutputPath` to write the file; without it the comparison model is returned and nothing is written. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` with automatic baseline owner resolution. |

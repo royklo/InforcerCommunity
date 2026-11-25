@@ -25,6 +25,8 @@
         'Set-InforcerGroup'
         'Get-InforcerThreat'
         'Get-InforcerThreatIndicator'
+        'Get-InforcerAutoContainment'
+        'Set-InforcerAutoContainment'
         'Get-InforcerRole'
         'Get-InforcerSecureScore'
         'Export-InforcerTenantDocumentation'
@@ -43,7 +45,7 @@
         PSData = @{
             ProjectUri   = 'https://github.com/royklo/InforcerCommunity'
             LicenseUri   = 'https://github.com/royklo/InforcerCommunity/blob/main/LICENSE'
-            ReleaseNotes = 'v1.3.0: read threats and their indicators with Get-InforcerThreat and Get-InforcerThreatIndicator (API client only). See CHANGELOG.md.'
+            ReleaseNotes = 'v1.3.0: read threats and their indicators with Get-InforcerThreat and Get-InforcerThreatIndicator, and read and change auto-containment with Get-InforcerAutoContainment and Set-InforcerAutoContainment (API client only). See CHANGELOG.md.'
             Tags         = @('Inforcer', 'API', 'Community')
         }
     }

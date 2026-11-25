@@ -70,6 +70,12 @@ foreach ($name in $exported) {
             'Get-InforcerThreatIndicator' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }
+            'Get-InforcerAutoContainment' {
+                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
+            'Set-InforcerAutoContainment' {
+                $out = & $name -TenantId 1 -Enabled $false -Confirm:$false -ErrorVariable err -ErrorAction SilentlyContinue
+            }
             'Get-InforcerRole' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }

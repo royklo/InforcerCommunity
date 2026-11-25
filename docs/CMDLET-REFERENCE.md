@@ -4,7 +4,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
-> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, `Set-InforcerGroup`, `Get-InforcerThreat` and `Get-InforcerThreatIndicator`, which need an API client because the beta API cannot create or change users and groups and has no threat detection and response endpoints. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
+> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, `Set-InforcerGroup`, `Get-InforcerThreat`, `Get-InforcerThreatIndicator`, `Get-InforcerAutoContainment` and `Set-InforcerAutoContainment`, which need an API client because the beta API cannot create or change users and groups and has no threat detection and response endpoints. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
 
 > **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
 
@@ -1110,6 +1110,77 @@ UserPrincipalName : jo.bloggs@contoso.com
 Description       : Activity on this account came through Tor, a network that deliberately hides where a person really is.
 Id                : Q29udG9zb3xUb3JFeGl0Tm9kZXwwMDAx
 MsTenantId        : 00000000-0000-0000-0000-000000000001
+```
+
+---
+
+## Get-InforcerAutoContainment
+
+Retrieves whether auto-containment is on for a tenant, and the settings that limit what it may do. Auto-containment lets inforcer's threat detection and response act on a tenant by itself, such as blocking a user's sign-in. A tenant where it was never set up returns `configured` and `enabled` `False` and `settings` empty. One request per tenant; the cmdlet adds `msTenantId` to each result so piped tenants can be told apart. A tenant outside the API client's scope, or without a TDR licence, is an error (404). Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/tdr/autoContainment` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, view auto remediation (`tdr:auto_remediation:view`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrAutoContainment](./API-REFERENCE.md#tdrautocontainment)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (Depth 100). |
+
+### Examples
+
+```powershell
+Get-InforcerAutoContainment -TenantId 'Contoso'
+Get-InforcerTenant | Get-InforcerAutoContainment -ErrorAction SilentlyContinue | Where-Object enabled
+Get-InforcerAutoContainment -TenantId 'Contoso' -OutputType JsonObject
+```
+
+### Example output
+
+```
+msTenantId : 00000000-0000-0000-0000-000000000001
+enabled    : True
+configured : True
+settings   : @{severityThreshold=high; allowedActions=System.Object[]; allowedDeviceActions=System.Object[]; allowedTargets=System.Object[]; deniedTargets=System.Object[]}
+updatedAt  : 20/11/2026 14:03:11
+updatedBy  : SIEM integration
+```
+
+---
+
+## Set-InforcerAutoContainment
+
+Turns auto-containment on or off for a tenant and changes the settings that limit what it may do. Only the parameters you pass change; the rest is kept. Turning it on lets inforcer act on the tenant by itself, such as blocking a user's sign-in, so the cmdlet asks for confirmation by default (`-Confirm:$false` skips it; `-WhatIf` shows the change without making it). On a tenant where auto-containment was never set up, passing any setting sets it up and it stays off unless you also pass `-Enabled $true`; `-Enabled $true` alone there is refused (409), so it is never turned on with settings nobody chose. Settings left out then take their defaults: severity `critical` and every list empty. Returns the tenant's auto-containment after the change. Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/tdr/autoContainment` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, manage auto remediation (`tdr:auto_remediation:manage`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrAutoContainment](./API-REFERENCE.md#tdrautocontainment)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **Enabled** | Bool | No | `$true` turns auto-containment on, `$false` turns it off. |
+| **SeverityThreshold** | String | No | The lowest threat severity it acts on: `critical` or `high`. |
+| **AllowedAction** | String[] | No | Actions it may take on users and apps, such as `blockUser` or `revokeAllSessions`. `@()` allows all. At most 50. |
+| **AllowedDeviceAction** | String[] | No | Actions it may take on devices: `isolateDevice`, `quarantineFile`, `fullScanClean`. `@()` allows none. |
+| **AllowedTarget** | String[] | No | Accounts it may act on: user principal name, object id or app id; a trailing `*` matches every value that starts with the rest. `@()` allows any account. At most 50. |
+| **DeniedTarget** | String[] | No | Accounts it must never act on, written as `-AllowedTarget`; these win over `-AllowedTarget`. At most 50. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (Depth 100). |
+
+### Examples
+
+```powershell
+Set-InforcerAutoContainment -TenantId 'Contoso' -SeverityThreshold critical -AllowedAction blockUser -DeniedTarget 'breakglass@contoso.com'
+Set-InforcerAutoContainment -TenantId 'Contoso' -Enabled $true
+Set-InforcerAutoContainment -TenantId 'Contoso' -Enabled $false -Confirm:$false
+Set-InforcerAutoContainment -TenantId 'Contoso' -AllowedDeviceAction isolateDevice -OutputType JsonObject
 ```
 
 ---

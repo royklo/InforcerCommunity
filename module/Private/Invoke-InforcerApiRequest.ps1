@@ -125,10 +125,10 @@ function Invoke-InforcerApiRequest {
             continue
         }
         # Microsoft Graph refuses a write on a user shortly after another one (409); it clears within seconds.
-        # Left out: creating a user (its 409 is a taken userPrincipalName, which a retry cannot fix) and the
-        # POST searches, which only read.
+        # Left out: creating a user (its 409 is a taken userPrincipalName, which a retry cannot fix), the
+        # POST searches, which only read, and TDR, whose 409 is a request that can never succeed.
         if ($statusCode -eq 409 -and $isV1 -and $Method -ne 'GET' -and $retries409 -lt 2 -and
-            -not ($Method -eq 'POST' -and $Endpoint -match '/users/?$|/search/?$')) {
+            -not ($Method -eq 'POST' -and $Endpoint -match '/users/?$|/search/?$') -and $Endpoint -notmatch '/tdr/') {
             $retries409++
             $delay = Get-InforcerRetryDelay -Value (Get-InforcerHeaderValue -Headers $response.Headers -Name 'Retry-After') -Attempt ($retries409 + 2)
             Write-Verbose "Conflict (HTTP 409). Retrying in $delay second(s) (attempt $retries409 of 2)."

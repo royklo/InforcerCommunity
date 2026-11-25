@@ -229,3 +229,76 @@ Describe 'Dates sent to the API do not follow the regional settings' {
         }
     }
 }
+
+Describe 'Get-InforcerAutoContainment' {
+    BeforeAll {
+        $script:AcJson = '{"enabled":true,"configured":true,"settings":{"severityThreshold":"high","allowedActions":["blockUser"],"allowedDeviceActions":[],"allowedTargets":[],"deniedTargets":["breakglass@contoso.com"]},"updatedAt":"2026-11-20T14:03:11Z","updatedBy":"SIEM integration"}'
+    }
+    It 'reads each piped tenant and puts msTenantId first' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri) New-TdrResponse $script:AcJson }
+        $r = @([pscustomobject]@{ msTenantId = $script:T1 }, [pscustomobject]@{ msTenantId = $script:T2 }) | Get-InforcerAutoContainment
+        $global:TdrCalls.Count | Should -Be 2
+        $global:TdrCalls[0].Uri | Should -BeLike "*/v1/tenants/$($script:T1)/tdr/autoContainment"
+        $global:TdrCalls[0].Method | Should -Be 'GET'
+        $r[1].msTenantId | Should -Be $script:T2
+        $r[0].PSObject.Properties.Name[0] | Should -Be 'msTenantId'
+        $r[0].settings.deniedTargets | Should -Be 'breakglass@contoso.com'
+        $r[0].PSObject.TypeNames[0] | Should -Be 'InforcerCommunity.AutoContainment'
+    }
+    It 'returns JSON with -OutputType JsonObject' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri) New-TdrResponse '{"enabled":false,"configured":false,"settings":null,"updatedAt":null,"updatedBy":null}' }
+        $j = Get-InforcerAutoContainment -TenantId $script:T1 -OutputType JsonObject | ConvertFrom-Json
+        $j.msTenantId | Should -Be $script:T1
+        $j.configured | Should -BeFalse
+    }
+    It 'needs an API client' {
+        Set-TdrSession -Beta
+        Set-TdrRoute { param($Uri) throw 'no call expected' }
+        Get-InforcerAutoContainment -TenantId $script:T1 -ErrorVariable e -ErrorAction SilentlyContinue
+        $e[0].FullyQualifiedErrorId | Should -Match '^RequiresApiClient'
+        $global:TdrCalls.Count | Should -Be 0
+    }
+}
+
+Describe 'Set-InforcerAutoContainment' {
+    It 'asks for confirmation by default' {
+        (Get-Command Set-InforcerAutoContainment).ScriptBlock.Attributes |
+            Where-Object { $_ -is [System.Management.Automation.CmdletBindingAttribute] } |
+            ForEach-Object ConfirmImpact | Should -Be 'High'
+    }
+    It 'sends only the settings passed, an empty list as []' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri) New-TdrResponse '{"enabled":false,"configured":true,"settings":{"severityThreshold":"critical","allowedActions":[],"allowedDeviceActions":[],"allowedTargets":[],"deniedTargets":["breakglass@contoso.com"]},"updatedAt":"2026-11-25T10:00:00Z","updatedBy":"api client"}' }
+        $r = Set-InforcerAutoContainment -TenantId $script:T1 -SeverityThreshold critical -AllowedAction @() -DeniedTarget 'breakglass@contoso.com' -Confirm:$false
+        $global:TdrCalls[0].Method | Should -Be 'PATCH'
+        $global:TdrCalls[0].Uri | Should -BeLike "*/v1/tenants/$($script:T1)/tdr/autoContainment"
+        $global:TdrCalls[0].Body | Should -Be '{"settings":{"severityThreshold":"critical","allowedActions":[],"deniedTargets":["breakglass@contoso.com"]}}'
+        $r.msTenantId | Should -Be $script:T1
+        $r.configured | Should -BeTrue
+    }
+    It 'sends enabled false on its own' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri) New-TdrResponse '{"enabled":false,"configured":true,"settings":null,"updatedAt":null,"updatedBy":null}' }
+        $null = Set-InforcerAutoContainment -TenantId $script:T1 -Enabled $false -Confirm:$false
+        $global:TdrCalls[0].Body | Should -Be '{"enabled":false}'
+    }
+    It 'refuses a call without a change, and -WhatIf sends nothing' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri) throw 'no call expected' }
+        Set-InforcerAutoContainment -TenantId $script:T1 -ErrorVariable e -ErrorAction SilentlyContinue
+        $e[0].FullyQualifiedErrorId | Should -Match '^NoChangeSpecified'
+        Set-InforcerAutoContainment -TenantId $script:T1 -Enabled $true -WhatIf
+        $global:TdrCalls.Count | Should -Be 0
+    }
+    It 'does not retry a 409, which a retry cannot fix' {
+        Set-TdrSession
+        Mock -ModuleName InforcerCommunity Start-Sleep { }
+        Set-TdrRoute { param($Uri) New-TdrResponse -Status 409 '{"title":"Conflict","status":409,"detail":"Auto-containment is not configured; send settings to turn it on."}' }
+        Set-InforcerAutoContainment -TenantId $script:T1 -Enabled $true -Confirm:$false -ErrorVariable e -ErrorAction SilentlyContinue
+        $e[0].FullyQualifiedErrorId | Should -Match '^ApiRequestFailed_409'
+        $global:TdrCalls.Count | Should -Be 1
+        Should -Invoke -ModuleName InforcerCommunity Start-Sleep -Times 0 -Exactly
+    }
+}

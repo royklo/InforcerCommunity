@@ -30,13 +30,13 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 26
+        $script:expectedCount = 28
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
             'Get-InforcerUser', 'New-InforcerUser', 'Set-InforcerUser', 'Get-InforcerGroup', 'Set-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore',
-            'Get-InforcerThreat', 'Get-InforcerThreatIndicator',
+            'Get-InforcerThreat', 'Get-InforcerThreatIndicator', 'Get-InforcerAutoContainment', 'Set-InforcerAutoContainment',
             'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
             'Get-InforcerAssessment', 'Invoke-InforcerAssessment',
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
@@ -58,6 +58,8 @@ Describe 'Consistency contract' {
             'Set-InforcerGroup'             = @('TenantId', 'Group', 'AddMember', 'RemoveMember')
             'Get-InforcerThreat'            = @('Format', 'TenantId', 'ThreatId', 'Status', 'Severity', 'Verdict', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
             'Get-InforcerThreatIndicator'   = @('Format', 'TenantId', 'IndicatorId', 'ThreatId', 'Severity', 'AlertType', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
+            'Get-InforcerAutoContainment'   = @('Format', 'TenantId', 'OutputType')
+            'Set-InforcerAutoContainment'   = @('TenantId', 'Enabled', 'SeverityThreshold', 'AllowedAction', 'AllowedDeviceAction', 'AllowedTarget', 'DeniedTarget', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')
             'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'Show', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
@@ -228,6 +230,8 @@ Describe 'No-silent-failure contract' {
     It '<Name> produces an error when not connected' -ForEach @(
         @{ Name = 'Get-InforcerThreat'; Splat = @{} }
         @{ Name = 'Get-InforcerThreatIndicator'; Splat = @{} }
+        @{ Name = 'Get-InforcerAutoContainment'; Splat = @{ TenantId = 'Contoso' } }
+        @{ Name = 'Set-InforcerAutoContainment'; Splat = @{ TenantId = 'Contoso'; Enabled = $false; Confirm = $false } }
         @{ Name = 'New-InforcerUser'; Splat = @{ TenantId = 'Contoso'; DisplayName = 'Jo'; UserPrincipalName = 'jo@contoso.com'; Password = (ConvertTo-SecureString 'x' -AsPlainText -Force); Confirm = $false } }
         @{ Name = 'Set-InforcerUser'; Splat = @{ TenantId = 'Contoso'; UserId = '00000000-0000-0000-0000-000000000005'; Department = 'X'; Confirm = $false } }
         @{ Name = 'Set-InforcerGroup'; Splat = @{ TenantId = 'Contoso'; Group = '00000000-0000-0000-0000-0000000000c1'; AddMember = '00000000-0000-0000-0000-000000000005'; Confirm = $false } }

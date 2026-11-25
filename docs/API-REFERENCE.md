@@ -65,6 +65,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [TenantUserOffboarding](#tenantuseroffboarding)
   - [TdrThreat](#tdrthreat)
   - [TdrIndicator](#tdrindicator)
+  - [TdrAutoContainment](#tdrautocontainment)
   - [TemporaryAccessPass](#temporaryaccesspass)
   - [MailboxAction](#mailboxaction)
   - [Mailbox](#mailbox)
@@ -164,7 +165,7 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Set-InforcerUser` | none: the beta API cannot update users, reset passwords or revoke sessions (the cmdlet needs an API client) | not available with an API key |
 | `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
 | `Set-InforcerGroup` | none: the beta API cannot change groups (the cmdlet needs an API client) | not available with an API key |
-| `Get-InforcerThreat`, `Get-InforcerThreatIndicator` | none: the beta API has no threat detection and response endpoints (the cmdlets need an API client) | not available with an API key |
+| `Get-InforcerThreat`, `Get-InforcerThreatIndicator`, `Get-InforcerAutoContainment`, `Set-InforcerAutoContainment` | none: the beta API has no threat detection and response endpoints (the cmdlets need an API client) | not available with an API key |
 | `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
 | `Get-InforcerSecureScore` | `GET /beta/tenants/{tenantId}/secureScores` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.SecureScores.Read` + `Tenants.Read`† |
 | `Get-InforcerAssessment` | `GET /beta/assessments` | `Assessments.Read` |
@@ -205,6 +206,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | Copilot Manager / Copilot Manager | Write: Manage | none in the current spec; the module does not use it | n/a |
 | TDR / Threats | Read: View (incidents) | `/v1/tdr/ping`, `/v1/tenants/{msTenantId}/tdr/ping`, `POST /v1/tdr/threats/search`, `/v1/tdr/threats/{threatId}` | the spec names `tdr:incidents:view`; portal grant name unconfirmed |
 | TDR / Threats | Read: View (indicators) | `POST /v1/tdr/indicators/search`, `/v1/tdr/indicators/{indicatorId}` | the spec names `tdr:indicators:view`; portal grant name unconfirmed |
+| TDR / Auto remediation | Read: View, Write: Manage | `/v1/tenants/{msTenantId}/tdr/autoContainment` (GET: view, PATCH: manage) | the spec names `tdr:auto_remediation:view` and `tdr:auto_remediation:manage`; portal grant names unconfirmed |
 
 ### Cmdlet → Endpoints → Required permissions (v1)
 
@@ -228,6 +230,8 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Set-InforcerGroup` | `POST /v1/tenants/{msTenantId}/groups/{groupId}/members`; `GET .../groups` only to resolve a group name | User & Group Management (write), Tenants† |
 | `Get-InforcerThreat` | `POST /v1/tdr/threats/search` (every page); `GET /v1/tdr/threats/{threatId}` with `-ThreatId` | Threats: incidents (`tdr:incidents:view`), Tenants† |
 | `Get-InforcerThreatIndicator` | `POST /v1/tdr/indicators/search` (every page); `GET /v1/tdr/indicators/{indicatorId}` with `-IndicatorId` | Threats: indicators (`tdr:indicators:view`), Tenants† |
+| `Get-InforcerAutoContainment` | `GET /v1/tenants/{msTenantId}/tdr/autoContainment` (once per tenant) | Auto remediation: view (`tdr:auto_remediation:view`), Tenants† |
+| `Set-InforcerAutoContainment` | `PATCH /v1/tenants/{msTenantId}/tdr/autoContainment` | Auto remediation: manage (`tdr:auto_remediation:manage`), Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
 | `Get-InforcerAssessment` | `GET /v1/assessments` | Tenant Assessment |
@@ -367,6 +371,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tdr/threats/{threatId}` | GET | none (v1 only) | `Get-InforcerThreat -ThreatId` |
 | `/v1/tdr/indicators/search` | POST (`msTenantIds`, `threatId`, `severities`, `alertTypes`, `dateFrom` and `dateTo` required, `pageSize`, `continuationToken`) | none (v1 only) | `Get-InforcerThreatIndicator` |
 | `/v1/tdr/indicators/{indicatorId}` | GET | none (v1 only) | `Get-InforcerThreatIndicator -IndicatorId` |
+| `/v1/tenants/{msTenantId}/tdr/autoContainment` | GET, PATCH (JSON Merge Patch; optional `If-Match` with the `ETag` of a read) | none (v1 only) | `Get-InforcerAutoContainment`, `Set-InforcerAutoContainment` |
 | `/v1/tenants/{msTenantId}/directoryRoles` | GET | `/beta/tenants/{tenantId}/roles` | `Get-InforcerRole` |
 | `/v1/tenants/{msTenantId}/assessments/{assessmentId}/runs` | POST (synchronous) | `/beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Invoke-InforcerAssessment` |
 | `/v1/baselines` | GET (`baselineMsTenantId`) | `/beta/baselines` (`baselineTenantId`) | `Get-InforcerBaseline` |
@@ -379,7 +384,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 56 paths and 66 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH, `/v1/tenants/{msTenantId}/groups/{groupId}/members` GET and POST, and the mailbox's `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups` and `inboxRules` two methods each). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `permission` (`fullAccess`, `sendAs` or `sendOnBehalf`), `trusteeId` (the Entra object ID of the user holding a mailbox permission or calendar access), `address` (an email address), `ruleId` (an inbox rule's id, digits), `offboardingId`, `groupId`, `threatId` (uuid), `indicatorId` (opaque, up to 4096 characters; escape it in the path), `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 57 paths and 68 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH, `/v1/tenants/{msTenantId}/groups/{groupId}/members` GET and POST, `/v1/tenants/{msTenantId}/tdr/autoContainment` GET and PATCH, and the mailbox's `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups` and `inboxRules` two methods each). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `permission` (`fullAccess`, `sendAs` or `sendOnBehalf`), `trusteeId` (the Entra object ID of the user holding a mailbox permission or calendar access), `address` (an email address), `ruleId` (an inbox rule's id, digits), `offboardingId`, `groupId`, `threatId` (uuid), `indicatorId` (opaque, up to 4096 characters; escape it in the path), `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
 
 ### Managing users (v1 only)
 
@@ -679,6 +684,24 @@ The latest version of one indicator. The id is opaque (a search result's `id` or
 **Required API client permission(s)**: Threats, view indicators (`tdr:indicators:view`)
 
 **Response**: `200` with [TdrIndicator](#tdrindicator). Errors: `403`, `404` (missing, or in a tenant outside the client's scope), `502`.
+
+#### `GET /v1/tenants/{msTenantId}/tdr/autoContainment`
+
+Whether auto-containment is on for a tenant and the settings that limit what it may do. Auto-containment lets inforcer act on the tenant by itself, such as blocking a user's sign-in. A tenant where it was never set up is not an error: `configured` and `enabled` are `false` and `settings` is `null`, and there is no `ETag`. `Get-InforcerAutoContainment` sends it once per tenant and adds `msTenantId` to the result.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Threats, view auto remediation (`tdr:auto_remediation:view`)
+
+**Response**: `200` with [TdrAutoContainment](#tdrautocontainment) and an `ETag` header (absent when not configured). Errors: `403`, `404` (a tenant outside the client's scope, or without a TDR licence), `409`, `502`.
+
+#### `PATCH /v1/tenants/{msTenantId}/tdr/autoContainment`
+
+Turns auto-containment on or off and changes its settings, as a JSON Merge Patch (RFC 7396; `application/json` is accepted too): a property left out is kept. Body: `enabled` (boolean) and `settings` (`severityThreshold` `critical` or `high`; `allowedActions`, `allowedDeviceActions` (`isolateDevice`, `quarantineFile`, `fullScanClean`), `allowedTargets`, `deniedTargets`, each at most 50, `null` or empty to reset). On a tenant that is not configured, a request with `settings` sets it up and it stays off unless `enabled` is `true` too; `enabled: true` without `settings` there is a `409`. A setting left out then takes its default: `critical` and every list empty. `If-Match` with the `ETag` of a read makes the update fail with `412` when something changed since; without it the fields sent win. `Set-InforcerAutoContainment` sends it without `If-Match`.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Threats, manage auto remediation (`tdr:auto_remediation:manage`)
+
+**Response**: `200` with [TdrAutoContainment](#tdrautocontainment) after the change and its new `ETag`. Errors: `400` (an unknown or read-only property), `403`, `404`, `409` (turned on without settings, or a concurrent change), `412`, `413` (body over 64 KiB), `502`.
 
 ### How v1 fields map to the module's names
 
@@ -1554,6 +1577,18 @@ An indicator (one detection), from `POST /v1/tdr/indicators/search` (in `indicat
 | eventTime | string (date-time), nullable | When the activity happened. |
 | userPrincipalName | string, nullable | The account it concerns. |
 | description | string, nullable | What the alert type means. |
+
+### TdrAutoContainment
+
+A tenant's auto-containment, from `GET` or `PATCH /v1/tenants/{msTenantId}/tdr/autoContainment`. `Get-InforcerAutoContainment` and `Set-InforcerAutoContainment` return it with `msTenantId` added in front (PSTypeName `InforcerCommunity.AutoContainment`).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| enabled | boolean | Whether auto-containment is on. Always `false` when not configured. |
+| configured | boolean | Whether it has been set up for the tenant. Read-only. |
+| settings | object, nullable | What it may do; `null` when not configured: `severityThreshold` (the lowest severity it acts on; `critical` or `high` can be set, a lower one set elsewhere is returned as is), `allowedActions` (actions on users and apps, such as `blockUser`; empty means every action), `allowedDeviceActions` (empty means none), `allowedTargets` (user principal names, object ids or app ids, a trailing `*` as wildcard; empty means any account), `deniedTargets` (never acted on; wins over `allowedTargets`). |
+| updatedAt | string (date-time), nullable | When it was last changed. Read-only. |
+| updatedBy | string, nullable | The name of the user or API client that last changed it. Read-only. |
 
 ### TemporaryAccessPass
 

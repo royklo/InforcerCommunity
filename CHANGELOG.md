@@ -6,11 +6,12 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 
 ## [1.3.0] - 2026-11-25
 
-Read threats with an API client (client credentials, v1). These cmdlets need inforcer's v1 threat detection and response operations; with an API key they stop with `RequiresApiClient`.
+Read threats and manage auto-containment with an API client (client credentials, v1). These cmdlets need inforcer's v1 threat detection and response operations; with an API key they stop with `RequiresApiClient`.
 
 ### Features
 
 - **`Get-InforcerThreat`** and **`Get-InforcerThreatIndicator`** read inforcer's threat detection and response: threats with their AI summary and indicators, and indicators over any date range.
+- **`Get-InforcerAutoContainment`** and **`Set-InforcerAutoContainment`** read and change a tenant's auto-containment: whether inforcer may act on threats by itself, at which severity, with which actions and on which accounts. Changing it asks for confirmation.
 
 ## [1.2.0] - 2026-11-24
 

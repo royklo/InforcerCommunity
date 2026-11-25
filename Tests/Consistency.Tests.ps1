@@ -30,13 +30,12 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 26
+        $script:expectedCount = 24
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
             'Get-InforcerUser', 'New-InforcerUser', 'Set-InforcerUser', 'Get-InforcerGroup', 'Set-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore',
-            'Get-InforcerThreat', 'Get-InforcerThreatIndicator',
             'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
             'Get-InforcerAssessment', 'Invoke-InforcerAssessment',
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
@@ -56,8 +55,6 @@ Describe 'Consistency contract' {
             'Set-InforcerUser'              = @('TenantId', 'UserId', 'AccountEnabled', 'DisplayName', 'ManagerId', 'UserType', 'Password', 'ForceChangePasswordNextSignIn', 'AddLicense', 'RemoveLicense', 'AddGroup', 'RemoveGroup', 'HiddenFromAddressLists', 'MailboxType', 'EnableArchive', 'AutoReply', 'ForwardTo', 'KeepForwardedCopy', 'RemoveForwarding', 'GrantMailboxPermission', 'RemoveMailboxPermission', 'GrantCalendarAccess', 'RemoveCalendarAccess', 'AddMailGroup', 'RemoveMailGroup', 'AddEmailAddress', 'PrimaryEmailAddress', 'RemoveEmailAddress', 'RemoveInboxRule', 'RemoveAllInboxRules', 'AllowMailApp', 'BlockMailApp', 'RemoveAuthenticationMethod', 'ResetMfa', 'TemporaryAccessPass', 'TemporaryAccessPassLifetime', 'TemporaryAccessPassUsableOnce', 'RevokeSessions')
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
             'Set-InforcerGroup'             = @('TenantId', 'Group', 'AddMember', 'RemoveMember')
-            'Get-InforcerThreat'            = @('Format', 'TenantId', 'ThreatId', 'Status', 'Severity', 'Verdict', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
-            'Get-InforcerThreatIndicator'   = @('Format', 'TenantId', 'IndicatorId', 'ThreatId', 'Severity', 'AlertType', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')
             'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'Show', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
@@ -91,7 +88,7 @@ Describe 'Consistency contract' {
     }
 
     It 'Get-* cmdlets that return API data have -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore', 'Get-InforcerThreat', 'Get-InforcerThreatIndicator')
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'OutputType'
@@ -226,8 +223,6 @@ Describe 'No-silent-failure contract' {
     }
 
     It '<Name> produces an error when not connected' -ForEach @(
-        @{ Name = 'Get-InforcerThreat'; Splat = @{} }
-        @{ Name = 'Get-InforcerThreatIndicator'; Splat = @{} }
         @{ Name = 'New-InforcerUser'; Splat = @{ TenantId = 'Contoso'; DisplayName = 'Jo'; UserPrincipalName = 'jo@contoso.com'; Password = (ConvertTo-SecureString 'x' -AsPlainText -Force); Confirm = $false } }
         @{ Name = 'Set-InforcerUser'; Splat = @{ TenantId = 'Contoso'; UserId = '00000000-0000-0000-0000-000000000005'; Department = 'X'; Confirm = $false } }
         @{ Name = 'Set-InforcerGroup'; Splat = @{ TenantId = 'Contoso'; Group = '00000000-0000-0000-0000-0000000000c1'; AddMember = '00000000-0000-0000-0000-000000000005'; Confirm = $false } }

@@ -1,6 +1,6 @@
 $script:InforcerV1MetadataKeys = @('continuationToken', 'userCount', 'groupCount', 'memberCount', 'failedPolicyTypes')
 $script:InforcerV1CollectionKeys = @('tenants', 'policies', 'users', 'groups', 'members', 'roles', 'baselines', 'alignmentScores',
-    'assessments', 'reportRuns', 'outputs', 'reportTypes', 'auditEvents', 'eventTypes', 'threats', 'indicators')
+    'assessments', 'reportRuns', 'outputs', 'reportTypes', 'auditEvents', 'eventTypes')
 
 # Rename: v1 name -> canonical (beta) name. Nested: v1 property name -> map applied to its value(s).
 # Flatten: v1 object property -> its child properties lifted onto the parent under canonical names.

@@ -64,12 +64,6 @@ foreach ($name in $exported) {
             'Set-InforcerGroup' {
                 $out = & $name -TenantId 1 -Group '00000000-0000-0000-0000-000000000000' -AddMember '00000000-0000-0000-0000-000000000000' -ErrorVariable err -ErrorAction SilentlyContinue
             }
-            'Get-InforcerThreat' {
-                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
-            }
-            'Get-InforcerThreatIndicator' {
-                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
-            }
             'Get-InforcerRole' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }

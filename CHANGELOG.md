@@ -6,7 +6,7 @@ The format follows [Conventional Commits](https://www.conventionalcommits.org/) 
 
 ## [1.2.0] - 2026-11-24
 
-Manage users, groups and mailboxes, and read threats, with an API client (client credentials, v1). These cmdlets need inforcer's v1 user, group, mailbox and threat detection operations; with an API key they stop with `RequiresApiClient`.
+Manage users, groups and mailboxes with an API client (client credentials, v1). These cmdlets need inforcer's v1 user, group and mailbox operations; with an API key they stop with `RequiresApiClient`.
 
 ### Features
 
@@ -15,7 +15,6 @@ Manage users, groups and mailboxes, and read threats, with an API client (client
 - **`Set-InforcerGroup`** adds and removes up to 20 members of a group in one call.
 - **`Get-InforcerUser -UserId`** can add the user's sign-in methods (`-IncludeAuthenticationMethods`), mailbox with its replies, permissions, calendar sharing, mail groups and inbox rules (`-IncludeMailbox`), and the last 10 days of mail they sent and received (`-IncludeMessageTrace`).
 - **`Get-InforcerTenant -IncludeSubscriptions`** lists a tenant's licences with their free seats.
-- **`Get-InforcerThreat`** and **`Get-InforcerThreatIndicator`** read inforcer's threat detection and response: threats with their AI summary and indicators, and indicators over any date range.
 - **A write that Microsoft Entra refuses because another change is still being applied (HTTP 409) is retried**, twice, after 8 and 16 seconds.
 
 ### Bug Fixes

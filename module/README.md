@@ -26,8 +26,6 @@ module/
 │   ├── Set-InforcerUser.ps1
 │   ├── Get-InforcerGroup.ps1
 │   ├── Set-InforcerGroup.ps1
-│   ├── Get-InforcerThreat.ps1
-│   ├── Get-InforcerThreatIndicator.ps1
 │   ├── Get-InforcerRole.ps1
 │   ├── Get-InforcerSecureScore.ps1
 │   ├── Export-InforcerTenantDocumentation.ps1

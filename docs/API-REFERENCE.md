@@ -1586,7 +1586,7 @@ A tenant's auto-containment, from `GET` or `PATCH /v1/tenants/{msTenantId}/tdr/a
 |----------|------|-------------|
 | enabled | boolean | Whether auto-containment is on. Always `false` when not configured. |
 | configured | boolean | Whether it has been set up for the tenant. Read-only. |
-| settings | object, nullable | What it may do; `null` when not configured: `severityThreshold` (the lowest severity it acts on; `critical` or `high` can be set, a lower one set elsewhere is returned as is), `allowedActions` (actions on users and apps, such as `blockUser`; empty means every action), `allowedDeviceActions` (empty means none), `allowedTargets` (user principal names, object ids or app ids, a trailing `*` as wildcard; empty means any account), `deniedTargets` (never acted on; wins over `allowedTargets`). |
+| settings | object, nullable | What it may do; `null` when not configured: `severityThreshold` (the lowest severity it acts on; `critical` or `high` can be set, a lower one set elsewhere is returned as is), `allowedActions` (actions on users and apps: `blockUser`, `disableServicePrincipal`, `removeAppCredentials`, `removeMailRule`, `removePhishingEmail`, `removeRole`, `removeSiteAdmin`, `revokeAllSessions`, `revokeConsent`, named only in the `400` for an unknown one; empty means every action), `allowedDeviceActions` (empty means none), `allowedTargets` (user principal names, object ids or app ids, a trailing `*` as wildcard; empty means any account), `deniedTargets` (never acted on; wins over `allowedTargets`). |
 | updatedAt | string (date-time), nullable | When it was last changed. Read-only. |
 | updatedBy | string, nullable | The name of the user or API client that last changed it. Read-only. |
 

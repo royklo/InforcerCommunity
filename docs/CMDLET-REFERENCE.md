@@ -1168,7 +1168,7 @@ Turns auto-containment on or off for a tenant and changes the settings that limi
 | **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
 | **Enabled** | Bool | No | `$true` turns auto-containment on, `$false` turns it off. |
 | **SeverityThreshold** | String | No | The lowest threat severity it acts on: `critical` or `high`. |
-| **AllowedAction** | String[] | No | Actions it may take on users and apps, such as `blockUser` or `revokeAllSessions`. `@()` allows all. At most 50. |
+| **AllowedAction** | String[] | No | Actions it may take on users and apps: `blockUser`, `disableServicePrincipal`, `removeAppCredentials`, `removeMailRule`, `removePhishingEmail`, `removeRole`, `removeSiteAdmin`, `revokeAllSessions`, `revokeConsent` (the names inforcer accepts; another name is a `400`). `@()` allows all. At most 50. |
 | **AllowedDeviceAction** | String[] | No | Actions it may take on devices: `isolateDevice`, `quarantineFile`, `fullScanClean`. `@()` allows none. |
 | **AllowedTarget** | String[] | No | Accounts it may act on: user principal name, object id or app id; a trailing `*` matches every value that starts with the rest. `@()` allows any account. At most 50. |
 | **DeniedTarget** | String[] | No | Accounts it must never act on, written as `-AllowedTarget`; these win over `-AllowedTarget`. At most 50. |

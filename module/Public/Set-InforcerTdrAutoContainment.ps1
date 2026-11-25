@@ -32,7 +32,7 @@ function Set-InforcerTdrAutoContainment {
         The lowest threat severity auto-containment acts on: critical or high.
 
     .PARAMETER AllowedAction
-        The actions it may take on users and apps, such as blockUser or revokeAllSessions. @() allows all.
+        The actions it may take on users and apps. inforcer accepts: blockUser, disableServicePrincipal, removeAppCredentials, removeMailRule, removePhishingEmail, removeRole, removeSiteAdmin, revokeAllSessions, revokeConsent. @() allows all.
 
     .PARAMETER AllowedDeviceAction
         The actions it may take on devices: isolateDevice, quarantineFile, fullScanClean. @() allows none.

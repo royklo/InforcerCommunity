@@ -22,6 +22,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [failedPolicyTypes](#failedpolicytypes)
   - [v1 endpoints](#v1-endpoints)
   - [Managing users (v1 only)](#managing-users-v1-only)
+  - [Threat detection and response (v1 only)](#threat-detection-and-response-v1-only)
   - [How v1 fields map to the module's names](#how-v1-fields-map-to-the-modules-names)
     - [Alignment details renames](#alignment-details-renames)
 - [Beta endpoints](#beta-endpoints)
@@ -62,6 +63,8 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [GroupMembersChange](#groupmemberschange)
   - [MailboxMessageTrace](#mailboxmessagetrace)
   - [TenantUserOffboarding](#tenantuseroffboarding)
+  - [TdrThreat](#tdrthreat)
+  - [TdrIndicator](#tdrindicator)
   - [TemporaryAccessPass](#temporaryaccesspass)
   - [MailboxAction](#mailboxaction)
   - [Mailbox](#mailbox)
@@ -161,6 +164,7 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Set-InforcerUser` | none: the beta API cannot update users, reset passwords or revoke sessions (the cmdlet needs an API client) | not available with an API key |
 | `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
 | `Set-InforcerGroup` | none: the beta API cannot change groups (the cmdlet needs an API client) | not available with an API key |
+| `Get-InforcerThreat`, `Get-InforcerThreatIndicator` | none: the beta API has no threat detection and response endpoints (the cmdlets need an API client) | not available with an API key |
 | `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
 | `Get-InforcerSecureScore` | `GET /beta/tenants/{tenantId}/secureScores` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.SecureScores.Read` + `Tenants.Read`† |
 | `Get-InforcerAssessment` | `GET /beta/assessments` | `Assessments.Read` |
@@ -199,6 +203,8 @@ The permission names below are the ones the portal shows (feature and grant). **
 | Assess / Reports | Write: All (3 grants) | `/v1/reports/types`, `/v1/reports/runs`, `/v1/reports/runs/{reportRunId}/outputs`, `/v1/reports/runs/{reportRunId}/outputs/{outputId}` | unconfirmed (which of the 3 grants gates which route) |
 | Configure / Activity | Read | `/v1/auditEvents/types`, `/v1/auditEvents/search` | unconfirmed |
 | Copilot Manager / Copilot Manager | Write: Manage | none in the current spec; the module does not use it | n/a |
+| TDR / Threats | Read: View (incidents) | `/v1/tdr/ping`, `/v1/tenants/{msTenantId}/tdr/ping`, `POST /v1/tdr/threats/search`, `/v1/tdr/threats/{threatId}` | the spec names `tdr:incidents:view`; portal grant name unconfirmed |
+| TDR / Threats | Read: View (indicators) | `POST /v1/tdr/indicators/search`, `/v1/tdr/indicators/{indicatorId}` | the spec names `tdr:indicators:view`; portal grant name unconfirmed |
 
 ### Cmdlet → Endpoints → Required permissions (v1)
 
@@ -220,6 +226,8 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/assignLicenses` (with `-AddLicense`/`-RemoveLicense`), `POST .../users/{userId}/groups` (with `-AddGroup`/`-RemoveGroup`), the mailbox writes under `.../users/{userId}/mailbox/` (`type`, `archive`, `addressListVisibility`, `emailAddresses`, `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`, `mailApps`; one per mailbox parameter, one for all mail apps), each followed by `GET .../users/{userId}/mailbox/actions/{actionId}` until done, `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/authenticationMethods/temporaryAccessPasses` (with `-TemporaryAccessPass`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
 | `Set-InforcerGroup` | `POST /v1/tenants/{msTenantId}/groups/{groupId}/members`; `GET .../groups` only to resolve a group name | User & Group Management (write), Tenants† |
+| `Get-InforcerThreat` | `POST /v1/tdr/threats/search` (every page); `GET /v1/tdr/threats/{threatId}` with `-ThreatId` | Threats: incidents (`tdr:incidents:view`), Tenants† |
+| `Get-InforcerThreatIndicator` | `POST /v1/tdr/indicators/search` (every page); `GET /v1/tdr/indicators/{indicatorId}` with `-IndicatorId` | Threats: indicators (`tdr:indicators:view`), Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
 | `Get-InforcerSecureScore` | `GET /v1/tenants/{msTenantId}/secureScores` | Entra Dashboard, Tenants† |
 | `Get-InforcerAssessment` | `GET /v1/assessments` | Tenant Assessment |
@@ -354,6 +362,11 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tenants/{msTenantId}/groups/{groupId}` | GET | `/beta/tenants/{tenantId}/groups/{groupId}` | `Get-InforcerGroup -Group` |
 | `/v1/tenants/{msTenantId}/groups/{groupId}/members` | GET (`continuationToken`) | none (v1 only) | `Get-InforcerGroup -Group` (attached as members) |
 | `/v1/tenants/{msTenantId}/groups/{groupId}/members` | POST (204) | none (v1 only) | `Set-InforcerGroup` |
+| `/v1/tdr/ping`, `/v1/tenants/{msTenantId}/tdr/ping` | GET (`{ "status": "ok" }`) | none (v1 only) | not used (reachability checks for TDR, no data) |
+| `/v1/tdr/threats/search` | POST (`msTenantIds`, `statuses`, `severities`, `verdicts`, `dateFrom`, `dateTo`, `pageSize`, `continuationToken`) | none (v1 only) | `Get-InforcerThreat` |
+| `/v1/tdr/threats/{threatId}` | GET | none (v1 only) | `Get-InforcerThreat -ThreatId` |
+| `/v1/tdr/indicators/search` | POST (`msTenantIds`, `threatId`, `severities`, `alertTypes`, `dateFrom` and `dateTo` required, `pageSize`, `continuationToken`) | none (v1 only) | `Get-InforcerThreatIndicator` |
+| `/v1/tdr/indicators/{indicatorId}` | GET | none (v1 only) | `Get-InforcerThreatIndicator -IndicatorId` |
 | `/v1/tenants/{msTenantId}/directoryRoles` | GET | `/beta/tenants/{tenantId}/roles` | `Get-InforcerRole` |
 | `/v1/tenants/{msTenantId}/assessments/{assessmentId}/runs` | POST (synchronous) | `/beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Invoke-InforcerAssessment` |
 | `/v1/baselines` | GET (`baselineMsTenantId`) | `/beta/baselines` (`baselineTenantId`) | `Get-InforcerBaseline` |
@@ -366,7 +379,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/auditEvents/types` | GET (`{ "eventTypes": [ { "name" } ] }`) | `/beta/auditEvents/eventTypes` | `Get-InforcerSupportedEventType` |
 | `/v1/auditEvents/search` | POST (`user`, `eventTypes`, `dateFrom`, `dateTo` in whole seconds, `pageSize`, `continuationToken`) | `/beta/auditEvents/search` | `Get-InforcerAuditEvent` |
 
-That is 50 paths and 60 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH, `/v1/tenants/{msTenantId}/groups/{groupId}/members` GET and POST, and the mailbox's `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups` and `inboxRules` two methods each). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `permission` (`fullAccess`, `sendAs` or `sendOnBehalf`), `trusteeId` (the Entra object ID of the user holding a mailbox permission or calendar access), `address` (an email address), `ruleId` (an inbox rule's id, digits), `offboardingId`, `groupId`, `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
+That is 56 paths and 66 operations (`/v1/reports/runs` has GET and POST, `/v1/tenants/{msTenantId}/users` GET and POST, `/v1/tenants/{msTenantId}/users/{userId}` GET and PATCH, `/v1/tenants/{msTenantId}/groups/{groupId}/members` GET and POST, and the mailbox's `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups` and `inboxRules` two methods each). Path parameters are `msTenantId` (Microsoft tenant GUID), `userId` (Entra object ID), `methodId` (an authentication method's `id`; not always a GUID), `actionId` (a mailbox action's id), `permission` (`fullAccess`, `sendAs` or `sendOnBehalf`), `trusteeId` (the Entra object ID of the user holding a mailbox permission or calendar access), `address` (an email address), `ruleId` (an inbox rule's id, digits), `offboardingId`, `groupId`, `threatId` (uuid), `indicatorId` (opaque, up to 4096 characters; escape it in the path), `assessmentId`, `reportRunId` and `outputId`. Report runs are triggered with `{ "reports": [ { "type", "outputFormat", "collate", "parameters" } ], "msTenantIds": [ ... ] }` (beta: `tenants.includeTenants` with numeric IDs).
 
 ### Managing users (v1 only)
 
@@ -619,6 +632,53 @@ Adds users to a Microsoft Entra group and removes others from it in one call. Ea
 Body: [GroupMembersChange](#groupmemberschange).
 
 **Response**: `204` without a body; a change can take a few seconds to show in a GET. Errors: `400` (invalid request or a group whose members cannot change; when some users were changed and one refused, a `results` list with each user), `404` (tenant or group), `409` (Microsoft Entra reported a conflict; `results` when some users were changed or the users failed for different reasons; the module retries it), `502` (a service failed; `results` as for `409`).
+
+### Threat detection and response (v1 only)
+
+inforcer's threat detection and response (TDR) raises **indicators** (single detections, such as a sign-in through Tor) and groups a user's indicators into **threats** (incidents). The beta API has no equivalent, so `Get-InforcerThreat` and `Get-InforcerThreatIndicator` need an API client; an API-key login stops with `RequiresApiClient`. A tenant needs a TDR licence. Every route below is a draft in the current spec.
+
+#### `GET /v1/tdr/ping` and `GET /v1/tenants/{msTenantId}/tdr/ping`
+
+Reachability checks for inforcer's TDR (threat detection and response) API: `200 { "status": "ok" }` when the API client may view TDR incidents on at least one tenant, or, per tenant, when the tenant is in that scope and holds a TDR licence. No data; the module does not use them.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Threats, view incidents (`tdr:incidents:view`)
+
+#### `POST /v1/tdr/threats/search`
+
+The threats open at any time between `dateFrom` and `dateTo`, newest first, across `msTenantIds` or, without it, every tenant the client may view TDR incidents on. Every filter is optional: `dateTo` defaults to now and `dateFrom` to 7 days before `dateTo`; `statuses` (`open`, `triaging`, `remediating`, `pendingReview`, `closed`), `severities` (`info`, `medium`, `high`, `critical`) and `verdicts` (`remediated`, `falsePositive`, `acceptedRisk`, `merged`) take up to 50 values, `msTenantIds` up to 1000. `pageSize` is 1–500 (default 100); send `continuationToken` with the same filters for the next page. Threats spawned from another threat are not listed; read them by id. `Get-InforcerThreat` sends it.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Threats, view incidents (`tdr:incidents:view`)
+
+**Response**: `200` with `threats` ([TdrThreat](#tdrthreat) without `summary` and `iocs`) and `continuationToken` (`null` on the last page). Errors: `400`, `403` (no TDR permission), `404` (an `msTenantId` outside the client's scope), `413` (body over 128 KiB), `502`.
+
+#### `GET /v1/tdr/threats/{threatId}`
+
+One threat with its AI-written `summary` and its `iocs`. A threat in a tenant outside the client's scope is a `404`, as is a missing one. `Get-InforcerThreat -ThreatId` sends it.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Threats, view incidents (`tdr:incidents:view`)
+
+**Response**: `200` with [TdrThreat](#tdrthreat). Errors: `403`, `404`, `502`.
+
+#### `POST /v1/tdr/indicators/search`
+
+The indicators whose event happened between `dateFrom` and `dateTo`, newest first, each in its latest version within the range; an indicator with no event time is placed by when it was detected. `dateFrom` and `dateTo` are **required** and at most 30 days apart. Optional: `msTenantIds` (up to 1000), `threatId` (only the indicators behind that threat; a threat with more than 2000 indicators is a `400`, narrow it with `alertTypes`), `severities`, `alertTypes` (letters, digits and `_`, such as `TorExitNode`), `pageSize` 1–500 (default 100) and `continuationToken`. `Get-InforcerThreatIndicator` sends it, with the last 30 days when no dates are given, and splits a longer range into 30-day searches (newest first, duplicates on a window edge dropped). The `id` is base64url (`-`, `_`, no padding) of tenant, alert type and a hash, so it is safe in the path.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Threats, view indicators (`tdr:indicators:view`)
+
+**Response**: `200` with `indicators` ([TdrIndicator](#tdrindicator)) and `continuationToken`. Errors: `400`, `403`, `404` (an `msTenantId` or `threatId` outside the client's scope), `413`, `502`.
+
+#### `GET /v1/tdr/indicators/{indicatorId}`
+
+The latest version of one indicator. The id is opaque (a search result's `id` or a threat IoC's `indicatorId`): pass it as given, URL-escaped. `Get-InforcerThreatIndicator -IndicatorId` sends it.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Threats, view indicators (`tdr:indicators:view`)
+
+**Response**: `200` with [TdrIndicator](#tdrindicator). Errors: `403`, `404` (missing, or in a tenant outside the client's scope), `502`.
 
 ### How v1 fields map to the module's names
 
@@ -1451,6 +1511,49 @@ The answer of `GET /v1/tenants/{msTenantId}/users/{userId}/offboardings/{offboar
 | completedAt | string (date-time), nullable | When it finished; `null` while queued or running. |
 | error | object, nullable | Why it failed, as in [MailboxAction](#mailboxaction); `NotStarted` when it failed before any step existed. |
 | steps | object[] | The steps in the order they run (`step`, `status` `pending`/`running`/`succeeded`/`failed`, `completedAt`, `error`); empty until it starts. Steps so far: `revokeSessions`, `blockSignIn`, `hideFromAddressList`, `setAutoReply`, `removeForwarding`, `removeInboxRules`, `convertToShared`, `assignDelegates`, `removeLicenses`; more may be added. A failed step's error code is `StepFailed`, `NotStarted` or `NotRecorded`. |
+
+### TdrThreat
+
+A threat, from `POST /v1/tdr/threats/search` (in `threats`) or `GET /v1/tdr/threats/{threatId}` (which adds `summary` and `iocs`). `Get-InforcerThreat` returns it as is (PSTypeName `InforcerCommunity.Threat`).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string (uuid) | The threat's id. |
+| msTenantId | string (uuid) | The tenant. |
+| subjectKind | string | `user`, `servicePrincipal`, `device` or `tenant`; more may be added. |
+| userPrincipalName | string | The account the threat is about; a service principal is `ServicePrincipal_` plus its application id. |
+| userDisplayName | string, nullable | The principal's display name. |
+| userId | string, nullable | The user's Entra object id, or a spawned service principal threat's application id; `null` for other subjects. |
+| status | string | `open`, `triaging`, `remediating`, `pendingReview` or `closed`; more may be added. |
+| verdict | string, nullable | Why it was closed: `remediated`, `falsePositive`, `acceptedRisk` or `merged`; `null` while open. |
+| severity | string | `info`, `medium`, `high` or `critical`; more may be added. |
+| classification | string | `suspiciousActivity` or `potentialCompromise`; more may be added. |
+| openedAt | string (date-time) | When it was opened. |
+| closedAt | string (date-time), nullable | When it was closed. |
+| mergedIntoThreatId | string (uuid), nullable | The threat it was merged into, when the verdict is `merged`. |
+| simulated | boolean | Raised by a threat simulation, not real activity. |
+| raisedViaBackfill | boolean | Raised from historical activity replayed at onboarding. |
+| subjectDeviceName | string, nullable | A device subject's own device, else the most recently linked device. |
+| linkedDevices | object[] | Microsoft Defender for Endpoint devices merged or linked into the threat: `mdeDeviceId`, `deviceName` (nullable), `linkedAt`, `sourceThreatId` (nullable). |
+| devicesAffected | integer | The distinct devices involved. |
+| summary | string, nullable | By id only: the AI-written summary, in Markdown. |
+| iocs | object[] | By id only: the indicators attached, each once, in the order attached: `iocId` (stable within the threat) and `indicatorId` (for the indicator routes; `null` when TDR can no longer name it). |
+
+### TdrIndicator
+
+An indicator (one detection), from `POST /v1/tdr/indicators/search` (in `indicators`) or `GET /v1/tdr/indicators/{indicatorId}`. `Get-InforcerThreatIndicator` returns it as is (PSTypeName `InforcerCommunity.ThreatIndicator`).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string | Opaque; use as given. Each version of a Microsoft Defender alert is its own indicator. |
+| msTenantId | string (uuid) | The tenant. |
+| alertType | string | The detection, such as `TorExitNode`. |
+| severity | string | `info`, `medium`, `high` or `critical`; more may be added. |
+| mitreStage | string, nullable | The MITRE ATT&CK tactic, such as `initialAccess`. |
+| detectedAt | string (date-time), nullable | When TDR raised it. |
+| eventTime | string (date-time), nullable | When the activity happened. |
+| userPrincipalName | string, nullable | The account it concerns. |
+| description | string, nullable | What the alert type means. |
 
 ### TemporaryAccessPass
 

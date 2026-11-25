@@ -4,7 +4,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
-> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, and `Set-InforcerGroup`, which need an API client because the beta API cannot create or change users and groups. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
+> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, `Set-InforcerGroup`, `Get-InforcerThreat` and `Get-InforcerThreatIndicator`, which need an API client because the beta API cannot create or change users and groups and has no threat detection and response endpoints. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
 
 > **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
 
@@ -12,7 +12,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ## Personal data
 
-User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
+User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, threats and threat indicators (`Get-InforcerThreat`, `Get-InforcerThreatIndicator`: user names and UPNs), report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
 
 ---
 
@@ -1009,6 +1009,108 @@ Hint                   : Use $obj.ControlProfiles | Sort-Object ScoreDifference 
 Each nested item in `.ControlProfiles` carries the PSTypeName `InforcerCommunity.SecureScoreControlProfile` and renders as a compact list (`Title`, `ControlCategory`, `Service`, current/max score with potential gain, `RemediationImpact`, `ActionUrl`, `Id`) — the full HTML `remediation` string is still on the object as `.remediation` when needed.
 
 Use `| Select-Object *` to see all properties on any level.
+
+---
+
+## Get-InforcerThreat
+
+Retrieves the threats inforcer's threat detection and response (TDR) raised: incidents built from a user's indicators. Without `-ThreatId` it searches the threats open at any time in the date range, newest first, across the tenants you pass or every tenant the API client may view; without `-DateFrom`/`-DateTo` inforcer searches the last 7 days. Piped tenants are searched in one request. Threats spawned from another threat are not listed; read them with `-ThreatId`. With `-ThreatId` it returns one threat plus its AI-written `summary` (Markdown) and `iocs`, each with the `indicatorId` for `Get-InforcerThreatIndicator -IndicatorId`. Needs a login with an API client; with an API key it stops with `RequiresApiClient`. A tenant needs a TDR licence.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tdr/threats/search` (every page) or `GET /v1/tdr/threats/{threatId}` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, view incidents (`tdr:incidents:view`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrThreat](./API-REFERENCE.md#tdrthreat)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **TenantId** | Object | No | Only threats in these tenants: Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **ThreatId** | Guid | Yes (ById) | Return this threat, with its summary and IoCs. |
+| **Status** | String[] | No | `open`, `triaging`, `remediating`, `pendingReview`, `closed`. |
+| **Severity** | String[] | No | `info`, `medium`, `high`, `critical`. |
+| **Verdict** | String[] | No | Closed threats only: `remediated`, `falsePositive`, `acceptedRisk`, `merged`. |
+| **DateFrom** | DateTime | No | Threats still open at or after this time. Default: 7 days before `-DateTo`. |
+| **DateTo** | DateTime | No | Threats opened at or before this time. Default: now. |
+| **MaxResults** | Int | No | Stop after this many threats. `0` = no limit (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (a JSON array; one object with `-ThreatId`; Depth 100). |
+
+### Examples
+
+```powershell
+Get-InforcerThreat -Status open, triaging, remediating -Severity high, critical
+Get-InforcerThreat -TenantId 'Contoso' -DateFrom (Get-Date).AddDays(-30)
+(Get-InforcerThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').summary
+Get-InforcerThreat -Severity critical -OutputType JsonObject | Set-Content threats.json
+```
+
+### Example output
+
+```
+UserDisplayName   : Jo Bloggs
+UserPrincipalName : jo.bloggs@contoso.com
+Severity          : high
+Status            : remediating
+Classification    : potentialCompromise
+OpenedAt          : 18/11/2026 09:14:03
+SubjectDeviceName : CONTOSO-LT-042
+DevicesAffected   : 1
+Simulated         : False
+Id                : 00000000-0000-0000-0000-0000000000d1
+MsTenantId        : 00000000-0000-0000-0000-000000000001
+```
+
+`Verdict`, `ClosedAt`, `SubjectDeviceName` and `Summary` show only when set. `linkedDevices` and `iocs` stay on the object (`| Select-Object *`).
+
+---
+
+## Get-InforcerThreatIndicator
+
+Retrieves the indicators (single detections, such as a sign-in through Tor) inforcer's threat detection and response raised. Without `-IndicatorId` it searches the indicators whose event happened in the date range, newest first, each in its latest version within the range, across the tenants you pass or every tenant the API client may view. inforcer searches at most 30 days at a time, so the cmdlet searches a longer range in 30-day steps, newest first (one search per 30 days, an indicator on a step's edge listed once); without `-DateFrom` it searches the last 30 days. `-ThreatId` limits the search to the indicators behind one threat (inforcer refuses a threat with more than 2000 in one step; narrow it with `-AlertType`). With `-IndicatorId` it returns one indicator; the id is opaque, pass it as a search or a threat's `iocs` gave it. Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tdr/indicators/search` (every page) or `GET /v1/tdr/indicators/{indicatorId}` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, view indicators (`tdr:indicators:view`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrIndicator](./API-REFERENCE.md#tdrindicator)
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **TenantId** | Object | No | Only indicators in these tenants: Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **IndicatorId** | String | Yes (ById) | Return this indicator (opaque id, up to 4096 characters). |
+| **ThreatId** | Guid | No | Only the indicators behind this threat. |
+| **Severity** | String[] | No | `info`, `medium`, `high`, `critical`. |
+| **AlertType** | String[] | No | Alert types, such as `TorExitNode`. |
+| **DateFrom** | DateTime | No | Events at or after this time. Default: 30 days before `-DateTo`. A longer range costs one search per 30 days. |
+| **DateTo** | DateTime | No | Events at or before this time. Default: now. |
+| **MaxResults** | Int | No | Stop after this many indicators. `0` = no limit (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (a JSON array; one object with `-IndicatorId`; Depth 100). |
+
+### Examples
+
+```powershell
+Get-InforcerThreatIndicator -Severity high, critical
+Get-InforcerThreatIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom (Get-Date).AddDays(-90)
+(Get-InforcerThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').iocs | Where-Object indicatorId | ForEach-Object { Get-InforcerThreatIndicator -IndicatorId $_.indicatorId }
+Get-InforcerThreatIndicator -AlertType TorExitNode -OutputType JsonObject
+```
+
+### Example output
+
+```
+AlertType         : TorExitNode
+Severity          : high
+MitreStage        : initialAccess
+EventTime         : 18/11/2026 09:11:58
+DetectedAt        : 18/11/2026 09:12:40
+UserPrincipalName : jo.bloggs@contoso.com
+Description       : Activity on this account came through Tor, a network that deliberately hides where a person really is.
+Id                : Q29udG9zb3xUb3JFeGl0Tm9kZXwwMDAx
+MsTenantId        : 00000000-0000-0000-0000-000000000001
+```
 
 ---
 

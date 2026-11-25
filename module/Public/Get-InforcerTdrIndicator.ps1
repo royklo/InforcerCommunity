@@ -1,4 +1,4 @@
-function Get-InforcerThreatIndicator {
+function Get-InforcerTdrIndicator {
     <#
     .SYNOPSIS
         Retrieves the indicators (detections) inforcer's threat detection and response (TDR) raised, or one indicator by id.
@@ -15,7 +15,7 @@ function Get-InforcerThreatIndicator {
         -DateFrom the cmdlet searches the last 30 days.
 
         With -IndicatorId: GET /tdr/indicators/{indicatorId}, the latest version of that indicator. The
-        id comes from a search or from a threat's iocs (Get-InforcerThreat -ThreatId).
+        id comes from a search or from a threat's iocs (Get-InforcerTdrThreat -ThreatId).
 
         Needs a login with an API client (Connect-Inforcer -ClientId -ClientSecret); an API-key login
         gets the error RequiresApiClient.
@@ -54,33 +54,33 @@ function Get-InforcerThreatIndicator {
         PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 
     .EXAMPLE
-        Get-InforcerThreatIndicator -Severity high, critical
+        Get-InforcerTdrIndicator -Severity high, critical
 
         The high and critical indicators of the last 30 days, across every tenant.
 
     .EXAMPLE
-        Get-InforcerThreatIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom (Get-Date).AddDays(-90)
+        Get-InforcerTdrIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom (Get-Date).AddDays(-90)
 
         The indicators behind one threat over the last 90 days (three searches).
 
     .EXAMPLE
-        (Get-InforcerThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').iocs | Where-Object indicatorId | ForEach-Object { Get-InforcerThreatIndicator -IndicatorId $_.indicatorId }
+        (Get-InforcerTdrThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').iocs | Where-Object indicatorId | ForEach-Object { Get-InforcerTdrIndicator -IndicatorId $_.indicatorId }
 
         Every indicator attached to a threat, whatever its age.
 
     .EXAMPLE
-        Get-InforcerThreatIndicator -AlertType TorExitNode -OutputType JsonObject
+        Get-InforcerTdrIndicator -AlertType TorExitNode -OutputType JsonObject
 
         The Tor indicators of the last 30 days as a JSON array (one JSON object with -IndicatorId).
 
     .OUTPUTS
-        PSObject (InforcerCommunity.ThreatIndicator) or String (JSON array, or one JSON object with -IndicatorId)
+        PSObject (InforcerCommunity.TdrIndicator) or String (JSON array, or one JSON object with -IndicatorId)
 
     .LINK
-        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcerthreatindicator
+        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcertdrindicator
 
     .LINK
-        Get-InforcerThreat
+        Get-InforcerTdrThreat
     #>
     [CmdletBinding(DefaultParameterSetName = 'Search')]
     [OutputType([PSObject], [string])]
@@ -156,7 +156,7 @@ function Get-InforcerThreatIndicator {
             $indicator = Invoke-InforcerApiRequest -Endpoint "/tdr/indicators/$([System.Uri]::EscapeDataString($IndicatorId))" -Method GET -PreserveStructure
             if ($null -eq $indicator) { return }
             if ($OutputType -eq 'JsonObject') { return $indicator | ConvertTo-Json -Depth 100 }
-            $indicator.PSObject.TypeNames.Insert(0, 'InforcerCommunity.ThreatIndicator')
+            $indicator.PSObject.TypeNames.Insert(0, 'InforcerCommunity.TdrIndicator')
             return $indicator
         }
 
@@ -185,7 +185,7 @@ function Get-InforcerThreatIndicator {
             $left = if ($MaxResults -gt 0) { $MaxResults - $indicators.Count } else { 0 }
             foreach ($i in @(Invoke-InforcerPagedRequest -Endpoint '/tdr/indicators/search' -Method POST -Body $body -MaxResults $left)) {
                 if ($null -eq $i -or -not $seen.Add("$($i.id)")) { continue }
-                $i.PSObject.TypeNames.Insert(0, 'InforcerCommunity.ThreatIndicator')
+                $i.PSObject.TypeNames.Insert(0, 'InforcerCommunity.TdrIndicator')
                 $indicators.Add($i)
             }
             $windowTo = $windowFrom

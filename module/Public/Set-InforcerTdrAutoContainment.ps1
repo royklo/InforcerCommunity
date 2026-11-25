@@ -1,4 +1,4 @@
-function Set-InforcerAutoContainment {
+function Set-InforcerTdrAutoContainment {
     <#
     .SYNOPSIS
         Turns auto-containment on or off for a tenant and changes the settings that limit what it may do.
@@ -48,34 +48,34 @@ function Set-InforcerAutoContainment {
         PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 
     .EXAMPLE
-        Set-InforcerAutoContainment -TenantId 'Contoso' -SeverityThreshold critical -AllowedAction blockUser -DeniedTarget 'breakglass@contoso.com'
+        Set-InforcerTdrAutoContainment -TenantId 'Contoso' -SeverityThreshold critical -AllowedAction blockUser -DeniedTarget 'breakglass@contoso.com'
 
         Sets up auto-containment for critical threats, only blocking sign-in and never for the break-glass
         account. It stays off.
 
     .EXAMPLE
-        Set-InforcerAutoContainment -TenantId 'Contoso' -Enabled $true
+        Set-InforcerTdrAutoContainment -TenantId 'Contoso' -Enabled $true
 
         Turns on auto-containment that is already set up (asks for confirmation).
 
     .EXAMPLE
-        Set-InforcerAutoContainment -TenantId 'Contoso' -Enabled $false -Confirm:$false
+        Set-InforcerTdrAutoContainment -TenantId 'Contoso' -Enabled $false -Confirm:$false
 
         Turns it off without asking.
 
     .EXAMPLE
-        Set-InforcerAutoContainment -TenantId 'Contoso' -AllowedDeviceAction isolateDevice -OutputType JsonObject
+        Set-InforcerTdrAutoContainment -TenantId 'Contoso' -AllowedDeviceAction isolateDevice -OutputType JsonObject
 
         Lets it isolate devices too, and returns the result as JSON (asks for confirmation).
 
     .OUTPUTS
-        PSObject (InforcerCommunity.AutoContainment), or a JSON string with -OutputType JsonObject.
+        PSObject (InforcerCommunity.TdrAutoContainment), or a JSON string with -OutputType JsonObject.
 
     .LINK
-        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#set-inforcerautocontainment
+        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#set-inforcertdrautocontainment
 
     .LINK
-        Get-InforcerAutoContainment
+        Get-InforcerTdrAutoContainment
     #>
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     [OutputType([PSObject], [string])]
@@ -150,6 +150,6 @@ function Set-InforcerAutoContainment {
 
         $result = Invoke-InforcerApiRequest -Endpoint "/tenants/$resolvedTenantId/tdr/autoContainment" -Method PATCH -Body ($body | ConvertTo-Json -Depth 100 -Compress) -PreserveStructure
         if ($null -eq $result) { return }
-        ConvertTo-InforcerAutoContainment -Result $result -TenantId $resolvedTenantId -OutputType $OutputType
+        ConvertTo-InforcerTdrAutoContainment -Result $result -TenantId $resolvedTenantId -OutputType $OutputType
     }
 }

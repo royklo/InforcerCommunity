@@ -10,8 +10,8 @@ Read threats and manage auto-containment with an API client (client credentials,
 
 ### Features
 
-- **`Get-InforcerThreat`** and **`Get-InforcerThreatIndicator`** read inforcer's threat detection and response: threats with their AI summary and indicators, and indicators over any date range.
-- **`Get-InforcerAutoContainment`** and **`Set-InforcerAutoContainment`** read and change a tenant's auto-containment: whether inforcer may act on threats by itself, at which severity, with which actions and on which accounts. Changing it asks for confirmation.
+- **`Get-InforcerTdrThreat`** and **`Get-InforcerTdrIndicator`** read inforcer's threat detection and response: threats with their AI summary and indicators, and indicators over any date range.
+- **`Get-InforcerTdrAutoContainment`** and **`Set-InforcerTdrAutoContainment`** read and change a tenant's auto-containment: whether inforcer may act on threats by itself, at which severity, with which actions and on which accounts. Changing it asks for confirmation.
 
 ## [1.2.0] - 2026-11-24
 

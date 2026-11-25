@@ -4,7 +4,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
-> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, `Set-InforcerGroup`, `Get-InforcerThreat`, `Get-InforcerThreatIndicator`, `Get-InforcerAutoContainment` and `Set-InforcerAutoContainment`, which need an API client because the beta API cannot create or change users and groups and has no threat detection and response endpoints. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
+> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, `Set-InforcerGroup`, `Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`, `Get-InforcerTdrAutoContainment` and `Set-InforcerTdrAutoContainment`, which need an API client because the beta API cannot create or change users and groups and has no threat detection and response endpoints. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
 
 > **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
 
@@ -12,7 +12,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ## Personal data
 
-User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, threats and threat indicators (`Get-InforcerThreat`, `Get-InforcerThreatIndicator`: user names and UPNs), report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
+User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, threats and threat indicators (`Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`: user names and UPNs), report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
 
 ---
 
@@ -1012,9 +1012,9 @@ Use `| Select-Object *` to see all properties on any level.
 
 ---
 
-## Get-InforcerThreat
+## Get-InforcerTdrThreat
 
-Retrieves the threats inforcer's threat detection and response (TDR) raised: incidents built from a user's indicators. Without `-ThreatId` it searches the threats open at any time in the date range, newest first, across the tenants you pass or every tenant the API client may view; without `-DateFrom`/`-DateTo` inforcer searches the last 7 days. Piped tenants are searched in one request. Threats spawned from another threat are not listed; read them with `-ThreatId`. With `-ThreatId` it returns one threat plus its AI-written `summary` (Markdown) and `iocs`, each with the `indicatorId` for `Get-InforcerThreatIndicator -IndicatorId`. Needs a login with an API client; with an API key it stops with `RequiresApiClient`. A tenant needs a TDR licence.
+Retrieves the threats inforcer's threat detection and response (TDR) raised: incidents built from a user's indicators. Without `-ThreatId` it searches the threats open at any time in the date range, newest first, across the tenants you pass or every tenant the API client may view; without `-DateFrom`/`-DateTo` inforcer searches the last 7 days. Piped tenants are searched in one request. Threats spawned from another threat are not listed; read them with `-ThreatId`. With `-ThreatId` it returns one threat plus its AI-written `summary` (Markdown) and `iocs`, each with the `indicatorId` for `Get-InforcerTdrIndicator -IndicatorId`. Needs a login with an API client; with an API key it stops with `RequiresApiClient`. A tenant needs a TDR licence.
 
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
@@ -1039,10 +1039,10 @@ Retrieves the threats inforcer's threat detection and response (TDR) raised: inc
 ### Examples
 
 ```powershell
-Get-InforcerThreat -Status open, triaging, remediating -Severity high, critical
-Get-InforcerThreat -TenantId 'Contoso' -DateFrom (Get-Date).AddDays(-30)
-(Get-InforcerThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').summary
-Get-InforcerThreat -Severity critical -OutputType JsonObject | Set-Content threats.json
+Get-InforcerTdrThreat -Status open, triaging, remediating -Severity high, critical
+Get-InforcerTdrThreat -TenantId 'Contoso' -DateFrom (Get-Date).AddDays(-30)
+(Get-InforcerTdrThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').summary
+Get-InforcerTdrThreat -Severity critical -OutputType JsonObject | Set-Content threats.json
 ```
 
 ### Example output
@@ -1065,7 +1065,7 @@ MsTenantId        : 00000000-0000-0000-0000-000000000001
 
 ---
 
-## Get-InforcerThreatIndicator
+## Get-InforcerTdrIndicator
 
 Retrieves the indicators (single detections, such as a sign-in through Tor) inforcer's threat detection and response raised. Without `-IndicatorId` it searches the indicators whose event happened in the date range, newest first, each in its latest version within the range, across the tenants you pass or every tenant the API client may view. inforcer searches at most 30 days at a time, so the cmdlet searches a longer range in 30-day steps, newest first (one search per 30 days, an indicator on a step's edge listed once); without `-DateFrom` it searches the last 30 days. `-ThreatId` limits the search to the indicators behind one threat (inforcer refuses a threat with more than 2000 in one step; narrow it with `-AlertType`). With `-IndicatorId` it returns one indicator; the id is opaque, pass it as a search or a threat's `iocs` gave it. Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
 
@@ -1092,10 +1092,10 @@ Retrieves the indicators (single detections, such as a sign-in through Tor) info
 ### Examples
 
 ```powershell
-Get-InforcerThreatIndicator -Severity high, critical
-Get-InforcerThreatIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom (Get-Date).AddDays(-90)
-(Get-InforcerThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').iocs | Where-Object indicatorId | ForEach-Object { Get-InforcerThreatIndicator -IndicatorId $_.indicatorId }
-Get-InforcerThreatIndicator -AlertType TorExitNode -OutputType JsonObject
+Get-InforcerTdrIndicator -Severity high, critical
+Get-InforcerTdrIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom (Get-Date).AddDays(-90)
+(Get-InforcerTdrThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').iocs | Where-Object indicatorId | ForEach-Object { Get-InforcerTdrIndicator -IndicatorId $_.indicatorId }
+Get-InforcerTdrIndicator -AlertType TorExitNode -OutputType JsonObject
 ```
 
 ### Example output
@@ -1114,7 +1114,7 @@ MsTenantId        : 00000000-0000-0000-0000-000000000001
 
 ---
 
-## Get-InforcerAutoContainment
+## Get-InforcerTdrAutoContainment
 
 Retrieves whether auto-containment is on for a tenant, and the settings that limit what it may do. Auto-containment lets inforcer's threat detection and response act on a tenant by itself, such as blocking a user's sign-in. A tenant where it was never set up returns `configured` and `enabled` `False` and `settings` empty. One request per tenant; the cmdlet adds `msTenantId` to each result so piped tenants can be told apart. A tenant outside the API client's scope, or without a TDR licence, is an error (404). Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
 
@@ -1134,9 +1134,9 @@ Retrieves whether auto-containment is on for a tenant, and the settings that lim
 ### Examples
 
 ```powershell
-Get-InforcerAutoContainment -TenantId 'Contoso'
-Get-InforcerTenant | Get-InforcerAutoContainment -ErrorAction SilentlyContinue | Where-Object enabled
-Get-InforcerAutoContainment -TenantId 'Contoso' -OutputType JsonObject
+Get-InforcerTdrAutoContainment -TenantId 'Contoso'
+Get-InforcerTenant | Get-InforcerTdrAutoContainment -ErrorAction SilentlyContinue | Where-Object enabled
+Get-InforcerTdrAutoContainment -TenantId 'Contoso' -OutputType JsonObject
 ```
 
 ### Example output
@@ -1152,7 +1152,7 @@ updatedBy  : SIEM integration
 
 ---
 
-## Set-InforcerAutoContainment
+## Set-InforcerTdrAutoContainment
 
 Turns auto-containment on or off for a tenant and changes the settings that limit what it may do. Only the parameters you pass change; the rest is kept. Turning it on lets inforcer act on the tenant by itself, such as blocking a user's sign-in, so the cmdlet asks for confirmation by default (`-Confirm:$false` skips it; `-WhatIf` shows the change without making it). On a tenant where auto-containment was never set up, passing any setting sets it up and it stays off unless you also pass `-Enabled $true`; `-Enabled $true` alone there is refused (409), so it is never turned on with settings nobody chose. Settings left out then take their defaults: severity `critical` and every list empty. Returns the tenant's auto-containment after the change. Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
 
@@ -1177,10 +1177,10 @@ Turns auto-containment on or off for a tenant and changes the settings that limi
 ### Examples
 
 ```powershell
-Set-InforcerAutoContainment -TenantId 'Contoso' -SeverityThreshold critical -AllowedAction blockUser -DeniedTarget 'breakglass@contoso.com'
-Set-InforcerAutoContainment -TenantId 'Contoso' -Enabled $true
-Set-InforcerAutoContainment -TenantId 'Contoso' -Enabled $false -Confirm:$false
-Set-InforcerAutoContainment -TenantId 'Contoso' -AllowedDeviceAction isolateDevice -OutputType JsonObject
+Set-InforcerTdrAutoContainment -TenantId 'Contoso' -SeverityThreshold critical -AllowedAction blockUser -DeniedTarget 'breakglass@contoso.com'
+Set-InforcerTdrAutoContainment -TenantId 'Contoso' -Enabled $true
+Set-InforcerTdrAutoContainment -TenantId 'Contoso' -Enabled $false -Confirm:$false
+Set-InforcerTdrAutoContainment -TenantId 'Contoso' -AllowedDeviceAction isolateDevice -OutputType JsonObject
 ```
 
 ---

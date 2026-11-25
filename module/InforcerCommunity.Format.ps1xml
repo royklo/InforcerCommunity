@@ -730,11 +730,11 @@
       </ListControl>
     </View>
 
-    <!-- TDR THREAT (Get-InforcerThreat) -->
+    <!-- TDR THREAT (Get-InforcerTdrThreat) -->
     <View>
-      <Name>InforcerCommunity.Threat.Default</Name>
+      <Name>InforcerCommunity.TdrThreat.Default</Name>
       <ViewSelectedBy>
-        <TypeName>InforcerCommunity.Threat</TypeName>
+        <TypeName>InforcerCommunity.TdrThreat</TypeName>
       </ViewSelectedBy>
       <ListControl>
         <ListEntries>
@@ -772,11 +772,11 @@
       </ListControl>
     </View>
 
-    <!-- TDR INDICATOR (Get-InforcerThreatIndicator) -->
+    <!-- TDR INDICATOR (Get-InforcerTdrIndicator) -->
     <View>
-      <Name>InforcerCommunity.ThreatIndicator.Default</Name>
+      <Name>InforcerCommunity.TdrIndicator.Default</Name>
       <ViewSelectedBy>
-        <TypeName>InforcerCommunity.ThreatIndicator</TypeName>
+        <TypeName>InforcerCommunity.TdrIndicator</TypeName>
       </ViewSelectedBy>
       <ListControl>
         <ListEntries>

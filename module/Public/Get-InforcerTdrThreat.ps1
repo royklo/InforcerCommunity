@@ -1,4 +1,4 @@
-function Get-InforcerThreat {
+function Get-InforcerTdrThreat {
     <#
     .SYNOPSIS
         Retrieves the threats inforcer's threat detection and response (TDR) raised, or one threat by id.
@@ -13,7 +13,7 @@ function Get-InforcerThreat {
         from another threat are not listed; read them with -ThreatId.
 
         With -ThreatId: GET /tdr/threats/{threatId}, the threat plus its AI-written summary (Markdown)
-        and iocs, each with the indicatorId to pass to Get-InforcerThreatIndicator -IndicatorId.
+        and iocs, each with the indicatorId to pass to Get-InforcerTdrIndicator -IndicatorId.
 
         Needs a login with an API client (Connect-Inforcer -ClientId -ClientSecret); an API-key login
         gets the error RequiresApiClient.
@@ -50,33 +50,33 @@ function Get-InforcerThreat {
         PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 
     .EXAMPLE
-        Get-InforcerThreat -Status open, triaging, remediating -Severity high, critical
+        Get-InforcerTdrThreat -Status open, triaging, remediating -Severity high, critical
 
         The open high and critical threats of the last 7 days, across every tenant.
 
     .EXAMPLE
-        Get-InforcerThreat -TenantId 'Contoso' -DateFrom (Get-Date).AddDays(-30)
+        Get-InforcerTdrThreat -TenantId 'Contoso' -DateFrom (Get-Date).AddDays(-30)
 
         Every threat in Contoso open in the last 30 days.
 
     .EXAMPLE
-        (Get-InforcerThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').summary
+        (Get-InforcerTdrThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').summary
 
         The AI-written summary of one threat.
 
     .EXAMPLE
-        Get-InforcerThreat -Severity critical -OutputType JsonObject | Set-Content threats.json
+        Get-InforcerTdrThreat -Severity critical -OutputType JsonObject | Set-Content threats.json
 
         The critical threats as a JSON array (one JSON object with -ThreatId).
 
     .OUTPUTS
-        PSObject (InforcerCommunity.Threat) or String (JSON array, or one JSON object with -ThreatId)
+        PSObject (InforcerCommunity.TdrThreat) or String (JSON array, or one JSON object with -ThreatId)
 
     .LINK
-        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcerthreat
+        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcertdrthreat
 
     .LINK
-        Get-InforcerThreatIndicator
+        Get-InforcerTdrIndicator
     #>
     [CmdletBinding(DefaultParameterSetName = 'Search')]
     [OutputType([PSObject], [string])]
@@ -153,7 +153,7 @@ function Get-InforcerThreat {
             $threat = Invoke-InforcerApiRequest -Endpoint "/tdr/threats/$ThreatId" -Method GET -PreserveStructure
             if ($null -eq $threat) { return }
             if ($OutputType -eq 'JsonObject') { return $threat | ConvertTo-Json -Depth 100 }
-            $threat.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Threat')
+            $threat.PSObject.TypeNames.Insert(0, 'InforcerCommunity.TdrThreat')
             return $threat
         }
 
@@ -166,7 +166,7 @@ function Get-InforcerThreat {
         if ($PSBoundParameters.ContainsKey('DateTo')) { $body['dateTo'] = $DateTo.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture) }
 
         $threats = Invoke-InforcerPagedRequest -Endpoint '/tdr/threats/search' -Method POST -Body $body -MaxResults $MaxResults |
-            ForEach-Object { $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.Threat'); $_ }
+            ForEach-Object { $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.TdrThreat'); $_ }
         if ($OutputType -eq 'JsonObject') { return ConvertTo-Json -InputObject @($threats) -Depth 100 }
         $threats
     }

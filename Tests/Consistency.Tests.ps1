@@ -36,7 +36,7 @@ Describe 'Consistency contract' {
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
             'Get-InforcerUser', 'New-InforcerUser', 'Set-InforcerUser', 'Get-InforcerGroup', 'Set-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore',
-            'Get-InforcerThreat', 'Get-InforcerThreatIndicator', 'Get-InforcerAutoContainment', 'Set-InforcerAutoContainment',
+            'Get-InforcerTdrThreat', 'Get-InforcerTdrIndicator', 'Get-InforcerTdrAutoContainment', 'Set-InforcerTdrAutoContainment',
             'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
             'Get-InforcerAssessment', 'Invoke-InforcerAssessment',
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
@@ -56,10 +56,10 @@ Describe 'Consistency contract' {
             'Set-InforcerUser'              = @('TenantId', 'UserId', 'AccountEnabled', 'DisplayName', 'ManagerId', 'UserType', 'Password', 'ForceChangePasswordNextSignIn', 'AddLicense', 'RemoveLicense', 'AddGroup', 'RemoveGroup', 'HiddenFromAddressLists', 'MailboxType', 'EnableArchive', 'AutoReply', 'ForwardTo', 'KeepForwardedCopy', 'RemoveForwarding', 'GrantMailboxPermission', 'RemoveMailboxPermission', 'GrantCalendarAccess', 'RemoveCalendarAccess', 'AddMailGroup', 'RemoveMailGroup', 'AddEmailAddress', 'PrimaryEmailAddress', 'RemoveEmailAddress', 'RemoveInboxRule', 'RemoveAllInboxRules', 'AllowMailApp', 'BlockMailApp', 'RemoveAuthenticationMethod', 'ResetMfa', 'TemporaryAccessPass', 'TemporaryAccessPassLifetime', 'TemporaryAccessPassUsableOnce', 'RevokeSessions')
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')
             'Set-InforcerGroup'             = @('TenantId', 'Group', 'AddMember', 'RemoveMember')
-            'Get-InforcerThreat'            = @('Format', 'TenantId', 'ThreatId', 'Status', 'Severity', 'Verdict', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
-            'Get-InforcerThreatIndicator'   = @('Format', 'TenantId', 'IndicatorId', 'ThreatId', 'Severity', 'AlertType', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
-            'Get-InforcerAutoContainment'   = @('Format', 'TenantId', 'OutputType')
-            'Set-InforcerAutoContainment'   = @('TenantId', 'Enabled', 'SeverityThreshold', 'AllowedAction', 'AllowedDeviceAction', 'AllowedTarget', 'DeniedTarget', 'OutputType')
+            'Get-InforcerTdrThreat'            = @('Format', 'TenantId', 'ThreatId', 'Status', 'Severity', 'Verdict', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
+            'Get-InforcerTdrIndicator'   = @('Format', 'TenantId', 'IndicatorId', 'ThreatId', 'Severity', 'AlertType', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
+            'Get-InforcerTdrAutoContainment'   = @('Format', 'TenantId', 'OutputType')
+            'Set-InforcerTdrAutoContainment'   = @('TenantId', 'Enabled', 'SeverityThreshold', 'AllowedAction', 'AllowedDeviceAction', 'AllowedTarget', 'DeniedTarget', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
             'Get-InforcerSecureScore'       = @('TenantId', 'OutputType')
             'Export-InforcerTenantDocumentation' = @('Format', 'TenantId', 'OutputPath', 'Show', 'SettingsCatalogPath', 'FetchGraphData', 'Baseline', 'Tag')
@@ -93,7 +93,7 @@ Describe 'Consistency contract' {
     }
 
     It 'Get-* cmdlets that return API data have -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore', 'Get-InforcerThreat', 'Get-InforcerThreatIndicator')
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore', 'Get-InforcerTdrThreat', 'Get-InforcerTdrIndicator')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'OutputType'
@@ -228,10 +228,10 @@ Describe 'No-silent-failure contract' {
     }
 
     It '<Name> produces an error when not connected' -ForEach @(
-        @{ Name = 'Get-InforcerThreat'; Splat = @{} }
-        @{ Name = 'Get-InforcerThreatIndicator'; Splat = @{} }
-        @{ Name = 'Get-InforcerAutoContainment'; Splat = @{ TenantId = 'Contoso' } }
-        @{ Name = 'Set-InforcerAutoContainment'; Splat = @{ TenantId = 'Contoso'; Enabled = $false; Confirm = $false } }
+        @{ Name = 'Get-InforcerTdrThreat'; Splat = @{} }
+        @{ Name = 'Get-InforcerTdrIndicator'; Splat = @{} }
+        @{ Name = 'Get-InforcerTdrAutoContainment'; Splat = @{ TenantId = 'Contoso' } }
+        @{ Name = 'Set-InforcerTdrAutoContainment'; Splat = @{ TenantId = 'Contoso'; Enabled = $false; Confirm = $false } }
         @{ Name = 'New-InforcerUser'; Splat = @{ TenantId = 'Contoso'; DisplayName = 'Jo'; UserPrincipalName = 'jo@contoso.com'; Password = (ConvertTo-SecureString 'x' -AsPlainText -Force); Confirm = $false } }
         @{ Name = 'Set-InforcerUser'; Splat = @{ TenantId = 'Contoso'; UserId = '00000000-0000-0000-0000-000000000005'; Department = 'X'; Confirm = $false } }
         @{ Name = 'Set-InforcerGroup'; Splat = @{ TenantId = 'Contoso'; Group = '00000000-0000-0000-0000-0000000000c1'; AddMember = '00000000-0000-0000-0000-000000000005'; Confirm = $false } }

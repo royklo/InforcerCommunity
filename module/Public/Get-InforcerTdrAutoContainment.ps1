@@ -1,4 +1,4 @@
-function Get-InforcerAutoContainment {
+function Get-InforcerTdrAutoContainment {
     <#
     .SYNOPSIS
         Retrieves whether auto-containment is on for a tenant, and the settings that limit what it may do.
@@ -27,28 +27,28 @@ function Get-InforcerAutoContainment {
         PowerShellObject (default) or JsonObject. JSON output uses Depth 100.
 
     .EXAMPLE
-        Get-InforcerAutoContainment -TenantId 'Contoso'
+        Get-InforcerTdrAutoContainment -TenantId 'Contoso'
 
         Whether auto-containment is on for Contoso, and its settings.
 
     .EXAMPLE
-        Get-InforcerTenant | Get-InforcerAutoContainment -ErrorAction SilentlyContinue | Where-Object enabled
+        Get-InforcerTenant | Get-InforcerTdrAutoContainment -ErrorAction SilentlyContinue | Where-Object enabled
 
         The tenants where auto-containment is on (tenants without TDR are skipped).
 
     .EXAMPLE
-        Get-InforcerAutoContainment -TenantId 'Contoso' -OutputType JsonObject
+        Get-InforcerTdrAutoContainment -TenantId 'Contoso' -OutputType JsonObject
 
         The same as JSON, for a script or a change log.
 
     .OUTPUTS
-        PSObject (InforcerCommunity.AutoContainment), or a JSON string with -OutputType JsonObject.
+        PSObject (InforcerCommunity.TdrAutoContainment), or a JSON string with -OutputType JsonObject.
 
     .LINK
-        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcerautocontainment
+        https://github.com/royklo/InforcerCommunity/blob/main/docs/CMDLET-REFERENCE.md#get-inforcertdrautocontainment
 
     .LINK
-        Set-InforcerAutoContainment
+        Set-InforcerTdrAutoContainment
     #>
     [CmdletBinding()]
     [OutputType([PSObject], [string])]
@@ -84,6 +84,6 @@ function Get-InforcerAutoContainment {
 
         $result = Invoke-InforcerApiRequest -Endpoint "/tenants/$resolvedTenantId/tdr/autoContainment" -Method GET -PreserveStructure
         if ($null -eq $result) { return }
-        ConvertTo-InforcerAutoContainment -Result $result -TenantId $resolvedTenantId -OutputType $OutputType
+        ConvertTo-InforcerTdrAutoContainment -Result $result -TenantId $resolvedTenantId -OutputType $OutputType
     }
 }

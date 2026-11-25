@@ -1,4 +1,4 @@
-function ConvertTo-InforcerAutoContainment {
+function ConvertTo-InforcerTdrAutoContainment {
     # Shapes a GET or PATCH autoContainment answer: msTenantId first (the API leaves it out), then the API's fields.
     param(
         [Parameter(Mandatory)] [PSObject]$Result,
@@ -9,6 +9,6 @@ function ConvertTo-InforcerAutoContainment {
     foreach ($p in $Result.PSObject.Properties) { $out[$p.Name] = $p.Value }
     $obj = [PSCustomObject]$out
     if ($OutputType -eq 'JsonObject') { return $obj | ConvertTo-Json -Depth 100 }
-    $obj.PSObject.TypeNames.Insert(0, 'InforcerCommunity.AutoContainment')
+    $obj.PSObject.TypeNames.Insert(0, 'InforcerCommunity.TdrAutoContainment')
     $obj
 }

@@ -13,6 +13,7 @@ function Set-InforcerUser {
         Only the parameters you pass are changed; everything else stays as it is. Pass an empty string
         ('') or $null to clear a field, such as -JobTitle '' or -ManagerId '' to remove the manager.
         DisplayName, MailNickname, UserPrincipalName, Mail and UserType cannot be cleared.
+        Microsoft Entra refuses most changes to a user synced from on-premises Active Directory; change them there.
 
         -AddLicense and -RemoveLicense change the user's licences in one request
         (POST .../users/{userId}/assignLicenses); if one licence is refused, nothing changes.
@@ -245,7 +246,7 @@ function Set-InforcerUser {
 
     .PARAMETER Password
         A new password as a SecureString. It must meet the tenant's password policy.
-        inforcer does not store or log it.
+        inforcer does not store or log it. Refused for a user synced from on-premises Active Directory.
 
     .PARAMETER ForceChangePasswordNextSignIn
         Whether the user must change the new password when they next sign in. Default $true.

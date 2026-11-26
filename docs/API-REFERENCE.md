@@ -459,7 +459,7 @@ Signs the user out of every session by revoking their refresh tokens and session
 
 **Response**: `204` without a body. Errors: `404` (tenant or user, `User not found`), `409` (Microsoft Entra reported a conflict, such as while it still applies another change; the module retries it).
 
-`Set-InforcerUser` runs the steps of one call in this order: `PATCH` (when a profile field is passed), licences, password, delete authentication methods (one call per id), MFA reset, Temporary Access Pass, revoke sessions. When a step fails the later ones are skipped, and the error (`UserUpdatePartlyApplied`) names the steps already done and the steps not done.
+`Set-InforcerUser` runs the steps of one call in this order: `PATCH` (when a profile field is passed), licences (when licences are added), adding to and removing from groups, the mailbox changes (each awaited before the next), licences (when only removed, so a mailbox is converted to shared before its licence goes), password, delete authentication methods (one call per id), MFA reset, revoke sessions, Temporary Access Pass (last, so a failed step never hides the pass). When a step fails the later ones are skipped, and the error (`UserUpdatePartlyApplied`) names the steps already done and the steps not done.
 
 #### `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`
 

@@ -306,21 +306,49 @@ Describe 'Set-InforcerUser' {
         $global:UwCalls[1].Body | Should -Be ('{"addSkuIds":["' + $b1 + '"],"removeSkuIds":["' + $b2 + '"]}')
     }
 
-    It 'returns the Temporary Access Pass after the MFA reset, even when the sign-out then fails' {
+    It 'creates the Temporary Access Pass last, so -ErrorAction Stop can never lose it' {
         Set-UwSession
         Set-UwRoute {
             param($Uri, $Method, $Body)
             if ($Uri -like '*/temporaryAccessPasses') { return New-UwResponse '{"id":"tap-1","temporaryAccessPass":"Example-Tap1","startDateTime":"2026-11-15T10:00:00+00:00","lifetimeInMinutes":60,"usableOnce":true}' 201 }
+            New-UwResponse '' 204
+        }
+        $out = $null
+        try { $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ResetMfa -TemporaryAccessPass -TemporaryAccessPassLifetime 60 -TemporaryAccessPassUsableOnce $true -RevokeSessions -ErrorAction Stop } catch { throw }
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('DELETE /mfa', 'POST /revokeSessions', 'POST /authenticationMethods/temporaryAccessPasses')
+        $global:UwCalls[2].Body | Should -Be '{"lifetimeInMinutes":60,"usableOnce":true}'
+        $out.temporaryAccessPass | Should -Be 'Example-Tap1'
+        $out.userId | Should -Be $script:Uid
+    }
+
+    It 'creates no Temporary Access Pass when the sign-out before it fails' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
             if ($Uri -like '*/revokeSessions') { return New-UwResponse '{"title":"Bad gateway","status":502}' 502 }
             New-UwResponse '' 204
         }
-        $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ResetMfa -TemporaryAccessPass -TemporaryAccessPassLifetime 60 -TemporaryAccessPassUsableOnce $true -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e
-        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
-            Should -Be @('DELETE /mfa', 'POST /authenticationMethods/temporaryAccessPasses', 'POST /revokeSessions')
-        $global:UwCalls[1].Body | Should -Be '{"lifetimeInMinutes":60,"usableOnce":true}'
-        $out.temporaryAccessPass | Should -Be 'Example-Tap1'
-        $out.userId | Should -Be $script:Uid
-        $e[-1].Exception.Message | Should -BeLike '*Could not sign out of every session*Already done: reset MFA; create Temporary Access Pass.*'
+        $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ResetMfa -TemporaryAccessPass -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e
+        $out | Should -BeNullOrEmpty
+        @($global:UwCalls | Where-Object Uri -like '*/temporaryAccessPasses').Count | Should -Be 0
+        $e[-1].Exception.Message | Should -BeLike '*Could not sign out of every session*Already done: reset MFA.*Not done: create Temporary Access Pass.*'
+    }
+
+    It 'sends the same mailbox permission once, in the API spelling, whatever casing was typed' {
+        Set-UwSession
+        $global:UwPolls = 0
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'POST') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1","action":"grantPermission","status":"succeeded","queuedBehind":null,"requestedAt":"2026-11-15T10:00:00Z","completedAt":"2026-11-15T10:00:05Z","error":null}' 200
+        }
+        $t = '00000000-0000-0000-0000-000000000009'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -GrantMailboxPermission @{ permission = 'FullAccess'; trusteeId = $t }, @{ permission = 'fullAccess'; trusteeId = $t } -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $posts = @($global:UwCalls | Where-Object Method -eq 'POST')
+        $posts.Count | Should -Be 1
+        $posts[0].Body | Should -Be ('{"trusteeId":"' + $t + '","permission":"fullAccess"}')
     }
 
     It 'sends an empty body for a Temporary Access Pass without options' {

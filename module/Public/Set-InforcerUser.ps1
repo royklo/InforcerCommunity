@@ -45,7 +45,7 @@ function Set-InforcerUser {
         automatic replies, forwarding, granting and removing mailbox permissions, sharing and unsharing the
         calendar, adding to and removing from mail groups, removing inbox rules, mail apps, licences (when
         only -RemoveLicense is given, so a mailbox is converted to shared before its licence goes), password reset, removing sign-in methods, MFA reset,
-        Temporary Access Pass, sign-out. When a step fails, the later steps
+        sign-out, Temporary Access Pass (last, so a failed step never hides the pass). When a step fails, the later steps
         are skipped and the error says which steps were already done.
 
         -AccountEnabled $false blocks sign-in, but existing sessions last until their tokens expire;
@@ -562,9 +562,10 @@ function Set-InforcerUser {
         $body = ConvertTo-InforcerUserBody -BoundParameters $PSBoundParameters
         $steps = [System.Collections.Generic.List[string]]::new()
         # Mailbox steps: name -> request. Each is queued in Exchange Online and awaited before the next step.
-        $mailboxCalls = @{}
+        $mailboxCalls = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
         $addMailboxStep = {
             param([string]$Name, [string]$Path, [string]$Method, $Json)
+            if ($mailboxCalls.ContainsKey($Name)) { return }  # the same change asked twice runs once
             $steps.Add($Name)
             $mailboxCalls[$Name] = @{ Path = $Path; Method = $Method; Body = $(if ($null -ne $Json) { $Json | ConvertTo-Json -Depth 100 -Compress }) }
         }
@@ -601,13 +602,16 @@ function Set-InforcerUser {
             & $addMailboxStep "forward mail to $ForwardTo" 'forwarding' PATCH $forward
         }
         if ($RemoveForwarding) { & $addMailboxStep 'stop forwarding mail' 'forwarding' DELETE $null }
+        # The API's spelling (fullAccess) whatever casing was typed, as for the calendar role.
+        $permissionName = { param($n) if ("$n") { "$n".Substring(0, 1).ToLowerInvariant() + "$n".Substring(1) } }
         foreach ($p in $GrantMailboxPermission) {
-            $grant = [ordered]@{ trusteeId = "$($p.trusteeId)"; permission = "$($p.permission)" }
+            $grant = [ordered]@{ trusteeId = "$($p.trusteeId)"; permission = (& $permissionName $p.permission) }
             if ($null -ne $p.automapping) { $grant['automapping'] = [bool]$p.automapping }
-            & $addMailboxStep "grant $($p.permission) to $($p.trusteeId)" 'permissions' POST $grant
+            & $addMailboxStep "grant $($grant.permission) to $($p.trusteeId)" 'permissions' POST $grant
         }
         foreach ($p in $RemoveMailboxPermission) {
-            & $addMailboxStep "remove $($p.permission) from $($p.trusteeId)" "permissions/$([System.Uri]::EscapeDataString("$($p.permission)"))/$([System.Uri]::EscapeDataString("$($p.trusteeId)"))" DELETE $null
+            $name = & $permissionName $p.permission
+            & $addMailboxStep "remove $name from $($p.trusteeId)" "permissions/$([System.Uri]::EscapeDataString("$name"))/$([System.Uri]::EscapeDataString("$($p.trusteeId)"))" DELETE $null
         }
         foreach ($c in $GrantCalendarAccess) {
             & $addMailboxStep "share calendar with $($c.trusteeId) as $("$($c.role)".ToLower())" 'calendarAccess' POST ([ordered]@{ trusteeId = "$($c.trusteeId)"; role = "$($c.role)".ToLower() })
@@ -630,8 +634,9 @@ function Set-InforcerUser {
         if ($Password) { $steps.Add('reset password') }
         foreach ($methodId in $RemoveAuthenticationMethod | Select-Object -Unique) { $steps.Add("remove authentication method $methodId") }
         if ($ResetMfa) { $steps.Add('reset MFA') }
-        if ($TemporaryAccessPass) { $steps.Add('create Temporary Access Pass') }
         if ($RevokeSessions) { $steps.Add('sign out of every session') }
+        # Last, so no later failure can end the call before the pass (shown only once) is returned.
+        if ($TemporaryAccessPass) { $steps.Add('create Temporary Access Pass') }
         if ($steps.Count -eq 0) {
             Write-Error -Message 'Nothing to change: pass at least one property, such as -Department or -AccountEnabled, or -AddLicense, -RemoveLicense, -AddGroup, -RemoveGroup, a mailbox change (such as -MailboxType, -AutoReply, -ForwardTo, -GrantCalendarAccess or -BlockMailApp), -Password, -RemoveAuthenticationMethod, -ResetMfa, -TemporaryAccessPass or -RevokeSessions.' -ErrorId 'NoChangeSpecified' -Category InvalidArgument
             return

@@ -13,7 +13,13 @@ Read threats and manage auto-containment with an API client (client credentials,
 - **`Get-InforcerTdrThreat`** and **`Get-InforcerTdrIndicator`** read inforcer's threat detection and response: threats with their AI summary and indicators, and indicators over any date range.
 - **`Get-InforcerTdrAutoContainment`** and **`Set-InforcerTdrAutoContainment`** read and change a tenant's auto-containment: whether inforcer may act on threats by itself, at which severity, with which actions and on which accounts. Changing it asks for confirmation.
 
-## [1.2.0] - 2026-11-24
+## [1.2.1] - 2026-11-26
+
+### Removed
+
+- **`Get-InforcerUser -IncludeMessageTrace`** is withdrawn. Scripts that pass it stop with a parameter error; remove the parameter.
+
+## [1.2.0] - 2026-11-26
 
 Manage users, groups and mailboxes with an API client (client credentials, v1). These cmdlets need inforcer's v1 user, group and mailbox operations; with an API key they stop with `RequiresApiClient`.
 

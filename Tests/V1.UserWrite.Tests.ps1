@@ -306,21 +306,49 @@ Describe 'Set-InforcerUser' {
         $global:UwCalls[1].Body | Should -Be ('{"addSkuIds":["' + $b1 + '"],"removeSkuIds":["' + $b2 + '"]}')
     }
 
-    It 'returns the Temporary Access Pass after the MFA reset, even when the sign-out then fails' {
+    It 'creates the Temporary Access Pass last, so -ErrorAction Stop can never lose it' {
         Set-UwSession
         Set-UwRoute {
             param($Uri, $Method, $Body)
             if ($Uri -like '*/temporaryAccessPasses') { return New-UwResponse '{"id":"tap-1","temporaryAccessPass":"Example-Tap1","startDateTime":"2026-11-15T10:00:00+00:00","lifetimeInMinutes":60,"usableOnce":true}' 201 }
+            New-UwResponse '' 204
+        }
+        $out = $null
+        try { $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ResetMfa -TemporaryAccessPass -TemporaryAccessPassLifetime 60 -TemporaryAccessPassUsableOnce $true -RevokeSessions -ErrorAction Stop } catch { throw }
+        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
+            Should -Be @('DELETE /mfa', 'POST /revokeSessions', 'POST /authenticationMethods/temporaryAccessPasses')
+        $global:UwCalls[2].Body | Should -Be '{"lifetimeInMinutes":60,"usableOnce":true}'
+        $out.temporaryAccessPass | Should -Be 'Example-Tap1'
+        $out.userId | Should -Be $script:Uid
+    }
+
+    It 'creates no Temporary Access Pass when the sign-out before it fails' {
+        Set-UwSession
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
             if ($Uri -like '*/revokeSessions') { return New-UwResponse '{"title":"Bad gateway","status":502}' 502 }
             New-UwResponse '' 204
         }
-        $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ResetMfa -TemporaryAccessPass -TemporaryAccessPassLifetime 60 -TemporaryAccessPassUsableOnce $true -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e
-        @($global:UwCalls | ForEach-Object { "$($_.Method) $($_.Uri -replace '^.*/users/[^/]+', '')" }) |
-            Should -Be @('DELETE /mfa', 'POST /authenticationMethods/temporaryAccessPasses', 'POST /revokeSessions')
-        $global:UwCalls[1].Body | Should -Be '{"lifetimeInMinutes":60,"usableOnce":true}'
-        $out.temporaryAccessPass | Should -Be 'Example-Tap1'
-        $out.userId | Should -Be $script:Uid
-        $e[-1].Exception.Message | Should -BeLike '*Could not sign out of every session*Already done: reset MFA; create Temporary Access Pass.*'
+        $out = Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -ResetMfa -TemporaryAccessPass -RevokeSessions -ErrorAction SilentlyContinue -ErrorVariable e
+        $out | Should -BeNullOrEmpty
+        @($global:UwCalls | Where-Object Uri -like '*/temporaryAccessPasses').Count | Should -Be 0
+        $e[-1].Exception.Message | Should -BeLike '*Could not sign out of every session*Already done: reset MFA.*Not done: create Temporary Access Pass.*'
+    }
+
+    It 'sends the same mailbox permission once, in the API spelling, whatever casing was typed' {
+        Set-UwSession
+        $global:UwPolls = 0
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'POST') { return New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1"}' 202 }
+            New-UwResponse '{"actionId":"00000000-0000-0000-0000-0000000000a1","action":"grantPermission","status":"succeeded","queuedBehind":null,"requestedAt":"2026-11-15T10:00:00Z","completedAt":"2026-11-15T10:00:05Z","error":null}' 200
+        }
+        $t = '00000000-0000-0000-0000-000000000009'
+        Set-InforcerUser -TenantId $script:Tid -UserId $script:Uid -GrantMailboxPermission @{ permission = 'FullAccess'; trusteeId = $t }, @{ permission = 'fullAccess'; trusteeId = $t } -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $posts = @($global:UwCalls | Where-Object Method -eq 'POST')
+        $posts.Count | Should -Be 1
+        $posts[0].Body | Should -Be ('{"trusteeId":"' + $t + '","permission":"fullAccess"}')
     }
 
     It 'sends an empty body for a Temporary Access Pass without options' {
@@ -689,48 +717,6 @@ Describe 'Get-InforcerUser -IncludeMailbox' {
     }
 }
 
-Describe 'Get-InforcerUser -IncludeMessageTrace' {
-    It 'reads every page of the trace and attaches it as messageTrace' {
-        Set-UwSession
-        Set-UwRoute {
-            param($Uri, $Method, $Body)
-            if ($Uri -like '*/mailbox/messageTrace?continuationToken=p2') {
-                return New-UwResponse '{"messages":[{"received":"2026-11-18T09:00:00Z","direction":"received","sender":"ann@fabrikam.com","recipient":"jo@contoso.com","subject":"Hi","status":"FilteredAsSpam"}],"continuationToken":null}'
-            }
-            if ($Uri -like '*/mailbox/messageTrace') {
-                return New-UwResponse '{"messages":[{"received":"2026-11-19T09:00:00Z","direction":"sent","sender":"jo@contoso.com","recipient":"ann@fabrikam.com","subject":"Re: Hi","status":"Delivered"}],"continuationToken":"p2"}'
-            }
-            New-UwResponse ('{"id":"' + $script:Uid + '","displayName":"Jo Bloggs"}')
-        }
-        $u = Get-InforcerUser -TenantId $script:Tid -UserId $script:Uid -IncludeMessageTrace -ErrorVariable e
-        $e | Should -BeNullOrEmpty
-        $global:UwCalls.Count | Should -Be 3
-        @($u.messageTrace).Count | Should -Be 2
-        $u.messageTrace[1].status | Should -Be 'FilteredAsSpam'
-    }
-
-    It 'gives an empty trace for a user without a mailbox and reports other failures' {
-        Set-UwSession
-        Set-UwRoute {
-            param($Uri, $Method, $Body)
-            if ($Uri -like '*/messageTrace') { return New-UwResponse '{"title":"Mailbox not found","status":404}' 404 }
-            New-UwResponse '{"id":"u1"}'
-        }
-        $u = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeMessageTrace -ErrorAction Stop
-        $u.PSObject.Properties['messageTrace'] | Should -Not -BeNullOrEmpty
-        @($u.messageTrace).Count | Should -Be 0
-
-        Set-UwRoute {
-            param($Uri, $Method, $Body)
-            if ($Uri -like '*/messageTrace') { return New-UwResponse '{"title":"Bad gateway","status":502}' 502 }
-            New-UwResponse '{"id":"u1"}'
-        }
-        $u = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeMessageTrace -ErrorAction SilentlyContinue -ErrorVariable e2
-        "$($e2[-1])" | Should -BeLike '*502*'
-        $u.PSObject.Properties['messageTrace'] | Should -BeNullOrEmpty
-    }
-}
-
 Describe 'Set-InforcerGroup' {
     It 'adds and removes members in one request' {
         Set-UwSession
@@ -742,6 +728,9 @@ Describe 'Set-InforcerGroup' {
         $global:UwCalls[0].Method | Should -Be 'POST'
         $global:UwCalls[0].Uri | Should -Be "https://api.example.invalid/v1/tenants/$($script:Tid)/groups/$g/members"
         $global:UwCalls[0].Body | Should -Be ('{"add":["' + $script:Uid + '"],"remove":["' + $u2 + '"]}')
+
+        Set-InforcerGroup -TenantId $script:Tid -Group $g -AddMember $script:Uid -WhatIf
+        $global:UwCalls.Count | Should -Be 1 -Because '-WhatIf sends nothing'
     }
 
     It 'refuses no change, a user in both lists and an API-key login without a request' {
@@ -767,6 +756,26 @@ Describe 'Set-InforcerGroup' {
 }
 
 Describe 'Request paths and failed steps' {
+    It 'escapes a / or ? in every id a caller or the API puts in a path' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'GET' -and $Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"actionId":"a/b","status":"succeeded","error":null}' }
+            if ($Method -eq 'GET') { return New-UwResponse '{"id":"u1/x?y","displayName":"Jo"}' }
+            if ($Method -eq 'DELETE') { return New-UwResponse '{"actionId":"a/b"}' 202 }
+            New-UwResponse '' 204
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId 'u1/x?y' -RevokeSessions -RemoveInboxRule 'r/1' -Confirm:$false -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $null = Get-InforcerUser -TenantId $script:Tid -UserId 'u1/x?y'
+        $paths = @($global:UwCalls | ForEach-Object { $_.Uri -replace '^.*/users/', '' })
+        $paths | Should -Contain 'u1%2Fx%3Fy/mailbox/inboxRules/r%2F1'
+        $paths | Should -Contain 'u1%2Fx%3Fy/mailbox/actions/a%2Fb'
+        $paths | Should -Contain 'u1%2Fx%3Fy/revokeSessions'
+        $paths | Should -Contain 'u1%2Fx%3Fy'
+    }
+
     It 'refuses a percent-encoded . or .. in a request path' {
         Set-UwSession
         { & (Get-Module InforcerCommunity) { Get-InforcerBaseUrl -Endpoint '/tenants/t1/users/%2e%2e/%2E%2e/t2/users/u1' } } | Should -Throw "*'%2e%2e'*"

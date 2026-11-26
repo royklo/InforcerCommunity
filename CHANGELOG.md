@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
-## [1.2.0] - 2026-11-24
+## [1.2.0] - 2026-11-26
 
 Manage users, groups and mailboxes with an API client (client credentials, v1). These cmdlets need inforcer's v1 user, group and mailbox operations; with an API key they stop with `RequiresApiClient`.
 

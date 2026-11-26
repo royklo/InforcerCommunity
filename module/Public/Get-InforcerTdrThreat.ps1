@@ -35,7 +35,8 @@ function Get-InforcerTdrThreat {
         Only threats of these severities: info, medium, high, critical.
 
     .PARAMETER Verdict
-        Only closed threats with these verdicts: remediated, falsePositive, acceptedRisk, merged.
+        Only closed threats with these verdicts: remediated, falsePositive, acceptedRisk, merged, benign
+        (Microsoft classified every alert on the threat benign).
 
     .PARAMETER DateFrom
         Only threats still open at or after this time. Default: 7 days before -DateTo.
@@ -101,7 +102,7 @@ function Get-InforcerTdrThreat {
         [string[]]$Severity,
 
         [Parameter(ParameterSetName = 'Search')]
-        [ValidateSet('remediated', 'falsePositive', 'acceptedRisk', 'merged')]
+        [ValidateSet('remediated', 'falsePositive', 'acceptedRisk', 'merged', 'benign')]
         [string[]]$Verdict,
 
         [Parameter(ParameterSetName = 'Search')]

@@ -4,7 +4,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
-> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, `Set-InforcerGroup`, `Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`, `Get-InforcerTdrAutoContainment` and `Set-InforcerTdrAutoContainment`, which need an API client because the beta API cannot create or change users and groups and has no threat detection and response endpoints. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
+> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, `Set-InforcerGroup`, `Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`, `Get-InforcerTdrLog`, `Get-InforcerTdrAutoContainment` and `Set-InforcerTdrAutoContainment`, which need an API client because the beta API cannot create or change users and groups and has no threat detection and response endpoints. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
 
 > **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
 
@@ -32,6 +32,11 @@ Click a name for its parameters. Under each cmdlet, the endpoints, permissions, 
 | [Set-InforcerGroup](#set-inforcergroup) | Adds users to a group and removes others from it, in one request (API client login only). |
 | [Get-InforcerRole](#get-inforcerrole) | Retrieves Entra ID directory role definitions from a tenant. |
 | [Get-InforcerSecureScore](#get-inforcersecurescore) | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |
+| [Get-InforcerTdrThreat](#get-inforcertdrthreat) | Retrieves the threats inforcer's threat detection and response raised (search, or one with its summary and indicators) (API client login only). |
+| [Get-InforcerTdrIndicator](#get-inforcertdrindicator) | Retrieves threat detection and response indicators (detections), by search or by id (API client login only). |
+| [Get-InforcerTdrLog](#get-inforcertdrlog) | Searches the sign-in and audit log events inforcer's threat detection and response collected from a tenant (API client login only). |
+| [Get-InforcerTdrAutoContainment](#get-inforcertdrautocontainment) | Retrieves whether auto-containment (inforcer acting on threats by itself) is on for a tenant, and its settings (API client login only). |
+| [Set-InforcerTdrAutoContainment](#set-inforcertdrautocontainment) | Turns auto-containment on or off and changes what it may do; asks for confirmation (API client login only). |
 | [Export-InforcerTenantDocumentation](#export-inforcertenantdocumentation) | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. Pass `-OutputPath` to write files; without it the DocModel is returned and nothing is written. |
 | [Compare-InforcerEnvironments](#compare-inforcerenvironments) | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. Pass `-OutputPath` to write the file; without it the comparison model is returned and nothing is written. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` with automatic baseline owner resolution. |
 | [Get-InforcerAssessment](#get-inforcerassessment) | Lists available assessments (CIS, Essential Eight, etc.). |
@@ -45,7 +50,7 @@ Click a name for its parameters. Under each cmdlet, the endpoints, permissions, 
 
 ## Personal data
 
-User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, threats and threat indicators (`Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`: user names and UPNs), report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
+User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, threats and threat indicators (`Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`: user names and UPNs), the sign-in and audit log events of `Get-InforcerTdrLog` (user names, UPNs, IP addresses and locations, and what each user did), report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
 
 ---
 
@@ -1245,7 +1250,7 @@ Retrieves the threats inforcer's threat detection and response (TDR) raised: inc
 | **ThreatId** | Guid | Yes (ById) | Return this threat, with its summary and IoCs. |
 | **Status** | String[] | No | `open`, `triaging`, `remediating`, `pendingReview`, `closed`. |
 | **Severity** | String[] | No | `info`, `medium`, `high`, `critical`. |
-| **Verdict** | String[] | No | Closed threats only: `remediated`, `falsePositive`, `acceptedRisk`, `merged`. |
+| **Verdict** | String[] | No | Closed threats only: `remediated`, `falsePositive`, `acceptedRisk`, `merged`, `benign` (Microsoft classified every alert on the threat benign). |
 | **DateFrom** | DateTime | No | Threats still open at or after this time. Default: 7 days before `-DateTo`. |
 | **DateTo** | DateTime | No | Threats opened at or before this time. Default: now. |
 | **MaxResults** | Int | No | Stop after this many threats. `0` = no limit (default). |
@@ -1341,6 +1346,81 @@ Description       : Activity on this account came through Tor, a network that de
 Id                : Q29udG9zb3xUb3JFeGl0Tm9kZXwwMDAx
 MsTenantId        : 00000000-0000-0000-0000-000000000001
 ```
+
+</details>
+
+---
+
+## Get-InforcerTdrLog
+
+Searches the raw log events inforcer's threat detection and response collected from one tenant, newest first: Microsoft Entra interactive user sign-ins, service principal sign-ins and directory audits, and Microsoft 365 audit events (non-interactive user sign-ins are not included). Every event carries the fields all logs share, plus one object named after its `logType` with the rest. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); an API-key login stops with `RequiresApiClient`.
+
+inforcer searches at most 24 hours at a time and only the last 30 days. Without `-DateFrom` the cmdlet searches the last 24 hours; a longer range is searched in 24-hour steps, newest first. Every step and every page of 500 events is one search, and inforcer allows 20 searches per 5 minutes and 1000 a day for all your API clients together. Past that limit the cmdlet waits as long as inforcer asks and carries on, so a long range can take a while: narrow it with `-LogType`, `-UserPrincipalName` or `-MaxResults`. A search that fails ends the cmdlet; the events found until then are still returned.
+
+> **Personal data:** the events hold user names, UPNs, IP addresses, locations and what each user did. See [Personal data](#personal-data).
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tdr/logs/search` (once per tenant, per 24 hours of the range and per page of 500 events) (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, view events (`tdr:events:view`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrLogEvent](./API-REFERENCE.md#tdrlogevent)
+
+</details>
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name; piped tenants are searched one after the other. |
+| **LogType** | String | No | `signIn`, `servicePrincipalSignIn`, `directoryAudit`, `m365Audit`, or `all` (default) for every log together. |
+| **UserPrincipalName** | String | No | Only events of this user: the user who signed in, or who acted in an audit event. Matched whole, without regard to case. Not allowed with `-LogType servicePrincipalSignIn` (`UserPrincipalNameNotAllowed`). |
+| **IncludeSimulated** | Switch | No | Also return the events a threat simulation wrote, which are not real activity. Each event says whether it is `simulated`. |
+| **DateFrom** | DateTime | No | Events at or after this time, at most 30 days ago (`InvalidDateRange` when older). Default: 24 hours before `-DateTo`. A longer range costs at least one search per 24 hours. |
+| **DateTo** | DateTime | No | Events at or before this time. Default: now. |
+| **MaxResults** | Int | No | Stop after this many events. `0` = no limit (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (a JSON array; Depth 100). |
+
+<details>
+<summary>Examples</summary>
+
+```powershell
+# Every log event of the last 24 hours
+Get-InforcerTdrLog -TenantId 'Contoso'
+
+# One user's sign-ins of the last week (seven searches)
+Get-InforcerTdrLog -TenantId 'Contoso' -LogType signIn -UserPrincipalName 'jo.bloggs@contoso.com' -DateFrom (Get-Date).AddDays(-7)
+
+# Yesterday's role changes
+Get-InforcerTdrLog -TenantId 'Contoso' -LogType directoryAudit | Where-Object { $_.directoryAudit.category -eq 'RoleManagement' }
+
+# The 100 newest Microsoft 365 audit events as JSON
+Get-InforcerTdrLog -TenantId 'Contoso' -LogType m365Audit -MaxResults 100 -OutputType JsonObject
+```
+
+</details>
+
+<details>
+<summary>Example output</summary>
+
+```
+EventTime     : 18/11/2026 09:11:58
+LogType       : signIn
+Actor         : jo.bloggs@contoso.com
+Activity      : Sign-in to Office 365 Exchange Online
+Result        : failure
+ResultDetails : Invalid username or password.
+IpAddress     : 203.0.113.24
+Country       : DE
+City          : Frankfurt am Main
+Simulated     : False
+Id            : 00000000-0000-0000-0000-0000000000e1
+MsTenantId    : 00000000-0000-0000-0000-000000000001
+```
+
+`Actor` and `Activity` are only shown, not properties: they come from the object named after the log type (`signIn`, `servicePrincipalSignIn`, `directoryAudit` or `m365Audit`), which holds the rest of the fields (`| Select-Object *`, or `$_.signIn`). `ResultDetails`, `IpAddress`, `Country` and `City` show only when set. An `Id` is not unique: a sign-in and its Microsoft 365 audit event share one.
 
 </details>
 

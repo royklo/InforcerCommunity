@@ -67,6 +67,7 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [TenantUserOffboarding](#tenantuseroffboarding)
   - [TdrThreat](#tdrthreat)
   - [TdrIndicator](#tdrindicator)
+  - [TdrLogEvent](#tdrlogevent)
   - [TdrAutoContainment](#tdrautocontainment)
   - [TemporaryAccessPass](#temporaryaccesspass)
   - [MailboxAction](#mailboxaction)
@@ -177,7 +178,7 @@ Built mechanically by tracing each public cmdlet through the module (including t
 | `Set-InforcerUser` | none: the beta API cannot update users, reset passwords or revoke sessions (the cmdlet needs an API client) | not available with an API key |
 | `Get-InforcerGroup` | `GET /beta/tenants/{tenantId}/groups[/...] ` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Groups.Read` + `Tenants.Read`† |
 | `Set-InforcerGroup` | none: the beta API cannot change groups (the cmdlet needs an API client) | not available with an API key |
-| `Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`, `Get-InforcerTdrAutoContainment`, `Set-InforcerTdrAutoContainment` | none: the beta API has no threat detection and response endpoints (the cmdlets need an API client) | not available with an API key |
+| `Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`, `Get-InforcerTdrLog`, `Get-InforcerTdrAutoContainment`, `Set-InforcerTdrAutoContainment` | none: the beta API has no threat detection and response endpoints (the cmdlets need an API client) | not available with an API key |
 | `Get-InforcerRole` | `GET /beta/tenants/{tenantId}/roles` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.Roles.Read` + `Tenants.Read`† |
 | `Get-InforcerSecureScore` | `GET /beta/tenants/{tenantId}/secureScores` + `GET /beta/tenants` *(GUID/name lookup)* | `Tenants.SecureScores.Read` + `Tenants.Read`† |
 | `Get-InforcerAssessment` | `GET /beta/assessments` | `Assessments.Read` |
@@ -223,6 +224,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | Copilot Manager / Copilot Manager | Write: Manage | none in the current spec; the module does not use it | n/a |
 | TDR / Threats | Read: View (incidents) | `/v1/tdr/ping`, `/v1/tenants/{msTenantId}/tdr/ping`, `POST /v1/tdr/threats/search`, `/v1/tdr/threats/{threatId}` | the spec names `tdr:incidents:view`; portal grant name unconfirmed |
 | TDR / Threats | Read: View (indicators) | `POST /v1/tdr/indicators/search`, `/v1/tdr/indicators/{indicatorId}` | the spec names `tdr:indicators:view`; portal grant name unconfirmed |
+| TDR / Threats | Read: View (events) | `POST /v1/tdr/logs/search` | the spec names `tdr:events:view`; portal grant name unconfirmed |
 | TDR / Auto remediation | Read: View, Write: Manage | `/v1/tenants/{msTenantId}/tdr/autoContainment` (GET: view, PATCH: manage) | the spec names `tdr:auto_remediation:view` and `tdr:auto_remediation:manage`; portal grant names unconfirmed |
 
 </details>
@@ -252,6 +254,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Set-InforcerGroup` | `POST /v1/tenants/{msTenantId}/groups/{groupId}/members`; `GET .../groups` only to resolve a group name | User & Group Management (write), Tenants† |
 | `Get-InforcerTdrThreat` | `POST /v1/tdr/threats/search` (every page); `GET /v1/tdr/threats/{threatId}` with `-ThreatId` | Threats: incidents (`tdr:incidents:view`), Tenants† |
 | `Get-InforcerTdrIndicator` | `POST /v1/tdr/indicators/search` (every page); `GET /v1/tdr/indicators/{indicatorId}` with `-IndicatorId` | Threats: indicators (`tdr:indicators:view`), Tenants† |
+| `Get-InforcerTdrLog` | `POST /v1/tdr/logs/search` (once per tenant, per 24 hours of the range and per page of 500 events) | Threats: events (`tdr:events:view`), Tenants† |
 | `Get-InforcerTdrAutoContainment` | `GET /v1/tenants/{msTenantId}/tdr/autoContainment` (once per tenant) | Auto remediation: view (`tdr:auto_remediation:view`), Tenants† |
 | `Set-InforcerTdrAutoContainment` | `PATCH /v1/tenants/{msTenantId}/tdr/autoContainment` | Auto remediation: manage (`tdr:auto_remediation:manage`), Tenants† |
 | `Get-InforcerRole` | `GET /v1/tenants/{msTenantId}/directoryRoles` | Entra Dashboard, Tenants† |
@@ -412,6 +415,7 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tdr/threats/{threatId}` | GET | none (v1 only) | `Get-InforcerTdrThreat -ThreatId` |
 | `/v1/tdr/indicators/search` | POST (`msTenantIds`, `threatId`, `severities`, `alertTypes`, `dateFrom` and `dateTo` required, `pageSize`, `continuationToken`) | none (v1 only) | `Get-InforcerTdrIndicator` |
 | `/v1/tdr/indicators/{indicatorId}` | GET | none (v1 only) | `Get-InforcerTdrIndicator -IndicatorId` |
+| `/v1/tdr/logs/search` | POST (`msTenantId`, `dateFrom` and `dateTo` required, `logType`, `userPrincipalName`, `includeSimulated`, `pageSize`, `continuationToken`) | none (v1 only) | `Get-InforcerTdrLog` |
 | `/v1/tenants/{msTenantId}/tdr/autoContainment` | GET, PATCH (JSON Merge Patch; optional `If-Match` with the `ETag` of a read) | none (v1 only) | `Get-InforcerTdrAutoContainment`, `Set-InforcerTdrAutoContainment` |
 | `/v1/tenants/{msTenantId}/directoryRoles` | GET | `/beta/tenants/{tenantId}/roles` | `Get-InforcerRole` |
 | `/v1/tenants/{msTenantId}/assessments/{assessmentId}/runs` | POST (synchronous) | `/beta/tenants/{tenantId}/assessments/{assessmentId}/runs` | `Invoke-InforcerAssessment` |
@@ -674,7 +678,7 @@ Body: [GroupMembersChange](#groupmemberschange).
 
 ### Threat detection and response (v1 only)
 
-inforcer's threat detection and response (TDR) raises **indicators** (single detections, such as a sign-in through Tor) and groups a user's indicators into **threats** (incidents). The beta API has no equivalent, so `Get-InforcerTdrThreat` and `Get-InforcerTdrIndicator` need an API client; an API-key login stops with `RequiresApiClient`. A tenant needs a TDR licence. Every route below is a draft in the current spec.
+inforcer's threat detection and response (TDR) raises **indicators** (single detections, such as a sign-in through Tor) and groups a user's indicators into **threats** (incidents), and keeps the sign-in and audit **log events** it collected from the tenant. The beta API has no equivalent, so the `Get-InforcerTdr*` and `Set-InforcerTdr*` cmdlets need an API client; an API-key login stops with `RequiresApiClient`. A tenant needs a TDR licence. Every route below is a draft in the current spec.
 
 #### `GET /v1/tdr/ping` and `GET /v1/tenants/{msTenantId}/tdr/ping`
 
@@ -718,6 +722,17 @@ The latest version of one indicator. The id is opaque (a search result's `id` or
 **Required API client permission(s)**: Threats, view indicators (`tdr:indicators:view`)
 
 **Response**: `200` with [TdrIndicator](#tdrindicator). Errors: `403`, `404` (missing, or in a tenant outside the client's scope), `502`.
+
+#### `POST /v1/tdr/logs/search`
+
+One tenant's raw log events between `dateFrom` and `dateTo`, newest first: Microsoft Entra interactive user sign-ins, service principal sign-ins and directory audits, and Microsoft 365 audit events. Non-interactive user sign-ins are not included. Body: `msTenantId`, `dateFrom` and `dateTo` (all three required; at most 24 hours apart, and `dateFrom` within the last 30 days), `logType` (`all`, the default, `signIn`, `servicePrincipalSignIn`, `directoryAudit` or `m365Audit`), `userPrincipalName` (the user who signed in or acted; matched whole, without regard to case; a `400` with `servicePrincipalSignIn`), `includeSimulated` (default `false`: events a threat simulation wrote are left out), `pageSize` (1 to 500, default 100) and `continuationToken`. `Get-InforcerTdrLog` sends it, once per 24 hours of the range and per page of 500.
+
+**Required API scope(s)**: not available with an API key (beta).
+**Required API client permission(s)**: Threats, view events (`tdr:events:view`)
+
+**Rate limit**: on top of the 400 calls a minute every operation shares, each inforcer client gets 20 calls per 5 minutes and 1000 a day on this route, across all its API clients; over the limit is a `429` with `Retry-After`.
+
+**Response**: `200` with `events` ([TdrLogEvent](#tdrlogevent)) and `continuationToken` (`null` on the last page). Errors: `400` (a range over 24 hours, a `dateFrom` of 30 days ago or older, `userPrincipalName` with `servicePrincipalSignIn`), `403`, `404` (a tenant outside the client's scope), `413` (a body over 16 KiB), `429`, `502`, `504` (the search ran for more than 30 seconds: narrow the range or add a filter).
 
 #### `GET /v1/tenants/{msTenantId}/tdr/autoContainment`
 
@@ -1717,7 +1732,7 @@ A threat, from `POST /v1/tdr/threats/search` (in `threats`) or `GET /v1/tdr/thre
 | userDisplayName | string, nullable | The principal's display name. |
 | userId | string, nullable | The user's Entra object id, or a spawned service principal threat's application id; `null` for other subjects. |
 | status | string | `open`, `triaging`, `remediating`, `pendingReview` or `closed`; more may be added. |
-| verdict | string, nullable | Why it was closed: `remediated`, `falsePositive`, `acceptedRisk` or `merged`; `null` while open. |
+| verdict | string, nullable | Why it was closed: `remediated`, `falsePositive`, `acceptedRisk`, `merged` or `benign` (Microsoft classified every alert on the threat benign); more may be added; `null` while open. |
 | severity | string | `info`, `medium`, `high` or `critical`; more may be added. |
 | classification | string | `suspiciousActivity` or `potentialCompromise`; more may be added. |
 | openedAt | string (date-time) | When it was opened. |
@@ -1751,6 +1766,33 @@ An indicator (one detection), from `POST /v1/tdr/indicators/search` (in `indicat
 | eventTime | string (date-time), nullable | When the activity happened. |
 | userPrincipalName | string, nullable | The account it concerns. |
 | description | string, nullable | What the alert type means. |
+
+</details>
+
+### TdrLogEvent
+
+<details>
+<summary>Show details</summary>
+
+A log event inforcer's threat detection and response collected from a tenant, from `POST /v1/tdr/logs/search` (in `events`). `Get-InforcerTdrLog` returns it unchanged. The fields every log shares are on the event; the rest are in the one object named after its `logType`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string | The event's id within TDR; opaque. Not unique: a sign-in and its Microsoft 365 audit event share one, and so can several Microsoft 365 audit events. |
+| logType | string | `signIn`, `servicePrincipalSignIn`, `directoryAudit` or `m365Audit`; more may be added. Names the object that holds the rest of the fields. |
+| msTenantId | string (uuid) | The tenant. |
+| eventTime | string (date-time) | When the event happened. |
+| simulated | boolean | Written by a threat simulation, not real activity. |
+| result | string, nullable | `success` or `failure`; more may be added (`na` has been seen). |
+| resultDetails | string, nullable | Why the event has its result, such as a sign-in error. |
+| sourceEventId | string, nullable | The event's id in the Microsoft log it came from. |
+| correlationId | string, nullable | The id Microsoft gives the events of one request or session. |
+| ipAddress | string, nullable | The IP address the sign-in or operation came from. |
+| country, region, city | string, nullable | Where the IP address is; `country` is an ISO 3166-1 alpha-2 code. |
+| signIn | object | Only when `logType` is `signIn` (an interactive user sign-in): `userPrincipalName`, `userId`, `userDisplayName`, `appId`, `appName`, `resourceName`, `interactive`, `userAgent`, `deviceOs`, `deviceCompliant`, `deviceManaged`, `conditionalAccessStatus`, `riskLevel`, `authenticationRequirement`. |
+| servicePrincipalSignIn | object | Only when `logType` is `servicePrincipalSignIn`: `servicePrincipalId`, `servicePrincipalName`, `appId`, `appName`, `resourceName`, `credentialType`. |
+| directoryAudit | object | Only when `logType` is `directoryAudit`: `operation` (such as `Add member to role`), `category`, `loggedByService`, `actor`, `actorType`, `actorDisplayName`, `actorAppId`, `targetName`, `targetType`. |
+| m365Audit | object | Only when `logType` is `m365Audit`: `operation` (such as `New-InboxRule` or `FileDownloaded`), `workload`, `userPrincipalName`, `userId`, `targetName`, `appId`, `appName`, `userAgent`, `siteUrl`. |
 
 </details>
 

@@ -4,13 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/): a new feature or capability bumps MINOR, a bug fix or performance change that leaves the public surface alone bumps PATCH, and docs/tests/chore-only commits don't bump. While the module is pre-1.0 a breaking change also bumps MINOR and is called out under a **Breaking Changes** heading — 1.0.0 is reserved for the point the public surface is declared stable, after which breaking changes bump MAJOR. There is intentionally no `[Unreleased]` section — every entry is dated at ship time.
 
-## [1.3.0] - 2026-11-25
+## [1.3.0] - 2026-11-26
 
-Read threats and manage auto-containment with an API client (client credentials, v1). These cmdlets need inforcer's v1 threat detection and response operations; with an API key they stop with `RequiresApiClient`.
+Read threats and their logs and manage auto-containment with an API client (client credentials, v1). These cmdlets need inforcer's v1 threat detection and response operations; with an API key they stop with `RequiresApiClient`.
 
 ### Features
 
 - **`Get-InforcerTdrThreat`** and **`Get-InforcerTdrIndicator`** read inforcer's threat detection and response: threats with their AI summary and indicators, and indicators over any date range.
+- **`Get-InforcerTdrLog`** searches the sign-in and audit log events inforcer collected from a tenant, up to 30 days back: user sign-ins, service principal sign-ins, directory audits and Microsoft 365 audit events.
 - **`Get-InforcerTdrAutoContainment`** and **`Set-InforcerTdrAutoContainment`** read and change a tenant's auto-containment: whether inforcer may act on threats by itself, at which severity, with which actions and on which accounts. Changing it asks for confirmation.
 
 ## [1.2.1] - 2026-11-26

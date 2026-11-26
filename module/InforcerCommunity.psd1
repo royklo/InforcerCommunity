@@ -25,6 +25,7 @@
         'Set-InforcerGroup'
         'Get-InforcerTdrThreat'
         'Get-InforcerTdrIndicator'
+        'Get-InforcerTdrLog'
         'Get-InforcerTdrAutoContainment'
         'Set-InforcerTdrAutoContainment'
         'Get-InforcerRole'
@@ -45,7 +46,7 @@
         PSData = @{
             ProjectUri   = 'https://github.com/royklo/InforcerCommunity'
             LicenseUri   = 'https://github.com/royklo/InforcerCommunity/blob/main/LICENSE'
-            ReleaseNotes = 'v1.3.0: read threats and their indicators with Get-InforcerTdrThreat and Get-InforcerTdrIndicator, and read and change auto-containment with Get-InforcerTdrAutoContainment and Set-InforcerTdrAutoContainment (API client only). See CHANGELOG.md.'
+            ReleaseNotes = 'v1.3.0: read threats and their indicators with Get-InforcerTdrThreat and Get-InforcerTdrIndicator, search the collected log events with Get-InforcerTdrLog, and read and change auto-containment with Get-InforcerTdrAutoContainment and Set-InforcerTdrAutoContainment (API client only). See CHANGELOG.md.'
             Tags         = @('Inforcer', 'API', 'Community')
         }
     }

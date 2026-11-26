@@ -30,13 +30,13 @@ Describe 'Consistency contract' {
         $path = Get-InforcerCommunityManifestPath
         Import-Module $path -Force
         $script:exported = (Get-Module -Name 'InforcerCommunity').ExportedCommands.Keys
-        $script:expectedCount = 28
+        $script:expectedCount = 29
         $script:expectedNames = @(
             'Connect-Inforcer', 'Disconnect-Inforcer', 'Test-InforcerConnection',
             'Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies',
             'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerSupportedEventType',
             'Get-InforcerUser', 'New-InforcerUser', 'Set-InforcerUser', 'Get-InforcerGroup', 'Set-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore',
-            'Get-InforcerTdrThreat', 'Get-InforcerTdrIndicator', 'Get-InforcerTdrAutoContainment', 'Set-InforcerTdrAutoContainment',
+            'Get-InforcerTdrThreat', 'Get-InforcerTdrIndicator', 'Get-InforcerTdrLog', 'Get-InforcerTdrAutoContainment', 'Set-InforcerTdrAutoContainment',
             'Export-InforcerTenantDocumentation', 'Compare-InforcerEnvironments',
             'Get-InforcerAssessment', 'Invoke-InforcerAssessment',
             'Get-InforcerReportType', 'Invoke-InforcerReport', 'Get-InforcerReportRun', 'Save-InforcerReportOutput'
@@ -58,6 +58,7 @@ Describe 'Consistency contract' {
             'Set-InforcerGroup'             = @('TenantId', 'Group', 'AddMember', 'RemoveMember')
             'Get-InforcerTdrThreat'            = @('Format', 'TenantId', 'ThreatId', 'Status', 'Severity', 'Verdict', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
             'Get-InforcerTdrIndicator'   = @('Format', 'TenantId', 'IndicatorId', 'ThreatId', 'Severity', 'AlertType', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
+            'Get-InforcerTdrLog'               = @('Format', 'TenantId', 'LogType', 'UserPrincipalName', 'IncludeSimulated', 'DateFrom', 'DateTo', 'MaxResults', 'OutputType')
             'Get-InforcerTdrAutoContainment'   = @('Format', 'TenantId', 'OutputType')
             'Set-InforcerTdrAutoContainment'   = @('TenantId', 'Enabled', 'SeverityThreshold', 'AllowedAction', 'AllowedDeviceAction', 'AllowedTarget', 'DeniedTarget', 'OutputType')
             'Get-InforcerRole'              = @('TenantId', 'OutputType')
@@ -93,7 +94,7 @@ Describe 'Consistency contract' {
     }
 
     It 'Get-* cmdlets that return API data have -OutputType' {
-        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore', 'Get-InforcerTdrThreat', 'Get-InforcerTdrIndicator')
+        $getCmdlets = @('Get-InforcerTenant', 'Get-InforcerBaseline', 'Get-InforcerTenantPolicies', 'Get-InforcerAlignmentDetails', 'Get-InforcerAuditEvent', 'Get-InforcerUser', 'Get-InforcerGroup', 'Get-InforcerRole', 'Get-InforcerSecureScore', 'Get-InforcerTdrThreat', 'Get-InforcerTdrIndicator', 'Get-InforcerTdrLog')
         foreach ($name in $getCmdlets) {
             $cmd = Get-Command -Name $name -ErrorAction Stop
             $cmd.Parameters.Keys | Should -Contain 'OutputType'
@@ -230,6 +231,7 @@ Describe 'No-silent-failure contract' {
     It '<Name> produces an error when not connected' -ForEach @(
         @{ Name = 'Get-InforcerTdrThreat'; Splat = @{} }
         @{ Name = 'Get-InforcerTdrIndicator'; Splat = @{} }
+        @{ Name = 'Get-InforcerTdrLog'; Splat = @{ TenantId = 'Contoso' } }
         @{ Name = 'Get-InforcerTdrAutoContainment'; Splat = @{ TenantId = 'Contoso' } }
         @{ Name = 'Set-InforcerTdrAutoContainment'; Splat = @{ TenantId = 'Contoso'; Enabled = $false; Confirm = $false } }
         @{ Name = 'New-InforcerUser'; Splat = @{ TenantId = 'Contoso'; DisplayName = 'Jo'; UserPrincipalName = 'jo@contoso.com'; Password = (ConvertTo-SecureString 'x' -AsPlainText -Force); Confirm = $false } }

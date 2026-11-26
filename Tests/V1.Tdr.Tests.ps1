@@ -1,5 +1,5 @@
 # V1.Tdr.Tests.ps1
-# Get-InforcerTdrThreat and Get-InforcerTdrIndicator (v1 only). Fixtures are anonymised; no network calls.
+# The threat detection and response cmdlets (v1 only). Fixtures are anonymised; no network calls.
 
 BeforeAll {
     Remove-Module -Name 'InforcerCommunity' -ErrorAction SilentlyContinue
@@ -47,7 +47,7 @@ BeforeAll {
 
 AfterAll {
     foreach ($f in 'New-TdrResponse', 'Set-TdrSession', 'Set-TdrRoute') { Remove-Item "function:global:$f" -ErrorAction SilentlyContinue }
-    Remove-Variable -Name TdrCalls, TdrRoute -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable -Name TdrCalls, TdrRoute, TdrLogEvents -Scope Global -ErrorAction SilentlyContinue
     & (Get-Module InforcerCommunity) { $script:InforcerSession = $null; $script:InforcerTenantListCache = $null }
 }
 
@@ -116,6 +116,14 @@ Describe 'Get-InforcerTdrThreat' {
         $json = Get-InforcerTdrThreat -OutputType JsonObject
         $json.TrimStart() | Should -BeLike '`[*'
         @($json | ConvertFrom-Json).Count | Should -Be 1
+    }
+
+    It 'accepts the benign verdict' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse '{"threats":[],"continuationToken":null}' }
+        $null = Get-InforcerTdrThreat -Verdict benign -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        ($global:TdrCalls[0].Body | ConvertFrom-Json).verdicts | Should -Be @('benign')
     }
 
     It 'reports a 404 for an unknown threat' {
@@ -202,6 +210,160 @@ Describe 'Get-InforcerTdrIndicator' {
         Set-TdrSession -Beta
         Set-TdrRoute { param($Uri, $Method, $Body) throw 'no request expected' }
         Get-InforcerTdrIndicator -IndicatorId 'x' -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[-1].FullyQualifiedErrorId | Should -BeLike 'RequiresApiClient*'
+        $global:TdrCalls.Count | Should -Be 0
+    }
+}
+
+Describe 'Get-InforcerTdrLog' {
+    BeforeAll {
+        $script:Stamp = { param([datetime]$Time) $Time.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture) }
+        $script:LogJson = {
+            param([string]$Id, [datetime]$Time, [string]$LogType = 'signIn')
+            '{"id":"' + $Id + '","logType":"' + $LogType + '","msTenantId":"00000000-0000-0000-0000-000000000001","eventTime":"' +
+            $Time.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'+00:00'", [cultureinfo]::InvariantCulture) + '","simulated":false,"result":"success","' + $LogType + '":{"userPrincipalName":"jo@contoso.com"}}'
+        }
+        # Answers like the API: every event between dateFrom and dateTo, both ends included.
+        $script:LogRoute = {
+            param($Uri, $Method, $Body)
+            $b = $Body | ConvertFrom-Json
+            $hit = @($global:TdrLogEvents | Where-Object { $_.Time -ge $b.dateFrom.ToUniversalTime() -and $_.Time -le $b.dateTo.ToUniversalTime() } | ForEach-Object { $_.Json })
+            New-TdrResponse ('{"events":[' + ($hit -join ',') + '],"continuationToken":null}')
+        }
+        $now = [datetime]::UtcNow
+        $script:End = $now.AddTicks(-($now.Ticks % [TimeSpan]::TicksPerSecond)).AddHours(-1)
+    }
+
+    It 'searches the last 24 hours of every log by default and follows the continuation token' {
+        Set-TdrSession
+        Set-TdrRoute {
+            param($Uri, $Method, $Body)
+            $t = [datetime]::UtcNow.AddMinutes(-5)
+            if (($Body | ConvertFrom-Json).continuationToken -eq 'p2') { return New-TdrResponse ('{"events":[' + (& $script:LogJson 'b' $t.AddMinutes(-1)) + '],"continuationToken":null}') }
+            New-TdrResponse ('{"events":[' + (& $script:LogJson 'a' $t) + '],"continuationToken":"p2"}')
+        }
+        $before = [datetime]::UtcNow
+        $r = @(Get-InforcerTdrLog -TenantId $script:T1 -ErrorVariable e)
+        $e | Should -BeNullOrEmpty
+        $r.Count | Should -Be 2
+        $r[0].PSObject.TypeNames[0] | Should -Be 'InforcerCommunity.TdrLogEvent'
+        $r[0].signIn.userPrincipalName | Should -Be 'jo@contoso.com'
+        $global:TdrCalls.Count | Should -Be 2
+        $global:TdrCalls[0].Method | Should -Be 'POST'
+        $global:TdrCalls[0].Uri | Should -Be 'https://api.example.invalid/v1/tdr/logs/search'
+        $b = $global:TdrCalls[0].Body | ConvertFrom-Json
+        $b.msTenantId | Should -Be $script:T1
+        $b.pageSize | Should -Be 500
+        ($b.dateTo - $b.dateFrom).TotalHours | Should -Be 24
+        [Math]::Abs(($b.dateTo.ToUniversalTime() - $before).TotalSeconds) | Should -BeLessThan 30
+        foreach ($name in 'logType', 'userPrincipalName', 'includeSimulated') { $b.PSObject.Properties[$name] | Should -BeNullOrEmpty }
+    }
+
+    It 'sends the filters and caps the page at -MaxResults' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse '{"events":[],"continuationToken":null}' }
+        $null = Get-InforcerTdrLog -TenantId $script:T1 -LogType signIn -UserPrincipalName 'Jo@contoso.com' -IncludeSimulated -MaxResults 20
+        $b = $global:TdrCalls[0].Body | ConvertFrom-Json
+        $b.logType | Should -Be 'signIn'
+        $b.userPrincipalName | Should -Be 'Jo@contoso.com'
+        $b.includeSimulated | Should -BeTrue
+        $b.pageSize | Should -Be 20
+    }
+
+    It 'searches a longer range in 24-hour steps, newest first, under <Culture>' -ForEach @(@{ Culture = 'en-US' }, @{ Culture = 'th-TH' }, @{ Culture = 'da-DK' }) {
+        $saved = [cultureinfo]::CurrentCulture
+        try {
+            [cultureinfo]::CurrentCulture = $Culture
+            Set-TdrSession
+            Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse '{"events":[],"continuationToken":null}' }
+            $null = Get-InforcerTdrLog -TenantId $script:T1 -DateFrom $script:End.AddHours(-60) -DateTo $script:End
+            $global:TdrCalls.Count | Should -Be 3
+            $edges = 0, -24, -48, -60 | ForEach-Object { & $script:Stamp $script:End.AddHours($_) }
+            foreach ($i in 0..2) {
+                $b = $global:TdrCalls[$i].Body | ConvertFrom-Json -DateKind String
+                $b.dateTo | Should -Be $edges[$i]
+                $b.dateFrom | Should -Be $edges[$i + 1]
+            }
+        } finally {
+            [cultureinfo]::CurrentCulture = $saved
+        }
+    }
+
+    It 'keeps events that share an id, and returns an event on a window edge once' {
+        Set-TdrSession
+        $global:TdrLogEvents = @(
+            @{ Time = $script:End.AddHours(-1); Json = (& $script:LogJson 'shared' $script:End.AddHours(-1) 'signIn') }
+            @{ Time = $script:End.AddHours(-1); Json = (& $script:LogJson 'shared' $script:End.AddHours(-1) 'm365Audit') }
+            @{ Time = $script:End.AddHours(-2); Json = (& $script:LogJson 'shared' $script:End.AddHours(-2) 'm365Audit') }
+            @{ Time = $script:End.AddHours(-24); Json = (& $script:LogJson 'edge' $script:End.AddHours(-24)) }
+            @{ Time = $script:End.AddHours(-30); Json = (& $script:LogJson 'old' $script:End.AddHours(-30)) }
+        )
+        Set-TdrRoute $script:LogRoute
+        $r = @(Get-InforcerTdrLog -TenantId $script:T1 -DateFrom $script:End.AddHours(-48) -DateTo $script:End)
+        $global:TdrCalls.Count | Should -Be 2
+        $r.id | Should -Be @('shared', 'shared', 'shared', 'edge', 'old')
+        $r = @(Get-InforcerTdrLog -TenantId $script:T1 -DateFrom $script:End.AddHours(-48) -DateTo $script:End -MaxResults 2)
+        $r.Count | Should -Be 2
+        $global:TdrCalls.Count | Should -Be 3 -Because 'the first window already gave the two results asked for'
+    }
+
+    It 'stops at the first search that fails and still returns what it found' {
+        Set-TdrSession
+        Set-TdrRoute {
+            param($Uri, $Method, $Body)
+            if ($global:TdrCalls.Count -eq 1) { return New-TdrResponse ('{"events":[' + (& $script:LogJson 'a' $script:End.AddHours(-1)) + '],"continuationToken":null}') }
+            New-TdrResponse '{"title":"Gateway Timeout","status":504,"detail":"The search ran for longer than 30 seconds."}' 504
+        }
+        $r = @(Get-InforcerTdrLog -TenantId $script:T1, $script:T2 -DateFrom $script:End.AddHours(-72) -DateTo $script:End -ErrorAction SilentlyContinue -ErrorVariable e)
+        $r.Count | Should -Be 1
+        "$($e[-1])" | Should -BeLike '*504*'
+        $global:TdrCalls.Count | Should -Be 2 -Because 'no later window and no other tenant is searched after a failure'
+    }
+
+    It 'refuses <Name> before any request' -ForEach @(
+        @{ Name = '-DateFrom after -DateTo'; Splat = @{ DateFrom = [datetime]::UtcNow.AddHours(-1); DateTo = [datetime]::UtcNow.AddHours(-2) }; ErrorId = 'InvalidDateRange*' }
+        @{ Name = 'a -DateFrom more than 30 days ago'; Splat = @{ DateFrom = [datetime]::UtcNow.AddDays(-31) }; ErrorId = 'InvalidDateRange*' }
+        @{ Name = '-UserPrincipalName with service principal sign-ins'; Splat = @{ LogType = 'servicePrincipalSignIn'; UserPrincipalName = 'jo@contoso.com' }; ErrorId = 'UserPrincipalNameNotAllowed*' }
+    ) {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) throw 'no request expected' }
+        Get-InforcerTdrLog -TenantId $script:T1 @Splat -ErrorAction SilentlyContinue -ErrorVariable e
+        $e[-1].FullyQualifiedErrorId | Should -BeLike $ErrorId
+        $global:TdrCalls.Count | Should -Be 0
+    }
+
+    It 'searches from just inside the 30-day limit when -DateFrom is exactly 30 days ago' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse '{"events":[],"continuationToken":null}' }
+        $null = Get-InforcerTdrLog -TenantId $script:T1 -DateFrom ([datetime]::UtcNow.AddDays(-30)) -DateTo ([datetime]::UtcNow.AddDays(-30).AddHours(2)) -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $global:TdrCalls.Count | Should -Be 1
+        $sent = ($global:TdrCalls[0].Body | ConvertFrom-Json).dateFrom.ToUniversalTime()
+        $sent | Should -BeGreaterThan ([datetime]::UtcNow.AddDays(-30))
+        $sent | Should -BeLessThan ([datetime]::UtcNow.AddDays(-30).AddMinutes(10))
+    }
+
+    It 'searches piped tenants one after the other' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse '{"events":[],"continuationToken":null}' }
+        $null = [pscustomobject]@{ TenantId = $script:T1 }, [pscustomobject]@{ TenantId = $script:T2 } | Get-InforcerTdrLog
+        $global:TdrCalls.Count | Should -Be 2
+        ($global:TdrCalls | ForEach-Object { ($_.Body | ConvertFrom-Json).msTenantId }) | Should -Be @($script:T1, $script:T2)
+    }
+
+    It 'returns a JSON array, even with one event' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse ('{"events":[' + (& $script:LogJson 'a' $script:End.AddHours(-1)) + '],"continuationToken":null}') }
+        $json = Get-InforcerTdrLog -TenantId $script:T1 -DateFrom $script:End.AddHours(-2) -DateTo $script:End -OutputType JsonObject
+        $json | Should -BeOfType [string]
+        $json.TrimStart() | Should -BeLike '`[*'
+        @($json | ConvertFrom-Json).Count | Should -Be 1
+    }
+
+    It 'needs an API client login' {
+        Set-TdrSession -Beta
+        Set-TdrRoute { param($Uri, $Method, $Body) throw 'no request expected' }
+        Get-InforcerTdrLog -TenantId $script:T1 -ErrorAction SilentlyContinue -ErrorVariable e
         $e[-1].FullyQualifiedErrorId | Should -BeLike 'RequiresApiClient*'
         $global:TdrCalls.Count | Should -Be 0
     }

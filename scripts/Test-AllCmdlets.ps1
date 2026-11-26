@@ -70,6 +70,9 @@ foreach ($name in $exported) {
             'Get-InforcerTdrIndicator' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }
+            'Get-InforcerTdrLog' {
+                $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
+            }
             'Get-InforcerTdrAutoContainment' {
                 $out = & $name -TenantId 1 -ErrorVariable err -ErrorAction SilentlyContinue
             }

@@ -168,7 +168,7 @@ A call Graph refuses leaves those IDs as they are, with a warning that names the
 
 ## Personal data
 
-Some output contains personal data (names, UPNs, email addresses, IP addresses, sign-in details): user details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses in `-IncludeAuthenticationMethods` and the mailbox details in `-IncludeMailbox`), audit events, threats and threat indicators, report outputs, and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput`. The module caches no user or audit data. It writes files only where you ask: to `-OutputPath`, or for `Invoke-InforcerReport` and `Save-InforcerReportOutput` to the current directory when `-OutputPath` is omitted (`-NoSave` writes nothing). Handle those files as personal data: keep them access-controlled and delete them when no longer needed.
+Some output contains personal data (names, UPNs, email addresses, IP addresses, sign-in details): user details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses in `-IncludeAuthenticationMethods` and the mailbox details in `-IncludeMailbox`), audit events, threats, threat indicators and the sign-in and audit log events of `Get-InforcerTdrLog`, report outputs, and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput`. The module caches no user or audit data. It writes files only where you ask: to `-OutputPath`, or for `Invoke-InforcerReport` and `Save-InforcerReportOutput` to the current directory when `-OutputPath` is omitted (`-NoSave` writes nothing). Handle those files as personal data: keep them access-controlled and delete them when no longer needed.
 
 ## Cmdlets
 
@@ -192,6 +192,7 @@ Some output contains personal data (names, UPNs, email addresses, IP addresses, 
 | **Get-InforcerRole**           | Retrieves Entra ID directory role definitions from a tenant. |
 | **Get-InforcerTdrThreat**         | Retrieves the threats inforcer's threat detection and response raised (search, or one with its summary and indicators) (API client login only). |
 | **Get-InforcerTdrIndicator** | Retrieves threat detection and response indicators (detections), by search or by id (API client login only). |
+| **Get-InforcerTdrLog** | Searches the sign-in and audit log events inforcer's threat detection and response collected from a tenant (API client login only). |
 | **Get-InforcerTdrAutoContainment** | Retrieves whether auto-containment (inforcer acting on threats by itself) is on for a tenant, and its settings (API client login only). |
 | **Set-InforcerTdrAutoContainment** | Turns auto-containment on or off and changes what it may do; asks for confirmation (API client login only). |
 | **Get-InforcerSecureScore**    | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |

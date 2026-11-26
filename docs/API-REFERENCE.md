@@ -689,7 +689,7 @@ Reachability checks for inforcer's TDR (threat detection and response) API: `200
 
 #### `POST /v1/tdr/threats/search`
 
-The threats open at any time between `dateFrom` and `dateTo`, newest first, across `msTenantIds` or, without it, every tenant the client may view TDR incidents on. Every filter is optional: `dateTo` defaults to now and `dateFrom` to 7 days before `dateTo`; `statuses` (`open`, `triaging`, `remediating`, `pendingReview`, `closed`), `severities` (`info`, `medium`, `high`, `critical`) and `verdicts` (`remediated`, `falsePositive`, `acceptedRisk`, `merged`) take up to 50 values, `msTenantIds` up to 1000. `pageSize` is 1–500 (default 100); send `continuationToken` with the same filters for the next page. Threats spawned from another threat are not listed; read them by id. `Get-InforcerTdrThreat` sends it.
+The threats open at any time between `dateFrom` and `dateTo`, newest first, across `msTenantIds` or, without it, every tenant the client may view TDR incidents on. Every filter is optional: `dateTo` defaults to now and `dateFrom` to 7 days before `dateTo`; `statuses` (`open`, `triaging`, `remediating`, `pendingReview`, `closed`), `severities` (`info`, `medium`, `high`, `critical`) and `verdicts` (`remediated`, `falsePositive`, `acceptedRisk`, `merged`, `benign`) take up to 50 values, `msTenantIds` up to 1000. `pageSize` is 1–500 (default 100); send `continuationToken` with the same filters for the next page. Threats spawned from another threat are not listed; read them by id. `Get-InforcerTdrThreat` sends it.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: Threats, view incidents (`tdr:incidents:view`)

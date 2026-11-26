@@ -1355,7 +1355,7 @@ MsTenantId        : 00000000-0000-0000-0000-000000000001
 
 Searches the raw log events inforcer's threat detection and response collected from one tenant, newest first: Microsoft Entra interactive user sign-ins, service principal sign-ins and directory audits, and Microsoft 365 audit events (non-interactive user sign-ins are not included). Every event carries the fields all logs share, plus one object named after its `logType` with the rest. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); an API-key login stops with `RequiresApiClient`.
 
-inforcer searches at most 24 hours at a time and only the last 30 days. Without `-DateFrom` the cmdlet searches the last 24 hours; a longer range is searched in 24-hour steps, newest first. Every step and every page of 500 events is one search, and inforcer allows 20 searches per 5 minutes and 1000 a day for all your API clients together. Past that limit the cmdlet waits as long as inforcer asks and carries on, so a long range can take a while: narrow it with `-LogType`, `-UserPrincipalName` or `-MaxResults`. A search that fails ends the cmdlet; the events found until then are still returned.
+inforcer searches at most 24 hours at a time and only the last 30 days. Without `-DateFrom` the cmdlet searches the last 24 hours; a longer range is searched in 24-hour steps, newest first. Every step and every page of 500 events is one search, and inforcer allows 20 searches per 5 minutes and 1000 a day for all your API clients together. Past that limit the cmdlet waits as long as inforcer asks (at most 5 minutes, three times per search) and carries on, so a long range can take a while: narrow it with `-LogType`, `-UserPrincipalName` or `-MaxResults`. Events are returned as they are found, so `Select-Object -First` stops the search early. A search that fails ends the cmdlet; the events found until then are already returned.
 
 > **Personal data:** the events hold user names, UPNs, IP addresses, locations and what each user did. See [Personal data](#personal-data).
 
@@ -1378,8 +1378,8 @@ inforcer searches at most 24 hours at a time and only the last 30 days. Without 
 | **LogType** | String | No | `signIn`, `servicePrincipalSignIn`, `directoryAudit`, `m365Audit`, or `all` (default) for every log together. |
 | **UserPrincipalName** | String | No | Only events of this user: the user who signed in, or who acted in an audit event. Matched whole, without regard to case. Not allowed with `-LogType servicePrincipalSignIn` (`UserPrincipalNameNotAllowed`). |
 | **IncludeSimulated** | Switch | No | Also return the events a threat simulation wrote, which are not real activity. Each event says whether it is `simulated`. |
-| **DateFrom** | DateTime | No | Events at or after this time, at most 30 days ago (`InvalidDateRange` when older). Default: 24 hours before `-DateTo`. A longer range costs at least one search per 24 hours. |
-| **DateTo** | DateTime | No | Events at or before this time. Default: now. |
+| **DateFrom** | DateTime | No | Events at or after this time, at most 30 days ago (`InvalidDateRange` when older). Default: 24 hours before `-DateTo`. A longer range costs at least one search per 24 hours. inforcer refuses a search from exactly 30 days ago, so a range that reaches that far starts 5 minutes later. |
+| **DateTo** | DateTime | No | Events at or before this time. Default: now; a time in the future counts as now. |
 | **MaxResults** | Int | No | Stop after this many events. `0` = no limit (default). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (a JSON array; Depth 100). |
 
@@ -1393,7 +1393,7 @@ Get-InforcerTdrLog -TenantId 'Contoso'
 # One user's sign-ins of the last week (seven searches)
 Get-InforcerTdrLog -TenantId 'Contoso' -LogType signIn -UserPrincipalName 'jo.bloggs@contoso.com' -DateFrom (Get-Date).AddDays(-7)
 
-# Yesterday's role changes
+# The role changes of the last 24 hours
 Get-InforcerTdrLog -TenantId 'Contoso' -LogType directoryAudit | Where-Object { $_.directoryAudit.category -eq 'RoleManagement' }
 
 # The 100 newest Microsoft 365 audit events as JSON

@@ -717,48 +717,6 @@ Describe 'Get-InforcerUser -IncludeMailbox' {
     }
 }
 
-Describe 'Get-InforcerUser -IncludeMessageTrace' {
-    It 'reads every page of the trace and attaches it as messageTrace' {
-        Set-UwSession
-        Set-UwRoute {
-            param($Uri, $Method, $Body)
-            if ($Uri -like '*/mailbox/messageTrace?continuationToken=p2') {
-                return New-UwResponse '{"messages":[{"received":"2026-11-18T09:00:00Z","direction":"received","sender":"ann@fabrikam.com","recipient":"jo@contoso.com","subject":"Hi","status":"FilteredAsSpam"}],"continuationToken":null}'
-            }
-            if ($Uri -like '*/mailbox/messageTrace') {
-                return New-UwResponse '{"messages":[{"received":"2026-11-19T09:00:00Z","direction":"sent","sender":"jo@contoso.com","recipient":"ann@fabrikam.com","subject":"Re: Hi","status":"Delivered"}],"continuationToken":"p2"}'
-            }
-            New-UwResponse ('{"id":"' + $script:Uid + '","displayName":"Jo Bloggs"}')
-        }
-        $u = Get-InforcerUser -TenantId $script:Tid -UserId $script:Uid -IncludeMessageTrace -ErrorVariable e
-        $e | Should -BeNullOrEmpty
-        $global:UwCalls.Count | Should -Be 3
-        @($u.messageTrace).Count | Should -Be 2
-        $u.messageTrace[1].status | Should -Be 'FilteredAsSpam'
-    }
-
-    It 'gives an empty trace for a user without a mailbox and reports other failures' {
-        Set-UwSession
-        Set-UwRoute {
-            param($Uri, $Method, $Body)
-            if ($Uri -like '*/messageTrace') { return New-UwResponse '{"title":"Mailbox not found","status":404}' 404 }
-            New-UwResponse '{"id":"u1"}'
-        }
-        $u = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeMessageTrace -ErrorAction Stop
-        $u.PSObject.Properties['messageTrace'] | Should -Not -BeNullOrEmpty
-        @($u.messageTrace).Count | Should -Be 0
-
-        Set-UwRoute {
-            param($Uri, $Method, $Body)
-            if ($Uri -like '*/messageTrace') { return New-UwResponse '{"title":"Bad gateway","status":502}' 502 }
-            New-UwResponse '{"id":"u1"}'
-        }
-        $u = Get-InforcerUser -TenantId $script:Tid -UserId 'u1' -IncludeMessageTrace -ErrorAction SilentlyContinue -ErrorVariable e2
-        "$($e2[-1])" | Should -BeLike '*502*'
-        $u.PSObject.Properties['messageTrace'] | Should -BeNullOrEmpty
-    }
-}
-
 Describe 'Set-InforcerGroup' {
     It 'adds and removes members in one request' {
         Set-UwSession

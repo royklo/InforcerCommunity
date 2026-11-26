@@ -63,7 +63,6 @@ This document describes the inforcer REST API endpoints, schemas, and response s
   - [UserLicenseAssignment](#userlicenseassignment)
   - [UserGroupsChange](#usergroupschange)
   - [GroupMembersChange](#groupmemberschange)
-  - [MailboxMessageTrace](#mailboxmessagetrace)
   - [TenantUserOffboarding](#tenantuseroffboarding)
   - [TemporaryAccessPass](#temporaryaccesspass)
   - [MailboxAction](#mailboxaction)
@@ -208,7 +207,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 |----------------|-------|-----------|--------|
 | Tenants / Tenants | Read: View | `/v1/tenants`, `/v1/tenants/{msTenantId}`, `/v1/tenants/{msTenantId}/subscriptions` | unconfirmed |
 | Tenants / Policies | Read: View | `/v1/tenants/{msTenantId}/policies` | unconfirmed |
-| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/users/{userId}/mailbox` (and its `autoReply`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`, `messageTrace`), `/v1/tenants/{msTenantId}/users/{userId}/offboardings/{offboardingId}`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
+| Tenants / User & Group Management | Read: View | `/v1/tenants/{msTenantId}/users`, `/v1/tenants/{msTenantId}/users/{userId}`, `/v1/tenants/{msTenantId}/users/{userId}/authenticationMethods`, `/v1/tenants/{msTenantId}/users/{userId}/mailbox` (and its `autoReply`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`), `/v1/tenants/{msTenantId}/users/{userId}/offboardings/{offboardingId}`, `/v1/tenants/{msTenantId}/groups`, `/v1/tenants/{msTenantId}/groups/{groupId}`, `/v1/tenants/{msTenantId}/groups/{groupId}/members` | unconfirmed |
 | Tenants / User & Group Management | Write (grant name unconfirmed) | `POST /v1/tenants/{msTenantId}/users`, `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/password`, `POST /v1/tenants/{msTenantId}/users/{userId}/groups`, `POST /v1/tenants/{msTenantId}/groups/{groupId}/members`, `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa`, `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`, `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/archive`, `PATCH`/`DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess/{trusteeId}`, `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailApps`, `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}`, `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules[/{ruleId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | unconfirmed (which write grant) |
 | Tenants / Entra Dashboard | Read: View | `/v1/tenants/{msTenantId}/secureScores`, `/v1/tenants/{msTenantId}/directoryRoles` | unconfirmed |
 | Align / Baselines | Read: View | `/v1/baselines` | unconfirmed |
@@ -238,7 +237,7 @@ The permission names below are the ones the portal shows (feature and grant). **
 | `Get-InforcerAlignmentDetails` | `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails` | Baselines + Align + Tenants |
 | `Get-InforcerAuditEvent` | `POST /v1/auditEvents/search` | Activity |
 | `Get-InforcerSupportedEventType` | `GET /v1/auditEvents/types` | Activity |
-| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `.../users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `.../users/{userId}/mailbox` and its `autoReply`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules` (with `-IncludeMailbox`), `.../users/{userId}/mailbox/messageTrace` (with `-IncludeMessageTrace`, every page) | User & Group Management, Tenants† |
+| `Get-InforcerUser` | `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `.../users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `.../users/{userId}/mailbox` and its `autoReply`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules` (with `-IncludeMailbox`) | User & Group Management, Tenants† |
 | `New-InforcerUser` | `POST /v1/tenants/{msTenantId}/users` | User & Group Management (write), Tenants† |
 | `Set-InforcerUser` | `PATCH /v1/tenants/{msTenantId}/users/{userId}`, `POST .../users/{userId}/assignLicenses` (with `-AddLicense`/`-RemoveLicense`), `POST .../users/{userId}/groups` (with `-AddGroup`/`-RemoveGroup`), the mailbox writes under `.../users/{userId}/mailbox/` (`type`, `archive`, `addressListVisibility`, `emailAddresses`, `autoReply`, `forwarding`, `permissions`, `calendarAccess`, `mailGroups`, `inboxRules`, `mailApps`; one per mailbox parameter, one for all mail apps), each followed by `GET .../users/{userId}/mailbox/actions/{actionId}` until done, `POST .../users/{userId}/password` (with `-Password`), `DELETE .../users/{userId}/authenticationMethods/{methodId}` (with `-RemoveAuthenticationMethod`), `DELETE .../users/{userId}/mfa` (with `-ResetMfa`), `POST .../users/{userId}/authenticationMethods/temporaryAccessPasses` (with `-TemporaryAccessPass`), `POST .../users/{userId}/revokeSessions` (with `-RevokeSessions`) | User & Group Management (write), Tenants† |
 | `Get-InforcerGroup` | `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`) | User & Group Management, Tenants† |
@@ -389,7 +388,6 @@ Every path in the v1 spec, its beta equivalent and the module cmdlet. The module
 | `/v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules` | GET, DELETE (`all=true`, 202 `{ actionId }`) | none (v1 only) | `Get-InforcerUser -IncludeMailbox`, `Set-InforcerUser -RemoveAllInboxRules` |
 | `/v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules/{ruleId}` | DELETE (202 `{ actionId }`) | none (v1 only) | `Set-InforcerUser -RemoveInboxRule` |
 | `/v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` | GET | none (v1 only) | `Set-InforcerUser` (waits on every mailbox change) |
-| `/v1/tenants/{msTenantId}/users/{userId}/mailbox/messageTrace` | GET (`continuationToken`) | none (v1 only) | `Get-InforcerUser -UserId -IncludeMessageTrace` |
 | `/v1/tenants/{msTenantId}/users/{userId}/offboardings/{offboardingId}` | GET | none (v1 only) | not used (the API cannot start or list offboardings) |
 | `/v1/tenants/{msTenantId}/users/{userId}/password` | POST (204) | none (v1 only) | `Set-InforcerUser -Password` |
 | `/v1/tenants/{msTenantId}/users/{userId}/revokeSessions` | POST (204) | none (v1 only) | `Set-InforcerUser -RevokeSessions` |
@@ -532,7 +530,7 @@ Every mailbox write below is applied by Exchange Online after the response: the 
 
 #### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`
 
-The mailbox as Exchange Online holds it now ([Mailbox](#mailbox)). A user with no mailbox is a `404`. A user mailbox Exchange took offline, because the user has no licence that includes Exchange Online, is a `409` with the title `Mailbox offline` (on this route, the five lists below and the message trace); assigning a licence within 30 days of its removal brings it back, or Exchange deletes it. `Get-InforcerUser -IncludeMailbox` adds it (with the five lists below) as `mailbox`.
+The mailbox as Exchange Online holds it now ([Mailbox](#mailbox)). A user with no mailbox is a `404`. A user mailbox Exchange took offline, because the user has no licence that includes Exchange Online, is a `409` with the title `Mailbox offline` (on this route and the five lists below); assigning a licence within 30 days of its removal brings it back, or Exchange deletes it. `Get-InforcerUser -IncludeMailbox` adds it (with the five lists below) as `mailbox`.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management *(unconfirmed)*
@@ -635,15 +633,6 @@ Returns a queued mailbox change and where it has got to, whether it was asked fo
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
 
 **Response**: `200` with [MailboxAction](#mailboxaction). `404`: tenant, user or action.
-
-#### `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/messageTrace`
-
-The mail the user sent and received in the last 10 days (the longest window Exchange Online traces at once), newest first, one entry per message per recipient, with its delivery status and never its content. Mail to themselves appears twice (sent and received). A page holds up to 1,000 sent and 1,000 received entries; pass `continuationToken` back for the next page. A token works only for the same user and for a day; every page covers the 10 days of the first page. `Get-InforcerUser -IncludeMessageTrace` reads every page and adds the entries as `messageTrace`.
-
-**Required API scope(s)**: not available with an API key (beta).
-**Required API client permission(s)**: User & Group Management *(unconfirmed)*
-
-**Response**: `200` with [MailboxMessageTrace](#mailboxmessagetrace). Errors: `400` (a token that is not valid or has expired), `404` (tenant, user, or a user with no mailbox), `409` (`Mailbox offline`, see above), `502`.
 
 #### `GET /v1/tenants/{msTenantId}/users/{userId}/offboardings/{offboardingId}`
 
@@ -1610,24 +1599,6 @@ The body of `POST /v1/tenants/{msTenantId}/groups/{groupId}/members`. At least o
 |----------|------|----------|-------------|
 | add | string[] (uuid) | No | Object ids of the users to add, at most 20. A repeated id is ignored. |
 | remove | string[] (uuid) | No | Object ids of the users to remove, at most 20. A repeated id is ignored; an id that is not a user in the tenant is refused. |
-
-### MailboxMessageTrace
-
-<details>
-<summary>Show details</summary>
-
-The answer of `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/messageTrace`: `messages` (the entries below, newest first) and `continuationToken` (`null` on the last page). `Get-InforcerUser -IncludeMessageTrace` adds the entries of every page as `messageTrace`.
-
-| Property | Type | Description |
-|----------|------|-------------|
-| received | string (date-time) | When Exchange Online received the message. |
-| direction | string | `sent` or `received`. |
-| sender | string, nullable | The sender's address. |
-| recipient | string, nullable | The recipient's address; one entry per recipient. |
-| subject | string, nullable | The subject line. |
-| status | string, nullable | Exchange's delivery status, such as `Delivered`, `Failed`, `Pending`, `Quarantined` or `FilteredAsSpam`. |
-
-</details>
 
 ### TenantUserOffboarding
 

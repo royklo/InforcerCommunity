@@ -138,8 +138,9 @@ if (-not $dateFromVal -and -not $dateToVal) {
     $dateToVal = [DateTime]::UtcNow
     $dateFromVal = $dateToVal.AddYears(-10)
 }
-$dateFromStr = $dateFromVal.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-$dateToStr = $dateToVal.ToUniversalTime().ToString($(if ($isV1) { 'yyyy-MM-ddTHH:mm:ssZ' } else { 'yyyy-MM-ddTHH:mm:ss.fffZ' }))
+# Invariant culture: a Thai or Persian calendar, or a '.' time separator, must not reach the API.
+$dateFromStr = $dateFromVal.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture)
+$dateToStr = $dateToVal.ToUniversalTime().ToString($(if ($isV1) { "yyyy-MM-dd'T'HH:mm:ss'Z'" } else { "yyyy-MM-dd'T'HH:mm:ss.fff'Z'" }), [cultureinfo]::InvariantCulture)
 
 $allItems = [System.Collections.Generic.List[object]]::new()
 

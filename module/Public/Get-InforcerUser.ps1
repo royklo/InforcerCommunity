@@ -5,6 +5,7 @@ function Get-InforcerUser {
 
         Required API scope(s): Tenants.Users.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
         (API key); User & Group Management + Tenants (only for a tenant name) permission (API client, unconfirmed).
+        -IncludeAuthenticationMethods, -IncludeMailbox and -IncludeMessageTrace need a login with an API client.
 
     .DESCRIPTION
         Gets a list of users or a single user by ID from the Inforcer API. Works with both login types (API key and client credentials).
@@ -26,6 +27,26 @@ function Get-InforcerUser {
     .PARAMETER UserId
         The user ID (GUID) to retrieve full details for. Only available in the ById parameter set.
 
+    .PARAMETER IncludeAuthenticationMethods
+        Adds authenticationMethods to the user: the sign-in methods they have registered, such as their
+        password, phones, Microsoft Authenticator and passkeys (one extra request). Passwords and Temporary
+        Access Pass codes are never returned. Only with -UserId and a login with an API client
+        (Connect-Inforcer -ClientId -ClientSecret); an API-key login gets the error RequiresApiClient.
+
+    .PARAMETER IncludeMailbox
+        Adds mailbox to the user: the Exchange Online mailbox as it is now (type, size, archive, litigation
+        hold, email addresses, hiddenFromAddressList, forwarding, mailApps), with autoReply, permissions (and
+        unreadPermissions, the kinds Exchange could not read just now), calendarAccess, mailGroups
+        (distribution lists and mail-enabled security groups) and inboxRules. Six extra requests. mailbox is null when the user has
+        no mailbox. A mailbox Exchange took offline (no licence with Exchange Online) gives the error
+        'Mailbox offline' and leaves mailbox out. Only with -UserId and a login with an API client. Change these with Set-InforcerUser.
+
+    .PARAMETER IncludeMessageTrace
+        Adds messageTrace to the user: the mail they sent and received in the last 10 days, newest first,
+        one entry per message per recipient (received, direction, sender, recipient, subject, status).
+        Delivery details only, never message content. Reads every page (one request per 1,000 entries
+        each way). Empty when the user has no mailbox; an offline mailbox gives the error 'Mailbox offline'. Only with -UserId and a login with an API client.
+
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'. Depth 100; the v1 list is always a JSON array.
         Piped tenants: each user carries TenantId and JsonObject returns one array for all tenants.
@@ -44,6 +65,22 @@ function Get-InforcerUser {
         Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005"
 
         Gets full detail for a specific user.
+
+    .EXAMPLE
+        (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeAuthenticationMethods).authenticationMethods
+
+        Lists the sign-in methods the user has registered, such as password, phone and passkey.
+
+    .EXAMPLE
+        $mailbox = (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMailbox).mailbox
+        $mailbox.forwarding; $mailbox.inboxRules | Where-Object forwardsExternally
+
+        Shows where the user's mail is forwarded and which inbox rules send mail outside the tenant.
+
+    .EXAMPLE
+        (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMessageTrace).messageTrace | Where-Object status -ne 'Delivered'
+
+        Lists the user's mail of the last 10 days that was not delivered.
 
     .EXAMPLE
         Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
@@ -86,6 +123,15 @@ function Get-InforcerUser {
         [Parameter(Mandatory, ParameterSetName = 'ById')]
         [string]$UserId,
 
+        [Parameter(ParameterSetName = 'ById')]
+        [switch]$IncludeAuthenticationMethods,
+
+        [Parameter(ParameterSetName = 'ById')]
+        [switch]$IncludeMailbox,
+
+        [Parameter(ParameterSetName = 'ById')]
+        [switch]$IncludeMessageTrace,
+
         [Parameter(ParameterSetName = 'List')]
         [Parameter(ParameterSetName = 'ById')]
         [ValidateSet('PowerShellObject', 'JsonObject')]
@@ -97,6 +143,11 @@ function Get-InforcerUser {
     process {
         if (-not (Test-InforcerSession)) {
             Write-Error -Message "Not connected to Inforcer. Use Connect-Inforcer first." -ErrorId 'NotConnected' -Category ConnectionError
+            return
+        }
+
+        if (($IncludeAuthenticationMethods -or $IncludeMailbox -or $IncludeMessageTrace) -and $script:InforcerSession.ApiVersion -ne 'v1') {
+            Write-Error -Message 'Authentication methods, mailboxes and message traces need a login with an API client (Connect-Inforcer -ClientId -ClientSecret). The API-key (beta) API does not return them.' -ErrorId 'RequiresApiClient' -Category InvalidOperation
             return
         }
 
@@ -117,7 +168,7 @@ function Get-InforcerUser {
 
         if ($PSCmdlet.ParameterSetName -eq 'ById') {
             # --- ById: single user detail ---
-            $endpoint = "/tenants/$resolvedTenantId/users/$UserId"
+            $endpoint = "/tenants/$resolvedTenantId/users/$([System.Uri]::EscapeDataString($UserId))"
             $err = $null
             # -PreserveStructure: user detail response is a single object with many nested arrays
             # (groups, roles, devices, appRoleAssignments, assignedLicenses, businessPhones, ...).
@@ -131,6 +182,45 @@ function Get-InforcerUser {
                     Write-Error -ErrorRecord $err[-1]
                 }
                 return
+            }
+
+            if ($IncludeAuthenticationMethods) {
+                $methods = Invoke-InforcerApiRequest -Endpoint "$endpoint/authenticationMethods" -Method GET -PreserveStructure
+                if ($null -ne $methods) {
+                    $response.PSObject.Properties.Remove('authenticationMethods')
+                    $response.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('authenticationMethods', @($methods.authenticationMethods)))
+                }
+            }
+
+            if ($IncludeMailbox) {
+                $mailboxErr = $null
+                $mailbox = Invoke-InforcerApiRequest -Endpoint "$endpoint/mailbox" -Method GET -PreserveStructure -ErrorVariable mailboxErr -ErrorAction SilentlyContinue
+                # 404: the user has no mailbox, so mailbox is null; any other failure is reported and leaves mailbox out.
+                $noMailbox = $mailboxErr -and $mailboxErr[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*'
+                if ($mailboxErr -and -not $noMailbox) { Write-Error -ErrorRecord $mailboxErr[-1] }
+                if ($null -ne $mailbox) {
+                    foreach ($part in 'autoReply', 'permissions', 'calendarAccess', 'mailGroups', 'inboxRules') {
+                        $result = Invoke-InforcerApiRequest -Endpoint "$endpoint/mailbox/$part" -Method GET -PreserveStructure
+                        if ($null -eq $result) { continue }
+                        # Plain assignments: an if-expression would unroll an empty list to null.
+                        $value = $result
+                        if ($part -ne 'autoReply') { $value = @($result.$part) }
+                        $mailbox | Add-Member -NotePropertyName $part -NotePropertyValue $value -Force
+                        if ($part -eq 'permissions') { $mailbox | Add-Member -NotePropertyName unreadPermissions -NotePropertyValue @($result.unreadPermissions) -Force }
+                    }
+                }
+                if (-not $mailboxErr -or $noMailbox) {
+                    $response | Add-Member -NotePropertyName mailbox -NotePropertyValue $mailbox -Force
+                }
+            }
+
+            if ($IncludeMessageTrace) {
+                $traceErr = $null
+                $trace = @(Invoke-InforcerPagedRequest -Endpoint "$endpoint/mailbox/messageTrace" -ErrorVariable traceErr -ErrorAction SilentlyContinue)
+                # 404: the user has no mailbox, so the trace is empty; any other failure is reported and leaves messageTrace out.
+                $noMailbox = $traceErr -and $traceErr[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*'
+                if ($traceErr -and -not $noMailbox) { Write-Error -ErrorRecord $traceErr[-1] }
+                else { $response | Add-Member -NotePropertyName messageTrace -NotePropertyValue $trace -Force }
             }
 
             & $addTenantId $response

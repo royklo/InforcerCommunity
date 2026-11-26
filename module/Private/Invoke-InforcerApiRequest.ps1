@@ -18,7 +18,8 @@ function Invoke-InforcerApiRequest {
           * App-layer:     { success, message, errors[], errorCode }
           * APIM gateway:  { statusCode, message }
         ErrorId is ApiRequestFailed_<status>. On v1, 429 is retried up to three times honouring Retry-After
-        (seconds or HTTP date, capped at 300 s) and a 401 renews the token once and retries.
+        (seconds or HTTP date, capped at 300 s), a 409 on a write is retried twice (Retry-After, else 8 s
+        then 16 s; not on creating a user, where 409 means the name is taken) and a 401 renews the token once and retries.
 
         The x-correlation-id response header is logged to the verbose stream and included in error
         messages when present.
@@ -85,6 +86,7 @@ function Invoke-InforcerApiRequest {
     }
 
     $retries429 = 0
+    $retries409 = 0
     $renewToken = $false
     $tokenRenewed = $false
     while ($true) {
@@ -122,6 +124,17 @@ function Invoke-InforcerApiRequest {
             Start-Sleep -Seconds $delay
             continue
         }
+        # Microsoft Graph refuses a write on a user shortly after another one (409); it clears within seconds.
+        # Left out: creating a user (its 409 is a taken userPrincipalName, which a retry cannot fix) and the
+        # POST searches, which only read.
+        if ($statusCode -eq 409 -and $isV1 -and $Method -ne 'GET' -and $retries409 -lt 2 -and
+            -not ($Method -eq 'POST' -and $Endpoint -match '/users/?$|/search/?$')) {
+            $retries409++
+            $delay = Get-InforcerRetryDelay -Value (Get-InforcerHeaderValue -Headers $response.Headers -Name 'Retry-After') -Attempt ($retries409 + 2)
+            Write-Verbose "Conflict (HTTP 409). Retrying in $delay second(s) (attempt $retries409 of 2)."
+            Start-Sleep -Seconds $delay
+            continue
+        }
         if ($statusCode -eq 401 -and $isV1 -and -not $tokenRenewed) {
             Write-Verbose 'HTTP 401: renewing the access token and retrying once.'
             $tokenRenewed = $true
@@ -152,6 +165,14 @@ function Invoke-InforcerApiRequest {
                               elseif ($problemDetail) { $problemDetail } else { $title }
                 $fieldErrors = Format-InforcerProblemError -Errors $props['errors'].Value
                 if ($fieldErrors) { $apiMessage = "$apiMessage ($fieldErrors)" }
+                # A partly applied operation lists each step, e.g. "profile: succeeded; manager: failed (reason)".
+                $steps = foreach ($r in @($props['results'].Value)) {
+                    if ($r -isnot [System.Management.Automation.PSCustomObject]) { continue }
+                    $step = "$((@($r.PSObject.Properties['step'].Value, $r.PSObject.Properties['id'].Value) -ne $null) -join ' '): $($r.PSObject.Properties['status'].Value)"
+                    $why = $r.PSObject.Properties['title'].Value -as [string]
+                    if ($why) { "$step ($why)" } else { $step }
+                }
+                if ($steps) { $apiMessage = "$apiMessage Steps: $(@($steps) -join '; ')" }
                 $traceId = ($props['traceId'].Value -as [string])
             } elseif ($isAppEnvelope -or $null -ne $props['errors']) {
                 # App-layer envelope { success, message, errors[], errorCode }
@@ -203,6 +224,9 @@ function Invoke-InforcerApiRequest {
         Write-Error -Message $msg -ErrorId "ApiRequestFailed_$statusCode" -Category ConnectionError
         return
     }
+
+    # 204 No Content (an update): success with nothing to return.
+    if ($statusCode -eq 204) { return }
 
     if ($null -eq $rawResponse -or ($rawResponse -is [string] -and [string]::IsNullOrWhiteSpace($rawResponse))) {
         Write-Error -Message 'API returned an empty response.' -ErrorId 'EmptyResponse' -Category InvalidData

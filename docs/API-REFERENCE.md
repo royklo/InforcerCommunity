@@ -428,7 +428,7 @@ Body: the [UserUpdate](#userupdate) profile fields, of which `accountEnabled`, `
 
 #### `PATCH /v1/tenants/{msTenantId}/users/{userId}`
 
-Updates a user's profile, manager and whether they can sign in. JSON Merge Patch (RFC 7396): a property left out is kept, `null` clears it.
+Updates a user's profile, manager and whether they can sign in. JSON Merge Patch (RFC 7396): a property left out is kept, `null` clears it. Microsoft Entra refuses most changes to a user who syncs from on-premises Active Directory; those are a `400` saying to change the user there.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
@@ -439,7 +439,7 @@ Body: [UserUpdate](#userupdate), at least one property. Sent as `application/jso
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/password`
 
-Sets a new password for the user, and can require them to change it when they next sign in. inforcer does not store or log the password.
+Sets a new password for the user, and can require them to change it when they next sign in. inforcer does not store or log the password. A user who syncs from on-premises Active Directory is a `400` saying to change the password there.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*
@@ -488,7 +488,7 @@ Resets the user's MFA: deletes every authentication method that the list above r
 
 #### `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses`
 
-Adds and removes the user's licences in one call. If any licence is refused, nothing changes. Removing a licence the user does not have succeeds. Adding a licence enables all its service plans, including any disabled on a licence the user already has.
+Adds and removes the user's licences in one call. If any licence is refused, nothing changes. Removing a licence the user does not have succeeds. Adding a licence enables all its service plans, including any disabled on a licence the user already has. Adding a licence to a user with no usage location is a `400`.
 
 **Required API scope(s)**: not available with an API key (beta).
 **Required API client permission(s)**: User & Group Management (write) *(unconfirmed)*

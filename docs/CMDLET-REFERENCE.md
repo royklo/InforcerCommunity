@@ -832,7 +832,7 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **UserId** | String | Yes | The user's Microsoft Entra object id. Alias: `Id`. Supports pipeline input by property name. |
 | **AccountEnabled** | Bool | No | Whether the user can sign in. |
 | **DisplayName**, **MailNickname**, **UserPrincipalName**, **Mail** | String | No | Cannot be cleared; an empty value is refused. |
-| **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **UsageLocation**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType** | String | No | Profile fields; `''` clears the field. |
+| **GivenName**, **Surname**, **JobTitle**, **Department**, **OfficeLocation**, **StreetAddress**, **City**, **State**, **PostalCode**, **Country**, **MobilePhone**, **UsageLocation**, **PreferredLanguage**, **CompanyName**, **EmployeeId**, **EmployeeType** | String | No | Profile fields; `''` clears the field. Most profile changes are refused for a user synced from on-premises Active Directory: change them there. |
 | **BusinessPhones**, **OtherMails** | String[] | No | Replace the whole list; `@()` clears it. Microsoft Entra allows one business phone. |
 | **ManagerId** | String | No | The manager's Microsoft Entra object id; `''` removes the manager. |
 | **UserType** | String | No | `Member` or `Guest`. Cannot be cleared. |
@@ -858,7 +858,7 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 | **RemoveInboxRule** | String[] | No | Ids from `mailbox.inboxRules`; rules with `deletable` false fail. |
 | **RemoveAllInboxRules** | Switch | No | Removes every rule Exchange can remove (the junk filter and similar stay). |
 | **AllowMailApp**, **BlockMailApp** | String[] | No | Mail apps to allow or block: `OutlookWeb` (also the new Outlook for Windows), `OutlookDesktop` (classic Outlook for Windows), `OutlookMac`, `ExchangeWebServices`, `Imap`, `Pop`, `OutlookApp` (iOS and Android), `OtherMailApps` (Exchange ActiveSync). Sent as one change; apps not named keep their setting. A tenant-wide policy can still block an allowed app. The same app in both stops with `ConflictingMailApp`. |
-| **Password** | SecureString | No | A new password. It must meet the tenant's password policy. |
+| **Password** | SecureString | No | A new password. It must meet the tenant's password policy. Refused for a user synced from on-premises Active Directory. |
 | **ForceChangePasswordNextSignIn** | Bool | No | Whether the user must change the new password at the next sign-in. Default: `$true`. Only with `-Password`; on its own it stops with `PasswordRequired`. |
 | **RemoveAuthenticationMethod** | String[] | No | Ids of registered sign-in methods to delete, from `authenticationMethods` of `Get-InforcerUser -IncludeAuthenticationMethods`. Only methods with `deletable` true. |
 | **ResetMfa** | Switch | No | Deletes every deletable sign-in method, so the user must register MFA again. The password is kept. |

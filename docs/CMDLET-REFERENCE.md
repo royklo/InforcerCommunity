@@ -10,6 +10,39 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 ---
 
+## Cmdlet overview
+
+Click a name for its parameters. Under each cmdlet, the endpoints, permissions, examples and example output are folded away: click a line with ▶ to open it.
+
+| Cmdlet | What it does |
+|--------|--------------|
+| [Connect-Inforcer](#connect-inforcer) | Establishes a secure connection to the inforcer REST API with an API client (`-ClientId`/`-ClientSecret`, v1) or a legacy API key (`-ApiKey`, beta). Supports `-FetchGraphData` to also connect Microsoft Graph. |
+| [Disconnect-Inforcer](#disconnect-inforcer) | Disconnects and clears the session (including Graph if connected). |
+| [Test-InforcerConnection](#test-inforcerconnection) | Tests the API connection; returns `$true` or `$false`. |
+| [Get-InforcerTenant](#get-inforcertenant) | Retrieves tenant information (optional filter by TenantId); `-IncludeSubscriptions` adds the tenant's licences with free seats (API client login only). |
+| [Get-InforcerBaseline](#get-inforcerbaseline) | Retrieves baseline groups and members. |
+| [Get-InforcerTenantPolicies](#get-inforcertenantpolicies) | Retrieves policies for a specified tenant. |
+| [Get-InforcerAlignmentDetails](#get-inforceralignmentdetails) | Retrieves alignment scores (table or raw format). |
+| [Get-InforcerAuditEvent](#get-inforcerauditevent) | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
+| [Get-InforcerSupportedEventType](#get-inforcersupportedeventtype) | Returns the canonical list of audit event types accepted by `Get-InforcerAuditEvent -EventType`. Drives the tab completer; cached after first call. |
+| [Get-InforcerUser](#get-inforceruser) | Retrieves users from a tenant (list/search or detail by UserId); `-IncludeAuthenticationMethods` adds their sign-in methods, `-IncludeMailbox` their Exchange Online mailbox and `-IncludeMessageTrace` their mail of the last 10 days (API client login only). |
+| [New-InforcerUser](#new-inforceruser) | Creates a Microsoft Entra user in a tenant (API client login only). |
+| [Set-InforcerUser](#set-inforceruser) | Updates a user's profile, manager or sign-in, changes licences and group memberships, changes their mailbox (shared mailbox, online archive, automatic replies, forwarding, permissions, calendar sharing, mail groups, email addresses, inbox rules, mail apps, address lists), resets their password, removes sign-in methods or resets MFA, issues a Temporary Access Pass, or signs them out everywhere; only the fields you pass change (API client login only). |
+| [Get-InforcerGroup](#get-inforcergroup) | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
+| [Set-InforcerGroup](#set-inforcergroup) | Adds users to a group and removes others from it, in one request (API client login only). |
+| [Get-InforcerRole](#get-inforcerrole) | Retrieves Entra ID directory role definitions from a tenant. |
+| [Get-InforcerSecureScore](#get-inforcersecurescore) | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |
+| [Export-InforcerTenantDocumentation](#export-inforcertenantdocumentation) | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. Pass `-OutputPath` to write files; without it the DocModel is returned and nothing is written. |
+| [Compare-InforcerEnvironments](#compare-inforcerenvironments) | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. Pass `-OutputPath` to write the file; without it the comparison model is returned and nothing is written. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` with automatic baseline owner resolution. |
+| [Get-InforcerAssessment](#get-inforcerassessment) | Lists available assessments (CIS, Essential Eight, etc.). |
+| [Invoke-InforcerAssessment](#invoke-inforcerassessment) | Runs an assessment against one or more tenants. Supports HTML/CSV export. |
+| [Get-InforcerReportType](#get-inforcerreporttype) | Lists the report catalog from the Reports API. Cached after first call; supports `-Key`, `-Tag`, and `-OutputFormat` filters. |
+| [Invoke-InforcerReport](#invoke-inforcerreport) | Queues a report run, polls until complete, and saves outputs to disk. Use `-NoWait` for async or `-NoSave` to download metadata only. |
+| [Get-InforcerReportRun](#get-inforcerreportrun) | Lists report runs (last 7 days, capped at 500). Use `-Wait` with `-RunId` to bypass the 4-minute list propagation lag. |
+| [Save-InforcerReportOutput](#save-inforcerreportoutput) | Downloads a report output to disk using the server's `Content-Disposition` filename (or `-FileName`); never overwrites an existing file. Pipeline-friendly for bulk download. |
+
+---
+
 ## Personal data
 
 User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
@@ -27,8 +60,13 @@ Secrets and tokens are stored as SecureString only; `-PassThru` never exposes th
 
 > **Known limit:** after a failed request, `$Error` and your own `-ErrorVariable` still hold PowerShell's transport error record. The module strips the auth header from it, but it keeps the request URL (host, path, tenant id), so review `Format-List * -Force` dumps before sharing them.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called**: API key: `GET /beta/baselines` (validation probe; a key without that scope still connects, with a warning) and a best-effort `GET /beta/reports/types` (primes the report catalog, never fails the login). Client credentials: `POST /oauth/token` and the same best-effort `GET /v1/reports/types`.
 **Required API scope(s)**: None (a key that lacks the probe's scope still connects; a client-credentials login only needs a valid client)
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -40,7 +78,8 @@ Secrets and tokens are stored as SecureString only; `-PassThru` never exposes th
 | **FetchGraphData** | Switch | No | Also sign in to Microsoft Graph interactively, requesting the read scopes `Directory.Read.All`, `Policy.Read.All` and `DeviceManagementConfiguration.Read.All` (see [Graph enrichment](#graph-integration--fetchgraphdata)). `Export-InforcerTenantDocumentation` and `Compare-InforcerEnvironments -FetchGraphData` reuse that session when it is for the same tenant. Requires the `Microsoft.Graph.Authentication` module, which is not installed automatically: when it is missing, a warning says how to install it and Graph is skipped. |
 | **PassThru** | Switch | No | Returns only an independent copy of the session hashtable (no status object, so `$src = Connect-Inforcer ... -PassThru` holds a session usable with `-SourceSession`; earlier versions also returned the status object, which broke that example). Use to capture sessions for cross-account comparison with `Compare-InforcerEnvironments` (sessions of different login types can be mixed). A captured session stays usable after `Disconnect-Inforcer`, which clears only the module's session; remove it when done (`Remove-Variable src`). |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # Client credentials (v1, recommended)
@@ -57,7 +96,10 @@ Compare-InforcerEnvironments -SourceTenantId 'Contoso' -DestinationTenantId 'Fab
 Remove-Variable src, dst   # captured sessions outlive Disconnect-Inforcer
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 Status      : Connected
@@ -72,23 +114,34 @@ With an API key `BaseUrl` ends in `/api` (`https://api-uk.inforcer.com/api`) and
 WARNING: You connected with an API key, which uses inforcer's legacy beta API. API keys are due to be retired. Switch to an API client: create one in the inforcer portal (Configure > REST API), then run Connect-Inforcer -ClientId <client id> -ClientSecret <client secret> -Region uk. With an API client, pass the Microsoft tenant ID (GUID) or tenant name instead of the numeric tenant id.
 ```
 
+</details>
+
 ---
 
 ## Disconnect-Inforcer
 
 Disconnects from the inforcer API and clears the module's session from memory. Sessions captured with `Connect-Inforcer -PassThru` are separate copies and stay usable after Disconnect; remove them when done (`Remove-Variable src, dst`).
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Required API scope(s)**: None (session management only; a client-credentials login only needs a valid client)
+
+</details>
 
 No parameters.
 
-### Example
+<details>
+<summary>Example</summary>
 
 ```powershell
 Disconnect-Inforcer
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 When a session was active:
 
@@ -102,6 +155,8 @@ When no session was active:
 No active session to disconnect.
 ```
 
+</details>
+
 ---
 
 ## Test-InforcerConnection
@@ -110,16 +165,22 @@ Tests the current API connection by sending a request to the API, and returns `$
 
 Failures — including "no session" — are reported as **warnings**, not errors, so the cmdlet keeps answering the question instead of throwing in scripts that run under `$ErrorActionPreference = 'Stop'`.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/baselines`
 **Required API scope(s) (API key, beta)**: `Baselines.Read` (or `Tenants.Read`)
 **Endpoints on v1**: `GET /v1/baselines`
 **Required API client permission(s) (v1)**: Baselines *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
+</details>
+
 A key or API client without that permission makes the test return `False` with a warning, even though the session itself works.
 
 No parameters.
 
-### Example
+<details>
+<summary>Example</summary>
 
 ```powershell
 Connect-Inforcer -ClientId $env:INFORCER_CLIENT_ID -ClientSecret (ConvertTo-SecureString $env:INFORCER_CLIENT_SECRET -AsPlainText -Force) -Region uk
@@ -131,7 +192,10 @@ Test-InforcerConnection
 if (-not (Test-InforcerConnection)) { Connect-Inforcer -ClientId $id -ClientSecret $secret -Region uk }
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 Returns `True`; the following is written to the host:
 
@@ -145,6 +209,8 @@ With no active session it returns `False` and writes a warning:
 WARNING: Not connected. To connect, run: Connect-Inforcer -ClientId <ClientId> -ClientSecret <ClientSecret> -Region <uk|eu|us|anz>
 ```
 
+</details>
+
 ---
 
 ## Get-InforcerTenant
@@ -157,12 +223,17 @@ Retrieves tenant information. Optionally filter by `-TenantId` (Microsoft Tenant
 - **Subscriptions (client credentials only):** `-IncludeSubscriptions` adds `subscriptions`, the tenant's licences with their `skuId` (for `Set-InforcerUser -AddLicense`), name, status and seats (`units.enabled`, `units.consumed`, `units.available`, ...). One extra request per tenant; with an API key it stops with `RequiresApiClient`. A tenant whose subscriptions cannot be read is still returned, without `subscriptions`, next to the error.
 - **JSON:** with client credentials `-OutputType JsonObject` is always a JSON array, also for one tenant. With an API key a single tenant is a bare JSON object, as in 0.8.0.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants`
 **Required API scope(s) (API key, beta)**: `Tenants.Read`
 **Endpoints on v1**: `GET /v1/tenants`; `-TenantId <GUID>` calls only `GET /v1/tenants/{msTenantId}` (a name also reads the tenant list); `-IncludeSubscriptions` adds `GET /v1/tenants/{msTenantId}/subscriptions` per tenant
 **Required API client permission(s) (v1)**: Tenants *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schema**: [Tenant](./API-REFERENCE.md#tenant) — includes `licenses`, `PolicyDiff`; with `-IncludeSubscriptions` also `subscriptions` ([Subscription](./API-REFERENCE.md#subscription))
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -171,7 +242,8 @@ Retrieves tenant information. Optionally filter by `-TenantId` (Microsoft Tenant
 | **IncludeSubscriptions** | Switch | No | Adds `subscriptions` (licences with `skuId` and free seats). API client login only. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Get-InforcerTenant
@@ -183,7 +255,10 @@ Get-InforcerTenant -TenantId 102            # API key only (numeric Client Tenan
 Get-InforcerTenant -OutputType JsonObject
 ```
 
-### Example output — list of tenants (API key; client credentials has no ClientTenantId)
+</details>
+
+<details>
+<summary>Example output — list of tenants (API key; client credentials has no ClientTenantId)</summary>
 
 ```
 ClientTenantId      : 101
@@ -207,11 +282,14 @@ LastBackupTimestamp : 2025-03-01T09:00:00Z
 
 The default view shows 8 key properties. Use `| Select-Object *` to see all properties including `alignmentSummaries`, `policyDiff`, `tags`, and `recentChanges`.
 
+</details>
+
 ### Example output — single tenant with -TenantId
 
 Same shape as one of the objects above (one tenant). With client credentials it has no `ClientTenantId` and adds `AuthenticationMode`.
 
-### Example output — free seats with -IncludeSubscriptions
+<details>
+<summary>Example output — free seats with -IncludeSubscriptions</summary>
 
 ```
 name                     skuId                                free
@@ -219,6 +297,8 @@ name                     skuId                                free
 Microsoft 365 E5         00000000-0000-0000-0000-0000000000c1    5
 Exchange Online (Plan 1) 00000000-0000-0000-0000-0000000000c2   12
 ```
+
+</details>
 
 ---
 
@@ -228,6 +308,9 @@ Retrieves baseline groups and their members. Optionally filter by `-TenantId` (o
 
 **Pipeline:** piped tenants (for example `Get-InforcerTenant | Get-InforcerBaseline`) are handled one by one; each result gets a `TenantId` property naming its tenant, and `-OutputType JsonObject` returns one JSON array for all of them. Calls without pipeline input are unchanged. Baselines are read once per call; a baseline shared by several piped tenants is returned once per tenant, and an identical (tenant, baseline) pair never repeats.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/baselines` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Baselines.Read` + `Tenants.Read`†
 **Endpoints on v1**: `GET /v1/baselines` (+ `GET /v1/tenants` for a tenant name)
@@ -235,13 +318,18 @@ Retrieves baseline groups and their members. Optionally filter by `-TenantId` (o
 
 **Output schema**: [BaselineGroup](./API-REFERENCE.md#baselinegroup) — includes `members`, `items`, alignment thresholds
 
+> † `Tenants.Read` is only needed when `-TenantId` is a GUID or tenant name. A numeric `-TenantId` (API key) or no `-TenantId` needs no tenant lookup.
+
+</details>
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
 | **TenantId** | Object | No | Filter baselines where this tenant is owner or member (Microsoft tenant ID (GUID) or tenant name; numeric Client Tenant ID with an API key only). Aliases: `ClientTenantId`, `MsTenantId`. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 
-### Example
+<details>
+<summary>Example</summary>
 
 ```powershell
 Get-InforcerBaseline
@@ -249,9 +337,10 @@ Get-InforcerBaseline -TenantId 'Contoso'
 Get-InforcerBaseline -OutputType JsonObject
 ```
 
-> † `Tenants.Read` is only needed when `-TenantId` is a GUID or tenant name. A numeric `-TenantId` (API key) or no `-TenantId` needs no tenant lookup.
+</details>
 
-### Example output
+<details>
+<summary>Example output</summary>
 
 ```
 BaselineName         : Production baseline
@@ -266,6 +355,8 @@ Mode                 : Standard
 
 Use `| Select-Object *` to see all properties including `autoAddNewPolicies`, `isComplete`, `isShared`, and `items`.
 
+</details>
+
 ---
 
 ## Get-InforcerTenantPolicies
@@ -276,6 +367,9 @@ Retrieves policies for a specified tenant. TenantId accepts a Microsoft Tenant I
 
 > **v1:** the cmdlet writes a warning when the response lists `failedPolicyTypes` (a partial result: the types inforcer could not read, with the reason). Beta leaves such types out without a warning. Policy `Id` is the Microsoft policy ID on v1 and the inforcer ID on beta.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/policies` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (used by `Resolve-InforcerTenantId` to look up the numeric `clientTenantId`).
 **Required API scope(s) (API key, beta)**: `tenants.policies.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 **Endpoints on v1**: `GET /v1/tenants/{msTenantId}/policies` (a GUID needs no lookup; a tenant name also calls `GET /v1/tenants`)
@@ -283,13 +377,16 @@ Retrieves policies for a specified tenant. TenantId accepts a Microsoft Tenant I
 
 **Output schema**: [Policy](./API-REFERENCE.md#policy) — includes `product`, `platform`, `policyData`, `tags`
 
+</details>
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **Format** | String | No | `Raw` (default). |
 | **TenantId** | Object | Yes | Tenant to get policies for (Microsoft tenant ID (GUID) or tenant name; numeric Client Tenant ID with an API key only). Aliases: `ClientTenantId`, `MsTenantId`. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
-### Example
+<details>
+<summary>Example</summary>
 
 ```powershell
 Get-InforcerTenantPolicies -TenantId 'Contoso'
@@ -297,7 +394,10 @@ Get-InforcerTenantPolicies -TenantId 101            # API key only (numeric Clie
 Get-InforcerTenantPolicies -TenantId "00000000-0000-0000-0000-000000000003" -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 PolicyName     : Require MFA for admins
@@ -321,6 +421,8 @@ PolicyData     : {"displayName":"Block legacy auth","state":"enabled",...}
 
 The default view shows 8 key properties (`PolicyData` as compact JSON). Use `| Select-Object *` to see all properties including the policy `id`, the full `policyData` and raw API fields.
 
+</details>
+
 ---
 
 ## Get-InforcerAlignmentDetails
@@ -329,12 +431,17 @@ Retrieves alignment scores or detailed alignment data. **Format Table** (default
 
 **Pipeline:** piped tenants are collected and the scores, tenant list and baselines are read once per call, so rows never repeat; with `-BaselineId` each distinct tenant gets one detail call. Each result gets a `TenantId` property naming its tenant, and `-OutputType JsonObject` returns one JSON array. With client credentials the table's JSON is always an array, also for one row (with an API key one row is a bare object, as in 0.8.0).
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/baselines`, `GET /beta/alignmentScores`, `GET /beta/tenants`, `GET /beta/tenants/{tenantId}/alignmentDetails`
 **Required API scope(s) (API key, beta)**: `Baselines.Read` + `AlignmentScores.Read` + `Tenants.Read` + `tenants.policies.Read`
 **Endpoints on v1**: `GET /v1/baselines`, `GET /v1/alignmentScores`, `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}/alignmentDetails`
 **Required API client permission(s) (v1)**: Baselines + Align + Tenants *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schema**: [AlignmentScore](./API-REFERENCE.md#alignmentscore) — includes `score`, `baselineGroupId`, `lastComparisonDateTime`
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -344,7 +451,8 @@ Retrieves alignment scores or detailed alignment data. **Format Table** (default
 | **Tag** | String | No | When Format is Table (without `-BaselineId`), filter to tenants with tag containing this value (case-insensitive). No match returns no rows and a warning. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Get-InforcerAlignmentDetails
@@ -355,7 +463,10 @@ Get-InforcerAlignmentDetails -TenantId 'Contoso' -BaselineId "Provision M365"
 Get-InforcerAlignmentDetails -TenantId 'Contoso' -BaselineId "00000000-0000-0000-0000-000000000004" -Format Raw
 ```
 
-### Example output — Format Table (summary)
+</details>
+
+<details>
+<summary>Example output — Format Table (summary)</summary>
 
 ```
 Tenant                 : Contoso
@@ -373,7 +484,10 @@ LastComparisonDateTime : 2026-03-26T21:58:41Z
 
 `TenantId` is the numeric Client Tenant ID with an API key and the Microsoft tenant ID (GUID) with client credentials. Pipe to `Format-Table` for a table.
 
-### Example output — Format Table with -TenantId and -BaselineId (detail)
+</details>
+
+<details>
+<summary>Example output — Format Table with -TenantId and -BaselineId (detail)</summary>
 
 A metrics summary is written to the host, not the pipeline:
 
@@ -405,6 +519,8 @@ Tags                   : IAM - Core, Secure Collaboration, Provision M365, Tier 
 
 Possible `AlignmentStatus` values: `Aligned`, `Unaccepted Deviation`, `Accepted Deviation`, `Recommended From Baseline`, `Existing Customer Policy`.
 
+</details>
+
 ### Example output — Format Raw with -OutputType JsonObject
 
 A JSON string (array of objects) with properties such as `tenantId`, `tenantFriendlyName`, `score`, `baselineGroupId`, `baselineGroupName`, `lastComparisonDateTime`. Depth 100. When using `-BaselineId`, the JSON contains the full alignment detail including `metrics`, `alignment`, and `completedAt`.
@@ -421,12 +537,17 @@ Retrieves audit events from the inforcer API. Supports optional `-EventType`, `-
 
 Without `-EventType` one search covers every event type (both logins), and events come back in the API's order; `-MaxResults` returns the first events of that order. All `-EventType` values go in one search.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `POST /beta/auditEvents/search` (paged)
 **Required API scope(s) (API key, beta)**: `Audit.Read` *(not in the API team's published scope→route mapping — the route `/beta/auditEvents/search` is unmapped; `Audit.Read` is the assumed scope based on naming. Confirm with inforcer API team.)*
 **Endpoints on v1**: `POST /v1/auditEvents/search` (paged)
 **Required API client permission(s) (v1)**: Activity *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schema**: [AuditEvent](./API-REFERENCE.md#auditevent) — includes `eventType`, `timestamp`, flattened metadata fields
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -441,7 +562,8 @@ Without `-EventType` one search covers every event type (both logins), and event
 | **Format** | String | No | `Raw` (default). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Get-InforcerAuditEvent
@@ -451,7 +573,10 @@ Get-InforcerAuditEvent -User admin@contoso.com -DateFrom (Get-Date).AddDays(-30)
 Get-InforcerAuditEvent -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 Id              : 00000000-0000-0000-0000-000000000010
@@ -477,6 +602,8 @@ UserDisplayName :
 
 The default view shows 9 key properties. Use `| Select-Object *` to see all properties including `correlationId`, `clientId`, `relType`, `relId`, and `ClientIpv6`.
 
+</details>
+
 ---
 
 ## Get-InforcerUser
@@ -489,12 +616,17 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 
 **Pipeline:** piped tenants (for example `Get-InforcerTenant | Get-InforcerUser`) are handled one by one; each result gets a `TenantId` property naming its tenant, and `-OutputType JsonObject` returns one JSON array for all of them. Calls without pipeline input are unchanged.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/users` (list) or `GET /beta/tenants/{tenantId}/users/{userId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Users.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 **Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`, `.../mailbox/autoReply`, `.../mailbox/permissions`, `.../mailbox/calendarAccess`, `.../mailbox/mailGroups`, `.../mailbox/inboxRules` (with `-IncludeMailbox`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/messageTrace` (with `-IncludeMessageTrace`, every page)
 **Required API client permission(s) (v1)**: User & Group Management + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`) | [Mailbox](./API-REFERENCE.md#mailbox) (`mailbox`) | [MailboxMessageTrace](./API-REFERENCE.md#mailboxmessagetrace) (`messageTrace`)
+
+</details>
 
 | Parameter | Type | Mandatory | ParameterSet | Description |
 |-----------|------|-----------|--------------|-------------|
@@ -508,7 +640,8 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 | **IncludeMessageTrace** | Switch | No | ById | Adds `messageTrace`: the mail the user sent and received in the last 10 days, newest first, one entry per message per recipient (`received`, `direction`, `sender`, `recipient`, `subject`, `status`); delivery details only, never content. Reads every page (one request per 1,000 entries each way). Empty when the user has no mailbox; an offline mailbox gives the error `Mailbox offline`. Needs an API client. |
 | **OutputType** | String | No | Both | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Get-InforcerUser -TenantId 'Contoso'
@@ -525,7 +658,10 @@ Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
 Get-InforcerUser -TenantId 'Contoso' -OutputType JsonObject
 ```
 
-### Example output — List (UserSummary)
+</details>
+
+<details>
+<summary>Example output — List (UserSummary)</summary>
 
 ```
 DisplayName      : Jane Doe
@@ -537,7 +673,10 @@ IsGlobalAdmin    : False
 IsMfaCapable     : False
 ```
 
-### Example output — Detail (User)
+</details>
+
+<details>
+<summary>Example output — Detail (User)</summary>
 
 ```
 DisplayName      : Jane Doe
@@ -552,7 +691,10 @@ IsMfaRegistered  : False
 RiskLevel        :
 ```
 
-### Example output — authentication methods
+</details>
+
+<details>
+<summary>Example output — authentication methods</summary>
 
 ```powershell
 (Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeAuthenticationMethods).authenticationMethods |
@@ -567,7 +709,10 @@ phone                              mobile         True
 microsoftAuthenticator Contoso Phone              True 02/09/2026 10:15:00
 ```
 
-### Example output — mailbox
+</details>
+
+<details>
+<summary>Example output — mailbox</summary>
 
 ```powershell
 (Get-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -IncludeMailbox).mailbox
@@ -592,6 +737,8 @@ mailGroups            : {@{id=00000000-0000-0000-0000-0000000000c1; displayName=
 inboxRules            : {}
 ```
 
+</details>
+
 ---
 
 ## New-InforcerUser
@@ -600,12 +747,17 @@ Creates a Microsoft Entra user in a tenant. Needs a login with an API client (`C
 
 The user can sign in by default and must change the password at the first sign-in. `-MailNickname` defaults to the part of `-UserPrincipalName` before the `@`. The password must meet the tenant's password policy; it is sent only in the request body and never written to verbose output. `Get-InforcerUser` can take up to about five minutes to show the new user, because the API caches users. Supports `-WhatIf` and `-Confirm`.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
 **Endpoints on v1**: `POST /v1/tenants/{msTenantId}/users` (+ `GET /v1/tenants` for a tenant name)
 **Required API client permission(s) (v1)**: User & Group Management (write) + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schema**: [CreatedUser](./API-REFERENCE.md#createduser), with `TenantId`, `displayName` and `userPrincipalName` added.
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -624,7 +776,8 @@ The user can sign in by default and must change the password at the first sign-i
 | **UserType** | String | No | `Member` (the default when left out) or `Guest`. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100; piped tenants return one array. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 $password = Read-Host -AsSecureString -Prompt 'Initial password'
@@ -634,7 +787,10 @@ New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName
 New-InforcerUser -TenantId 'Contoso' -DisplayName 'Jo Bloggs' -UserPrincipalName 'jo.bloggs@contoso.com' -Password $password -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 DisplayName       : Jo Bloggs
@@ -642,6 +798,8 @@ UserPrincipalName : jo.bloggs@contoso.com
 Id                : 00000000-0000-0000-0000-000000000005
 TenantId          : 00000000-0000-0000-0000-000000000001
 ```
+
+</details>
 
 ---
 
@@ -657,6 +815,9 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 
 **Pipeline:** users from `Get-InforcerUser` or `New-InforcerUser` can be piped in; `-UserId` binds from their `id` and `-TenantId` from their `TenantId` when they have one.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
 **Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/users/{userId}` (profile fields), `POST /v1/tenants/{msTenantId}/users/{userId}/assignLicenses` (`-AddLicense`/`-RemoveLicense`), `POST /v1/tenants/{msTenantId}/users/{userId}/groups` (`-AddGroup`, then `-RemoveGroup`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/type` (`-MailboxType`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/archive` (`-EnableArchive`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/addressListVisibility` (`-HiddenFromAddressLists`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses` (`-AddEmailAddress`, `-PrimaryEmailAddress`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/emailAddresses/{address}` (`-RemoveEmailAddress`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/autoReply` (`-AutoReply`), `PATCH`/`DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/forwarding` (`-ForwardTo`/`-RemoveForwarding`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/permissions/{permission}/{trusteeId}` (`-GrantMailboxPermission`/`-RemoveMailboxPermission`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/calendarAccess/{trusteeId}` (`-GrantCalendarAccess`/`-RemoveCalendarAccess`), `POST /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailGroups/{groupId}` (`-AddMailGroup`/`-RemoveMailGroup`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules/{ruleId}` and `DELETE /v1/tenants/{msTenantId}/users/{userId}/mailbox/inboxRules?all=true` (`-RemoveInboxRule`/`-RemoveAllInboxRules`), `PATCH /v1/tenants/{msTenantId}/users/{userId}/mailbox/mailApps` (`-AllowMailApp`/`-BlockMailApp`), each followed by `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{actionId}` until done, `POST /v1/tenants/{msTenantId}/users/{userId}/password` (`-Password`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/{methodId}` (`-RemoveAuthenticationMethod`), `DELETE /v1/tenants/{msTenantId}/users/{userId}/mfa` (`-ResetMfa`), `POST /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods/temporaryAccessPasses` (`-TemporaryAccessPass`), `POST /v1/tenants/{msTenantId}/users/{userId}/revokeSessions` (`-RevokeSessions`) (+ `GET /v1/tenants` for a tenant name)
@@ -665,6 +826,8 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 **Request schemas**: [UserUpdate](./API-REFERENCE.md#userupdate) | [PasswordReset](./API-REFERENCE.md#passwordreset) | [UserLicenseAssignment](./API-REFERENCE.md#userlicenseassignment) | [UserGroupsChange](./API-REFERENCE.md#usergroupschange)
 **Polled schema** (after every mailbox change): [MailboxAction](./API-REFERENCE.md#mailboxaction)
 **Output schema** (with `-TemporaryAccessPass`): [TemporaryAccessPass](./API-REFERENCE.md#temporaryaccesspass)
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -709,7 +872,8 @@ When the manager could not be changed but the other changes were saved (HTTP 502
 
 At least one field, `-AddLicense`, `-RemoveLicense`, a mailbox change, `-Password`, `-RemoveAuthenticationMethod`, `-ResetMfa`, `-TemporaryAccessPass` or `-RevokeSessions` must be passed; otherwise the cmdlet stops with `NoChangeSpecified` without a request.
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -Department 'Sales' -JobTitle 'Account Manager'
@@ -743,7 +907,10 @@ Get-InforcerUser -TenantId 'Contoso' -Search 'Adele' | Set-InforcerUser -TenantI
 Set-InforcerUser -TenantId 'Contoso' -UserId '00000000-0000-0000-0000-000000000005' -UsageLocation 'GB' -WhatIf
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 With `-TemporaryAccessPass`:
 
@@ -762,6 +929,8 @@ Otherwise none. With `-WhatIf`:
 What if: Performing the operation "update usageLocation" on target "user 00000000-0000-0000-0000-000000000005 in tenant 00000000-0000-0000-0000-000000000001".
 ```
 
+</details>
+
 ---
 
 ## Get-InforcerGroup
@@ -770,10 +939,15 @@ Retrieves Entra ID groups from an inforcer tenant. When called without `-Group`,
 
 **Pipeline:** piped tenants (for example `Get-InforcerTenant | Get-InforcerGroup`) are handled one by one; each result gets a `TenantId` property naming its tenant, and `-OutputType JsonObject` returns one JSON array for all of them. Calls without pipeline input are unchanged.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/groups` (list) or `GET /beta/tenants/{tenantId}/groups/{groupId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Groups.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 **Endpoints on v1**: `GET /v1/tenants/{msTenantId}/groups[/{groupId}]`, `.../groups/{groupId}/members` (with `-Group`)
 **Required API client permission(s) (v1)**: User & Group Management + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -784,7 +958,8 @@ Retrieves Entra ID groups from an inforcer tenant. When called without `-Group`,
 | **MaxResults** | Int | No | Maximum groups to return. `0` = no limit (List parameter set only). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # List all groups in a tenant
@@ -806,7 +981,10 @@ Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerGroup
 Get-InforcerGroup -TenantId 'Contoso' -OutputType JsonObject
 ```
 
-### Example output (List)
+</details>
+
+<details>
+<summary>Example output (List)</summary>
 
 ```
 DisplayName : All Company
@@ -820,7 +998,10 @@ GroupTypes  : Unified
 > **`MembershipRule` is filled on the list.** Since inforcer fixed this (2026-11, verified live 2026-11-03),
 > the list returns the rule for every `DynamicMembership` group on both APIs, and the list view shows it.
 
-### Example output (ById)
+</details>
+
+<details>
+<summary>Example output (ById)</summary>
 
 ```
 DisplayName           : SG - Contoso - All Internal Users
@@ -851,11 +1032,16 @@ a bare `True`/blank:
 Both properties are on the object in raw API form (`membershipRule`, `onPremisesSyncEnabled`) and are
 unaffected by the display formatting — `-OutputType JsonObject` and `Select-Object` see the raw values.
 
+</details>
+
 ---
 
 ## Set-InforcerGroup
 
 Adds users to a Microsoft Entra group and removes others from it, in one request. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); with an API key it stops with the error `RequiresApiClient`, because the beta API cannot change groups. Each user is changed on its own, so a user who cannot be added does not stop the removals, and a user already in the group (or not in it) counts as done, so the same command can safely run again. When some users changed and others did not, the error lists each user (`Steps: ...`). Role-assignable groups, dynamic groups, distribution lists and mail-enabled security groups cannot be changed this way. Returns nothing. Supports `-WhatIf` and `-Confirm`. To change the groups of one user, use `Set-InforcerUser -AddGroup`/`-RemoveGroup`.
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
 
 **Endpoints called (beta)**: none (not available on the beta API).
 **Required API scope(s) (API key, beta)**: not available with an API key.
@@ -864,6 +1050,8 @@ Adds users to a Microsoft Entra group and removes others from it, in one request
 
 **Request schema**: [GroupMembersChange](./API-REFERENCE.md#groupmemberschange)
 
+</details>
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
 | **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
@@ -871,7 +1059,8 @@ Adds users to a Microsoft Entra group and removes others from it, in one request
 | **AddMember** | Guid[] | No | Object IDs of the users to add, at most 20. |
 | **RemoveMember** | Guid[] | No | Object IDs of the users to remove, at most 20. A user in both lists stops with `ConflictingMember`; neither list stops with `NoChangeSpecified`. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Set-InforcerGroup -TenantId 'Contoso' -Group 'Sales' -AddMember '00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000006'
@@ -879,6 +1068,8 @@ Set-InforcerGroup -TenantId 'Contoso' -Group '00000000-0000-0000-0000-0000000000
 ```
 
 No output on success.
+
+</details>
 
 ---
 
@@ -888,17 +1079,23 @@ Retrieves Entra ID directory role definitions from an inforcer tenant. Returns r
 
 **Pipeline:** piped tenants (for example `Get-InforcerTenant | Get-InforcerRole`) are handled one by one; each result gets a `TenantId` property naming its tenant, and `-OutputType JsonObject` returns one JSON array for all of them. Calls without pipeline input are unchanged. With client credentials `-OutputType JsonObject` is always a JSON array (`[]` for no roles); with an API key one role is a bare JSON object, as in 0.8.0.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/roles` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Roles.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 **Endpoints on v1**: `GET /v1/tenants/{msTenantId}/directoryRoles`
 **Required API client permission(s) (v1)**: Entra Dashboard + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **TenantId** | Object | Yes | Tenant (Microsoft tenant ID (GUID) or tenant name; numeric Client Tenant ID with an API key only). Aliases: `ClientTenantId`, `MsTenantId`. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # List all roles in a tenant
@@ -914,7 +1111,10 @@ Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerRole
 Get-InforcerRole -TenantId 'Contoso' -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 DisplayName  : Global Administrator
@@ -925,6 +1125,8 @@ IsEnabled    : True
 IsPrivileged : True
 ```
 
+</details>
+
 ---
 
 ## Get-InforcerSecureScore
@@ -933,6 +1135,9 @@ Retrieves the current and historic Microsoft Secure Score for a tenant, includin
 
 **Pipeline:** piped tenants (for example `Get-InforcerTenant | Get-InforcerSecureScore`) are handled one by one; each result gets a `TenantId` property naming its tenant, and `-OutputType JsonObject` returns one JSON array for all of them. Calls without pipeline input are unchanged. Without pipeline input `-OutputType JsonObject` is one JSON object.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/secureScores` — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.SecureScores.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
 **Endpoints on v1**: `GET /v1/tenants/{msTenantId}/secureScores`
@@ -940,12 +1145,15 @@ Retrieves the current and historic Microsoft Secure Score for a tenant, includin
 
 **Output schema**: [TenantSecureScore](./API-REFERENCE.md#tenantsecurescoredetails) — includes `Scores` (90-day history), `ControlProfiles` (actionable recommendations), and `ControlCategoryScores`.
 
+</details>
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
 | **TenantId** | Object | Yes | Tenant (Microsoft tenant ID (GUID) or tenant name; numeric Client Tenant ID with an API key only). Aliases: `ClientTenantId`, `MsTenantId`. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # Summary view for one tenant
@@ -989,7 +1197,10 @@ Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerSecureScore
 Get-InforcerSecureScore -TenantId 'Contoso' -OutputType JsonObject
 ```
 
-### Example output (default list view)
+</details>
+
+<details>
+<summary>Example output (default list view)</summary>
 
 ```
 CurrentScore           : 1002.88
@@ -1010,6 +1221,8 @@ Each nested item in `.ControlProfiles` carries the PSTypeName `InforcerCommunity
 
 Use `| Select-Object *` to see all properties on any level.
 
+</details>
+
 ---
 
 ## Export-InforcerTenantDocumentation
@@ -1022,10 +1235,15 @@ Piped tenants are documented one by one, each with its own Graph data (no names 
 
 > **Personal data:** written documents can contain names and UPNs (for example assignment and group details). See [Personal data](#personal-data).
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies`; with `-Baseline` also `GET /beta/tenants/{tenantId}/alignmentDetails`.
 **Required API scope(s) (API key, beta)**: `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read`
 **Endpoints on v1**: `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}`, `GET /v1/baselines`, `GET /v1/tenants/{msTenantId}/policies`; with `-Baseline` also `GET /v1/tenants/{msTenantId}/alignmentDetails`
 **Required API client permission(s) (v1)**: Tenants + Baselines + Policies (+ Align) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+</details>
 
 The HTML output features a modern admin dashboard design with a collapsible sidebar navigation, search, tag filtering, dark/light mode toggle, and hide-empty-fields toggle. All output is self-contained (no external dependencies or CDN links).
 
@@ -1040,7 +1258,8 @@ The HTML output features a modern admin dashboard design with a collapsible side
 | **Baseline** | String[] | No | Filter to policies belonging to one or more baselines (names or IDs). Several baselines read the tenant once and produce one DocModel, or one `{TenantName}-{Baseline}-Documentation` file, per baseline. Policies are matched by id, by name only when there is no id. A same-named policy whose product, category or description differs is not used in its place, and one that still matches several is left out; both are named in a warning. A baseline that cannot be resolved or holds no policies is an error (`BaselineFilterFailed`); the other baselines are still exported. |
 | **Tag** | String | No | Filter to policies with a specific inforcer tag (case-insensitive). |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # Return the DocModel only (no file written)
@@ -1065,6 +1284,8 @@ Export-InforcerTenantDocumentation -Format Html -TenantId 'Contoso' -FetchGraphD
 # Filter by tag
 Export-InforcerTenantDocumentation -Format Html -TenantId 'Contoso' -Tag "Tier 1"
 ```
+
+</details>
 
 ### Output
 
@@ -1128,10 +1349,15 @@ Source and destination are collected at the same time (the destination in a back
 
 The two sides may use different logins: pass `-SourceSession` from an API-key `Connect-Inforcer -PassThru` and `-DestinationSession` from a client-credentials one (or the reverse). Such a comparison pairs policies by `Basics.Id`, which is the inforcer ID on beta and the Microsoft policy ID on v1, so across logins the ids never match and policies are paired by their settings instead.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants`, `GET /beta/baselines`, `GET /beta/tenants/{tenantId}/policies` per side; with a baseline also `GET /beta/tenants/{tenantId}/alignmentDetails`.
 **Required API scope(s) (API key, beta)**: `Tenants.Read` + `Baselines.Read` + `tenants.policies.Read`
 **Endpoints on v1**: `GET /v1/tenants`, `GET /v1/tenants/{msTenantId}`, `GET /v1/baselines`, `GET /v1/tenants/{msTenantId}/policies` per side; with a baseline also `GET /v1/tenants/{msTenantId}/alignmentDetails`
 **Required API client permission(s) (v1)**: Tenants + Baselines + Policies (+ Align) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|--------------|
@@ -1149,7 +1375,8 @@ The two sides may use different logins: pass `-SourceSession` from an API-key `C
 | **OutputPath** | String | No | Directory for the HTML report. **No default** — omit it and no file is written; the comparison model is returned instead. |
 | **Show** | Switch | No | Open the generated HTML in the default browser. Requires `-OutputPath`. **Defaults to on interactively, off in CI** (`CI`, `TF_BUILD`, `GITHUB_ACTIONS`, `GITLAB_CI`, `JENKINS_URL`, `TEAMCITY_VERSION`, `BUILDKITE`). `-Show` forces it, `-Show:$false` suppresses it; an explicit value always wins. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # Basic comparison (same inforcer account)
@@ -1178,6 +1405,8 @@ Compare-InforcerEnvironments -SourceTenantId 'Contoso' -SourceBaselineId 'Tier 1
     -DestinationTenantId 'Fabrikam' -DestinationBaselineId 'Tier 2'
 ```
 
+</details>
+
 ### Output
 
 With `-OutputPath`: returns a `FileInfo` object for the exported HTML report. Without it: no file is written and the comparison model (hashtable) is returned instead, so alignment scores can be read without producing artefacts. The report opens in the default browser automatically in an interactive session, and not on a CI runner — see `-Show`.
@@ -1205,20 +1434,29 @@ When specified, connects to Microsoft Graph for each tenant (same scopes and ret
 
 Returns the list of supported audit event type names from the inforcer API (the live list; without a session, or when the call fails, the last list it got is returned, which is a built-in list of 80 until the first successful call). It also refreshes the `-EventType` tab completion of `Get-InforcerAuditEvent`. `Get-InforcerAuditEvent` itself no longer calls it.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/auditEvents/eventTypes`
 **Required API scope(s) (API key, beta)**: `Audit.Read` *(not in the API team's published scope→route mapping — the route `/beta/auditEvents/eventTypes` is unmapped; `Audit.Read` is the assumed scope based on naming. Confirm with inforcer API team.)*
 **Endpoints on v1**: `GET /v1/auditEvents/types`
 **Required API client permission(s) (v1)**: Activity *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
+</details>
+
 No parameters.
 
-### Example
+<details>
+<summary>Example</summary>
 
 ```powershell
 Get-InforcerSupportedEventType
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 authentication
@@ -1227,11 +1465,16 @@ policyChange
 userCreated
 ```
 
+</details>
+
 ---
 
 ## Get-InforcerAssessment
 
 Retrieves available assessments from the inforcer API. Returns a list of assessments that can be run against tenants via `Invoke-InforcerAssessment`.
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
 
 **Endpoints called (beta)**: `GET /beta/assessments`
 **Required API scope(s) (API key, beta)**: `Assessments.Read`
@@ -1240,19 +1483,25 @@ Retrieves available assessments from the inforcer API. Returns a list of assessm
 
 **Output schema**: [Assessment](./API-REFERENCE.md#assessment)
 
+</details>
+
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
 | **Format** | String | No | `Raw` (default). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Get-InforcerAssessment
 Get-InforcerAssessment -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 Name           : CIS Microsoft 365 Foundations Benchmark
@@ -1264,6 +1513,8 @@ LastUpdated    : 2025-01-15T00:00:00Z
 Created        : 2024-06-01T00:00:00Z
 ```
 
+</details>
+
 ---
 
 ## Invoke-InforcerAssessment
@@ -1272,10 +1523,15 @@ Runs an assessment against one or more inforcer tenants and outputs per-check re
 
 Piped tenants are collected into one multi-tenant run, the same as passing them to `-TenantId`; a single piped tenant also adds `TenantId` to each check. With client credentials a throttled run (`429`) is retried after `Retry-After` and a `401` renews the token once; with an API key neither is retried. A run that answers with a redirect fails with a clear message.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/tenants`, `GET /beta/assessments`, `POST /beta/tenants/{tenantId}/assessments/{assessmentId}/runs`
 **Required API scope(s) (API key, beta)**: `Tenants.Read` + `Assessments.Read` + `Assessments.Run`
 **Endpoints on v1**: `GET /v1/tenants`, `GET /v1/assessments`, `POST /v1/tenants/{msTenantId}/assessments/{assessmentId}/runs`
 **Required API client permission(s) (v1)**: Tenants + Tenant Assessment *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -1285,7 +1541,8 @@ Piped tenants are collected into one multi-tenant run, the same as passing them 
 | **OutputPath** | String | No | File path for an export; the extension picks the format: `.html`/`.htm` (report, or a matrix report for several tenants) or `.csv` (with a tenant column for several tenants). Any other extension, or a directory, fails with `UnsupportedFormat`. Returns a `FileInfo`. CSV values that start with `=`, `+`, `-`, `@`, a tab or a carriage return get a leading `'`, so Excel shows them as text instead of running them as formulas. When omitted, results stream to the pipeline only. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # Run against a single tenant
@@ -1304,7 +1561,10 @@ Invoke-InforcerAssessment -TenantId 'Contoso', 'Fabrikam' -AssessmentId "assess-
 Invoke-InforcerAssessment -TenantId 'Contoso' -AssessmentId "assess-001" -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 Status           : Pass
@@ -1317,6 +1577,8 @@ FindingsMessage  : All users have MFA enabled.
 Scores           : {@{objectId=00000000-0000-0000-0000-000000000001; score=100; objectName=Contoso; ...}}
 ```
 
+</details>
+
 ### Status values
 
 `Status` is `Pass`, `Fail`, `InsufficientPermissions` or `Error`. The last two mean the API could not assess the check (missing permissions, or data that could not be read from the tenant). They are not counted as failures, and the HTML reports show them as **Not Assessed**. The compliance score is inforcer's own score with client credentials (the run's `summary.score`, the number the portal shows, rounded down to a whole percentage); with an API key, which has no score, it is `Pass ÷ (Pass + Fail)` to one decimal. Multi-tenant `-OutputType JsonObject` reports them per tenant as `NotAssessed`, next to `Passed` and `Failed`.
@@ -1327,12 +1589,17 @@ Scores           : {@{objectId=00000000-0000-0000-0000-000000000001; score=100; 
 
 Lists available report types from the inforcer Reports API. The catalog is cached in the module session; pass `-Force` to refetch.
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/reports/types`
 **Required API scope(s) (API key, beta)**: `Reports.Read`
 **Endpoints on v1**: `GET /v1/reports/types`
 **Required API client permission(s) (v1)**: Reports *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schema**: [ReportType](./API-REFERENCE.md#reporttype)
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -1343,7 +1610,8 @@ Lists available report types from the inforcer Reports API. The catalog is cache
 | **Format** | String | No | `Raw` (default). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Get-InforcerReportType
@@ -1353,7 +1621,10 @@ Get-InforcerReportType -Tag security
 Get-InforcerReportType -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 Key            : CopilotAdoption
@@ -1365,6 +1636,8 @@ Tags           : Copilot, Productivity
 Parameters     : report-period
 ```
 
+</details>
+
 ---
 
 ## Invoke-InforcerReport
@@ -1373,10 +1646,17 @@ Queues one or more inforcer reports, polls the outputs endpoint until each run i
 
 Saving follows the [download rules](#download-rules) of `Save-InforcerReportOutput`: existing files are never overwritten. With client credentials a numeric `-TenantId` fails with an error that says to pass the Microsoft tenant ID (GUID) or tenant name (ErrorId `TenantResolutionFailed` here; the other cmdlets use `InvalidTenantId`).
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `POST /beta/reports/runs`, `GET /beta/reports/runs/{runId}/outputs`, `GET /beta/reports/runs/{runId}/outputs/{outputId}`, `GET /beta/tenants` *(GUID/name lookup)*
 **Required API scope(s) (API key, beta)**: `Reports.Read` + `Reports.Run` + `Tenants.Read`†
 **Endpoints on v1**: `POST /v1/reports/runs`, `GET /v1/reports/runs/{reportRunId}/outputs[/{outputId}]`, `GET /v1/tenants` (tenant name)
 **Required API client permission(s) (v1)**: Reports + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+> † `Tenants.Read` is only consumed when `-TenantId` is a GUID or tenant name (which triggers `Resolve-InforcerTenantId`). Numeric `-TenantId` calls skip the tenant-list lookup.
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -1396,9 +1676,8 @@ Saving follows the [download rules](#download-rules) of `Save-InforcerReportOutp
 | **Format** | String | No | `Raw` (default). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 
-> † `Tenants.Read` is only consumed when `-TenantId` is a GUID or tenant name (which triggers `Resolve-InforcerTenantId`). Numeric `-TenantId` calls skip the tenant-list lookup.
-
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # Single report, single tenant — saves ActiveUserCount-<id>.csv to the current directory
@@ -1427,7 +1706,10 @@ Get-InforcerReportType -Tag Security | Invoke-InforcerReport -OutputFormat csv -
 Invoke-InforcerReport -ReportType ActiveUserCount -OutputFormat csv -TenantId 'Contoso' -OutputType JsonObject
 ```
 
-### Example output (default sync + save)
+</details>
+
+<details>
+<summary>Example output (default sync + save)</summary>
 
 ```
 RunId         : 00000000-0000-0000-0000-000000000009
@@ -1440,7 +1722,10 @@ FileSize      : 12480
 ContentType   : text/csv
 ```
 
-### Example output (-NoWait)
+</details>
+
+<details>
+<summary>Example output (-NoWait)</summary>
 
 The POST response is intentionally minimal — `RunId` is the only property the API returns. Poll status with `Get-InforcerReportRun -RunId <id>` or `Get-InforcerReportRun -RunId <id> -Wait -IncludeOutputs`.
 
@@ -1448,11 +1733,16 @@ The POST response is intentionally minimal — `RunId` is the only property the 
 RunId : 00000000-0000-0000-0000-000000000009
 ```
 
+</details>
+
 ---
 
 ## Get-InforcerReportRun
 
 Lists report runs from the inforcer Reports API. The list endpoint has a ~4-minute propagation lag for fresh runs and a server-side 500-item / 7-day cap; use `-Wait` with `-RunId` to bypass the lag by polling the outputs endpoint directly.
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
 
 **Endpoints called (beta)**: `GET /beta/reports/runs`, `GET /beta/reports/runs/{runId}/outputs` *(with `-Wait` or `-IncludeOutputs`)*
 **Required API scope(s) (API key, beta)**: `Reports.Read`
@@ -1460,6 +1750,8 @@ Lists report runs from the inforcer Reports API. The list endpoint has a ~4-minu
 **Required API client permission(s) (v1)**: Reports *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
 **Output schema**: [ReportRun](./API-REFERENCE.md#reportrun)
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -1471,7 +1763,8 @@ Lists report runs from the inforcer Reports API. The list endpoint has a ~4-minu
 | **Format** | String | No | `Raw` (default). |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 Get-InforcerReportRun
@@ -1481,7 +1774,10 @@ Get-InforcerReportRun -IncludeOutputs
 Get-InforcerReportRun -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 A run can batch multiple report types and output formats under a single `RunId`, so `ReportTypes` and `OutputFormats` are plural arrays.
 
@@ -1495,6 +1791,8 @@ CreatedAt       : 2026-06-26T14:01:23Z
 CompletedAt    : 2026-06-26T14:01:29Z
 OutputCount     : 2
 ```
+
+</details>
 
 ---
 
@@ -1514,10 +1812,15 @@ These apply here and to the save step of `Invoke-InforcerReport`:
 
 > **Personal data:** saved outputs can contain names and UPNs. See [Personal data](#personal-data).
 
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
 **Endpoints called (beta)**: `GET /beta/reports/runs/{runId}/outputs/{outputId}`
 **Required API scope(s) (API key, beta)**: `Reports.Read`
 **Endpoints on v1**: `GET /v1/reports/runs/{reportRunId}/outputs/{outputId}`
 **Required API client permission(s) (v1)**: Reports *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
+
+</details>
 
 | Parameter | Type | Mandatory | Description |
 |-----------|------|-----------|-------------|
@@ -1530,7 +1833,8 @@ These apply here and to the save step of `Invoke-InforcerReport`:
 | **FileName** | String | No | Save under this name instead of the server's (made safe for the file system). The server's name is not written at all. |
 | **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject`. |
 
-### Examples
+<details>
+<summary>Examples</summary>
 
 ```powershell
 # Single download
@@ -1549,7 +1853,10 @@ Get-InforcerReportRun -IncludeOutputs |
 Save-InforcerReportOutput -RunId 00000000-0000-0000-0000-000000000009 -OutputId out-1 -FileName users.csv -OutputType JsonObject
 ```
 
-### Example output
+</details>
+
+<details>
+<summary>Example output</summary>
 
 ```
 RunId         : 00000000-0000-0000-0000-000000000009
@@ -1563,6 +1870,8 @@ ContentType   : text/csv
 ```
 
 `OutputId` and `CorrelationId` are on the object too (`Select-Object *`). `TenantId`, `ReportType`, and `OutputFormat` are populated automatically when piped from `Invoke-InforcerReport -NoSave` or `Get-InforcerReportRun -IncludeOutputs`; they are `$null` when the cmdlet is called standalone with bare `-RunId` / `-OutputId`.
+
+</details>
 
 ---
 

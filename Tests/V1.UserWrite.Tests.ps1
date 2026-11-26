@@ -770,6 +770,9 @@ Describe 'Set-InforcerGroup' {
         $global:UwCalls[0].Method | Should -Be 'POST'
         $global:UwCalls[0].Uri | Should -Be "https://api.example.invalid/v1/tenants/$($script:Tid)/groups/$g/members"
         $global:UwCalls[0].Body | Should -Be ('{"add":["' + $script:Uid + '"],"remove":["' + $u2 + '"]}')
+
+        Set-InforcerGroup -TenantId $script:Tid -Group $g -AddMember $script:Uid -WhatIf
+        $global:UwCalls.Count | Should -Be 1 -Because '-WhatIf sends nothing'
     }
 
     It 'refuses no change, a user in both lists and an API-key login without a request' {
@@ -795,6 +798,26 @@ Describe 'Set-InforcerGroup' {
 }
 
 Describe 'Request paths and failed steps' {
+    It 'escapes a / or ? in every id a caller or the API puts in a path' {
+        Set-UwSession
+        Mock -ModuleName InforcerCommunity Start-Sleep {}
+        Set-UwRoute {
+            param($Uri, $Method, $Body)
+            if ($Method -eq 'GET' -and $Uri -like '*/mailbox/actions/*') { return New-UwResponse '{"actionId":"a/b","status":"succeeded","error":null}' }
+            if ($Method -eq 'GET') { return New-UwResponse '{"id":"u1/x?y","displayName":"Jo"}' }
+            if ($Method -eq 'DELETE') { return New-UwResponse '{"actionId":"a/b"}' 202 }
+            New-UwResponse '' 204
+        }
+        Set-InforcerUser -TenantId $script:Tid -UserId 'u1/x?y' -RevokeSessions -RemoveInboxRule 'r/1' -Confirm:$false -ErrorVariable e
+        $e | Should -BeNullOrEmpty
+        $null = Get-InforcerUser -TenantId $script:Tid -UserId 'u1/x?y'
+        $paths = @($global:UwCalls | ForEach-Object { $_.Uri -replace '^.*/users/', '' })
+        $paths | Should -Contain 'u1%2Fx%3Fy/mailbox/inboxRules/r%2F1'
+        $paths | Should -Contain 'u1%2Fx%3Fy/mailbox/actions/a%2Fb'
+        $paths | Should -Contain 'u1%2Fx%3Fy/revokeSessions'
+        $paths | Should -Contain 'u1%2Fx%3Fy'
+    }
+
     It 'refuses a percent-encoded . or .. in a request path' {
         Set-UwSession
         { & (Get-Module InforcerCommunity) { Get-InforcerBaseUrl -Endpoint '/tenants/t1/users/%2e%2e/%2E%2e/t2/users/u1' } } | Should -Throw "*'%2e%2e'*"

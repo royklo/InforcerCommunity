@@ -50,7 +50,7 @@ Describe 'Consistency contract' {
             'Get-InforcerAlignmentDetails'    = @('Format', 'TenantId', 'BaselineId', 'Tag', 'OutputType')
             'Get-InforcerAuditEvent'        = @('EventType', 'DateFrom', 'DateTo', 'User', 'PageSize', 'MaxResults', 'Format', 'OutputType')
             'Get-InforcerSupportedEventType'    = @()
-            'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'IncludeAuthenticationMethods', 'IncludeMailbox', 'IncludeMessageTrace', 'OutputType')
+            'Get-InforcerUser'              = @('Format', 'TenantId', 'Search', 'MaxResults', 'UserId', 'IncludeAuthenticationMethods', 'IncludeMailbox', 'OutputType')
             'New-InforcerUser'              = @('TenantId', 'DisplayName', 'UserPrincipalName', 'Password', 'MailNickname', 'AccountEnabled', 'ManagerId', 'UserType', 'OutputType')
             'Set-InforcerUser'              = @('TenantId', 'UserId', 'AccountEnabled', 'DisplayName', 'ManagerId', 'UserType', 'Password', 'ForceChangePasswordNextSignIn', 'AddLicense', 'RemoveLicense', 'AddGroup', 'RemoveGroup', 'HiddenFromAddressLists', 'MailboxType', 'EnableArchive', 'AutoReply', 'ForwardTo', 'KeepForwardedCopy', 'RemoveForwarding', 'GrantMailboxPermission', 'RemoveMailboxPermission', 'GrantCalendarAccess', 'RemoveCalendarAccess', 'AddMailGroup', 'RemoveMailGroup', 'AddEmailAddress', 'PrimaryEmailAddress', 'RemoveEmailAddress', 'RemoveInboxRule', 'RemoveAllInboxRules', 'AllowMailApp', 'BlockMailApp', 'RemoveAuthenticationMethod', 'ResetMfa', 'TemporaryAccessPass', 'TemporaryAccessPassLifetime', 'TemporaryAccessPassUsableOnce', 'RevokeSessions')
             'Get-InforcerGroup'             = @('TenantId', 'Search', 'Filter', 'MaxResults', 'Group', 'OutputType')

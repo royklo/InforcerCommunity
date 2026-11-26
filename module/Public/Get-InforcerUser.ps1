@@ -5,7 +5,7 @@ function Get-InforcerUser {
 
         Required API scope(s): Tenants.Users.Read + Tenants.Read (only when -TenantId is a GUID or tenant name)
         (API key); User & Group Management + Tenants (only for a tenant name) permission (API client, unconfirmed).
-        -IncludeAuthenticationMethods, -IncludeMailbox and -IncludeMessageTrace need a login with an API client.
+        -IncludeAuthenticationMethods and -IncludeMailbox need a login with an API client.
 
     .DESCRIPTION
         Gets a list of users or a single user by ID from the Inforcer API. Works with both login types (API key and client credentials).
@@ -41,12 +41,6 @@ function Get-InforcerUser {
         no mailbox. A mailbox Exchange took offline (no licence with Exchange Online) gives the error
         'Mailbox offline' and leaves mailbox out. Only with -UserId and a login with an API client. Change these with Set-InforcerUser.
 
-    .PARAMETER IncludeMessageTrace
-        Adds messageTrace to the user: the mail they sent and received in the last 10 days, newest first,
-        one entry per message per recipient (received, direction, sender, recipient, subject, status).
-        Delivery details only, never message content. Reads every page (one request per 1,000 entries
-        each way). Empty when the user has no mailbox; an offline mailbox gives the error 'Mailbox offline'. Only with -UserId and a login with an API client.
-
     .PARAMETER OutputType
         Output type: 'PowerShellObject' (default) or 'JsonObject'. Depth 100; the v1 list is always a JSON array.
         Piped tenants: each user carries TenantId and JsonObject returns one array for all tenants.
@@ -76,11 +70,6 @@ function Get-InforcerUser {
         $mailbox.forwarding; $mailbox.inboxRules | Where-Object forwardsExternally
 
         Shows where the user's mail is forwarded and which inbox rules send mail outside the tenant.
-
-    .EXAMPLE
-        (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMessageTrace).messageTrace | Where-Object status -ne 'Delivered'
-
-        Lists the user's mail of the last 10 days that was not delivered.
 
     .EXAMPLE
         Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
@@ -129,9 +118,6 @@ function Get-InforcerUser {
         [Parameter(ParameterSetName = 'ById')]
         [switch]$IncludeMailbox,
 
-        [Parameter(ParameterSetName = 'ById')]
-        [switch]$IncludeMessageTrace,
-
         [Parameter(ParameterSetName = 'List')]
         [Parameter(ParameterSetName = 'ById')]
         [ValidateSet('PowerShellObject', 'JsonObject')]
@@ -146,8 +132,8 @@ function Get-InforcerUser {
             return
         }
 
-        if (($IncludeAuthenticationMethods -or $IncludeMailbox -or $IncludeMessageTrace) -and $script:InforcerSession.ApiVersion -ne 'v1') {
-            Write-Error -Message 'Authentication methods, mailboxes and message traces need a login with an API client (Connect-Inforcer -ClientId -ClientSecret). The API-key (beta) API does not return them.' -ErrorId 'RequiresApiClient' -Category InvalidOperation
+        if (($IncludeAuthenticationMethods -or $IncludeMailbox) -and $script:InforcerSession.ApiVersion -ne 'v1') {
+            Write-Error -Message 'Authentication methods and mailboxes need a login with an API client (Connect-Inforcer -ClientId -ClientSecret). The API-key (beta) API does not return them.' -ErrorId 'RequiresApiClient' -Category InvalidOperation
             return
         }
 
@@ -214,14 +200,6 @@ function Get-InforcerUser {
                 }
             }
 
-            if ($IncludeMessageTrace) {
-                $traceErr = $null
-                $trace = @(Invoke-InforcerPagedRequest -Endpoint "$endpoint/mailbox/messageTrace" -ErrorVariable traceErr -ErrorAction SilentlyContinue)
-                # 404: the user has no mailbox, so the trace is empty; any other failure is reported and leaves messageTrace out.
-                $noMailbox = $traceErr -and $traceErr[-1].FullyQualifiedErrorId -like 'ApiRequestFailed_404*'
-                if ($traceErr -and -not $noMailbox) { Write-Error -ErrorRecord $traceErr[-1] }
-                else { $response | Add-Member -NotePropertyName messageTrace -NotePropertyValue $trace -Force }
-            }
 
             & $addTenantId $response
             if ($OutputType -eq 'JsonObject') {

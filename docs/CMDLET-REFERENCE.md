@@ -25,7 +25,7 @@ Click a name for its parameters. Under each cmdlet, the endpoints, permissions, 
 | [Get-InforcerAlignmentDetails](#get-inforceralignmentdetails) | Retrieves alignment scores (table or raw format). |
 | [Get-InforcerAuditEvent](#get-inforcerauditevent) | Retrieves audit events (optional EventType, date range; -EventType has tab completion). |
 | [Get-InforcerSupportedEventType](#get-inforcersupportedeventtype) | Returns the canonical list of audit event types accepted by `Get-InforcerAuditEvent -EventType`. Drives the tab completer; cached after first call. |
-| [Get-InforcerUser](#get-inforceruser) | Retrieves users from a tenant (list/search or detail by UserId); `-IncludeAuthenticationMethods` adds their sign-in methods, `-IncludeMailbox` their Exchange Online mailbox and `-IncludeMessageTrace` their mail of the last 10 days (API client login only). |
+| [Get-InforcerUser](#get-inforceruser) | Retrieves users from a tenant (list/search or detail by UserId); `-IncludeAuthenticationMethods` adds their sign-in methods and `-IncludeMailbox` their Exchange Online mailbox (API client login only). |
 | [New-InforcerUser](#new-inforceruser) | Creates a Microsoft Entra user in a tenant (API client login only). |
 | [Set-InforcerUser](#set-inforceruser) | Updates a user's profile, manager or sign-in, changes licences and group memberships, changes their mailbox (shared mailbox, online archive, automatic replies, forwarding, permissions, calendar sharing, mail groups, email addresses, inbox rules, mail apps, address lists), resets their password, removes sign-in methods or resets MFA, issues a Temporary Access Pass, or signs them out everywhere; only the fields you pass change (API client login only). |
 | [Get-InforcerGroup](#get-inforcergroup) | Retrieves Entra ID groups from a tenant (list/search or detail by GroupId). |
@@ -608,9 +608,9 @@ The default view shows 9 key properties. Use `| Select-Object *` to see all prop
 
 ## Get-InforcerUser
 
-Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`, `-IncludeMailbox` (API client only) to get their Exchange Online mailbox as `mailbox`, and `-IncludeMessageTrace` (API client only) to get the mail they sent and received in the last 10 days as `messageTrace`.
+Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated list of user summaries with optional search filtering. With `-UserId`, returns the full user detail including groups, roles, devices, and risk information. Add `-IncludeAuthenticationMethods` (API client only) to get the sign-in methods the user has registered as `authenticationMethods`, and `-IncludeMailbox` (API client only) to get their Exchange Online mailbox as `mailbox`.
 
-> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses; `-IncludeMailbox` adds automatic reply texts, forwarding targets and who can read the mailbox; `-IncludeMessageTrace` adds the addresses and subject lines of the user's mail. See [Personal data](#personal-data).
+> **Personal data:** `-UserId` returns a full personal record; `-IncludeAuthenticationMethods` adds phone numbers and email addresses; `-IncludeMailbox` adds automatic reply texts, forwarding targets and who can read the mailbox. See [Personal data](#personal-data).
 
 > **v1:** the list view returns `Groups` and `Roles` as counts (`groupCount`/`roleCount` mapped to those names), not arrays; `-UserId` returns the full record.
 
@@ -621,10 +621,10 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 
 **Endpoints called (beta)**: `GET /beta/tenants/{tenantId}/users` (list) or `GET /beta/tenants/{tenantId}/users/{userId}` (detail) — plus `GET /beta/tenants` when `-TenantId` is a GUID or name (resolution).
 **Required API scope(s) (API key, beta)**: `Tenants.Users.Read` + `Tenants.Read` *(the `Tenants.Read` part can be skipped if `-TenantId` is always passed as a numeric Client Tenant ID — no lookup needed)*
-**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`, `.../mailbox/autoReply`, `.../mailbox/permissions`, `.../mailbox/calendarAccess`, `.../mailbox/mailGroups`, `.../mailbox/inboxRules` (with `-IncludeMailbox`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/messageTrace` (with `-IncludeMessageTrace`, every page)
+**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/users[/{userId}]`, `GET /v1/tenants/{msTenantId}/users/{userId}/authenticationMethods` (with `-IncludeAuthenticationMethods`), `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox`, `.../mailbox/autoReply`, `.../mailbox/permissions`, `.../mailbox/calendarAccess`, `.../mailbox/mailGroups`, `.../mailbox/inboxRules` (with `-IncludeMailbox`)
 **Required API client permission(s) (v1)**: User & Group Management + Tenants (only for a tenant name) *(unconfirmed, see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1))*
 
-**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`) | [Mailbox](./API-REFERENCE.md#mailbox) (`mailbox`) | [MailboxMessageTrace](./API-REFERENCE.md#mailboxmessagetrace) (`messageTrace`)
+**Output schemas**: [UserSummary](./API-REFERENCE.md#usersummary) (list) | [User](./API-REFERENCE.md#user) (detail) | [UserAuthenticationMethod](./API-REFERENCE.md#userauthenticationmethod) (`authenticationMethods`) | [Mailbox](./API-REFERENCE.md#mailbox) (`mailbox`)
 
 </details>
 
@@ -637,7 +637,6 @@ Retrieves users from an inforcer tenant. Without `-UserId`, returns a paginated 
 | **UserId** | String | Yes | ById | The user ID (GUID) to retrieve full details for. |
 | **IncludeAuthenticationMethods** | Switch | No | ById | Adds `authenticationMethods`: the user's registered sign-in methods (password, phone, Microsoft Authenticator, passkey, ...), one extra request. Passwords and Temporary Access Pass codes are never returned. Needs an API client; an API key stops with `RequiresApiClient`. |
 | **IncludeMailbox** | Switch | No | ById | Adds `mailbox`: type, size, archive, litigation hold, email addresses, `hiddenFromAddressList`, forwarding and `mailApps`, plus `autoReply`, `permissions`, `unreadPermissions`, `calendarAccess`, `mailGroups` and `inboxRules` (six extra requests). `$null` when the user has no mailbox. A mailbox Exchange took offline (the user has no licence with Exchange Online) gives the error `Mailbox offline` and leaves `mailbox` out. Needs an API client. |
-| **IncludeMessageTrace** | Switch | No | ById | Adds `messageTrace`: the mail the user sent and received in the last 10 days, newest first, one entry per message per recipient (`received`, `direction`, `sender`, `recipient`, `subject`, `status`); delivery details only, never content. Reads every page (one request per 1,000 entries each way). Empty when the user has no mailbox; an offline mailbox gives the error `Mailbox offline`. Needs an API client. |
 | **OutputType** | String | No | Both | `PowerShellObject` (default) or `JsonObject`. JSON uses Depth 100. |
 
 <details>
@@ -652,8 +651,6 @@ Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-0000000000
 # Where the mail goes: forwarding and inbox rules that send mail outside the tenant
 $mailbox = (Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMailbox).mailbox
 $mailbox.forwarding; $mailbox.inboxRules | Where-Object forwardsExternally
-# Mail of the last 10 days that did not arrive
-(Get-InforcerUser -TenantId 'Contoso' -UserId "00000000-0000-0000-0000-000000000005" -IncludeMessageTrace).messageTrace | Where-Object status -ne 'Delivered'
 Get-InforcerTenant -TenantId 'Contoso' | Get-InforcerUser
 Get-InforcerUser -TenantId 'Contoso' -OutputType JsonObject
 ```

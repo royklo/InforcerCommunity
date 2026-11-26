@@ -1471,7 +1471,7 @@ The answer of `GET /v1/tenants/{msTenantId}/users/{userId}/mailbox/actions/{acti
 | Property | Type | Description |
 |----------|------|-------------|
 | actionId | string (uuid) | The action's id, from the `202` that queued it. |
-| action | string | The change: `convertToShared`, `convertToUser`, `setAddressListVisibility`, `setAutoReply`, `setForwarding`, `grantPermission`, `removePermission`, `removeInboxRules`, `addToMailGroup`, `removeFromMailGroup`, `addEmailAddress`, `removeEmailAddress`, `setMailApps`, `setCalendarAccess`, `enableArchive` or `replaceEmailAddress`. A change asked for in inforcer can have a value the API cannot ask for, such as `replaceEmailAddress`. More may be added. |
+| action | string | The change: `convertToShared`, `convertToUser`, `setAddressListVisibility`, `setAutoReply`, `setForwarding`, `grantPermission`, `removePermission`, `removeInboxRules`, `addToMailGroup`, `removeFromMailGroup`, `addEmailAddress`, `removeEmailAddress`, `setMailApps`, `setCalendarAccess`, `enableArchive`, `replaceEmailAddress`, `disableInboxRule` or `enableInboxRule`. A change asked for in inforcer can have a value the API cannot ask for, such as `replaceEmailAddress`, `disableInboxRule` and `enableInboxRule`. More may be added. |
 | status | string | `queued` (waits for an earlier change to the same mailbox), `running`, `succeeded` (Exchange shows the change) or `failed`. |
 | queuedBehind | string (uuid), nullable | While `queued`, the action it waits for, when the caller can read that one. |
 | requestedAt | string (date-time) | When it was asked for. |

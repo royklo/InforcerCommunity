@@ -341,12 +341,48 @@ Describe 'Get-InforcerTdrLog' {
         $global:TdrCalls.Count | Should -Be 2
     }
 
-    It 'sends a -DateFrom just inside the 30-day limit as given' {
+    It 'never searches from less than 5 minutes inside the 30-day limit' {
         Set-TdrSession
         Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse '{"events":[],"continuationToken":null}' }
-        $from = [datetime]::UtcNow.AddDays(-30).AddMinutes(2)
-        $null = Get-InforcerTdrLog -TenantId $script:T1 -DateFrom $from -DateTo $from.AddMinutes(8)
-        ($global:TdrCalls[0].Body | ConvertFrom-Json -DateKind String).dateFrom | Should -Be (& $script:Stamp $from)
+        $limit = [datetime]::UtcNow.AddDays(-30)
+        $null = Get-InforcerTdrLog -TenantId $script:T1 -DateFrom $limit.AddMinutes(10) -DateTo $limit.AddMinutes(20)
+        ($global:TdrCalls[0].Body | ConvertFrom-Json -DateKind String).dateFrom | Should -Be (& $script:Stamp $limit.AddMinutes(10)) -Because 'a start well inside the limit is sent as given'
+        $null = Get-InforcerTdrLog -TenantId $script:T1 -DateFrom $limit.AddSeconds(20) -DateTo $limit.AddHours(24).AddMinutes(3) -WarningVariable w
+        $global:TdrCalls.Count | Should -Be 2 -Because 'what is left of the second window lies inside the 5 minutes'
+        $w | Should -BeNullOrEmpty
+        $sent = ($global:TdrCalls[1].Body | ConvertFrom-Json).dateFrom.ToUniversalTime()
+        $sent | Should -BeGreaterThan $limit.AddMinutes(4)
+        $sent | Should -BeLessThan $limit.AddMinutes(6)
+    }
+
+    It 'does not spend a search on each event of a window edge when -MaxResults is nearly reached' {
+        Set-TdrSession
+        $global:TdrLogEvents = @(
+            @{ Time = $script:End.AddHours(-1); Json = (& $script:LogJson 'new' $script:End.AddHours(-1)) }
+            1..5 | ForEach-Object { @{ Time = $script:End.AddHours(-24); Json = (& $script:LogJson "edge$_" $script:End.AddHours(-24)) } }
+            @{ Time = $script:End.AddHours(-30); Json = (& $script:LogJson 'old' $script:End.AddHours(-30)) }
+        )
+        Set-TdrRoute {
+            param($Uri, $Method, $Body)
+            $b = $Body | ConvertFrom-Json
+            $hit = @($global:TdrLogEvents | Where-Object { $_.Time -ge $b.dateFrom.ToUniversalTime() -and $_.Time -le $b.dateTo.ToUniversalTime() })
+            $skip = [int]"0$($b.continuationToken)"
+            $next = if ($skip + $b.pageSize -lt $hit.Count) { '"' + ($skip + $b.pageSize) + '"' } else { 'null' }
+            New-TdrResponse ('{"events":[' + ((@($hit | Select-Object -Skip $skip -First $b.pageSize) | ForEach-Object { $_.Json }) -join ',') + '],"continuationToken":' + $next + '}')
+        }
+        $r = @(Get-InforcerTdrLog -TenantId $script:T1 -DateFrom $script:End.AddHours(-48) -DateTo $script:End -MaxResults 7)
+        $r.id | Should -Be @('new', 'edge1', 'edge2', 'edge3', 'edge4', 'edge5', 'old')
+        $global:TdrCalls.Count | Should -Be 2
+    }
+
+    It 'reports a failed search once' {
+        Set-TdrSession
+        Set-TdrRoute { param($Uri, $Method, $Body) New-TdrResponse '{"title":"Gateway Timeout","status":504}' 504 }
+        Get-InforcerTdrLog -TenantId $script:T1 -ErrorAction SilentlyContinue -ErrorVariable e
+        $e.Count | Should -Be 1
+        $e[0].FullyQualifiedErrorId | Should -BeLike 'ApiRequestFailed_504*'
+        $shown = @(Get-InforcerTdrLog -TenantId $script:T1 2>&1 | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] })
+        $shown.Count | Should -Be 1
     }
 
     It 'warns instead of searching when the whole range lies beyond the 30 days' {

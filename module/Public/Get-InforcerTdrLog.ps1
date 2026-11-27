@@ -21,7 +21,8 @@ function Get-InforcerTdrLog {
         range on a busy tenant can take a while: narrow it with -LogType, -UserPrincipalName or
         -MaxResults. Events are returned as they are found, so
         Select-Object -First stops the search early. A search that fails ends the cmdlet; the events
-        found until then are already returned.
+        found until then are already returned (as JSON they come as one array at the end, which
+        -ErrorAction Stop does not reach).
 
         Needs a login with an API client (Connect-Inforcer -ClientId -ClientSecret); an API-key login
         gets the error RequiresApiClient.
@@ -48,7 +49,8 @@ function Get-InforcerTdrLog {
     .PARAMETER DateFrom
         Only events at or after this time, at most 30 days ago. Default: 24 hours before -DateTo.
         A range longer than 24 hours costs at least one search per 24 hours. inforcer refuses a
-        search from exactly 30 days ago, so a range that reaches that far starts 5 minutes later.
+        search from 30 days ago or older, so the cmdlet searches from 30 days ago plus 5 minutes at
+        the earliest.
 
     .PARAMETER DateTo
         Only events at or before this time. Default: now; a time in the future counts as now.
@@ -191,47 +193,47 @@ function Get-InforcerTdrLog {
         $json = $null
         if ($OutputType -eq 'JsonObject') { $json = [System.Collections.Generic.List[object]]::new() }
         $count = 0
-        $failed = $false
+        $failed = $null
         foreach ($tenant in @($tenants | Select-Object -Unique)) {
             $body['msTenantId'] = $tenant
             $windowTo = $to
             $edge = $null
             do {
                 $windowFrom = if ($windowTo.AddHours(-24) -gt $from) { $windowTo.AddHours(-24) } else { $from }
-                # inforcer refuses a dateFrom of 30 days ago or older, and a long search reaches its last window late.
-                $limit = [DateTime]::UtcNow.AddDays(-30)
-                if ($windowFrom -lt $limit.AddSeconds(30)) {
-                    $windowFrom = $limit.AddMinutes(5)
-                    $windowFrom = $windowFrom.AddTicks(-($windowFrom.Ticks % [TimeSpan]::TicksPerSecond))
-                    Write-Verbose "Searching from $($windowFrom.ToString('u')): inforcer keeps log events searchable for 30 days."
-                }
+                # inforcer refuses a dateFrom of 30 days ago or older. Stay 5 minutes inside that, because a
+                # search can be sent late: after a wait on the search limit, or as a later page.
+                $floor = [DateTime]::UtcNow.AddDays(-30).AddMinutes(5)
+                $floor = $floor.AddTicks(-($floor.Ticks % [TimeSpan]::TicksPerSecond))
+                $moved = $windowFrom -lt $floor
+                if ($moved) { $windowFrom = $floor }
                 if ($windowFrom -gt $windowTo -or ($edge -and $windowFrom -eq $windowTo)) {
                     if (-not $edge) { Write-Warning 'Nothing searched: the date range lies at or beyond the 30 days inforcer keeps log events searchable.' }
                     break
                 }
+                if ($moved) { Write-Verbose "Searching from $($windowFrom.ToString('u')): inforcer keeps log events searchable for 30 days." }
                 $body['dateFrom'] = $windowFrom.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture)
                 $body['dateTo'] = $windowTo.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [cultureinfo]::InvariantCulture)
                 $left = if ($MaxResults -gt 0) { $MaxResults - $count } else { [int]::MaxValue }
-                $body['pageSize'] = [Math]::Min($left, 500)
-                try {
-                    # Both ends of a window count, so an event exactly on an edge is also in the newer window:
-                    # skip it here, by its time. Ids cannot tell: several events share one.
-                    Invoke-InforcerPagedRequest -Endpoint '/tdr/logs/search' -Method POST -Body $body -ErrorAction Stop |
-                        Where-Object {
-                            $time = $_.eventTime -as [DateTime]
-                            if ($time -and $time.Kind -eq 'Unspecified') { $time = [DateTime]::SpecifyKind($time, 'Utc') }
-                            -not ($edge -and $time -and $time.ToUniversalTime() -ge $edge)
-                        } |
-                        Select-Object -First $left |
-                        ForEach-Object {
-                            $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.TdrLogEvent')
-                            $count++
-                            if ($null -ne $json) { $json.Add($_) } else { $_ }
-                        }
-                } catch {
-                    $failed = $true
-                    $PSCmdlet.WriteError($_)
-                }
+                # An older window starts with the events on its edge, which are skipped: ask for some more
+                # than are left, or each of them costs a search of its own.
+                $body['pageSize'] = [Math]::Min(500, $(if ($edge) { [Math]::Max($left, 50) } else { $left }))
+                # Both ends of a window count, so an event exactly on an edge is also in the newer window:
+                # skip it here, by its time. Ids cannot tell: several events share one.
+                Invoke-InforcerPagedRequest -Endpoint '/tdr/logs/search' -Method POST -Body $body -ErrorAction SilentlyContinue -ErrorVariable failed |
+                    Where-Object {
+                        $time = $_.eventTime -as [DateTime]
+                        if ($time -and $time.Kind -eq 'Unspecified') { $time = [DateTime]::SpecifyKind($time, 'Utc') }
+                        -not ($edge -and $time -and $time.ToUniversalTime() -ge $edge)
+                    } |
+                    Select-Object -First $left |
+                    ForEach-Object {
+                        $_.PSObject.TypeNames.Insert(0, 'InforcerCommunity.TdrLogEvent')
+                        $count++
+                        if ($null -ne $json) { $json.Add($_) } else { $_ }
+                    }
+                # The search above keeps its error to itself, so that the loop sees it whatever -ErrorAction
+                # says; pass it on here, once.
+                foreach ($problem in @($failed)) { $PSCmdlet.WriteError($problem) }
                 $edge = $windowTo = $windowFrom
             } while (-not $failed -and $windowTo -gt $from -and ($MaxResults -eq 0 -or $count -lt $MaxResults))
             if ($failed -or ($MaxResults -gt 0 -and $count -ge $MaxResults)) { break }

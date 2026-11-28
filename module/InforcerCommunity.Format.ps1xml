@@ -730,5 +730,118 @@
       </ListControl>
     </View>
 
+    <!-- TDR THREAT (Get-InforcerTdrThreat) -->
+    <View>
+      <Name>InforcerCommunity.TdrThreat.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.TdrThreat</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>UserDisplayName</Label><PropertyName>userDisplayName</PropertyName></ListItem>
+              <ListItem><Label>UserPrincipalName</Label><PropertyName>userPrincipalName</PropertyName></ListItem>
+              <ListItem><Label>Severity</Label><PropertyName>severity</PropertyName></ListItem>
+              <ListItem><Label>Status</Label><PropertyName>status</PropertyName></ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.verdict</ScriptBlock></ItemSelectionCondition>
+                <Label>Verdict</Label><PropertyName>verdict</PropertyName>
+              </ListItem>
+              <ListItem><Label>Classification</Label><PropertyName>classification</PropertyName></ListItem>
+              <ListItem><Label>OpenedAt</Label><PropertyName>openedAt</PropertyName></ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.closedAt</ScriptBlock></ItemSelectionCondition>
+                <Label>ClosedAt</Label><PropertyName>closedAt</PropertyName>
+              </ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>$null -ne $_.subjectDeviceName</ScriptBlock></ItemSelectionCondition>
+                <Label>SubjectDeviceName</Label><PropertyName>subjectDeviceName</PropertyName>
+              </ListItem>
+              <ListItem><Label>DevicesAffected</Label><PropertyName>devicesAffected</PropertyName></ListItem>
+              <ListItem><Label>Simulated</Label><PropertyName>simulated</PropertyName></ListItem>
+              <ListItem>
+                <ItemSelectionCondition><ScriptBlock>-not [string]::IsNullOrWhiteSpace($_.summary)</ScriptBlock></ItemSelectionCondition>
+                <Label>Summary</Label><PropertyName>summary</PropertyName>
+              </ListItem>
+              <ListItem><Label>Id</Label><PropertyName>id</PropertyName></ListItem>
+              <ListItem><Label>MsTenantId</Label><PropertyName>msTenantId</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- TDR INDICATOR (Get-InforcerTdrIndicator) -->
+    <View>
+      <Name>InforcerCommunity.TdrIndicator.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.TdrIndicator</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>AlertType</Label><PropertyName>alertType</PropertyName></ListItem>
+              <ListItem><Label>Severity</Label><PropertyName>severity</PropertyName></ListItem>
+              <ListItem><Label>MitreStage</Label><PropertyName>mitreStage</PropertyName></ListItem>
+              <ListItem><Label>EventTime</Label><PropertyName>eventTime</PropertyName></ListItem>
+              <ListItem><Label>DetectedAt</Label><PropertyName>detectedAt</PropertyName></ListItem>
+              <ListItem><Label>UserPrincipalName</Label><PropertyName>userPrincipalName</PropertyName></ListItem>
+              <ListItem><Label>Description</Label><PropertyName>description</PropertyName></ListItem>
+              <ListItem><Label>Id</Label><PropertyName>id</PropertyName></ListItem>
+              <ListItem><Label>MsTenantId</Label><PropertyName>msTenantId</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
+    <!-- TDR LOG EVENT (Get-InforcerTdrLog) -->
+    <View>
+      <Name>InforcerCommunity.TdrLogEvent.Default</Name>
+      <ViewSelectedBy>
+        <TypeName>InforcerCommunity.TdrLogEvent</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><Label>EventTime</Label><PropertyName>eventTime</PropertyName></ListItem>
+              <ListItem><Label>LogType</Label><PropertyName>logType</PropertyName></ListItem>
+              <ListItem>
+                <Label>Actor</Label>
+                <ScriptBlock>$d = $_.($_.logType); @($d.userPrincipalName, $d.servicePrincipalName, $d.actor) | Where-Object { $_ } | Select-Object -First 1</ScriptBlock>
+              </ListItem>
+              <ListItem>
+                <Label>Activity</Label>
+                <ScriptBlock>$d = $_.($_.logType); if ($d.operation) { $d.operation } elseif ($_.logType -eq 'signIn') { "Sign-in to $($d.appName)" } elseif ($_.logType -eq 'servicePrincipalSignIn') { "Sign-in to $($d.resourceName)" }</ScriptBlock>
+              </ListItem>
+              <ListItem><Label>Result</Label><PropertyName>result</PropertyName></ListItem>
+              <ListItem>
+                <Label>ResultDetails</Label><PropertyName>resultDetails</PropertyName>
+                <ItemSelectionCondition><ScriptBlock>$_.resultDetails</ScriptBlock></ItemSelectionCondition>
+              </ListItem>
+              <ListItem>
+                <Label>IpAddress</Label><PropertyName>ipAddress</PropertyName>
+                <ItemSelectionCondition><ScriptBlock>$_.ipAddress</ScriptBlock></ItemSelectionCondition>
+              </ListItem>
+              <ListItem>
+                <Label>Country</Label><PropertyName>country</PropertyName>
+                <ItemSelectionCondition><ScriptBlock>$_.country</ScriptBlock></ItemSelectionCondition>
+              </ListItem>
+              <ListItem>
+                <Label>City</Label><PropertyName>city</PropertyName>
+                <ItemSelectionCondition><ScriptBlock>$_.city</ScriptBlock></ItemSelectionCondition>
+              </ListItem>
+              <ListItem><Label>Simulated</Label><PropertyName>simulated</PropertyName></ListItem>
+              <ListItem><Label>Id</Label><PropertyName>id</PropertyName></ListItem>
+              <ListItem><Label>MsTenantId</Label><PropertyName>msTenantId</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

@@ -4,7 +4,7 @@ This document describes each cmdlet with parameters, usage examples, and **examp
 
 > **Tip**: For detailed property definitions and API schemas, see the [API Reference](./API-REFERENCE.md).
 
-> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, and `Set-InforcerGroup`, which need an API client because the beta API cannot create or change users and groups. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
+> **Logins**: every cmdlet works with both logins, except `New-InforcerUser`, `Set-InforcerUser`, `Set-InforcerGroup`, `Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`, `Get-InforcerTdrLog`, `Get-InforcerTdrAutoContainment` and `Set-InforcerTdrAutoContainment`, which need an API client because the beta API cannot create or change users and groups and has no threat detection and response endpoints. An API client (`Connect-Inforcer -ClientId -ClientSecret`) uses the v1 API; an API key (`-ApiKey`) uses the legacy beta API. Each cmdlet lists the beta API-key scopes and the v1 API client permissions it needs. The v1 permission mapping is unconfirmed (see [API client permissions](./API-REFERENCE.md#api-client-permissions-v1)). Tenant IDs: Microsoft tenant ID (GUID) or name on both logins; the numeric Client Tenant ID only with an API key. `-TenantId` has the aliases `ClientTenantId` and `MsTenantId`.
 
 > **Note**: Default output shows key properties. Use `| Select-Object *` to see all properties including raw API fields.
 
@@ -32,6 +32,11 @@ Click a name for its parameters. Under each cmdlet, the endpoints, permissions, 
 | [Set-InforcerGroup](#set-inforcergroup) | Adds users to a group and removes others from it, in one request (API client login only). |
 | [Get-InforcerRole](#get-inforcerrole) | Retrieves Entra ID directory role definitions from a tenant. |
 | [Get-InforcerSecureScore](#get-inforcersecurescore) | Retrieves the current and 90-day historic Microsoft Secure Score for a tenant, including per-category scores and actionable control profiles. |
+| [Get-InforcerTdrThreat](#get-inforcertdrthreat) | Retrieves the threats inforcer's threat detection and response raised (search, or one with its summary and indicators) (API client login only). |
+| [Get-InforcerTdrIndicator](#get-inforcertdrindicator) | Retrieves threat detection and response indicators (detections), by search or by id (API client login only). |
+| [Get-InforcerTdrLog](#get-inforcertdrlog) | Searches the sign-in and audit log events inforcer's threat detection and response collected from a tenant (API client login only). |
+| [Get-InforcerTdrAutoContainment](#get-inforcertdrautocontainment) | Retrieves whether auto-containment (inforcer acting on threats by itself) is on for a tenant, and its settings (API client login only). |
+| [Set-InforcerTdrAutoContainment](#set-inforcertdrautocontainment) | Turns auto-containment on or off and changes what it may do; asks for confirmation (API client login only). |
 | [Export-InforcerTenantDocumentation](#export-inforcertenantdocumentation) | Generates comprehensive tenant documentation in HTML, Markdown, or Excel format. Pass `-OutputPath` to write files; without it the DocModel is returned and nothing is written. |
 | [Compare-InforcerEnvironments](#compare-inforcerenvironments) | Compares two tenants' Intune configuration and generates an interactive HTML comparison report. Pass `-OutputPath` to write the file; without it the comparison model is returned and nothing is written. Supports baseline-scoped comparison via `-SourceBaselineId` / `-DestinationBaselineId` with automatic baseline owner resolution. |
 | [Get-InforcerAssessment](#get-inforcerassessment) | Lists available assessments (CIS, Essential Eight, etc.). |
@@ -45,7 +50,7 @@ Click a name for its parameters. Under each cmdlet, the endpoints, permissions, 
 
 ## Personal data
 
-User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
+User details (`Get-InforcerUser -UserId`, including the phone numbers and email addresses that `-IncludeAuthenticationMethods` adds), audit events, threats and threat indicators (`Get-InforcerTdrThreat`, `Get-InforcerTdrIndicator`: user names and UPNs), the sign-in and audit log events of `Get-InforcerTdrLog` (user names, UPNs, IP addresses and locations, and what each user did), report outputs and the files written by `Export-InforcerTenantDocumentation`, `Compare-InforcerEnvironments`, `Invoke-InforcerAssessment`, `Invoke-InforcerReport` and `Save-InforcerReportOutput` can contain personal data (names, UPNs, email addresses, IP addresses, sign-in details). The module caches no user or audit data and writes files only where you ask (`-OutputPath`, or the current directory for `Invoke-InforcerReport` and `Save-InforcerReportOutput`). Handle exported files as personal data.
 
 ---
 
@@ -1217,6 +1222,295 @@ Hint                   : Use $obj.ControlProfiles | Sort-Object ScoreDifference 
 Each nested item in `.ControlProfiles` carries the PSTypeName `InforcerCommunity.SecureScoreControlProfile` and renders as a compact list (`Title`, `ControlCategory`, `Service`, current/max score with potential gain, `RemediationImpact`, `ActionUrl`, `Id`) — the full HTML `remediation` string is still on the object as `.remediation` when needed.
 
 Use `| Select-Object *` to see all properties on any level.
+
+</details>
+
+---
+
+## Get-InforcerTdrThreat
+
+Retrieves the threats inforcer's threat detection and response (TDR) raised: incidents built from a user's indicators. Without `-ThreatId` it searches the threats open at any time in the date range, newest first, across the tenants you pass or every tenant the API client may view; without `-DateFrom`/`-DateTo` inforcer searches the last 7 days. Piped tenants are searched in one request. Threats spawned from another threat are not listed; read them with `-ThreatId`. With `-ThreatId` it returns one threat plus its AI-written `summary` (Markdown) and `iocs`, each with the `indicatorId` for `Get-InforcerTdrIndicator -IndicatorId`. Needs a login with an API client; with an API key it stops with `RequiresApiClient`. A tenant needs a TDR licence.
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tdr/threats/search` (every page) or `GET /v1/tdr/threats/{threatId}` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, view incidents (`tdr:incidents:view`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrThreat](./API-REFERENCE.md#tdrthreat)
+
+</details>
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **TenantId** | Object | No | Only threats in these tenants: Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **ThreatId** | Guid | Yes (ById) | Return this threat, with its summary and IoCs. |
+| **Status** | String[] | No | `open`, `triaging`, `remediating`, `pendingReview`, `closed`. |
+| **Severity** | String[] | No | `info`, `medium`, `high`, `critical`. |
+| **Verdict** | String[] | No | Closed threats only: `remediated`, `falsePositive`, `acceptedRisk`, `merged`, `benign` (Microsoft classified every alert on the threat benign). |
+| **DateFrom** | DateTime | No | Threats still open at or after this time. Default: 7 days before `-DateTo`. |
+| **DateTo** | DateTime | No | Threats opened at or before this time. Default: now. |
+| **MaxResults** | Int | No | Stop after this many threats. `0` = no limit (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (a JSON array; one object with `-ThreatId`; Depth 100). |
+
+<details>
+<summary>Examples</summary>
+
+```powershell
+Get-InforcerTdrThreat -Status open, triaging, remediating -Severity high, critical
+Get-InforcerTdrThreat -TenantId 'Contoso' -DateFrom (Get-Date).AddDays(-30)
+(Get-InforcerTdrThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').summary
+Get-InforcerTdrThreat -Severity critical -OutputType JsonObject | Set-Content threats.json
+```
+
+</details>
+
+<details>
+<summary>Example output</summary>
+
+```
+UserDisplayName   : Jo Bloggs
+UserPrincipalName : jo.bloggs@contoso.com
+Severity          : high
+Status            : remediating
+Classification    : potentialCompromise
+OpenedAt          : 18/11/2026 09:14:03
+SubjectDeviceName : CONTOSO-LT-042
+DevicesAffected   : 1
+Simulated         : False
+Id                : 00000000-0000-0000-0000-0000000000d1
+MsTenantId        : 00000000-0000-0000-0000-000000000001
+```
+
+`Verdict`, `ClosedAt`, `SubjectDeviceName` and `Summary` show only when set. `linkedDevices` and `iocs` stay on the object (`| Select-Object *`).
+
+</details>
+
+---
+
+## Get-InforcerTdrIndicator
+
+Retrieves the indicators (single detections, such as a sign-in through Tor) inforcer's threat detection and response raised. Without `-IndicatorId` it searches the indicators whose event happened in the date range, newest first, each in its latest version within the range, across the tenants you pass or every tenant the API client may view. inforcer searches at most 30 days at a time, so the cmdlet searches a longer range in 30-day steps, newest first (one search per 30 days, an indicator on a step's edge listed once); without `-DateFrom` it searches the last 30 days. `-ThreatId` limits the search to the indicators behind one threat (inforcer refuses a threat with more than 2000 in one step; narrow it with `-AlertType`). With `-IndicatorId` it returns one indicator; the id is opaque, pass it as a search or a threat's `iocs` gave it. Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tdr/indicators/search` (every page) or `GET /v1/tdr/indicators/{indicatorId}` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, view indicators (`tdr:indicators:view`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrIndicator](./API-REFERENCE.md#tdrindicator)
+
+</details>
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **TenantId** | Object | No | Only indicators in these tenants: Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **IndicatorId** | String | Yes (ById) | Return this indicator (opaque id, up to 4096 characters). |
+| **ThreatId** | Guid | No | Only the indicators behind this threat. |
+| **Severity** | String[] | No | `info`, `medium`, `high`, `critical`. |
+| **AlertType** | String[] | No | Alert types, such as `TorExitNode`. |
+| **DateFrom** | DateTime | No | Events at or after this time. Default: 30 days before `-DateTo`. A longer range costs one search per 30 days. |
+| **DateTo** | DateTime | No | Events at or before this time. Default: now. |
+| **MaxResults** | Int | No | Stop after this many indicators. `0` = no limit (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (a JSON array; one object with `-IndicatorId`; Depth 100). |
+
+<details>
+<summary>Examples</summary>
+
+```powershell
+Get-InforcerTdrIndicator -Severity high, critical
+Get-InforcerTdrIndicator -ThreatId '00000000-0000-0000-0000-0000000000d1' -DateFrom (Get-Date).AddDays(-90)
+(Get-InforcerTdrThreat -ThreatId '00000000-0000-0000-0000-0000000000d1').iocs | Where-Object indicatorId | ForEach-Object { Get-InforcerTdrIndicator -IndicatorId $_.indicatorId }
+Get-InforcerTdrIndicator -AlertType TorExitNode -OutputType JsonObject
+```
+
+</details>
+
+<details>
+<summary>Example output</summary>
+
+```
+AlertType         : TorExitNode
+Severity          : high
+MitreStage        : initialAccess
+EventTime         : 18/11/2026 09:11:58
+DetectedAt        : 18/11/2026 09:12:40
+UserPrincipalName : jo.bloggs@contoso.com
+Description       : Activity on this account came through Tor, a network that deliberately hides where a person really is.
+Id                : Q29udG9zb3xUb3JFeGl0Tm9kZXwwMDAx
+MsTenantId        : 00000000-0000-0000-0000-000000000001
+```
+
+</details>
+
+---
+
+## Get-InforcerTdrLog
+
+Searches the raw log events inforcer's threat detection and response collected from one tenant, newest first: Microsoft Entra interactive user sign-ins, service principal sign-ins and directory audits, and Microsoft 365 audit events (non-interactive user sign-ins are not included). Every event carries the fields all logs share, plus one object named after its `logType` with the rest. Needs a login with an API client (`Connect-Inforcer -ClientId -ClientSecret`); an API-key login stops with `RequiresApiClient`.
+
+inforcer searches at most 24 hours at a time and only the last 30 days. Without `-DateFrom` the cmdlet searches the last 24 hours; a longer range is searched in 24-hour steps, newest first. Every step and every page of 500 events is one search, and inforcer allows 20 searches per 5 minutes and 1000 a day for all your API clients together. Past that limit the cmdlet waits as long as inforcer asks (at most 5 minutes, three times per search) and carries on, so a long range can take a while: narrow it with `-LogType`, `-UserPrincipalName` or `-MaxResults`. Events are returned as they are found, so `Select-Object -First` stops the search early. A search that fails ends the cmdlet; the events found until then are already returned (as JSON they come as one array at the end, which `-ErrorAction Stop` does not reach).
+
+> **Personal data:** the events hold user names, UPNs, IP addresses, locations and what each user did. See [Personal data](#personal-data).
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `POST /v1/tdr/logs/search` (once per tenant, per 24 hours of the range and per page of 500 events) (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, view events (`tdr:events:view`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrLogEvent](./API-REFERENCE.md#tdrlogevent)
+
+</details>
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name; piped tenants are searched one after the other. |
+| **LogType** | String | No | `signIn`, `servicePrincipalSignIn`, `directoryAudit`, `m365Audit`, or `all` (default) for every log together. |
+| **UserPrincipalName** | String | No | Only events of this user: the user who signed in, or who acted in an audit event. Matched whole, without regard to case. Not allowed with `-LogType servicePrincipalSignIn` (`UserPrincipalNameNotAllowed`). |
+| **IncludeSimulated** | Switch | No | Also return the events a threat simulation wrote, which are not real activity. Each event says whether it is `simulated`. |
+| **DateFrom** | DateTime | No | Events at or after this time, at most 30 days ago (`InvalidDateRange` when older). Default: 24 hours before `-DateTo`. A longer range costs at least one search per 24 hours. inforcer refuses a search from 30 days ago or older, so the cmdlet searches from 30 days ago plus 5 minutes at the earliest. |
+| **DateTo** | DateTime | No | Events at or before this time. Default: now; a time in the future counts as now. |
+| **MaxResults** | Int | No | Stop after this many events. `0` = no limit (default). |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (a JSON array; Depth 100). |
+
+<details>
+<summary>Examples</summary>
+
+```powershell
+# Every log event of the last 24 hours
+Get-InforcerTdrLog -TenantId 'Contoso'
+
+# One user's sign-ins of the last week (seven searches)
+Get-InforcerTdrLog -TenantId 'Contoso' -LogType signIn -UserPrincipalName 'jo.bloggs@contoso.com' -DateFrom (Get-Date).AddDays(-7)
+
+# The role changes of the last 24 hours
+Get-InforcerTdrLog -TenantId 'Contoso' -LogType directoryAudit | Where-Object { $_.directoryAudit.category -eq 'RoleManagement' }
+
+# The 100 newest Microsoft 365 audit events as JSON
+Get-InforcerTdrLog -TenantId 'Contoso' -LogType m365Audit -MaxResults 100 -OutputType JsonObject
+```
+
+</details>
+
+<details>
+<summary>Example output</summary>
+
+```
+EventTime     : 18/11/2026 09:11:58
+LogType       : signIn
+Actor         : jo.bloggs@contoso.com
+Activity      : Sign-in to Office 365 Exchange Online
+Result        : failure
+ResultDetails : Invalid username or password.
+IpAddress     : 203.0.113.24
+Country       : DE
+City          : Frankfurt am Main
+Simulated     : False
+Id            : 00000000-0000-0000-0000-0000000000e1
+MsTenantId    : 00000000-0000-0000-0000-000000000001
+```
+
+`Actor` and `Activity` are only shown, not properties: they come from the object named after the log type (`signIn`, `servicePrincipalSignIn`, `directoryAudit` or `m365Audit`), which holds the rest of the fields (`| Select-Object *`, or `$_.signIn`). `ResultDetails`, `IpAddress`, `Country` and `City` show only when set. An `Id` is not unique: a sign-in and its Microsoft 365 audit event share one.
+
+</details>
+
+---
+
+## Get-InforcerTdrAutoContainment
+
+Retrieves whether auto-containment is on for a tenant, and the settings that limit what it may do. Auto-containment lets inforcer's threat detection and response act on a tenant by itself, such as blocking a user's sign-in. A tenant where it was never set up returns `configured` and `enabled` `False` and `settings` empty. One request per tenant; the cmdlet adds `msTenantId` to each result so piped tenants can be told apart. A tenant outside the API client's scope, or without a TDR licence, is an error (404). Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `GET /v1/tenants/{msTenantId}/tdr/autoContainment` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, view auto remediation (`tdr:auto_remediation:view`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrAutoContainment](./API-REFERENCE.md#tdrautocontainment)
+
+</details>
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **Format** | String | No | `Raw` (default). |
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (Depth 100). |
+
+<details>
+<summary>Examples</summary>
+
+```powershell
+Get-InforcerTdrAutoContainment -TenantId 'Contoso'
+Get-InforcerTenant | Get-InforcerTdrAutoContainment -ErrorAction SilentlyContinue | Where-Object enabled
+Get-InforcerTdrAutoContainment -TenantId 'Contoso' -OutputType JsonObject
+```
+
+</details>
+
+<details>
+<summary>Example output</summary>
+
+```
+msTenantId : 00000000-0000-0000-0000-000000000001
+enabled    : True
+configured : True
+settings   : @{severityThreshold=high; allowedActions=System.Object[]; allowedDeviceActions=System.Object[]; allowedTargets=System.Object[]; deniedTargets=System.Object[]}
+updatedAt  : 20/11/2026 14:03:11
+updatedBy  : SIEM integration
+```
+
+</details>
+
+---
+
+## Set-InforcerTdrAutoContainment
+
+Turns auto-containment on or off for a tenant and changes the settings that limit what it may do. Only the parameters you pass change; the rest is kept. Turning it on lets inforcer act on the tenant by itself, such as blocking a user's sign-in, so the cmdlet asks for confirmation by default (`-Confirm:$false` skips it; `-WhatIf` shows the change without making it). On a tenant where auto-containment was never set up, passing any setting sets it up and it stays off unless you also pass `-Enabled $true`; `-Enabled $true` alone there is refused (409), so it is never turned on with settings nobody chose. Settings left out then take their defaults: severity `critical` and every list empty. Returns the tenant's auto-containment after the change. Needs a login with an API client; with an API key it stops with `RequiresApiClient`.
+
+<details>
+<summary>Endpoints, permissions and schemas</summary>
+
+**Endpoints called (beta)**: none (not available on the beta API).
+**Required API scope(s) (API key, beta)**: not available with an API key.
+**Endpoints on v1**: `PATCH /v1/tenants/{msTenantId}/tdr/autoContainment` (+ `GET /v1/tenants` for a tenant name)
+**Required API client permission(s) (v1)**: Threats, manage auto remediation (`tdr:auto_remediation:manage`, named in the spec) + Tenants (only for a tenant name)
+
+**Response schema**: [TdrAutoContainment](./API-REFERENCE.md#tdrautocontainment)
+
+</details>
+
+| Parameter | Type | Mandatory | Description |
+|-----------|------|-----------|-------------|
+| **TenantId** | Object | Yes | Microsoft tenant ID (GUID) or tenant name. Aliases: `ClientTenantId`, `MsTenantId`. Supports pipeline input by property name. |
+| **Enabled** | Bool | No | `$true` turns auto-containment on, `$false` turns it off. |
+| **SeverityThreshold** | String | No | The lowest threat severity it acts on: `critical` or `high`. |
+| **AllowedAction** | String[] | No | Actions it may take on users and apps: `blockUser`, `disableServicePrincipal`, `removeAppCredentials`, `removeMailRule`, `removePhishingEmail`, `removeRole`, `removeSiteAdmin`, `revokeAllSessions`, `revokeConsent` (the names inforcer accepts; another name is a `400`). `@()` allows all. At most 50. |
+| **AllowedDeviceAction** | String[] | No | Actions it may take on devices: `isolateDevice`, `quarantineFile`, `fullScanClean`. `@()` allows none. |
+| **AllowedTarget** | String[] | No | Accounts it may act on: user principal name, object id or app id; a trailing `*` matches every value that starts with the rest. `@()` allows any account. At most 50. |
+| **DeniedTarget** | String[] | No | Accounts it must never act on, written as `-AllowedTarget`; these win over `-AllowedTarget`. At most 50. |
+| **OutputType** | String | No | `PowerShellObject` (default) or `JsonObject` (Depth 100). |
+
+<details>
+<summary>Examples</summary>
+
+```powershell
+Set-InforcerTdrAutoContainment -TenantId 'Contoso' -SeverityThreshold critical -AllowedAction blockUser -DeniedTarget 'breakglass@contoso.com'
+Set-InforcerTdrAutoContainment -TenantId 'Contoso' -Enabled $true
+Set-InforcerTdrAutoContainment -TenantId 'Contoso' -Enabled $false -Confirm:$false
+Set-InforcerTdrAutoContainment -TenantId 'Contoso' -AllowedDeviceAction isolateDevice -OutputType JsonObject
+```
 
 </details>
 

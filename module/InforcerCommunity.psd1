@@ -1,6 +1,6 @@
 @{
     RootModule        = 'InforcerCommunity.psm1'
-    ModuleVersion     = '1.2.1'
+    ModuleVersion     = '1.3.0'
     GUID              = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
     Author            = 'Roy Klooster'
     Description       = 'Community PowerShell module for the Inforcer API. Created by Roy Klooster. Not owned or officially maintained by Inforcer.'
@@ -23,6 +23,11 @@
         'Set-InforcerUser'
         'Get-InforcerGroup'
         'Set-InforcerGroup'
+        'Get-InforcerTdrThreat'
+        'Get-InforcerTdrIndicator'
+        'Get-InforcerTdrLog'
+        'Get-InforcerTdrAutoContainment'
+        'Set-InforcerTdrAutoContainment'
         'Get-InforcerRole'
         'Get-InforcerSecureScore'
         'Export-InforcerTenantDocumentation'
@@ -41,7 +46,7 @@
         PSData = @{
             ProjectUri   = 'https://github.com/royklo/InforcerCommunity'
             LicenseUri   = 'https://github.com/royklo/InforcerCommunity/blob/main/LICENSE'
-            ReleaseNotes = 'v1.2.1: Get-InforcerUser -IncludeMessageTrace is withdrawn. See CHANGELOG.md.'
+            ReleaseNotes = 'v1.3.0: read threats and their indicators with Get-InforcerTdrThreat and Get-InforcerTdrIndicator, search the collected log events with Get-InforcerTdrLog, and read and change auto-containment with Get-InforcerTdrAutoContainment and Set-InforcerTdrAutoContainment (API client only). See CHANGELOG.md.'
             Tags         = @('Inforcer', 'API', 'Community')
         }
     }

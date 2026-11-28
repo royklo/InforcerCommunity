@@ -381,7 +381,7 @@ Describe 'Get-InforcerTdrLog' {
         Get-InforcerTdrLog -TenantId $script:T1 -ErrorAction SilentlyContinue -ErrorVariable e
         $e.Count | Should -Be 1
         $e[0].FullyQualifiedErrorId | Should -BeLike 'ApiRequestFailed_504*'
-        $shown = @(Get-InforcerTdrLog -TenantId $script:T1 2>&1 | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] })
+        $shown = @(Get-InforcerTdrLog -TenantId $script:T1 -ErrorAction Continue 2>&1 | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] })
         $shown.Count | Should -Be 1
     }
 
